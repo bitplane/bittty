@@ -21,7 +21,8 @@ dev = [
     "pytest-asyncio",
     "build",
     "twine",
-    "ruff"
+    "ruff",
+    "pydoc-markdown"
 ]
 
 [build-system]
