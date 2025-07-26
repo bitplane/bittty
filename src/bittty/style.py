@@ -1,196 +1,187 @@
-"""Style merging for ANSI escape sequences."""
-
 from __future__ import annotations
 
+from dataclasses import dataclass, replace
 from functools import lru_cache
+from typing import Literal, Tuple, Union, Optional
 
 
-# Pattern tuples ordered by popularity (most common first)
-RESET_PATTERNS = ("[0m", "[m", ";0;", "[0;", ";0m")
-
-# Colors are most common
-FG_BLACK_PATTERNS = (";30;", "[30;", ";30m", "[30m")
-FG_RED_PATTERNS = (";31;", "[31;", ";31m", "[31m")
-FG_GREEN_PATTERNS = (";32;", "[32;", ";32m", "[32m")
-FG_YELLOW_PATTERNS = (";33;", "[33;", ";33m", "[33m")
-FG_BLUE_PATTERNS = (";34;", "[34;", ";34m", "[34m")
-FG_MAGENTA_PATTERNS = (";35;", "[35;", ";35m", "[35m")
-FG_CYAN_PATTERNS = (";36;", "[36;", ";36m", "[36m")
-FG_WHITE_PATTERNS = (";37;", "[37;", ";37m", "[37m")
-FG_DEFAULT_PATTERNS = (";39;", "[39;", ";39m", "[39m")
-
-BG_BLACK_PATTERNS = (";40;", "[40;", ";40m", "[40m")
-BG_RED_PATTERNS = (";41;", "[41;", ";41m", "[41m")
-BG_GREEN_PATTERNS = (";42;", "[42;", ";42m", "[42m")
-BG_YELLOW_PATTERNS = (";43;", "[43;", ";43m", "[43m")
-BG_BLUE_PATTERNS = (";44;", "[44;", ";44m", "[44m")
-BG_MAGENTA_PATTERNS = (";45;", "[45;", ";45m", "[45m")
-BG_CYAN_PATTERNS = (";46;", "[46;", ";46m", "[46m")
-BG_WHITE_PATTERNS = (";47;", "[47;", ";47m", "[47m")
-BG_DEFAULT_PATTERNS = (";49;", "[49;", ";49m", "[49m")
-
-# Bright colors
-FG_BRIGHT_BLACK_PATTERNS = (";90;", "[90;", ";90m", "[90m")
-FG_BRIGHT_RED_PATTERNS = (";91;", "[91;", ";91m", "[91m")
-FG_BRIGHT_GREEN_PATTERNS = (";92;", "[92;", ";92m", "[92m")
-FG_BRIGHT_YELLOW_PATTERNS = (";93;", "[93;", ";93m", "[93m")
-FG_BRIGHT_BLUE_PATTERNS = (";94;", "[94;", ";94m", "[94m")
-FG_BRIGHT_MAGENTA_PATTERNS = (";95;", "[95;", ";95m", "[95m")
-FG_BRIGHT_CYAN_PATTERNS = (";96;", "[96;", ";96m", "[96m")
-FG_BRIGHT_WHITE_PATTERNS = (";97;", "[97;", ";97m", "[97m")
-
-BG_BRIGHT_BLACK_PATTERNS = (";100;", "[100;", ";100m", "[100m")
-BG_BRIGHT_RED_PATTERNS = (";101;", "[101;", ";101m", "[101m")
-BG_BRIGHT_GREEN_PATTERNS = (";102;", "[102;", ";102m", "[102m")
-BG_BRIGHT_YELLOW_PATTERNS = (";103;", "[103;", ";103m", "[103m")
-BG_BRIGHT_BLUE_PATTERNS = (";104;", "[104;", ";104m", "[104m")
-BG_BRIGHT_MAGENTA_PATTERNS = (";105;", "[105;", ";105m", "[105m")
-BG_BRIGHT_CYAN_PATTERNS = (";106;", "[106;", ";106m", "[106m")
-BG_BRIGHT_WHITE_PATTERNS = (";107;", "[107;", ";107m", "[107m")
-
-# Text attributes (ordered by popularity)
-BOLD_PATTERNS = (";1;", "[1;", ";1m", "[1m")
-UNDERLINE_PATTERNS = (";4;", "[4;", ";4m", "[4m")
-DIM_PATTERNS = (";2;", "[2;", ";2m", "[2m")
-ITALIC_PATTERNS = (";3;", "[3;", ";3m", "[3m")
-REVERSE_PATTERNS = (";7;", "[7;", ";7m", "[7m")
-BLINK_PATTERNS = (";5;", "[5;", ";5m", "[5m")
-STRIKE_PATTERNS = (";9;", "[9;", ";9m", "[9m")
-CONCEAL_PATTERNS = (";8;", "[8;", ";8m", "[8m")
-
-# Reset patterns for attributes
-NOT_BOLD_PATTERNS = (";22;", "[22;", ";22m", "[22m", ";21;", "[21;", ";21m", "[21m")
-NOT_DIM_PATTERNS = (";22;", "[22;", ";22m", "[22m")
-NOT_ITALIC_PATTERNS = (";23;", "[23;", ";23m", "[23m")
-NOT_UNDERLINE_PATTERNS = (";24;", "[24;", ";24m", "[24m")
-NOT_BLINK_PATTERNS = (";25;", "[25;", ";25m", "[25m")
-NOT_REVERSE_PATTERNS = (";27;", "[27;", ";27m", "[27m")
-NOT_CONCEAL_PATTERNS = (";28;", "[28;", ";28m", "[28m")
-NOT_STRIKE_PATTERNS = (";29;", "[29;", ";29m", "[29m")
+# --- Color Model --- #
 
 
-@lru_cache(maxsize=20000)
-def has_pattern(ansi: str, patterns: tuple) -> bool:
-    """Check if ANSI sequence contains any of the patterns."""
-    for pattern in patterns:
-        if pattern in ansi:
-            return True
-    return False
+@dataclass(frozen=True)
+class Color:
+    mode: Literal["default", "indexed", "rgb"]
+    value: Union[int, Tuple[int, int, int], None] = None
+
+    @property
+    @lru_cache
+    def ansi(self) -> str:
+        if self.mode == "default":
+            return ""
+        elif self.mode == "indexed":
+            return f"5;{self.value}"
+        elif self.mode == "rgb":
+            r, g, b = self.value
+            return f"2;{r};{g};{b}"
+        return ""
+
+    def __str__(self) -> str:
+        return self.ansi
+
+    def __hash__(self) -> int:
+        return hash((self.mode, self.value))
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Color):
+            return NotImplemented
+        return (self.mode, self.value) == (other.mode, other.value)
 
 
-@lru_cache(maxsize=20000)
-def _extract_indexed_color(ansi: str, base_code: str) -> str:
-    """Extracts 256-color or true-color parameters from an ANSI sequence."""
-    if ";5;" in ansi or ";2;" in ansi:
-        # Strip the escape prefix and m suffix
-        if ansi.startswith("\033[") or ansi.startswith("\x1b["):
-            ansi = ansi[2:]
-        parts = ansi.rstrip("m").split(";")
-        for i, part in enumerate(parts):
-            if part == base_code:
-                if len(parts) > i + 1 and parts[i + 1] == "5":
-                    if len(parts) > i + 2:
-                        return f"{base_code};5;{parts[i+2]}"
-                elif len(parts) > i + 4 and parts[i + 1] == "2":
-                    return f"{base_code};2;{parts[i+2]};{parts[i+3]};{parts[i+4]}"
-    return ""
+# --- Style Model --- #
 
 
-@lru_cache(maxsize=20000)
-def extract_fg_color(ansi: str) -> str:
-    """Extract foreground color parameter from ANSI sequence."""
-    # Check for 256-color or true-color first
-    indexed_color = _extract_indexed_color(ansi, "38")
-    if indexed_color:
-        return indexed_color
+@dataclass(frozen=True)
+class Style:
+    fg: Color = Color("default")
+    bg: Color = Color("default")
+    bold: Optional[bool] = None
+    dim: Optional[bool] = None
+    italic: Optional[bool] = None
+    underline: Optional[bool] = None
+    blink: Optional[bool] = None
+    reverse: Optional[bool] = None
+    conceal: Optional[bool] = None
+    strike: Optional[bool] = None
 
-    # Check patterns in order of popularity
-    if has_pattern(ansi, FG_RED_PATTERNS):
-        return "31"
-    elif has_pattern(ansi, FG_GREEN_PATTERNS):
-        return "32"
-    elif has_pattern(ansi, FG_YELLOW_PATTERNS):
-        return "33"
-    elif has_pattern(ansi, FG_BLUE_PATTERNS):
-        return "34"
-    elif has_pattern(ansi, FG_MAGENTA_PATTERNS):
-        return "35"
-    elif has_pattern(ansi, FG_CYAN_PATTERNS):
-        return "36"
-    elif has_pattern(ansi, FG_WHITE_PATTERNS):
-        return "37"
-    elif has_pattern(ansi, FG_BLACK_PATTERNS):
-        return "30"
-    elif has_pattern(ansi, FG_DEFAULT_PATTERNS):
-        return "39"
-    elif has_pattern(ansi, FG_BRIGHT_RED_PATTERNS):
-        return "91"
-    elif has_pattern(ansi, FG_BRIGHT_GREEN_PATTERNS):
-        return "92"
-    elif has_pattern(ansi, FG_BRIGHT_YELLOW_PATTERNS):
-        return "93"
-    elif has_pattern(ansi, FG_BRIGHT_BLUE_PATTERNS):
-        return "94"
-    elif has_pattern(ansi, FG_BRIGHT_MAGENTA_PATTERNS):
-        return "95"
-    elif has_pattern(ansi, FG_BRIGHT_CYAN_PATTERNS):
-        return "96"
-    elif has_pattern(ansi, FG_BRIGHT_WHITE_PATTERNS):
-        return "97"
-    elif has_pattern(ansi, FG_BRIGHT_BLACK_PATTERNS):
-        return "90"
-    return ""
+    def merge(self, other: Style) -> Style:
+        """Merge another style into this one. The other style takes precedence."""
+
+        def merge_attr(base_attr, other_attr):
+            # If other explicitly sets the attribute (True or False), use it
+            if other_attr is not None:
+                return other_attr
+            # Otherwise keep the base attribute
+            return base_attr
+
+        return Style(
+            fg=other.fg if other.fg.mode != "default" else self.fg,
+            bg=other.bg if other.bg.mode != "default" else self.bg,
+            bold=merge_attr(self.bold, other.bold),
+            dim=merge_attr(self.dim, other.dim),
+            italic=merge_attr(self.italic, other.italic),
+            underline=merge_attr(self.underline, other.underline),
+            blink=merge_attr(self.blink, other.blink),
+            reverse=merge_attr(self.reverse, other.reverse),
+            conceal=merge_attr(self.conceal, other.conceal),
+            strike=merge_attr(self.strike, other.strike),
+        )
 
 
-@lru_cache(maxsize=20000)
-def extract_bg_color(ansi: str) -> str:
-    """Extract background color parameter from ANSI sequence."""
-    # Check for 256-color or true-color first
-    indexed_color = _extract_indexed_color(ansi, "48")
-    if indexed_color:
-        return indexed_color
-
-    # Check patterns in order of popularity
-    if has_pattern(ansi, BG_BLACK_PATTERNS):
-        return "40"
-    elif has_pattern(ansi, BG_RED_PATTERNS):
-        return "41"
-    elif has_pattern(ansi, BG_GREEN_PATTERNS):
-        return "42"
-    elif has_pattern(ansi, BG_YELLOW_PATTERNS):
-        return "43"
-    elif has_pattern(ansi, BG_BLUE_PATTERNS):
-        return "44"
-    elif has_pattern(ansi, BG_MAGENTA_PATTERNS):
-        return "45"
-    elif has_pattern(ansi, BG_CYAN_PATTERNS):
-        return "46"
-    elif has_pattern(ansi, BG_WHITE_PATTERNS):
-        return "47"
-    elif has_pattern(ansi, BG_DEFAULT_PATTERNS):
-        return "49"
-    elif has_pattern(ansi, BG_BRIGHT_BLACK_PATTERNS):
-        return "100"
-    elif has_pattern(ansi, BG_BRIGHT_RED_PATTERNS):
-        return "101"
-    elif has_pattern(ansi, BG_BRIGHT_GREEN_PATTERNS):
-        return "102"
-    elif has_pattern(ansi, BG_BRIGHT_YELLOW_PATTERNS):
-        return "103"
-    elif has_pattern(ansi, BG_BRIGHT_BLUE_PATTERNS):
-        return "104"
-    elif has_pattern(ansi, BG_BRIGHT_MAGENTA_PATTERNS):
-        return "105"
-    elif has_pattern(ansi, BG_BRIGHT_CYAN_PATTERNS):
-        return "106"
-    elif has_pattern(ansi, BG_BRIGHT_WHITE_PATTERNS):
-        return "107"
-    return ""
+# --- ANSI Sequence Parser --- #
 
 
-@lru_cache(maxsize=20000)
+@lru_cache(maxsize=10000)
+def parse_sgr_sequence(ansi: str) -> Style:
+    if not ansi.startswith("\x1b[") or not ansi.endswith("m"):
+        return Style()
+
+    tokens = tuple(ansi[2:-1].split(";"))
+    return interpret(tokens)
+
+
+@lru_cache(maxsize=10000)
+def interpret(tokens: Tuple[str, ...]) -> Style:
+    style = Style()
+    i = 0
+    while i < len(tokens):
+        token = tokens[i]
+
+        # Reset
+        if token == "0" or token == "00":
+            style = Style()
+
+        # Simple attributes
+        elif token == "1" or token == "01":
+            style = replace(style, bold=True)
+        elif token == "2":
+            style = replace(style, dim=True)
+        elif token == "3":
+            style = replace(style, italic=True)
+        elif token == "4":
+            style = replace(style, underline=True)
+        elif token == "5":
+            style = replace(style, blink=True)
+        elif token == "7":
+            style = replace(style, reverse=True)
+        elif token == "8":
+            style = replace(style, conceal=True)
+        elif token == "9":
+            style = replace(style, strike=True)
+
+        elif token == "22":
+            style = replace(style, bold=False, dim=False)
+        elif token == "23":
+            style = replace(style, italic=False)
+        elif token == "24":
+            style = replace(style, underline=False)
+        elif token == "25":
+            style = replace(style, blink=False)
+        elif token == "27":
+            style = replace(style, reverse=False)
+        elif token == "28":
+            style = replace(style, conceal=False)
+        elif token == "29":
+            style = replace(style, strike=False)
+
+        # Basic indexed colors
+        elif token.isdigit() and 30 <= int(token) <= 37:
+            style = replace(style, fg=Color("indexed", int(token) - 30))
+        elif token == "39":
+            style = replace(style, fg=Color("default"))
+
+        elif token.isdigit() and 40 <= int(token) <= 47:
+            style = replace(style, bg=Color("indexed", int(token) - 40))
+        elif token == "49":
+            style = replace(style, bg=Color("default"))
+
+        # Bright colors
+        elif token.isdigit() and 90 <= int(token) <= 97:
+            style = replace(style, fg=Color("indexed", int(token) - 90 + 8))
+        elif token.isdigit() and 100 <= int(token) <= 107:
+            style = replace(style, bg=Color("indexed", int(token) - 100 + 8))
+
+        # Extended color (indexed or rgb)
+        elif token in {"38", "48"}:
+            is_fg = token == "38"
+            if i + 1 < len(tokens):
+                mode = tokens[i + 1]
+                if mode == "5" and i + 2 < len(tokens):
+                    val = int(tokens[i + 2])
+                    if is_fg:
+                        style = replace(style, fg=Color("indexed", val))
+                    else:
+                        style = replace(style, bg=Color("indexed", val))
+                    i += 2
+                elif mode == "2" and i + 4 < len(tokens):
+                    r = int(tokens[i + 2])
+                    g = int(tokens[i + 3])
+                    b = int(tokens[i + 4])
+                    if is_fg:
+                        style = replace(style, fg=Color("rgb", (r, g, b)))
+                    else:
+                        style = replace(style, bg=Color("rgb", (r, g, b)))
+                    i += 4
+        i += 1
+
+    return style
+
+
+# --- Compatibility Functions --- #
+
+
+@lru_cache(maxsize=10000)
 def get_background(ansi: str) -> str:
-    """Get just the background color from an ANSI sequence.
+    """Extract just the background color as an ANSI sequence.
 
     Args:
         ansi: ANSI escape sequence
@@ -198,173 +189,199 @@ def get_background(ansi: str) -> str:
     Returns:
         ANSI sequence with just the background color, or empty string
     """
-    bg_color = extract_bg_color(ansi)
-    if bg_color:
-        return f"\033[{bg_color}m"
+    style = parse_sgr_sequence(ansi)
+    if style.bg.mode == "default":
+        return ""
+    elif style.bg.mode == "indexed":
+        if style.bg.value < 8:
+            return f"\x1b[{40 + style.bg.value}m"
+        elif style.bg.value < 16:
+            return f"\x1b[{100 + style.bg.value - 8}m"
+        else:
+            return f"\x1b[48;5;{style.bg.value}m"
+    elif style.bg.mode == "rgb":
+        r, g, b = style.bg.value
+        return f"\x1b[48;2;{r};{g};{b}m"
     return ""
 
 
-@lru_cache(maxsize=20000)
-def _parse_ansi_to_tuple(ansi: str) -> tuple:
-    """Parse an ANSI escape sequence into a canonical tuple representation."""
-    if not ansi:
-        return (None, None, None, None, None, None, None, None, None, None)
-
-    if has_pattern(ansi, RESET_PATTERNS):
-        return (None, None, None, None, None, None, None, None, None, None)
-
-    fg = extract_fg_color(ansi)
-    bg = extract_bg_color(ansi)
-    
-    bold = None
-    if has_pattern(ansi, BOLD_PATTERNS):
-        bold = True
-    elif has_pattern(ansi, NOT_BOLD_PATTERNS):
-        bold = False
-
-    dim = None
-    if has_pattern(ansi, DIM_PATTERNS):
-        dim = True
-    elif has_pattern(ansi, NOT_DIM_PATTERNS):
-        dim = False
-
-    italic = None
-    if has_pattern(ansi, ITALIC_PATTERNS):
-        italic = True
-    elif has_pattern(ansi, NOT_ITALIC_PATTERNS):
-        italic = False
-
-    underline = None
-    if has_pattern(ansi, UNDERLINE_PATTERNS):
-        underline = True
-    elif has_pattern(ansi, NOT_UNDERLINE_PATTERNS):
-        underline = False
-
-    blink = None
-    if has_pattern(ansi, BLINK_PATTERNS):
-        blink = True
-    elif has_pattern(ansi, NOT_BLINK_PATTERNS):
-        blink = False
-
-    reverse = None
-    if has_pattern(ansi, REVERSE_PATTERNS):
-        reverse = True
-    elif has_pattern(ansi, NOT_REVERSE_PATTERNS):
-        reverse = False
-
-    conceal = None
-    if has_pattern(ansi, CONCEAL_PATTERNS):
-        conceal = True
-    elif has_pattern(ansi, NOT_CONCEAL_PATTERNS):
-        conceal = False
-
-    strike = None
-    if has_pattern(ansi, STRIKE_PATTERNS):
-        strike = True
-    elif has_pattern(ansi, NOT_STRIKE_PATTERNS):
-        strike = False
-
-    return (fg, bg, bold, dim, italic, underline, blink, reverse, conceal, strike)
-
-
-@lru_cache(maxsize=20000)
-def _tuple_to_ansi(style_tuple: tuple) -> str:
-    """Convert a style tuple back to an ANSI escape sequence."""
-    fg, bg, bold, dim, italic, underline, blink, reverse, conceal, strike = style_tuple
-    
-    params = []
-    if fg:
-        params.append(fg)
-    if bg:
-        params.append(bg)
-
-    if bold is True:
-        params.append("1")
-    elif bold is False:
-        params.append("22")
-
-    if dim is True:
-        params.append("2")
-    elif dim is False:
-        params.append("22")
-
-    if italic is True:
-        params.append("3")
-    elif italic is False:
-        params.append("23")
-
-    if underline is True:
-        params.append("4")
-    elif underline is False:
-        params.append("24")
-
-    if blink is True:
-        params.append("5")
-    elif blink is False:
-        params.append("25")
-
-    if reverse is True:
-        params.append("7")
-    elif reverse is False:
-        params.append("27")
-
-    if conceal is True:
-        params.append("8")
-    elif conceal is False:
-        params.append("28")
-
-    if strike is True:
-        params.append("9")
-    elif strike is False:
-        params.append("29")
-
-    # Always return an ANSI string, even if empty params, unless it's a full reset
-    if not params and style_tuple != (None, None, False, False, False, False, False, False, False, False):
-        return ""
-    elif not params and style_tuple == (None, None, False, False, False, False, False, False, False, False):
-        return "\033[0m" # Explicitly return reset for a full reset tuple
-
-    # Sort parameters for consistent output and better caching
-    sorted_params = sorted(list(params))
-    return f"\033[{';'.join(sorted_params)}m"
-
-
-@lru_cache(maxsize=20000)
+@lru_cache(maxsize=10000)
 def merge_ansi_styles(base: str, new: str) -> str:
-    """Merge two ANSI style sequences."""
-    if not base:
-        return new
-    if not new:
-        return base
-    if has_pattern(new, RESET_PATTERNS):
-        return new
+    """Merge two ANSI style sequences, returning a new ANSI sequence.
 
-    base_tuple = _parse_ansi_to_tuple(base)
-    new_tuple = _parse_ansi_to_tuple(new)
+    Args:
+        base: Base ANSI sequence
+        new: New ANSI sequence to merge
 
-    # Unpack tuples for merging
-    base_fg, base_bg, base_bold, base_dim, base_italic, base_underline, base_blink, base_reverse, base_conceal, base_strike = base_tuple
-    new_fg, new_bg, new_bold, new_dim, new_italic, new_underline, new_blink, new_reverse, new_conceal, new_strike = new_tuple
+    Returns:
+        Merged ANSI sequence
+    """
+    # Check for reset sequence first
+    if new and ("\x1b[0m" in new or "\x1b[00m" in new):
+        # Reset overwrites everything
+        return style_to_ansi(parse_sgr_sequence(new))
 
-    # Merge fields - new takes precedence. If new is None, use base.
-    final_fg = new_fg if new_fg is not None else base_fg
-    final_bg = new_bg if new_bg is not None else base_bg
-    final_bold = new_bold if new_bold is not None else base_bold
-    final_dim = new_dim if new_dim is not None else base_dim
-    final_italic = new_italic if new_italic is not None else base_italic
-    final_underline = new_underline if new_underline is not None else base_underline
-    final_blink = new_blink if new_blink is not None else base_blink
-    final_reverse = new_reverse if new_reverse is not None else base_reverse
-    final_conceal = new_conceal if new_conceal is not None else base_conceal
-    final_strike = new_strike if new_strike is not None else base_strike
+    # Parse both sequences to Style objects
+    base_style = parse_sgr_sequence(base) if base else Style()
+    new_style = parse_sgr_sequence(new) if new else Style()
 
-    merged_tuple = (
-        final_fg, final_bg, final_bold, final_dim, final_italic, 
-        final_underline, final_blink, final_reverse, final_conceal, final_strike
+    # Merge the styles
+    merged = base_style.merge(new_style)
+
+    # Convert back to ANSI
+    return style_to_ansi(merged)
+
+
+@lru_cache(maxsize=10000)
+def style_to_ansi(style: Style) -> str:
+    """Convert a Style object back to an ANSI escape sequence.
+
+    Args:
+        style: Style object to convert
+
+    Returns:
+        ANSI escape sequence string
+    """
+    if style == Style():  # Default style
+        return ""
+
+    params = []
+
+    # Attributes
+    if style.bold is True:
+        params.append("1")
+    if style.dim is True:
+        params.append("2")
+    if style.italic is True:
+        params.append("3")
+    if style.underline is True:
+        params.append("4")
+    if style.blink is True:
+        params.append("5")
+    if style.reverse is True:
+        params.append("7")
+    if style.conceal is True:
+        params.append("8")
+    if style.strike is True:
+        params.append("9")
+
+    # Foreground color
+    if style.fg.mode == "indexed":
+        if style.fg.value < 8:
+            params.append(str(30 + style.fg.value))
+        elif style.fg.value < 16:
+            params.append(str(90 + style.fg.value - 8))
+        else:
+            params.append(f"38;5;{style.fg.value}")
+    elif style.fg.mode == "rgb":
+        r, g, b = style.fg.value
+        params.append(f"38;2;{r};{g};{b}")
+
+    # Background color
+    if style.bg.mode == "indexed":
+        if style.bg.value < 8:
+            params.append(str(40 + style.bg.value))
+        elif style.bg.value < 16:
+            params.append(str(100 + style.bg.value - 8))
+        else:
+            params.append(f"48;5;{style.bg.value}")
+    elif style.bg.mode == "rgb":
+        r, g, b = style.bg.value
+        params.append(f"48;2;{r};{g};{b}")
+
+    if not params:
+        return ""
+
+    return f"\x1b[{';'.join(params)}m"
+
+
+# For backwards compatibility with tests
+def _parse_ansi_to_tuple(ansi: str) -> tuple:
+    """Legacy function for tests - converts ANSI to tuple representation."""
+    style = parse_sgr_sequence(ansi)
+
+    # Convert colors to old format
+    fg = None
+    if style.fg.mode == "indexed":
+        if style.fg.value < 8:
+            fg = str(30 + style.fg.value)
+        elif style.fg.value < 16:
+            fg = str(90 + style.fg.value - 8)
+        else:
+            fg = f"38;5;{style.fg.value}"
+    elif style.fg.mode == "rgb":
+        r, g, b = style.fg.value
+        fg = f"38;2;{r};{g};{b}"
+
+    bg = None
+    if style.bg.mode == "indexed":
+        if style.bg.value < 8:
+            bg = str(40 + style.bg.value)
+        elif style.bg.value < 16:
+            bg = str(100 + style.bg.value - 8)
+        else:
+            bg = f"48;5;{style.bg.value}"
+    elif style.bg.mode == "rgb":
+        r, g, b = style.bg.value
+        bg = f"48;2;{r};{g};{b}"
+
+    return (
+        fg,
+        bg,
+        style.bold,
+        style.dim,
+        style.italic,
+        style.underline,
+        style.blink,
+        style.reverse,
+        style.conceal,
+        style.strike,
     )
 
-    return _tuple_to_ansi(merged_tuple)
 
+def _tuple_to_ansi(style_tuple: tuple) -> str:
+    """Legacy function for tests - converts tuple to ANSI."""
+    fg, bg, bold, dim, italic, underline, blink, reverse, conceal, strike = style_tuple
 
+    # Build a Style object
+    style = Style()
 
+    # Parse fg color
+    if fg:
+        if fg.startswith("38;5;"):
+            style = replace(style, fg=Color("indexed", int(fg.split(";")[2])))
+        elif fg.startswith("38;2;"):
+            parts = fg.split(";")
+            style = replace(style, fg=Color("rgb", (int(parts[2]), int(parts[3]), int(parts[4]))))
+        elif fg.isdigit():
+            val = int(fg)
+            if 30 <= val <= 37:
+                style = replace(style, fg=Color("indexed", val - 30))
+            elif 90 <= val <= 97:
+                style = replace(style, fg=Color("indexed", val - 90 + 8))
 
+    # Parse bg color
+    if bg:
+        if bg.startswith("48;5;"):
+            style = replace(style, bg=Color("indexed", int(bg.split(";")[2])))
+        elif bg.startswith("48;2;"):
+            parts = bg.split(";")
+            style = replace(style, bg=Color("rgb", (int(parts[2]), int(parts[3]), int(parts[4]))))
+        elif bg.isdigit():
+            val = int(bg)
+            if 40 <= val <= 47:
+                style = replace(style, bg=Color("indexed", val - 40))
+            elif 100 <= val <= 107:
+                style = replace(style, bg=Color("indexed", val - 100 + 8))
+
+    # Set attributes
+    style = replace(style, bold=bold)
+    style = replace(style, dim=dim)
+    style = replace(style, italic=italic)
+    style = replace(style, underline=underline)
+    style = replace(style, blink=blink)
+    style = replace(style, reverse=reverse)
+    style = replace(style, conceal=conceal)
+    style = replace(style, strike=strike)
+
+    return style_to_ansi(style)

@@ -108,8 +108,8 @@ def test_ps1_with_colors():
     # Check for bold blue for "~/projects"
     assert ("\x1b[1;34m", "~") in line_cells or ("\x1b[34;1m", "~") in line_cells
 
-    # Check for reset code
-    assert ("\x1b[0m", ":") in line_cells or ("\x1b[0m", "$") in line_cells
+    # Check for reset code (should result in empty string)
+    assert ("", ":") in line_cells or ("", "$") in line_cells
 
 
 def test_osc_string_terminator():
