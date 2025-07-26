@@ -427,9 +427,26 @@ class Parser:
         elif final_char == "l":  # RM - Reset Mode
             self._csi_dispatch_sm_rm(False)
         elif final_char == "p":  # Device status queries or mode setting
-            # Various device status queries - we consume but don't respond
-            # This could be device attributes, mode queries, etc.
-            pass
+            # Check for DECRQM (Request Mode) - has '$' intermediate
+            if "$" in self.intermediate_chars:
+                # DECRQM - Request Mode Status
+                mode = self._get_param(0, 0)
+                private = "?" in self.intermediate_chars
+
+                if private:
+                    # Private mode query
+                    status = self._get_private_mode_status(mode)
+                else:
+                    # ANSI mode query
+                    status = self._get_ansi_mode_status(mode)
+
+                # Response format: ESC[?{mode};{status}$y for private modes
+                # Response format: ESC[{mode};{status}$y for ANSI modes
+                prefix = "?" if private else ""
+                self.terminal.respond(f"\033[{prefix}{mode};{status}$y")
+            else:
+                # Other device queries - ignore for now
+                pass
         elif final_char == "t":  # Window operations
             # Various window operations (resize, position queries, etc.)
             # We consume but don't implement window operations
@@ -454,12 +471,23 @@ class Parser:
                 if self.terminal.cursor_x < self.terminal.width - 1:
                     self.terminal.cursor_x += 1
         elif final_char == "n":  # Device Status Report / Cursor Position Report
-            # This is often used by programs to query cursor position
-            # We don't need to respond as this is just for compatibility
-            pass
+            param = self._get_param(0, 0)
+            if param == 6:  # CPR - Cursor Position Report
+                row = self.terminal.cursor_y + 1  # Convert to 1-based
+                col = self.terminal.cursor_x + 1  # Convert to 1-based
+                self.terminal.respond(f"\033[{row};{col}R")
+            elif param == 5:  # DSR - Device Status Report
+                # Report OK status
+                self.terminal.respond("\033[0n")
         elif final_char == "c":  # Device Attributes
-            # Programs query terminal capabilities - we just ignore
-            pass
+            param = self._get_param(0, 0)
+            if param == 0:  # Primary Device Attributes
+                # Report as VT220 with various capabilities:
+                # 1 = 132 columns, 2 = printer port, 6 = selective erase, 8 = user defined keys
+                # 9 = national replacement character sets, 15 = technical character set
+                # 18 = user windows, 19 = dual sessions, 21 = horizontal scrolling
+                # 23 = Greek character sets, 24 = Turkish character sets, 42 = ISO Latin-2 character set
+                self.terminal.respond("\033[?62;1;2;6;8;9;15;18;21;22c")
         else:
             # Unknown CSI sequence, log it
             params_str = self.param_buffer if self.param_buffer else "<no params>"
@@ -629,6 +657,70 @@ class Parser:
 
         # Merge with existing style
         self.terminal.current_ansi_code = merge_ansi_styles(self.terminal.current_ansi_code, new_ansi_sequence)
+
+    def _get_private_mode_status(self, mode: int) -> int:
+        """Get the status of a private mode for DECRQM response.
+
+        Returns:
+        0 = not recognized
+        1 = set
+        2 = reset
+        3 = permanently set
+        4 = permanently reset
+        """
+        if mode == constants.DECCKM_CURSOR_KEYS_APPLICATION:
+            return 1 if self.terminal.cursor_application_mode else 2
+        elif mode == constants.DECAWM_AUTOWRAP:
+            return 1 if self.terminal.auto_wrap else 2
+        elif mode == constants.DECTCEM_SHOW_CURSOR:
+            return 1 if self.terminal.cursor_visible else 2
+        elif mode == constants.ALT_SCREEN_BUFFER:
+            return 1 if self.terminal.in_alt_screen else 2
+        elif mode == constants.ALT_SCREEN_BUFFER_OLDER:
+            return 1 if self.terminal.in_alt_screen else 2
+        elif mode == constants.MOUSE_TRACKING_BASIC:
+            return 1 if self.terminal.mouse_tracking else 2
+        elif mode == constants.MOUSE_TRACKING_BUTTON_EVENT:
+            return 1 if self.terminal.mouse_button_tracking else 2
+        elif mode == constants.MOUSE_TRACKING_ANY_EVENT:
+            return 1 if self.terminal.mouse_any_tracking else 2
+        elif mode == constants.MOUSE_SGR_MODE:
+            return 1 if self.terminal.mouse_sgr_mode else 2
+        elif mode == constants.MOUSE_EXTENDED_MODE:
+            return 1 if self.terminal.mouse_extended_mode else 2
+        elif mode == constants.DECBKM_BACKARROW_KEY:
+            return 1 if self.terminal.backarrow_key_sends_bs else 2
+        elif mode == constants.DECSCLM_SCROLLING_MODE:
+            return 1 if self.terminal.scroll_mode else 2
+        elif mode == constants.DECARM_AUTO_REPEAT:
+            return 1 if self.terminal.auto_repeat else 2
+        elif mode == constants.DECNKM_NUMERIC_KEYPAD:
+            return 1 if not self.terminal.numeric_keypad else 2  # Inverted
+        elif mode == constants.DECCOLM_COLUMN_MODE:
+            return 1 if self.terminal.width == 132 else 2
+        elif mode == constants.DECSCNM_SCREEN_MODE:
+            return 1 if self.terminal.reverse_screen else 2
+        elif mode == constants.DECOM_ORIGIN_MODE:
+            return 1 if self.terminal.origin_mode else 2
+        elif mode == constants.DECARSM_AUTO_RESIZE:
+            return 1 if self.terminal.auto_resize_mode else 2
+        elif mode == constants.DECKBUM_KEYBOARD_USAGE:
+            return 1 if self.terminal.keyboard_usage_mode else 2
+        else:
+            return 0  # Not recognized
+
+    def _get_ansi_mode_status(self, mode: int) -> int:
+        """Get the status of an ANSI mode for DECRQM response."""
+        if mode == constants.IRM_INSERT_REPLACE:
+            return 1 if self.terminal.insert_mode else 2
+        elif mode == constants.SRM_SEND_RECEIVE:
+            return 1 if not self.terminal.local_echo else 2  # Inverted
+        elif mode == constants.DECAWM_AUTOWRAP:
+            return 1 if self.terminal.auto_wrap else 2
+        elif mode == constants.DECTCEM_SHOW_CURSOR:
+            return 1 if self.terminal.cursor_visible else 2
+        else:
+            return 0  # Not recognized
 
     def _csi_dispatch_sm_rm(self, set_mode: bool) -> None:
         """Handle SM (Set Mode) and RM (Reset Mode) sequences."""

@@ -183,3 +183,12 @@ class UnixPTY(PTYBase):
             return await future
         except Exception:
             return ""
+
+    def flush(self) -> None:
+        """Flush any buffered output."""
+        if self._closed:
+            return
+        try:
+            os.fsync(self.master_fd)
+        except OSError:
+            pass

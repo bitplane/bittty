@@ -62,3 +62,8 @@ class PTYBase(ABC):
     async def read_async(self, size: int = constants.DEFAULT_PTY_BUFFER_SIZE) -> str:
         """Async read from PTY. Returns empty string when no data available."""
         pass
+
+    @abstractmethod
+    def flush(self) -> None:
+        """Flush any buffered output."""
+        pass

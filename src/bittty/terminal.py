@@ -640,7 +640,7 @@ class Terminal:
                 # Convert to application mode: ESC[A -> ESC OA
                 key_char = data[2]
                 translated = f"{constants.ESC}O{key_char}"
-                self._send_to_pty(translated)
+                self.send(translated)
                 return
 
         # Check if this is a function key that needs keypad mode translation
@@ -648,7 +648,7 @@ class Terminal:
         # For now, most function keys are the same in both modes
 
         # No special translation needed, send as-is
-        self._send_to_pty(data)
+        self.send(data)
 
     def input_mouse(self, x: int, y: int, button: int, event_type: str, modifiers: set[str]) -> None:
         """
@@ -692,13 +692,23 @@ class Terminal:
                 button = constants.MOUSE_BUTTON_MOVEMENT
 
             mouse_seq = f"{constants.ESC}[<{button};{x};{y}{final_char}"
-            self._send_to_pty(mouse_seq)
+            self.send(mouse_seq)
 
-    def _send_to_pty(self, data: str) -> None:
-        """Send data to PTY or stdout."""
+    def send(self, data: str) -> None:
+        """Send data to PTY without flushing (for regular input/unsolicited messages)."""
+        self._send_to_pty(data, flush=False)
+
+    def respond(self, data: str) -> None:
+        """Send response to PTY with immediate flush (for query responses)."""
+        self._send_to_pty(data, flush=True)
+
+    def _send_to_pty(self, data: str, flush: bool = False) -> None:
+        """Send data to PTY or stdout with optional flush."""
         if self.pty:
             # PTY mode
             self.pty.write(data)
+            if flush:
+                self.pty.flush()
         elif self.stdout:
             # Stream mode
             self.stdout.write(data)

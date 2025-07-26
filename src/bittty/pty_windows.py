@@ -166,3 +166,14 @@ class WindowsPTY(PTYBase):
             return data or ""
         except Exception:
             return ""
+
+    def flush(self) -> None:
+        """Flush any buffered output."""
+        if self._closed:
+            return
+        try:
+            # Windows PTY doesn't need explicit flushing
+            # pywinpty handles this automatically
+            pass
+        except Exception:
+            pass
