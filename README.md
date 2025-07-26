@@ -90,7 +90,6 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
 *   **`DECPEX` (Printer-Extent Mode):** Sets the extent of the printer.
 *   **`DECTEK` (Tektronix Mode):** Switches to Tektronix graphics mode.
 *   **`DECNKM` (Numeric-Keypad Mode):** Switches the keypad between numeric and application modes.
-*   **`DECBKM` (Backarrow-Key Mode):** Determines the character sent by the backarrow key.
 *   **`DECKBUM` (Keyboard-Usage Mode):** Controls the usage of the keyboard.
 *   **`DECNAKB` (Greek-National-Replacement-Keyboard Mode):** Enables the Greek national replacement keyboard.
 *   **`DECRLM` (Right-to-Left-Language Mode):** Enables right-to-left language support.
