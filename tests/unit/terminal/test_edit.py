@@ -1,6 +1,7 @@
 from bittty.terminal import Terminal
 from bittty import constants
 from bittty.parser import Parser
+from bittty.style import Style, parse_sgr_sequence
 
 
 def test_write_cell_overwrite():
@@ -10,20 +11,20 @@ def test_write_cell_overwrite():
     parser.feed("\x1b[31m")  # Set red color
     parser.feed("A")
     assert terminal.current_buffer.get_line_text(0) == "A         "
-    assert terminal.current_buffer.get_cell(0, 0) == ("\x1b[31m", "A")
+    assert terminal.current_buffer.get_cell(0, 0) == (parse_sgr_sequence("\x1b[31m"), "A")
     assert terminal.cursor_x == 1
 
     parser.feed("\x1b[32m")  # Set green color
     parser.feed("B")
     assert terminal.current_buffer.get_line_text(0) == "AB        "
-    assert terminal.current_buffer.get_cell(1, 0) == ("\x1b[32m", "B")
+    assert terminal.current_buffer.get_cell(1, 0) == (parse_sgr_sequence("\x1b[32m"), "B")
     assert terminal.cursor_x == 2
 
     terminal.set_cursor(0, 0)
     parser.feed("\x1b[34m")  # Set blue color
     parser.feed("C")
     assert terminal.current_buffer.get_line_text(0) == "CB        "
-    assert terminal.current_buffer.get_cell(0, 0) == ("\x1b[34m", "C")
+    assert terminal.current_buffer.get_cell(0, 0) == (parse_sgr_sequence("\x1b[34m"), "C")
     assert terminal.cursor_x == 1
 
 
@@ -40,9 +41,9 @@ def test_write_cell_insert_mode():
     parser.feed("\x1b[34m")  # Set blue color
     parser.feed("C")
     assert terminal.current_buffer.get_line_text(0) == "CAB       "
-    assert terminal.current_buffer.get_cell(0, 0) == ("\x1b[34m", "C")
-    assert terminal.current_buffer.get_cell(1, 0) == ("\x1b[31m", "A")
-    assert terminal.current_buffer.get_cell(2, 0) == ("\x1b[32m", "B")
+    assert terminal.current_buffer.get_cell(0, 0) == (parse_sgr_sequence("\x1b[34m"), "C")
+    assert terminal.current_buffer.get_cell(1, 0) == (parse_sgr_sequence("\x1b[31m"), "A")
+    assert terminal.current_buffer.get_cell(2, 0) == (parse_sgr_sequence("\x1b[32m"), "B")
     assert terminal.cursor_x == 1
 
 
@@ -77,9 +78,9 @@ def test_clear_rect():
     for y in range(5):
         for x in range(5):
             if 1 <= x <= 3 and 1 <= y <= 3:
-                assert terminal.current_buffer.get_cell(x, y) == ("", " ")
+                assert terminal.current_buffer.get_cell(x, y) == (Style(), " ")
             else:
-                assert terminal.current_buffer.get_cell(x, y) == ("\x1b[31m", "X")
+                assert terminal.current_buffer.get_cell(x, y) == (parse_sgr_sequence("\x1b[31m"), "X")
 
 
 def test_clear_screen():

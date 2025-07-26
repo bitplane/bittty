@@ -11,6 +11,7 @@ should interact with the bittty API.
 """
 
 import asyncio
+import os
 import sys
 import termios
 import tty
@@ -75,7 +76,7 @@ class StdoutFrontend:
                 print(f"\033[{i+1}H{line}\033[K", end="")
 
         # Show status line at bottom
-        status = f"bittty demo | {self.width}x{self.height} | Type 'exit' to quit"
+        status = f"bittty demo | {self.width}x{self.height} | exit normally to quit"
         print(f"\033[{self.height+1}H\033[7m{status:<{self.width}}\033[0m", end="", flush=True)
 
     def handle_input_char(self, char):
@@ -115,8 +116,6 @@ class StdoutFrontend:
 
         def read_char():
             try:
-                import os
-
                 data = os.read(sys.stdin.fileno(), 1)
                 return data.decode("utf-8", errors="replace")
             except (OSError, BlockingIOError):

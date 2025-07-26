@@ -6,10 +6,11 @@ from typing import List, Tuple
 
 from . import constants
 from .color import get_cursor_code, reset_code
+from .style import Style, parse_sgr_sequence
 
 
-# Type alias for a cell: (ANSI code, character)
-Cell = Tuple[str, str]
+# Type alias for a cell: (Style, character)
+Cell = Tuple[Style, str]
 
 
 class Buffer:
@@ -19,8 +20,8 @@ class Buffer:
         """Initialize buffer with given dimensions."""
         self.width = width
         self.height = height
-        # Initialize grid with empty cells
-        self.grid: List[List[Cell]] = [[("", " ") for _ in range(width)] for _ in range(height)]
+        # Initialize grid with empty cells (default style, space character)
+        self.grid: List[List[Cell]] = [[(Style(), " ") for _ in range(width)] for _ in range(height)]
 
     def get_content(self) -> List[List[Cell]]:
         """Get buffer content as a 2D grid."""
@@ -30,33 +31,69 @@ class Buffer:
         """Get cell at position."""
         if 0 <= y < self.height and 0 <= x < self.width:
             return self.grid[y][x]
-        return ("", " ")
+        return (Style(), " ")
 
-    def set_cell(self, x: int, y: int, char: str, ansi_code: str = "") -> None:
-        """Set a single cell at position."""
+    def set_cell(self, x: int, y: int, char: str, style_or_ansi=None) -> None:
+        """Set a single cell at position.
+
+        Args:
+            x, y: Position
+            char: Character to store
+            style_or_ansi: Either a Style object or ANSI string (for backward compatibility)
+        """
         if 0 <= y < self.height and 0 <= x < self.width:
-            self.grid[y][x] = (ansi_code, char)
+            if style_or_ansi is None:
+                style = Style()
+            elif isinstance(style_or_ansi, Style):
+                style = style_or_ansi
+            elif isinstance(style_or_ansi, str):
+                # Parse ANSI code to Style for backward compatibility
+                style = parse_sgr_sequence(style_or_ansi) if style_or_ansi else Style()
+            else:
+                style = Style()
 
-    def set(self, x: int, y: int, text: str, ansi_code: str = "") -> None:
+            self.grid[y][x] = (style, char)
+
+    def set(self, x: int, y: int, text: str, style_or_ansi=None) -> None:
         """Set text at position, overwriting existing content."""
         if not (0 <= y < self.height):
             return
 
+        # Convert style_or_ansi to Style once
+        if style_or_ansi is None:
+            style = Style()
+        elif isinstance(style_or_ansi, Style):
+            style = style_or_ansi
+        elif isinstance(style_or_ansi, str):
+            style = parse_sgr_sequence(style_or_ansi) if style_or_ansi else Style()
+        else:
+            style = Style()
+
         for i, char in enumerate(text):
             if x + i >= self.width:
                 break
-            self.grid[y][x + i] = (ansi_code, char)
+            self.grid[y][x + i] = (style, char)
 
-    def insert(self, x: int, y: int, text: str, ansi_code: str = "") -> None:
+    def insert(self, x: int, y: int, text: str, style_or_ansi=None) -> None:
         """Insert text at position, shifting existing content right."""
         if not (0 <= y < self.height) or x >= self.width:
             return
+
+        # Convert style_or_ansi to Style once
+        if style_or_ansi is None:
+            style = Style()
+        elif isinstance(style_or_ansi, Style):
+            style = style_or_ansi
+        elif isinstance(style_or_ansi, str):
+            style = parse_sgr_sequence(style_or_ansi) if style_or_ansi else Style()
+        else:
+            style = Style()
 
         # Get the current row
         row = self.grid[y]
 
         # Create new cells for the inserted text
-        new_cells = [(ansi_code, char) for char in text]
+        new_cells = [(style, char) for char in text]
 
         # Insert at position
         if x < len(row):
@@ -68,7 +105,7 @@ class Buffer:
             # Pad with spaces if needed
             padding_needed = x - len(row)
             if padding_needed > 0:
-                row.extend([("", " ")] * padding_needed)
+                row.extend([(Style(), " ")] * padding_needed)
             row.extend(new_cells)
             # Truncate to width
             self.grid[y] = row[: self.width]
@@ -89,42 +126,62 @@ class Buffer:
                 new_row.append(("", " "))
             self.grid[y] = new_row
 
-    def clear_region(self, x1: int, y1: int, x2: int, y2: int, ansi_code: str = "") -> None:
+    def clear_region(self, x1: int, y1: int, x2: int, y2: int, style_or_ansi=None) -> None:
         """Clear a rectangular region."""
+        # Convert to Style
+        if style_or_ansi is None:
+            style = Style()
+        elif isinstance(style_or_ansi, Style):
+            style = style_or_ansi
+        elif isinstance(style_or_ansi, str):
+            style = parse_sgr_sequence(style_or_ansi) if style_or_ansi else Style()
+        else:
+            style = Style()
+
         for y in range(max(0, y1), min(self.height, y2 + 1)):
             for x in range(max(0, x1), min(self.width, x2 + 1)):
-                self.grid[y][x] = (ansi_code, " ")
+                self.grid[y][x] = (style, " ")
 
     def clear_line(
-        self, y: int, mode: int = constants.ERASE_FROM_CURSOR_TO_END, cursor_x: int = 0, ansi_code: str = ""
+        self, y: int, mode: int = constants.ERASE_FROM_CURSOR_TO_END, cursor_x: int = 0, style_or_ansi=None
     ) -> None:
         """Clear line content."""
         if not (0 <= y < self.height):
             return
 
+        # Convert to Style
+        if style_or_ansi is None:
+            style = Style()
+        elif isinstance(style_or_ansi, Style):
+            style = style_or_ansi
+        elif isinstance(style_or_ansi, str):
+            style = parse_sgr_sequence(style_or_ansi) if style_or_ansi else Style()
+        else:
+            style = Style()
+
         if mode == constants.ERASE_FROM_CURSOR_TO_END:
             # Clear from cursor to end of line
             for x in range(cursor_x, self.width):
-                self.grid[y][x] = (ansi_code, " ")
+                self.grid[y][x] = (style, " ")
         elif mode == constants.ERASE_FROM_START_TO_CURSOR:
             # Clear from start to cursor
             for x in range(0, min(cursor_x + 1, self.width)):
-                self.grid[y][x] = (ansi_code, " ")
+                self.grid[y][x] = (style, " ")
         elif mode == constants.ERASE_ALL:
             # Clear entire line
-            self.grid[y] = [(ansi_code, " ") for _ in range(self.width)]
+            self.grid[y] = [(style, " ") for _ in range(self.width)]
 
     def scroll_up(self, count: int) -> None:
         """Scroll content up, removing top lines and adding blank lines at bottom."""
         for _ in range(count):
             self.grid.pop(0)
-            self.grid.append([("", " ") for _ in range(self.width)])
+            self.grid.append([(Style(), " ") for _ in range(self.width)])
 
     def scroll_down(self, count: int) -> None:
         """Scroll content down, removing bottom lines and adding blank lines at top."""
         for _ in range(count):
             self.grid.pop()
-            self.grid.insert(0, [("", " ") for _ in range(self.width)])
+            self.grid.insert(0, [(Style(), " ") for _ in range(self.width)])
 
     def resize(self, width: int, height: int) -> None:
         """Resize buffer to new dimensions."""
@@ -132,7 +189,7 @@ class Buffer:
         if len(self.grid) < height:
             # Add new rows
             for _ in range(height - len(self.grid)):
-                self.grid.append([("", " ") for _ in range(width)])
+                self.grid.append([(Style(), " ") for _ in range(width)])
         elif len(self.grid) > height:
             # Remove excess rows
             self.grid = self.grid[:height]
@@ -142,7 +199,7 @@ class Buffer:
             row = self.grid[y]
             if len(row) < width:
                 # Extend row
-                row.extend([("", " ")] * (width - len(row)))
+                row.extend([(Style(), " ")] * (width - len(row)))
             elif len(row) > width:
                 # Truncate row
                 self.grid[y] = row[:width]
@@ -178,10 +235,11 @@ class Buffer:
 
         parts = []
         row = self.grid[y]
+        current_style = Style()  # Start with default style
 
         # Process each cell up to specified width
         for x in range(min(len(row), width)):
-            ansi_code, char = row[x]
+            cell_style, char = row[x]
 
             # Handle mouse cursor (convert to 0-based, as original code does mouse_x - 1)
             if show_mouse and x == (mouse_x - 1) and y == (mouse_y - 1):
@@ -189,25 +247,32 @@ class Buffer:
 
             # Handle text cursor position
             if show_cursor and x == cursor_x and y == cursor_y:
-                # Add cursor style
-                parts.append(ansi_code)
+                # For cursor, we need to apply cursor style on top of cell style
+                transition = current_style.diff(cell_style)
+                parts.append(transition)
                 parts.append(get_cursor_code())
                 parts.append(char)
                 parts.append("\033[27m")  # Turn off reverse video only
+                current_style = cell_style  # Update tracking
             else:
-                # Normal cell
-                parts.append(ansi_code)
+                # Normal cell - generate diff from current to cell style
+                transition = current_style.diff(cell_style)
+                parts.append(transition)
                 parts.append(char)
+                current_style = cell_style  # Update tracking
 
         # Pad to width if needed
         current_width = min(len(row), width)
         if current_width < width:
-            # Reset all attributes for padding (including background)
-            parts.append(reset_code())
+            # Transition to default style for padding
+            reset_transition = current_style.diff(Style())
+            parts.append(reset_transition)
             parts.append(" " * (width - current_width))
+            current_style = Style()
 
         # Always end with a reset to prevent bleeding to next line
-        parts.append(reset_code())
+        final_reset = current_style.diff(Style())
+        parts.append(final_reset)
 
         return "".join(parts)
 

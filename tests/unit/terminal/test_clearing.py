@@ -13,12 +13,14 @@ def test_clear_rect():
             terminal.current_buffer.set_cell(x, y, "X")
 
     terminal.clear_rect(2, 1, 5, 3)
+    from bittty.style import Style
+
     for y in range(5):
         for x in range(10):
             if 1 <= y <= 3 and 2 <= x <= 5:
-                assert terminal.current_buffer.get_cell(x, y) == ("", " ")
+                assert terminal.current_buffer.get_cell(x, y) == (Style(), " ")
             else:
-                assert terminal.current_buffer.get_cell(x, y) == ("", "X")
+                assert terminal.current_buffer.get_cell(x, y) == (Style(), "X")
 
 
 def test_clear_rect_with_style():
@@ -28,12 +30,16 @@ def test_clear_rect_with_style():
             terminal.current_buffer.set_cell(x, y, "X", f"\x1b[{31+y}m")
 
     terminal.clear_rect(2, 1, 5, 3, "\x1b[33m")
+    from bittty.style import parse_sgr_sequence
+
+    yellow_style = parse_sgr_sequence("\x1b[33m")
     for y in range(5):
         for x in range(10):
             if 1 <= y <= 3 and 2 <= x <= 5:
-                assert terminal.current_buffer.get_cell(x, y) == ("\x1b[33m", " ")
+                assert terminal.current_buffer.get_cell(x, y) == (yellow_style, " ")
             else:
-                assert terminal.current_buffer.get_cell(x, y) == (f"\x1b[{31+y}m", "X")
+                expected_style = parse_sgr_sequence(f"\x1b[{31+y}m")
+                assert terminal.current_buffer.get_cell(x, y) == (expected_style, "X")
 
 
 def test_clear_line_from_cursor_to_end():

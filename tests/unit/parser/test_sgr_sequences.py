@@ -389,3 +389,138 @@ def test_sgr_merge_complex_scenario():
     assert terminal.current_ansi_code == ""  # Reset results in empty
     parser.feed(f"{ESC}[5;46m")
     assert terminal.current_ansi_code in ["\x1b[5;46m", "\x1b[46;5m"]  # Accept different orderings
+
+
+def test_sgr_sequences_should_not_accumulate_raw_codes():
+    """Test that ANSI sequences accumulate styles, not raw escape code numbers.
+
+    This test reproduces the bug where RGB values (5,6,7) get mixed with
+    previous blink/reverse codes, causing flashing when it shouldn't.
+    """
+    terminal = Terminal()
+    parser = Parser(terminal)
+
+    # Send blink + reverse
+    parser.feed("\x1b[5;7m")
+    first_result = terminal.current_ansi_code
+    assert first_result == "\x1b[5;7m"
+
+    # Send RGB colors - this should REPLACE the style, not accumulate raw codes
+    parser.feed("\x1b[38;2;88;88;121;48;2;5;6;7m")
+    second_result = terminal.current_ansi_code
+
+    # The result should correctly combine the styles - the exact sequence format
+    # may vary but should contain all the right components
+    # What we DON'T want is broken parsing that misinterprets RGB values as SGR codes
+
+    # The result should contain both the accumulated styles AND the RGB colors
+    # in a properly formatted sequence
+    assert "38;2;88;88;121" in second_result, "Should contain foreground RGB"
+    assert "48;2;5;6;7" in second_result, "Should contain background RGB"
+    assert "5" in second_result and "7" in second_result, "Should maintain blink and reverse"
+
+    # Verify the sequence actually parses correctly
+    from bittty.style import parse_sgr_sequence
+
+    style = parse_sgr_sequence(second_result)
+    assert style.blink is True, "Should maintain blink from first sequence"
+    assert style.reverse is True, "Should maintain reverse from first sequence"
+    assert style.fg.mode == "rgb" and style.fg.value == (88, 88, 121), "Should have RGB foreground"
+    assert style.bg.mode == "rgb" and style.bg.value == (5, 6, 7), "Should have RGB background"
+
+
+def test_reset_sequence_after_rgb_colors():
+    """Test that reset sequences properly clear RGB colors and other attributes.
+
+    This reproduces the bug where reset sequences don't work after RGB colors,
+    causing terminal prompts to keep blue color instead of resetting to white.
+    """
+    terminal = Terminal()
+    parser = Parser(terminal)
+
+    # Set some RGB colors (like from the ANSI file)
+    parser.feed("\x1b[38;2;88;88;121;48;2;5;6;7m")
+    colored_result = terminal.current_ansi_code
+    assert "38;2;88;88;121" in colored_result, "Should have RGB foreground"
+    assert "48;2;5;6;7" in colored_result, "Should have RGB background"
+
+    # Now send reset sequence (like at end of prompt: [34m~/path[0m$)
+    parser.feed("\x1b[0m")
+    reset_result = terminal.current_ansi_code
+
+    # After reset, terminal should have no active styling
+    assert reset_result == "", f"Expected empty string after reset, got {repr(reset_result)}"
+
+    # Verify by parsing the result
+    from bittty.style import parse_sgr_sequence, Style
+
+    reset_style = parse_sgr_sequence(reset_result) if reset_result else Style()
+    assert reset_style.fg.mode == "default", "Foreground should be default after reset"
+    assert reset_style.bg.mode == "default", "Background should be default after reset"
+    assert reset_style.blink is None, "Should have no blink after reset"
+    assert reset_style.reverse is None, "Should have no reverse after reset"
+
+
+def test_prompt_color_reset_after_ansi_file():
+    """Test that terminal colors reset properly in a prompt-like scenario.
+
+    Simulates: [34m~/path[0m$ where the $ should be white, not blue.
+    This reproduces the bug where colors persist after reset in complex sequences.
+    """
+    terminal = Terminal()
+    parser = Parser(terminal)
+
+    # Simulate displaying an ANSI file with RGB colors
+    parser.feed("\x1b[38;2;88;88;121;48;2;5;6;7m")
+    # Then simulate the end of a prompt with blue directory and reset
+    parser.feed("\x1b[34m")  # Blue color for directory
+    directory_result = terminal.current_ansi_code
+    assert "34" in directory_result, "Should have blue color"
+
+    # Now reset (like after ~/path[0m$)
+    parser.feed("\x1b[0m")
+    final_result = terminal.current_ansi_code
+
+    # The prompt $ and subsequent text should be default color (white)
+    assert final_result == "", f"Expected empty string after reset, got {repr(final_result)}"
+
+    # Test that new text after $ stays default
+    parser.feed("some text")  # This would be typed after the $
+    text_result = terminal.current_ansi_code
+    assert text_result == "", f"Text after reset should be default color, got {repr(text_result)}"
+
+
+def test_buffer_outputs_reset_codes_for_default_style_cells():
+    """Test that buffer outputs reset codes when cells have no style.
+
+    This reproduces the pen color bug where cells with empty style don't
+    output reset codes, causing terminal colors to persist incorrectly.
+    """
+    from bittty.buffer import Buffer
+
+    buffer = Buffer(width=10, height=3)
+
+    # Write colored text to position 0
+    buffer.set_cell(0, 0, "A", "\x1b[38;2;255;0;0m")  # Red text
+
+    # Write default text to position 1 (this should reset the color)
+    buffer.set_cell(1, 0, "B", "")  # No style = default
+
+    # Get the line output
+    line_output = buffer.get_line(0, width=2)
+
+    print(f"Line output: {repr(line_output)}")
+
+    # The output should contain a reset code before the "B"
+    # Currently it probably outputs: '\x1b[38;2;255;0;0mA' + 'B' (missing reset)
+    # Should output: '\x1b[38;2;255;0;0mA' + '\x1b[0m' + 'B'
+
+    assert (
+        "\x1b[0m" in line_output
+    ), f"Buffer should output reset code for default style cells, got: {repr(line_output)}"
+
+    # Verify the reset comes between A and B
+    parts = line_output.split("\x1b[0m")
+    if len(parts) >= 2:
+        assert "A" in parts[0], "A should come before reset"
+        assert "B" in parts[1], "B should come after reset"

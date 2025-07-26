@@ -76,6 +76,22 @@ class Style:
             strike=merge_attr(self.strike, other.strike),
         )
 
+    @lru_cache(maxsize=10000)
+    def diff(self, other: "Style") -> str:
+        """Generate minimal ANSI sequence to transition to another style."""
+        if self == other:
+            return ""
+
+        if other == Style():  # Target is default
+            return "\x1b[0m"
+
+        if self == Style():  # Coming from default
+            return style_to_ansi(other)
+
+        # For now, reset + target (can optimize later for partial changes)
+        target_ansi = style_to_ansi(other)
+        return f"\x1b[0m{target_ansi}" if target_ansi else "\x1b[0m"
+
 
 # --- ANSI Sequence Parser --- #
 

@@ -101,15 +101,19 @@ def test_ps1_with_colors():
     # This is a simplified check, as full ANSI parsing is complex
     line_cells = terminal.current_buffer.get_content()[0]
 
-    # Check for bold green for "user@host"
-    # The order of params in the ANSI code may vary, so we check for both
-    assert ("\x1b[1;32m", "u") in line_cells or ("\x1b[32;1m", "u") in line_cells
+    # Check for bold green for "user@host" - now using Style objects
+    from bittty.style import Style, Color
+
+    bold_green_style = Style(fg=Color("indexed", 2), bold=True)
+    assert (bold_green_style, "u") in line_cells
 
     # Check for bold blue for "~/projects"
-    assert ("\x1b[1;34m", "~") in line_cells or ("\x1b[34;1m", "~") in line_cells
+    bold_blue_style = Style(fg=Color("indexed", 4), bold=True)
+    assert (bold_blue_style, "~") in line_cells
 
-    # Check for reset code (should result in empty string)
-    assert ("", ":") in line_cells or ("", "$") in line_cells
+    # Check for default style (after reset)
+    default_style = Style()
+    assert (default_style, ":") in line_cells or (default_style, "$") in line_cells
 
 
 def test_osc_string_terminator():
