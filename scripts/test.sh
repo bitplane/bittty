@@ -2,4 +2,4 @@
 
 source .venv/bin/activate
 
-pytest .
+pytest -vv --asyncio-mode=auto .
