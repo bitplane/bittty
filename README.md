@@ -53,6 +53,7 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
 - [ ] bugs
   - [ ] corruption in stream - debug it
   - [ ] scroll region: scroll up in `vim` corrupts outside scroll region
+  - [ ] erase but keep background colour
 - [ ] add terminal visuals
   - [ ] bell flash effect
 - [ ] Support themes
