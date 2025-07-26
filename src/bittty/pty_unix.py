@@ -14,11 +14,13 @@ import fcntl
 import signal
 import asyncio
 import subprocess
+import logging
 from typing import Optional, Dict
 
 from .pty_base import PTYBase
 from . import constants
-from .log import measure_performance, info
+
+logger = logging.getLogger(__name__)
 
 
 class UnixPTY(PTYBase):
@@ -27,10 +29,9 @@ class UnixPTY(PTYBase):
     def __init__(self, rows: int = constants.DEFAULT_TERMINAL_HEIGHT, cols: int = constants.DEFAULT_TERMINAL_WIDTH):
         super().__init__(rows, cols)
         self.master_fd, self.slave_fd = pty.openpty()
-        info(f"Created PTY: master_fd={self.master_fd}, slave_fd={self.slave_fd}")
+        logger.info(f"Created PTY: master_fd={self.master_fd}, slave_fd={self.slave_fd}")
         self.resize(rows, cols)
 
-    @measure_performance("UnixPTY")
     def read(self, size: int = constants.DEFAULT_PTY_BUFFER_SIZE) -> str:
         """Read data from the PTY."""
         if self._closed:
@@ -44,7 +45,6 @@ class UnixPTY(PTYBase):
                 raise
             return ""
 
-    @measure_performance("UnixPTY")
     def write(self, data: str) -> int:
         """Write data to the PTY."""
         if self._closed:
@@ -70,22 +70,22 @@ class UnixPTY(PTYBase):
     def close(self) -> None:
         """Close the PTY file descriptors."""
         if not self._closed:
-            info(f"Closing PTY: master_fd={self.master_fd}, slave_fd={self.slave_fd}")
+            logger.info(f"Closing PTY: master_fd={self.master_fd}, slave_fd={self.slave_fd}")
 
             # Send SIGHUP to process group (like a shell would)
             if self._process is not None:
                 try:
                     os.killpg(os.getpgid(self._process.pid), signal.SIGHUP)
-                    info(f"Sent SIGHUP to process group {os.getpgid(self._process.pid)}")
+                    logger.info(f"Sent SIGHUP to process group {os.getpgid(self._process.pid)}")
                 except (OSError, AttributeError) as e:
-                    info(f"Could not send SIGHUP to process group: {e}")
+                    logger.info(f"Could not send SIGHUP to process group: {e}")
 
             # Remove from asyncio event loop first
             try:
                 loop = asyncio.get_event_loop()
                 if self.master_fd and isinstance(self.master_fd, int):
                     loop.remove_reader(self.master_fd)
-                    info(f"Removed master_fd {self.master_fd} from event loop")
+                    logger.info(f"Removed master_fd {self.master_fd} from event loop")
             except (RuntimeError, ValueError, OSError):
                 # Event loop not running or fd not registered
                 pass

@@ -9,11 +9,13 @@ from __future__ import annotations
 import os
 import asyncio
 import subprocess
+import logging
 from typing import Optional, Dict
 
 from .pty_base import PTYBase
 from . import constants
-from .log import measure_performance
+
+logger = logging.getLogger(__name__)
 
 
 class WinptyProcessWrapper:
@@ -67,7 +69,6 @@ class WindowsPTY(PTYBase):
         except ImportError:
             raise OSError("pywinpty not installed. Install with: pip install textual-terminal[windows]")
 
-    @measure_performance("WindowsPTY")
     def read(self, size: int = constants.DEFAULT_PTY_BUFFER_SIZE) -> str:
         """Read data from the PTY."""
         if self._closed:
@@ -81,7 +82,6 @@ class WindowsPTY(PTYBase):
         except Exception:
             return ""
 
-    @measure_performance("WindowsPTY")
     def write(self, data: str) -> int:
         """Write data to the PTY."""
         if self._closed:

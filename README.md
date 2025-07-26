@@ -6,7 +6,13 @@ Currently buggy and a bit slow, but it's still somewhat usable.
 
 ## Demo
 
-At present, use the textual demo to see it in action:
+Run the standalone demo:
+
+```bash
+python ./demo/terminal.py
+```
+
+Or use the textual demo to see it in a TUI:
 
 ```bash
 uvx textual-tty
@@ -40,7 +46,7 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
 
 - [ ] split pty out into a cross platform package
 - [x] break terminal project out from Textual deps
-  - [ ] write a minimal demo that doesn't need textual
+  - [x] write a minimal demo that doesn't need textual
   - [ ] gui
     - [ ] make `framebuffer.py`
     - [ ] choose a backend
