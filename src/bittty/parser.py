@@ -448,7 +448,9 @@ class Parser:
             count = self._get_param(0, 1)
             # For now, treat this as delete characters (could be improved)
             for _ in range(count):
-                self.terminal.current_buffer.set(self.terminal.cursor_x, self.terminal.cursor_y, " ")
+                self.terminal.current_buffer.set(
+                    self.terminal.cursor_x, self.terminal.cursor_y, " ", self.terminal.current_ansi_code
+                )
                 if self.terminal.cursor_x < self.terminal.width - 1:
                     self.terminal.cursor_x += 1
         elif final_char == "n":  # Device Status Report / Cursor Position Report

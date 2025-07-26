@@ -182,6 +182,25 @@ def test_csi_ech_erase_character(standard_terminal: Terminal):
     assert "before-    -after" in line
 
 
+def test_csi_ech_erase_character_preserves_background_color(standard_terminal: Terminal):
+    """Test CSI X (ECH - Erase Character) preserves background color."""
+    from bittty.style import parse_sgr_sequence
+
+    parser = Parser(standard_terminal)
+    # Set background color to green and write some text
+    parser.feed("\x1b[42mHELLO")  # Green background
+    standard_terminal.cursor_x = 1  # Position at 'E'
+    parser.feed("\x1b[3X")  # Erase 3 characters (ELL)
+
+    # Check that erased characters have green background
+    row = standard_terminal.current_buffer.get_content()[0]
+    assert row[0] == (parse_sgr_sequence("\x1b[42m"), "H")  # Original H with green background
+    assert row[1] == (parse_sgr_sequence("\x1b[42m"), " ")  # Erased E becomes space with green background
+    assert row[2] == (parse_sgr_sequence("\x1b[42m"), " ")  # Erased L becomes space with green background
+    assert row[3] == (parse_sgr_sequence("\x1b[42m"), " ")  # Erased L becomes space with green background
+    assert row[4] == (parse_sgr_sequence("\x1b[42m"), "O")  # Original O with green background
+
+
 def test_csi_decsc_and_decrc_save_restore_cursor(standard_terminal: Terminal):
     """Test CSI s (DECSC) and CSI u (DECRC) for saving and restoring cursor."""
     parser = Parser(standard_terminal)

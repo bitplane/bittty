@@ -6,3 +6,4 @@ dist
 coverage.json
 docs/pydoc
 *.ansi
+*.log
