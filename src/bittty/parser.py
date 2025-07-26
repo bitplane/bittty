@@ -501,6 +501,8 @@ class Parser:
                 self.terminal.set_mode(constants.MOUSE_SGR_MODE, set_mode, private=True)
             elif param == constants.MOUSE_EXTENDED_MODE:
                 self.terminal.set_mode(constants.MOUSE_EXTENDED_MODE, set_mode, private=True)
+            elif param == constants.DECBKM_BACKARROW_KEY:
+                self.terminal.backarrow_key_sends_bs = set_mode
             # Add more private modes as needed
 
     # --- OSC, DCS, and other String-based Sequence Handlers ---

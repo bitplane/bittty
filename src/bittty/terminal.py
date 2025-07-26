@@ -80,6 +80,7 @@ class Terminal:
         self.mouse_any_tracking = False
         self.mouse_sgr_mode = False
         self.mouse_extended_mode = False
+        self.backarrow_key_sends_bs = False  # DECBKM: False = sends DEL, True = sends BS
 
         # Screen buffers
         self.primary_buffer = Buffer(width, height)  # With scrollback (future)
@@ -500,6 +501,14 @@ class Terminal:
             else:
                 sequence = f"{constants.ESC}[1;{modifier}{constants.NAV_KEYS[char]}"
             self.input(sequence)
+            return
+
+        # Handle backspace key (DECBKM mode)
+        if char == constants.BS:
+            if self.backarrow_key_sends_bs:
+                self.input(constants.BS)  # Send BS (0x08)
+            else:
+                self.input(constants.DEL)  # Send DEL (0x7F) - default
             return
 
         # Handle control characters (Ctrl+A = \x01, etc.)
