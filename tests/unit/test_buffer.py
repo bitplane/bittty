@@ -240,3 +240,203 @@ def test_resize_shrink_width():
     assert buffer.width == 3
     assert buffer.get_line_text(0) == "ABC"  # Truncated
     assert buffer.get_line_text(1) == "GHI"
+
+
+def test_delete_out_of_bounds():
+    """Test delete method with out of bounds coordinates."""
+    buffer = Buffer(width=5, height=3)
+    buffer.set(0, 0, "Hello")
+
+    # Delete with x >= width should return early (line 116)
+    buffer.delete(5, 0, 1)  # x == width
+    buffer.delete(10, 0, 1)  # x > width
+
+    # Buffer should be unchanged
+    assert buffer.get_line_text(0) == "Hello"
+
+
+def test_clear_region_with_style_object():
+    """Test clear_region with Style object (line 135)."""
+    buffer = Buffer(width=5, height=3)
+    buffer.set(0, 0, "XXXXX")
+
+    style = Style(bold=True)
+    buffer.clear_region(1, 0, 3, 0, style)
+
+    # Check that cleared region has the provided style
+    for x in range(1, 4):
+        cell_style, char = buffer.get_cell(x, 0)
+        assert char == " "
+        assert isinstance(cell_style, Style)
+
+
+def test_clear_region_with_invalid_style():
+    """Test clear_region with invalid style_or_ansi falls back to default (line 139)."""
+    buffer = Buffer(width=5, height=3)
+    buffer.set(0, 0, "XXXXX")
+
+    # Pass invalid type - should fall back to default Style
+    buffer.clear_region(1, 0, 3, 0, 123)
+
+    # Should clear with default style
+    for x in range(1, 4):
+        cell_style, char = buffer.get_cell(x, 0)
+        assert char == " "
+        assert isinstance(cell_style, Style)
+
+
+def test_clear_line_with_style_object():
+    """Test clear_line with Style object (line 156)."""
+    buffer = Buffer(width=5, height=3)
+    buffer.set(0, 0, "XXXXX")
+
+    from bittty import constants
+
+    style = Style(italic=True)
+    buffer.clear_line(0, constants.ERASE_ALL, 0, style)
+
+    # Check that line was cleared with provided style
+    for x in range(5):
+        cell_style, char = buffer.get_cell(x, 0)
+        assert char == " "
+        assert isinstance(cell_style, Style)
+
+
+def test_clear_line_with_invalid_style():
+    """Test clear_line with invalid style_or_ansi falls back to default (line 160)."""
+    buffer = Buffer(width=5, height=3)
+    buffer.set(0, 0, "XXXXX")
+
+    from bittty import constants
+
+    # Pass invalid type - should fall back to default Style
+    buffer.clear_line(0, constants.ERASE_ALL, 0, 123)
+
+    # Should clear with default style
+    for x in range(5):
+        cell_style, char = buffer.get_cell(x, 0)
+        assert char == " "
+        assert isinstance(cell_style, Style)
+
+
+def test_get_line_text_out_of_bounds():
+    """Test get_line_text with out of bounds y coordinate (line 215)."""
+    buffer = Buffer(width=5, height=3)
+    buffer.set(0, 0, "Hello")
+
+    # Out of bounds should return empty string
+    assert buffer.get_line_text(-1) == ""
+    assert buffer.get_line_text(3) == ""
+    assert buffer.get_line_text(10) == ""
+
+
+def test_get_line_out_of_bounds():
+    """Test get_line with out of bounds y coordinate (line 230)."""
+    buffer = Buffer(width=5, height=3)
+
+    # Out of bounds should return empty string
+    assert buffer.get_line(-1) == ""
+    assert buffer.get_line(3) == ""
+    assert buffer.get_line(10) == ""
+
+
+def test_get_line_with_explicit_width():
+    """Test get_line with explicitly provided width (line 234)."""
+    buffer = Buffer(width=10, height=3)
+    buffer.set(0, 0, "Hello")
+
+    # Use explicit width different from buffer width
+    result = buffer.get_line(0, width=3)
+
+    # Should only process first 3 characters
+    # This tests the width override functionality
+    assert result  # Should have some content, exact format depends on style processing
+
+
+def test_get_line_with_cursor_display():
+    """Test get_line with cursor display (lines 268-271)."""
+    buffer = Buffer(width=10, height=3)
+    buffer.set(0, 0, "Hello")
+
+    # Test cursor display at different positions
+    result = buffer.get_line(0, cursor_x=2, cursor_y=0, show_cursor=True)
+    assert result  # Should contain cursor formatting codes
+
+    # Test padding with cursor beyond content (lines 268-271)
+    result = buffer.get_line(0, width=15, cursor_x=12, cursor_y=0, show_cursor=True)
+    assert result  # Should handle padding when cursor is beyond content
+
+
+def test_get_line_tuple_out_of_bounds():
+    """Test get_line_tuple with out of bounds y coordinate (line 291-292)."""
+    buffer = Buffer(width=5, height=3)
+
+    # Out of bounds should return empty tuple
+    assert buffer.get_line_tuple(-1) == tuple()
+    assert buffer.get_line_tuple(3) == tuple()
+    assert buffer.get_line_tuple(10) == tuple()
+
+
+def test_get_line_tuple_with_explicit_width():
+    """Test get_line_tuple with explicit width (lines 294-296)."""
+    buffer = Buffer(width=10, height=3)
+    buffer.set(0, 0, "Hello")
+
+    # Use explicit width
+    result = buffer.get_line_tuple(0, width=3)
+
+    # Should be a tuple with content for first 3 characters only
+    assert isinstance(result, tuple)
+    assert result  # Should have some content
+
+
+def test_get_line_tuple_with_mouse_cursor():
+    """Test get_line_tuple with mouse cursor display (lines 305-307)."""
+    buffer = Buffer(width=10, height=3)
+    buffer.set(0, 0, "Hello")
+
+    # Test mouse cursor display
+    result = buffer.get_line_tuple(0, mouse_x=3, mouse_y=1, show_mouse=True)
+
+    # Should contain mouse cursor character at position
+    assert isinstance(result, tuple)
+    assert "↖" in result  # Mouse cursor character should be in tuple
+
+
+def test_get_line_tuple_with_text_cursor():
+    """Test get_line_tuple with text cursor display (lines 310-312)."""
+    buffer = Buffer(width=10, height=3)
+    buffer.set(0, 0, "Hello")
+
+    # Test text cursor display
+    result = buffer.get_line_tuple(0, cursor_x=2, cursor_y=0, show_cursor=True)
+
+    # Should contain cursor formatting
+    assert isinstance(result, tuple)
+    assert "cursor" in result  # Should have cursor markers
+
+
+def test_get_line_tuple_with_padding():
+    """Test get_line_tuple padding logic (lines 318-321)."""
+    buffer = Buffer(width=5, height=3)
+    buffer.set(0, 0, "Hi")  # Only 2 characters
+
+    # Request wider width to trigger padding
+    result = buffer.get_line_tuple(0, width=8)
+
+    # Should contain padding information
+    assert isinstance(result, tuple)
+    assert "pad" in result  # Should have padding marker
+    assert "reset" in result  # Should have reset for padding
+
+
+def test_get_line_tuple_final_reset():
+    """Test get_line_tuple always ends with reset (lines 323-325)."""
+    buffer = Buffer(width=5, height=3)
+    buffer.set(0, 0, "Hello")
+
+    result = buffer.get_line_tuple(0)
+
+    # Should always end with final reset
+    assert isinstance(result, tuple)
+    assert "final_reset" in result
