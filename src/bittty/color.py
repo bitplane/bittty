@@ -1,9 +1,4 @@
-"""
-ANSI Sequence Cache: LRU-cached functions for generating ANSI escape sequences.
-
-This module provides high-performance ANSI sequence generation by caching
-commonly used combinations of colors and styles.
-"""
+"""Functions for generating ANSI escape sequences."""
 
 from __future__ import annotations
 
@@ -120,7 +115,6 @@ def get_combined_code(
     """
     Generate a combined ANSI code for colors and styles.
 
-    This is the main function to use for complete styling.
     RGB colors take precedence over palette colors.
 
     Returns:

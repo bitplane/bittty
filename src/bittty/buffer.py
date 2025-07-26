@@ -1,9 +1,4 @@
-"""
-Terminal Buffer: Grid-based terminal content storage.
-
-This module provides the Buffer class that manages terminal screen content
-as a 2D grid of (ansi_code, character) tuples.
-"""
+"""A grid-based terminal buffer."""
 
 from __future__ import annotations
 
@@ -18,13 +13,7 @@ Cell = Tuple[str, str]
 
 
 class Buffer:
-    """
-    A buffer that stores terminal content as a 2D grid.
-
-    Each cell contains a tuple of (ansi_code, character) where:
-    - ansi_code: ANSI escape sequence for styling (empty string for no styling)
-    - character: The actual character to display
-    """
+    """A 2D grid that stores terminal content."""
 
     def __init__(self, width: int, height: int) -> None:
         """Initialize buffer with given dimensions."""
@@ -179,7 +168,7 @@ class Buffer:
         mouse_y: int = -1,
         show_mouse: bool = False,
     ) -> str:
-        """Get full ANSI sequence for a line (like tmux capture-pane)."""
+        """Get full ANSI sequence for a line."""
         if not (0 <= y < self.height):
             return ""
 
@@ -233,7 +222,7 @@ class Buffer:
         mouse_y: int = -1,
         show_mouse: bool = False,
     ) -> tuple:
-        """Get line as hashable tuple for caching: (ansi_code, char, ansi_code, char, ...)"""
+        """Get line as a hashable tuple for caching."""
         if not (0 <= y < self.height):
             return tuple()
 

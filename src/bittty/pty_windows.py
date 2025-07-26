@@ -1,7 +1,5 @@
 """
 Windows PTY implementation using pywinpty.
-
-This module provides PTY functionality for Windows systems.
 """
 
 from __future__ import annotations

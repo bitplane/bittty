@@ -1,16 +1,4 @@
-"""
-The Terminal Parser: A state machine for processing terminal input streams.
-
-This module provides the `Parser` class, which consumes a stream of bytes
-from a pseudo-terminal (pty) and translates it into high-level calls to a
-`ScreenWriter` API.
-
-It is a direct architectural port of tmux's `input.c`, implementing the same
-finite state machine described by Paul Williams (https://vt100.net/emu/).
-
-The core logic is in the `feed()` method, which processes each byte, moves
-between states, and calls the appropriate handler methods for escape sequences.
-"""
+"""A state machine for processing terminal input streams."""
 
 from __future__ import annotations
 
@@ -30,14 +18,14 @@ class Parser:
     """
     A state machine that parses a stream of terminal control codes.
 
-    The parser is always in one of several states (GROUND, ESCAPE, CSI_ENTRY,
-    etc.). Each byte fed to the `feed()` method can cause a transition to a new
+    The parser is always in one of several states (e.g. GROUND, ESCAPE, CSI_ENTRY).
+    Each byte fed to the `feed()` method can cause a transition to a new
     state and/or execute a handler for a recognized escape sequence.
     """
 
     def __init__(self, terminal: Terminal) -> None:
         """
-        Initializes the parser state. Replaces `input_init()`.
+        Initializes the parser state.
 
         Args:
             terminal: A Terminal object that the parser will manipulate.
@@ -59,7 +47,7 @@ class Parser:
 
     def feed(self, data: str) -> None:
         """
-        Feeds a chunk of text into the parser. Replaces `input_parse_buffer()`.
+        Feeds a chunk of text into the parser.
 
         This is the main entry point. It iterates over the data and passes each
         character to the state machine engine.
@@ -71,7 +59,7 @@ class Parser:
         """
         The core state machine engine.
 
-        It looks up the current state in `self.states`, finds the appropriate
+        It looks up the current state, finds the appropriate
         transition for the given byte, executes the handler, and moves to the
         next state.
         """

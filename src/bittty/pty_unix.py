@@ -1,7 +1,5 @@
 """
 Unix/Linux/macOS PTY implementation.
-
-This module provides PTY functionality for Unix-like systems.
 """
 
 from __future__ import annotations

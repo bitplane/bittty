@@ -1,9 +1,7 @@
 """
-Terminal: Base terminal emulator class.
+A terminal emulator.
 
-This module provides the core Terminal class that manages terminal state,
-process control, and screen buffers. UI frameworks can subclass this to
-create terminal widgets.
+UI frameworks can subclass this to create terminal widgets.
 """
 
 from __future__ import annotations
@@ -25,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 class Terminal:
     """
-    Base terminal emulator with process management and screen buffers.
+    A terminal emulator with process management and screen buffers.
 
     This class handles all terminal logic but has no UI dependencies.
     Subclass this to create terminal widgets for specific UI frameworks.
@@ -33,15 +31,7 @@ class Terminal:
 
     @staticmethod
     def get_pty_handler(rows: int = constants.DEFAULT_TERMINAL_HEIGHT, cols: int = constants.DEFAULT_TERMINAL_WIDTH):
-        """Create a platform-appropriate PTY handler.
-
-        Args:
-            rows: Terminal height in characters
-            cols: Terminal width in characters
-
-        Returns:
-            PTY handler object with read/write/resize interface
-        """
+        """Create a platform-appropriate PTY handler."""
         if sys.platform == "win32":
             from .pty_windows import WindowsPTY
 
@@ -155,7 +145,7 @@ class Terminal:
         return self.current_buffer.get_content()
 
     def capture_pane(self) -> str:
-        """Capture terminal content like tmux capture-pane."""
+        """Capture terminal content."""
         lines = []
         for y in range(self.height):
             lines.append(

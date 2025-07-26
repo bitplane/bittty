@@ -1,9 +1,4 @@
-"""Style merging for ANSI escape sequences.
-
-NOTE: We work directly with ANSI strings for performance.
-No intermediate objects are created in the hot path.
-Everything is string-to-string mapping with heavy caching.
-"""
+"""Style merging for ANSI escape sequences."""
 
 from __future__ import annotations
 
@@ -211,17 +206,9 @@ def get_background(ansi: str) -> str:
 
 @lru_cache(maxsize=20000)
 def merge_ansi_styles(base: str, new: str) -> str:
-    """Merge two ANSI style sequences.
-
-    This is the hot path - it directly maps two ANSI strings to a merged result.
-
-    Args:
-        base: Existing ANSI sequence (e.g., "\033[31m")
-        new: New ANSI sequence to apply (e.g., "\033[1m")
-
-    Returns:
-        Merged ANSI sequence (e.g., "\033[31;1m")
-    """
+    # TODO: This function should be creating cacheable objects only and
+    # leaning on lru_cache for performance reasons. The current implementation
+    # creates intermediate list objects.
     # Handle empty cases
     if not base:
         return new
