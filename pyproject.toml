@@ -1,0 +1,35 @@
+[project]
+name = "example_package"
+description = "example package"
+version = "0.1.0"
+authors = [
+    { name = "Random Hacker", email = "no@dev.null" }
+]
+readme = "README.md"
+requires-python = ">=3.10"
+
+dependencies = [
+
+]
+
+[project.optional-dependencies]
+dev = [
+    "pre-commit",
+    "pytest",
+    "coverage",
+    "pytest-cov",
+    "build",
+    "twine",
+    "ruff"
+]
+
+[build-system]
+build-backend = "flit_core.buildapi"
+requires = ["flit_core >=3.2,<4"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.format]
+docstring-code-format = true
