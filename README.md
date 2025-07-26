@@ -18,19 +18,10 @@ Or use the textual demo to see it in a TUI:
 uvx textual-tty
 ```
 
-## Usage
-
-There's 3 main classes:
-
-1. `Terminal`, a standalone terminal that doesn't need Textual.
-2. `TextualTerminal`, a tty widget subclass.
-3. `TerminalApp`, a terminal emulator in a window.
-
-Read the demo code for more info.
-
 ## Links
 
 * [🏠 home](https://bitplane.net/dev/python/bittty)
+* [📖 pydoc](https://bitplane.net/dev/python/bittty/pydoc)
 * [🐍 pypi](https://pypi.org/project/bittty)
 * [🐱 github](https://github.com/bitplane/bittty)
 
