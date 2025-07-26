@@ -1,11 +1,6 @@
 import pytest
-from unittest.mock import Mock
 from bittty.parser import Parser
-from bittty.terminal import Terminal
-from rich.style import Style
 from bittty.constants import (
-    DEFAULT_TERMINAL_WIDTH,
-    DEFAULT_TERMINAL_HEIGHT,
     DECAWM_AUTOWRAP,
     DECCOLM_COLUMN_MODE,
     DECSCNM_SCREEN_MODE,
@@ -14,37 +9,11 @@ from bittty.constants import (
 )
 
 
+# Use real terminal instead of mock
 @pytest.fixture
-def terminal():
-    """Return a mock Screen object with necessary attributes."""
-    terminal = Mock(spec=Terminal)
-    terminal.current_style = Style()  # Initialize with a real Style object
-    terminal.width = DEFAULT_TERMINAL_WIDTH
-    terminal.height = DEFAULT_TERMINAL_HEIGHT
-    terminal.cursor_x = 0
-    terminal.cursor_y = 0
-    terminal.scroll_top = 0
-    terminal.scroll_bottom = terminal.height - 1
-    terminal.auto_wrap = True
-    terminal.cursor_visible = True
-    terminal.current_ansi_code = ""
-    terminal.reverse_screen = False
-    terminal.origin_mode = False
-
-    def _set_cursor(x, y):
-        if x is not None:
-            terminal.cursor_x = x
-        if y is not None:
-            terminal.cursor_y = y
-
-    def _set_column_mode(columns):
-        terminal.width = columns
-        terminal.cursor_x = 0
-        terminal.cursor_y = 0
-
-    terminal.set_cursor.side_effect = _set_cursor
-    terminal.set_column_mode.side_effect = _set_column_mode
-    return terminal
+def terminal(standard_terminal):
+    """Return a real Terminal instance for testing."""
+    return standard_terminal
 
 
 def test_csi_sm_rm_private_autowrap(terminal):
@@ -147,9 +116,18 @@ def test_parse_byte_csi_param_intermediate(terminal):
 def test_parse_byte_csi_intermediate_param_final(terminal):
     """Test CSI_INTERMEDIATE with parameter and final byte."""
     parser = Parser(terminal)
-    parser.feed("\x1b[?1;2@")  # ESC [ ? 1 ; 2 @
-    # ICH uses the first parameter (index 0), which is 1
-    terminal.insert_characters.assert_called_once_with(1, terminal.current_ansi_code)
+
+    # Put some text at cursor position first
+    terminal.write_text("ABC")
+    terminal.cursor_x = 1  # Move cursor to position 1 (between A and B)
+
+    # Send ICH (Insert Character) command: ESC [ ? 1 ; 2 @
+    # Should insert 1 blank character at cursor position
+    parser.feed("\x1b[?1;2@")
+
+    # Verify that a space was inserted at position 1
+    line_text = terminal.current_buffer.get_line_text(0).rstrip()
+    assert line_text == "A BC"  # Space inserted between A and BC
 
 
 def test_split_params_value_error_sub_param(terminal):
