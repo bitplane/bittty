@@ -83,6 +83,10 @@ class Parser:
                 self.terminal.line_feed()
             elif char == constants.CR:
                 self.terminal.carriage_return()
+            elif char == constants.SO:
+                self.terminal.shift_out()
+            elif char == constants.SI:
+                self.terminal.shift_in()
             elif ord(char) >= 0x20:  # Printable characters
                 # Use current ANSI sequence
                 self.terminal.write_text(char, self.terminal.current_ansi_code)
@@ -124,6 +128,18 @@ class Parser:
                 self.current_state = constants.CHARSET_G0
             elif char == ")":
                 self.current_state = constants.CHARSET_G1
+            elif char == "*":
+                self.current_state = constants.CHARSET_G2
+            elif char == "+":
+                self.current_state = constants.CHARSET_G3
+            elif char == "N":
+                # SS2 - Single Shift 2
+                self.terminal.single_shift_2()
+                self.current_state = constants.GROUND
+            elif char == "O":
+                # SS3 - Single Shift 3
+                self.terminal.single_shift_3()
+                self.current_state = constants.GROUND
             else:
                 logger.debug(f"Unknown escape sequence: ESC {char!r}")
                 self.current_state = constants.GROUND
@@ -166,6 +182,14 @@ class Parser:
         elif self.current_state == constants.CHARSET_G1:
             # ESC ) <charset> - Set G1 character set
             self.terminal.set_g1_charset(char)
+            self.current_state = constants.GROUND
+        elif self.current_state == constants.CHARSET_G2:
+            # ESC * <charset> - Set G2 character set
+            self.terminal.set_g2_charset(char)
+            self.current_state = constants.GROUND
+        elif self.current_state == constants.CHARSET_G3:
+            # ESC + <charset> - Set G3 character set
+            self.terminal.set_g3_charset(char)
             self.current_state = constants.GROUND
 
     def _handle_csi(self, char: str) -> None:
@@ -545,6 +569,14 @@ class Parser:
         self.terminal.clear_screen(constants.ERASE_ALL)
         self.terminal.set_cursor(0, 0)
         self.terminal.current_ansi_code = ""
+
+        # Reset character sets to defaults
+        self.terminal.g0_charset = "B"  # US ASCII
+        self.terminal.g1_charset = "B"
+        self.terminal.g2_charset = "B"
+        self.terminal.g3_charset = "B"
+        self.terminal.current_charset = 0  # G0
+        self.terminal.single_shift = None
 
     def _csi_dispatch_sgr(self) -> None:
         """

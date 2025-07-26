@@ -17,36 +17,9 @@ from .buffer import Buffer
 from .parser import Parser
 from . import constants
 from .style import get_background
+from .charsets import get_charset
 
 logger = logging.getLogger(__name__)
-
-# DEC Special Graphics character set mapping
-# Maps ASCII characters to their box drawing equivalents
-DEC_SPECIAL_GRAPHICS = {
-    "j": "┘",  # Lower right corner
-    "k": "┐",  # Upper right corner
-    "l": "┌",  # Upper left corner
-    "m": "└",  # Lower left corner
-    "n": "┼",  # Crossing lines
-    "q": "─",  # Horizontal line
-    "t": "├",  # Left T
-    "u": "┤",  # Right T
-    "v": "┴",  # Bottom T
-    "w": "┬",  # Top T
-    "x": "│",  # Vertical line
-    "a": "▒",  # Checkerboard
-    "`": "◆",  # Diamond
-    "f": "°",  # Degree symbol
-    "g": "±",  # Plus/minus
-    "~": "·",  # Bullet
-    "o": "⎺",  # Scan line 1
-    "s": "⎻",  # Scan line 3
-    "0": "▮",  # Solid block
-    "_": " ",  # Non-breaking space
-    "{": "π",  # Pi
-    "}": "£",  # Pound sterling
-    "|": "≠",  # Not equal
-}
 
 
 class Terminal:
@@ -124,10 +97,13 @@ class Terminal:
         # Last printed character (for REP command)
         self.last_printed_char = " "
 
-        # Character set state (G0 and G1 sets)
+        # Character set state (G0-G3 sets)
         self.g0_charset = "B"  # Default: US ASCII
         self.g1_charset = "B"  # Default: US ASCII
-        self.current_charset = 0  # 0 = G0, 1 = G1
+        self.g2_charset = "B"  # Default: US ASCII
+        self.g3_charset = "B"  # Default: US ASCII
+        self.current_charset = 0  # 0 = G0, 1 = G1, 2 = G2, 3 = G3
+        self.single_shift = None  # For SS2/SS3 (temporary shift)
 
         # Saved cursor state (for DECSC/DECRC)
         self.saved_cursor_x = 0
@@ -228,15 +204,27 @@ class Terminal:
 
     def _translate_charset(self, text: str) -> str:
         """Translate characters based on current character set."""
-        # Get the current charset (G0 or G1)
-        current_set = self.g0_charset if self.current_charset == 0 else self.g1_charset
+        result = []
 
-        # Only translate if we're using DEC Special Graphics
-        if current_set == "0":  # DEC Special Graphics
-            return "".join(DEC_SPECIAL_GRAPHICS.get(char, char) for char in text)
+        for char in text:
+            # Check for single shift (SS2/SS3) - takes precedence
+            if self.single_shift is not None:
+                charset_designator = [self.g0_charset, self.g1_charset, self.g2_charset, self.g3_charset][
+                    self.single_shift
+                ]
+                self.single_shift = None  # Reset after one character
+            else:
+                # Use current charset
+                charset_designator = [self.g0_charset, self.g1_charset, self.g2_charset, self.g3_charset][
+                    self.current_charset
+                ]
 
-        # For all other charsets (B, A, etc.), return unchanged
-        return text
+            # Get the character mapping for this charset
+            charset_map = get_charset(charset_designator)
+            translated_char = charset_map.get(char, char)
+            result.append(translated_char)
+
+        return "".join(result)
 
     def set_g0_charset(self, charset: str) -> None:
         """Set the G0 character set."""
@@ -245,6 +233,30 @@ class Terminal:
     def set_g1_charset(self, charset: str) -> None:
         """Set the G1 character set."""
         self.g1_charset = charset
+
+    def set_g2_charset(self, charset: str) -> None:
+        """Set the G2 character set."""
+        self.g2_charset = charset
+
+    def set_g3_charset(self, charset: str) -> None:
+        """Set the G3 character set."""
+        self.g3_charset = charset
+
+    def shift_in(self) -> None:
+        """Shift In (SI) - switch to G0."""
+        self.current_charset = 0
+
+    def shift_out(self) -> None:
+        """Shift Out (SO) - switch to G1."""
+        self.current_charset = 1
+
+    def single_shift_2(self) -> None:
+        """Single Shift 2 (SS2) - use G2 for next character only."""
+        self.single_shift = 2
+
+    def single_shift_3(self) -> None:
+        """Single Shift 3 (SS3) - use G3 for next character only."""
+        self.single_shift = 3
 
     def move_cursor(self, x: Optional[int], y: Optional[int]) -> None:
         """Move cursor to position."""

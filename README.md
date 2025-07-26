@@ -50,7 +50,7 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
   - [x] blank background to end of line
   - [ ] corruption in stream - debug it
   - [ ] scroll region: scroll up in `vim` corrupts outside scroll region
-  - [ ] DEC Special Graphics not working
+  - [x] DEC Special Graphics not working
 - [ ] add terminal visuals
   - [ ] bell flash effect
 - [ ] Support themes

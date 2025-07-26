@@ -17,6 +17,8 @@ DCS_STRING = "DCS_STRING"
 DCS_ESC = "DCS_ESC"
 CHARSET_G0 = "CHARSET_G0"
 CHARSET_G1 = "CHARSET_G1"
+CHARSET_G2 = "CHARSET_G2"
+CHARSET_G3 = "CHARSET_G3"
 
 # --- C0 Control Characters ---
 BEL = "\x07"  # Bell
@@ -24,6 +26,8 @@ BS = "\x08"  # Backspace
 HT = "\x09"  # Horizontal Tab
 LF = "\x0a"  # Line Feed
 CR = "\x0d"  # Carriage Return
+SO = "\x0e"  # Shift Out (activate G1)
+SI = "\x0f"  # Shift In (activate G0)
 ESC = "\x1b"  # Escape
 DEL = "\x7f"  # Delete
 
