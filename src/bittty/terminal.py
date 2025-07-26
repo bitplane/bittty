@@ -20,6 +20,34 @@ from .style import get_background
 
 logger = logging.getLogger(__name__)
 
+# DEC Special Graphics character set mapping
+# Maps ASCII characters to their box drawing equivalents
+DEC_SPECIAL_GRAPHICS = {
+    "j": "┘",  # Lower right corner
+    "k": "┐",  # Upper right corner
+    "l": "┌",  # Upper left corner
+    "m": "└",  # Lower left corner
+    "n": "┼",  # Crossing lines
+    "q": "─",  # Horizontal line
+    "t": "├",  # Left T
+    "u": "┤",  # Right T
+    "v": "┴",  # Bottom T
+    "w": "┬",  # Top T
+    "x": "│",  # Vertical line
+    "a": "▒",  # Checkerboard
+    "`": "◆",  # Diamond
+    "f": "°",  # Degree symbol
+    "g": "±",  # Plus/minus
+    "~": "·",  # Bullet
+    "o": "⎺",  # Scan line 1
+    "s": "⎻",  # Scan line 3
+    "0": "▮",  # Solid block
+    "_": " ",  # Non-breaking space
+    "{": "π",  # Pi
+    "}": "£",  # Pound sterling
+    "|": "≠",  # Not equal
+}
+
 
 class Terminal:
     """
@@ -95,6 +123,11 @@ class Terminal:
 
         # Last printed character (for REP command)
         self.last_printed_char = " "
+
+        # Character set state (G0 and G1 sets)
+        self.g0_charset = "B"  # Default: US ASCII
+        self.g1_charset = "B"  # Default: US ASCII
+        self.current_charset = 0  # 0 = G0, 1 = G1
 
         # Saved cursor state (for DECSC/DECRC)
         self.saved_cursor_x = 0
@@ -176,19 +209,42 @@ class Terminal:
         # Use provided ANSI code or current one
         code_to_use = ansi_code if ansi_code else self.current_ansi_code
 
+        # Translate characters if using DEC Special Graphics
+        translated_text = self._translate_charset(text)
+
         # Insert or overwrite based on mode
         if self.insert_mode:
-            self.current_buffer.insert(self.cursor_x, self.cursor_y, text, code_to_use)
+            self.current_buffer.insert(self.cursor_x, self.cursor_y, translated_text, code_to_use)
         else:
-            self.current_buffer.set(self.cursor_x, self.cursor_y, text, code_to_use)
+            self.current_buffer.set(self.cursor_x, self.cursor_y, translated_text, code_to_use)
 
         # Move cursor forward by character count
         if self.auto_wrap or self.cursor_x < self.width - 1:
-            self.cursor_x += len(text)
+            self.cursor_x += len(translated_text)
 
         # Remember last character for REP command
-        if text:
-            self.last_printed_char = text[-1]
+        if translated_text:
+            self.last_printed_char = translated_text[-1]
+
+    def _translate_charset(self, text: str) -> str:
+        """Translate characters based on current character set."""
+        # Get the current charset (G0 or G1)
+        current_set = self.g0_charset if self.current_charset == 0 else self.g1_charset
+
+        # Only translate if we're using DEC Special Graphics
+        if current_set == "0":  # DEC Special Graphics
+            return "".join(DEC_SPECIAL_GRAPHICS.get(char, char) for char in text)
+
+        # For all other charsets (B, A, etc.), return unchanged
+        return text
+
+    def set_g0_charset(self, charset: str) -> None:
+        """Set the G0 character set."""
+        self.g0_charset = charset
+
+    def set_g1_charset(self, charset: str) -> None:
+        """Set the G1 character set."""
+        self.g1_charset = charset
 
     def move_cursor(self, x: Optional[int], y: Optional[int]) -> None:
         """Move cursor to position."""

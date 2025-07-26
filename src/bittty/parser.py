@@ -160,8 +160,12 @@ class Parser:
                 self.string_buffer += constants.ESC + char
                 self.current_state = constants.DCS_STRING
         elif self.current_state == constants.CHARSET_G0:
+            # ESC ( <charset> - Set G0 character set
+            self.terminal.set_g0_charset(char)
             self.current_state = constants.GROUND
         elif self.current_state == constants.CHARSET_G1:
+            # ESC ) <charset> - Set G1 character set
+            self.terminal.set_g1_charset(char)
             self.current_state = constants.GROUND
 
     def _handle_csi(self, char: str) -> None:
