@@ -59,43 +59,4 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
 
 ## Unhandled modes
 
-*   **`KAM` (Keyboard Action Mode):** Determines how the keyboard is locked.
-*   **`HEM` (Horizontal Editing Mode):** Manages horizontal editing.
-*   **`PUM` (Positioning Unit Mode):** Defines the unit for positioning.
-*   **`VEM` (Vertical Editing Mode):** Manages vertical editing.
-*   **`GATM` (Guarded Area Transfer Mode):** Controls the transfer of data in guarded areas.
-*   **`TAT` (Tabulation at All Positions):** Enables tabulation at any position.
-*   **`TSM` (Tabulation Stop Mode):** Manages tabulation stops.
-*   **`DFM` (Delete Form Mode):** Controls the form of deletion.
-*   **`FEAM` (Format Effector Action Mode):** Determines the action of format effectors.
-*   **`FETM` (Format Effector Transfer Mode):** Controls the transfer of format effectors.
-*   **`MATM` (Multiple Area Transfer Mode):** Manages the transfer of multiple areas.
-*   **`TTM` (Transfer Termination Mode):** Controls the termination of data transfer.
-*   **`SATM` (Selected Area Transfer Mode):** Manages the transfer of selected areas.
-*   **`TSM` (Tabulation Stop Mode):** Manages tabulation stops.
-*   **`EBM` (Editing Boundary Mode):** Controls the boundary for editing.
-*   **`DCKM` (Data-Compression Mode):** Manages data compression.
-*   **`ZDM` (Zero-Default Mode):** Controls the use of zero as a default value.
-*   **`NRM` (Numeric-Representation Mode):** Manages the representation of numeric values.
-*   **`GRCM` (Graphic-Rendition-Combination Mode):** Controls the combination of graphic renditions.
-*   **`DECINLM` (Interlace Mode):** Sets the interlace mode for display.
-*   **`DECPFF` (Print-Form-Feed Mode):** Controls the action of the form-feed character.
-*   **`DECPEX` (Printer-Extent Mode):** Sets the extent of the printer.
-*   **`DECTEK` (Tektronix Mode):** Switches to Tektronix graphics mode.
-*   **`DECKBUM` (Keyboard-Usage Mode):** Controls the usage of the keyboard.
-*   **`DECNAKB` (Greek-National-Replacement-Keyboard Mode):** Enables the Greek national replacement keyboard.
 *   **`DECRLM` (Right-to-Left-Language Mode):** Enables right-to-left language support.
-*   **`DECHCCM` (Hebrew-Character-Set-Control Mode):** Controls the Hebrew character set.
-*   **`DECVCCM` (VT52-Cursor-Control Mode):** Enables VT52 cursor control.
-*   **`DECPCCM` (PC-Crossing-Character-Set Mode):** Enables the PC crossing character set.
-*   **`DECNCSM` (National-Character-Set Mode):** Sets the national character set.
-*   **`DECRLCM` (Right-to-Left-Copy Mode):** Controls the copy direction for right-to-left languages.
-*   **`DECCRTSM` (CRT-Save Mode):** Enables the CRT save mode.
-*   **`DECARSM` (Auto-Resize Mode):** Enables auto-resizing of the terminal.
-*   **`DECMCM` (Modem-Control Mode):** Controls the modem.
-*   **`DECAAM` (Auto-Answerback Mode):** Enables auto-answerback.
-*   **`DECCANSM` (Conceal-Answerback-Message Mode):** Conceals the answerback message.
-*   **`DECNULM` (Null-Modem Mode):** Enables null-modem support.
-*   **`DECHDPXM` (Half-Duplex-Mode):** Enables half-duplex communication.
-*   **`DECESKM` (Enable-Secondary-Keyboard-Language-Mode):** Enables a secondary keyboard language.
-*   **`DECOSCNM` (Other-Screen-Function-Mode):** Enables other screen functions.
