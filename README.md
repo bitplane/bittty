@@ -37,7 +37,6 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
 
 * DEC Special Graphics
 * Faster colour/style parser
-*
 * Split out from `textual-tty` into separate package
 
 ## bugs / todo
@@ -81,15 +80,12 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
 *   **`NRM` (Numeric-Representation Mode):** Manages the representation of numeric values.
 *   **`GRCM` (Graphic-Rendition-Combination Mode):** Controls the combination of graphic renditions.
 *   **`DECCOLM` (Column Mode):** Switches between 80 and 132 columns per line.
-*   **`DECSCLM` (Scrolling Mode):** Sets the scrolling mode (smooth or jump).
 *   **`DECSCNM` (Screen Mode):** Switches between normal and reverse screen video.
 *   **`DECOM` (Origin Mode):** Sets the origin for cursor positioning.
-*   **`DECARM` (Auto-Repeat Mode):** Controls the auto-repeat of keys.
 *   **`DECINLM` (Interlace Mode):** Sets the interlace mode for display.
 *   **`DECPFF` (Print-Form-Feed Mode):** Controls the action of the form-feed character.
 *   **`DECPEX` (Printer-Extent Mode):** Sets the extent of the printer.
 *   **`DECTEK` (Tektronix Mode):** Switches to Tektronix graphics mode.
-*   **`DECNKM` (Numeric-Keypad Mode):** Switches the keypad between numeric and application modes.
 *   **`DECKBUM` (Keyboard-Usage Mode):** Controls the usage of the keyboard.
 *   **`DECNAKB` (Greek-National-Replacement-Keyboard Mode):** Enables the Greek national replacement keyboard.
 *   **`DECRLM` (Right-to-Left-Language Mode):** Enables right-to-left language support.

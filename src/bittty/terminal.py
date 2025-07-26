@@ -81,6 +81,9 @@ class Terminal:
         self.mouse_sgr_mode = False
         self.mouse_extended_mode = False
         self.backarrow_key_sends_bs = False  # DECBKM: False = sends DEL, True = sends BS
+        self.scroll_mode = False  # DECSCLM: False = jump scrolling, True = smooth scrolling
+        self.auto_repeat = True  # DECARM: True = auto-repeat enabled, False = disabled
+        self.numeric_keypad = True  # DECNKM: True = numeric mode, False = application mode
 
         # Screen buffers
         self.primary_buffer = Buffer(width, height)  # With scrollback (future)
@@ -547,6 +550,53 @@ class Terminal:
         else:
             # Unsupported function key
             return
+
+        self.input(sequence)
+
+    def input_numpad_key(self, key: str) -> None:
+        """Convert numpad key to appropriate sequence based on DECNKM mode."""
+        if self.numeric_keypad:
+            # Numeric mode - send literal characters
+            numeric_map = {
+                "0": "0",
+                "1": "1",
+                "2": "2",
+                "3": "3",
+                "4": "4",
+                "5": "5",
+                "6": "6",
+                "7": "7",
+                "8": "8",
+                "9": "9",
+                ".": ".",
+                "+": "+",
+                "-": "-",
+                "*": "*",
+                "/": "/",
+                "Enter": "\r",
+            }
+            sequence = numeric_map.get(key, key)
+        else:
+            # Application mode - send escape sequences
+            application_map = {
+                "0": "\x1bOp",
+                "1": "\x1bOq",
+                "2": "\x1bOr",
+                "3": "\x1bOs",
+                "4": "\x1bOt",
+                "5": "\x1bOu",
+                "6": "\x1bOv",
+                "7": "\x1bOw",
+                "8": "\x1bOx",
+                "9": "\x1bOy",
+                ".": "\x1bOn",
+                "+": "\x1bOk",
+                "-": "\x1bOm",
+                "*": "\x1bOj",
+                "/": "\x1bOo",
+                "Enter": "\x1bOM",
+            }
+            sequence = application_map.get(key, key)
 
         self.input(sequence)
 

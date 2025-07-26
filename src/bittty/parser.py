@@ -98,9 +98,11 @@ class Parser:
                 self.current_state = constants.OSC_STRING
             elif char == "=":
                 self.terminal.set_mode(constants.DECKPAM_APPLICATION_KEYPAD, True)
+                self.terminal.numeric_keypad = False  # Application mode
                 self.current_state = constants.GROUND
             elif char == ">":
                 self.terminal.set_mode(constants.DECKPAM_APPLICATION_KEYPAD, False)
+                self.terminal.numeric_keypad = True  # Numeric mode
                 self.current_state = constants.GROUND
             elif char == "P":
                 self._clear()
@@ -503,6 +505,12 @@ class Parser:
                 self.terminal.set_mode(constants.MOUSE_EXTENDED_MODE, set_mode, private=True)
             elif param == constants.DECBKM_BACKARROW_KEY:
                 self.terminal.backarrow_key_sends_bs = set_mode
+            elif param == constants.DECSCLM_SCROLLING_MODE:
+                self.terminal.scroll_mode = set_mode
+            elif param == constants.DECARM_AUTO_REPEAT:
+                self.terminal.auto_repeat = set_mode
+            elif param == constants.DECNKM_NUMERIC_KEYPAD:
+                self.terminal.numeric_keypad = not set_mode  # Inverted: h = application (False), l = numeric (True)
             # Add more private modes as needed
 
     # --- OSC, DCS, and other String-based Sequence Handlers ---
