@@ -5,6 +5,8 @@ from bittty.constants import (
     DECCOLM_COLUMN_MODE,
     DECSCNM_SCREEN_MODE,
     DECOM_ORIGIN_MODE,
+    DECARSM_AUTO_RESIZE,
+    DECKBUM_KEYBOARD_USAGE,
     ESC,
 )
 
@@ -208,3 +210,29 @@ def test_csi_sm_rm_decom_origin_mode(terminal):
     assert terminal.origin_mode is False
     assert terminal.cursor_x == 0  # Cursor should move to home position
     assert terminal.cursor_y == 0
+
+
+def test_csi_sm_rm_decarsm_auto_resize_mode(terminal):
+    """Test CSI ? 2028 h (Auto-Resize Mode) and CSI ? 2028 l (Disable Auto-Resize Mode)."""
+    parser = Parser(terminal)
+
+    # Enable auto-resize mode
+    parser.feed(f"{ESC}[?{DECARSM_AUTO_RESIZE}h")
+    assert terminal.auto_resize_mode is True
+
+    # Disable auto-resize mode
+    parser.feed(f"{ESC}[?{DECARSM_AUTO_RESIZE}l")
+    assert terminal.auto_resize_mode is False
+
+
+def test_csi_sm_rm_deckbum_keyboard_usage_mode(terminal):
+    """Test CSI ? 69 h (Keyboard Usage Mode) and CSI ? 69 l (Normal Keyboard Mode)."""
+    parser = Parser(terminal)
+
+    # Enable keyboard usage mode (typewriter keys send functions)
+    parser.feed(f"{ESC}[?{DECKBUM_KEYBOARD_USAGE}h")
+    assert terminal.keyboard_usage_mode is True
+
+    # Reset to normal keyboard mode
+    parser.feed(f"{ESC}[?{DECKBUM_KEYBOARD_USAGE}l")
+    assert terminal.keyboard_usage_mode is False
