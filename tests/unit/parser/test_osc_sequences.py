@@ -21,15 +21,19 @@ def render_lines_to_string(lines: list[list[tuple[str, str]]]) -> list[str]:
     return output
 
 
-def test_osc_window_title():
-    """Test OSC sequence for setting window title."""
+def test_osc_set_both_window_and_icon_title():
+    """Test OSC 0 for setting both window and icon title."""
     terminal = Terminal(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
     parser = Parser(terminal)
 
-    # OSC 0 sets window title
+    # OSC 0 sets both window and icon title
     # Format: ESC ] 0 ; <title> BEL
     title_sequence = "\x1b]0;My Terminal Window\x07"
     parser.feed(title_sequence)
+
+    # Check that both titles are set
+    assert terminal.title == "My Terminal Window"
+    assert terminal.icon_title == "My Terminal Window"
 
     # Window title should not appear in screen content
     output = render_terminal_to_string(terminal)
@@ -122,7 +126,7 @@ def test_osc_string_terminator():
     parser = Parser(terminal)
 
     # OSC can be terminated with ST (ESC \) instead of BEL
-    # Format: ESC ] 0 ; <title> ESC \
+    # Format: ESC ] 0 ; <title> ESC \\
     title_sequence = "\x1b]0;My Title\x1b\\"
     parser.feed(title_sequence)
 
@@ -195,3 +199,35 @@ def test_osc_empty_command():
     # Should work normally
     output = render_terminal_to_string(terminal)
     assert "Normal text" in output
+
+
+def test_osc_set_empty_title_and_icon():
+    """Test OSC 0 with an empty title string."""
+    terminal = Terminal(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
+    parser = Parser(terminal)
+
+    # Set initial titles
+    terminal.set_title("Initial Title")
+    terminal.set_icon_title("Initial Icon")
+
+    # OSC 0 with empty title should clear both
+    parser.feed("\x1b]0;\x07")
+
+    assert terminal.title == ""
+    assert terminal.icon_title == ""
+
+
+def test_osc_set_title_and_icon_no_semicolon():
+    """Test OSC 0 without a semicolon separator."""
+    terminal = Terminal(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
+    parser = Parser(terminal)
+
+    # Set initial titles
+    terminal.set_title("Initial Title")
+    terminal.set_icon_title("Initial Icon")
+
+    # OSC 0 without a semicolon should be ignored
+    parser.feed("\x1b]0My Title\x07")
+
+    assert terminal.title == "Initial Title"
+    assert terminal.icon_title == "Initial Icon"

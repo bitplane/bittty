@@ -315,6 +315,8 @@ class Terminal:
         elif mode == constants.ERASE_ALL:
             for y in range(self.height):
                 self.current_buffer.clear_line(y, constants.ERASE_ALL, 0, bg_ansi)
+            self.cursor_x = 0
+            self.cursor_y = 0
 
     def clear_line(self, mode: int = constants.ERASE_FROM_CURSOR_TO_END) -> None:
         """Clear line."""
