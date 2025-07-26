@@ -22,6 +22,7 @@ from bittty.constants import (
     SGR_STRIKE,
     SGR_NOT_STRIKETHROUGH,
 )
+from bittty.style import _parse_ansi_to_tuple, _tuple_to_ansi, merge_ansi_styles
 
 
 @pytest.fixture
@@ -146,6 +147,38 @@ def test_sgr_bright_16_color_background():
     assert terminal.current_ansi_code == "\x1b[104m"
 
 
+def test_sgr_bright_16_color_foreground_extract():
+    """Test extraction of bright 16-color foreground."""
+    terminal = Terminal()
+    parser = Parser(terminal)
+    parser.feed(f"{ESC}[91m")
+    assert terminal.current_ansi_code == "\x1b[91m"
+
+
+def test_sgr_bright_16_color_background_extract():
+    """Test extraction of bright 16-color background."""
+    terminal = Terminal()
+    parser = Parser(terminal)
+    parser.feed(f"{ESC}[101m")
+    assert terminal.current_ansi_code == "\x1b[101m"
+
+
+def test_sgr_empty_foreground_extract():
+    """Test extraction of empty foreground."""
+    terminal = Terminal()
+    parser = Parser(terminal)
+    parser.feed(f"{ESC}[0m")
+    assert terminal.current_ansi_code == "\x1b[0m"
+
+
+def test_sgr_empty_background_extract():
+    """Test extraction of empty background."""
+    terminal = Terminal()
+    parser = Parser(terminal)
+    parser.feed(f"{ESC}[0m")
+    assert terminal.current_ansi_code == "\x1b[0m"
+
+
 def test_sgr_256_color_foreground():
     """Test SGR 38;5;N (256-color foreground)."""
     terminal = Terminal()
@@ -215,7 +248,7 @@ def test_sgr_multiple_attributes():
     terminal = Terminal()
     parser = Parser(terminal)
     parser.feed(f"{ESC}[1;31;44m")  # Bold, red foreground, blue background
-    assert terminal.current_ansi_code == "\x1b[1;31;44m"
+    assert terminal.current_ansi_code == "\x1b[1;31;44m" # Sorted: 1;31;44
 
 
 def test_sgr_reset_and_then_set():
@@ -227,3 +260,133 @@ def test_sgr_reset_and_then_set():
     assert terminal.current_ansi_code == "\x1b[0m"
     parser.feed(f"{ESC}[32m")  # Green
     assert terminal.current_ansi_code == "\x1b[32m"
+
+
+def test_sgr_bright_16_color_foreground_extract():
+    """Test extraction of bright 16-color foreground."""
+    terminal = Terminal()
+    parser = Parser(terminal)
+    parser.feed(f"{ESC}[91m")
+    assert terminal.current_ansi_code == "\x1b[91m"
+
+
+def test_sgr_bright_16_color_background_extract():
+    """Test extraction of bright 16-color background."""
+    terminal = Terminal()
+    parser = Parser(terminal)
+    parser.feed(f"{ESC}[101m")
+    assert terminal.current_ansi_code == "\x1b[101m"
+
+
+def test_sgr_empty_foreground_extract():
+    """Test extraction of empty foreground."""
+    terminal = Terminal()
+    parser = Parser(terminal)
+    parser.feed(f"{ESC}[0m")
+    assert terminal.current_ansi_code == "\x1b[0m"
+
+
+def test_sgr_empty_background_extract():
+    """Test extraction of empty background."""
+    terminal = Terminal()
+    parser = Parser(terminal)
+    parser.feed(f"{ESC}[0m")
+    assert terminal.current_ansi_code == "\x1b[0m"
+
+
+def test_sgr_single_off_attribute():
+    """Test SGR with a single 'off' attribute."""
+    terminal = Terminal()
+    parser = Parser(terminal)
+    parser.feed(f"{ESC}[22m") # Not bold
+    assert terminal.current_ansi_code == "\x1b[22m"
+
+
+def test_sgr_merge_none_with_true():
+    """Test merging a style with None attribute with a style with True attribute."""
+    terminal = Terminal()
+    parser = Parser(terminal)
+    parser.feed(f"{ESC}[1m") # Bold
+    assert terminal.current_ansi_code == "\x1b[1m"
+    parser.feed(f"{ESC}[32m") # Green
+    assert terminal.current_ansi_code == "\x1b[1;32m"
+
+
+def test_sgr_merge_true_with_false():
+    """Test merging a style with True attribute with a style with False attribute."""
+    terminal = Terminal()
+    parser = Parser(terminal)
+    parser.feed(f"{ESC}[1m") # Bold
+    assert terminal.current_ansi_code == "\x1b[1m"
+    parser.feed(f"{ESC}[22m") # Not bold
+    assert terminal.current_ansi_code == "\x1b[22m"
+
+
+def test_sgr_merge_false_with_true():
+    """Test merging a style with False attribute with a style with True attribute."""
+    terminal = Terminal()
+    parser = Parser(terminal)
+    parser.feed(f"{ESC}[22m") # Not bold
+    assert terminal.current_ansi_code == "\x1b[22m"
+    parser.feed(f"{ESC}[1m") # Bold
+    assert terminal.current_ansi_code == "\x1b[1m"
+
+
+def test_sgr_merge_none_with_false():
+    """Test merging a style with None attribute with a style with False attribute."""
+    terminal = Terminal()
+    parser = Parser(terminal)
+    parser.feed(f"{ESC}[32m") # Green
+    assert terminal.current_ansi_code == "\x1b[32m"
+    parser.feed(f"{ESC}[22m") # Not bold
+    assert terminal.current_ansi_code == "\x1b[22;32m"
+
+
+def test_sgr_merge_false_with_none():
+    """Test merging a style with False attribute with a style with None attribute."""
+    terminal = Terminal()
+    parser = Parser(terminal)
+    parser.feed(f"{ESC}[22m") # Not bold
+    assert terminal.current_ansi_code == "\x1b[22m"
+    parser.feed(f"{ESC}[32m") # Green
+    assert terminal.current_ansi_code == "\x1b[22;32m"
+
+
+def test_sgr_merge_all_attributes():
+    """Test merging all attributes, including resets."""
+    terminal = Terminal()
+    parser = Parser(terminal)
+
+    # Initial style: Bold, Red, Underline
+    parser.feed(f"{ESC}[1;31;4m")
+    assert terminal.current_ansi_code == "\x1b[1;31;4m"
+
+    # New style: Not Bold, Blue background, Italic
+    parser.feed(f"{ESC}[22;44;3m")
+    assert terminal.current_ansi_code == "\x1b[22;24;3;32;44m"
+
+    # Reset all, then set Green
+    parser.feed(f"{ESC}[0m")
+    assert terminal.current_ansi_code == "\x1b[0m"
+    parser.feed(f"{ESC}[32m")
+    assert terminal.current_ansi_code == "\x1b[32m"
+
+
+def test_sgr_merge_complex_scenario():
+    """Test a more complex merging scenario."""
+    terminal = Terminal()
+    parser = Parser(terminal)
+
+    # Initial: Bold, Red FG, Blue BG, Underline
+    parser.feed(f"{ESC}[1;31;44;4m")
+    assert terminal.current_ansi_code == "\x1b[1;31;44;4m"
+
+    # Apply: Not Bold, Green FG, Not Underline, Italic
+    parser.feed(f"{ESC}[22;32;24;3m")
+    assert terminal.current_ansi_code == "\x1b[22;24;3;32;44m"
+
+    # Apply: Reset, then Blink, Cyan BG
+    parser.feed(f"{ESC}[0m")
+    assert terminal.current_ansi_code == "\x1b[0m"
+    parser.feed(f"{ESC}[5;46m")
+    assert terminal.current_ansi_code == "\x1b[5;46m"

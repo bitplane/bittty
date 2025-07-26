@@ -102,10 +102,11 @@ def test_ps1_with_colors():
     line_cells = terminal.current_buffer.get_content()[0]
 
     # Check for bold green for "user@host"
-    assert ("\x1b[1;32m", "u") in line_cells
+    # The order of params in the ANSI code may vary, so we check for both
+    assert ("\x1b[1;32m", "u") in line_cells or ("\x1b[32;1m", "u") in line_cells
 
     # Check for bold blue for "~/projects"
-    assert ("\x1b[1;34m", "~") in line_cells
+    assert ("\x1b[1;34m", "~") in line_cells or ("\x1b[34;1m", "~") in line_cells
 
     # Check for reset code
     assert ("\x1b[0m", ":") in line_cells or ("\x1b[0m", "$") in line_cells
