@@ -511,6 +511,25 @@ class Parser:
                 self.terminal.auto_repeat = set_mode
             elif param == constants.DECNKM_NUMERIC_KEYPAD:
                 self.terminal.numeric_keypad = not set_mode  # Inverted: h = application (False), l = numeric (True)
+            elif param == constants.DECCOLM_COLUMN_MODE:
+                # DECCOLM: Switch between 80 and 132 columns
+                if set_mode:
+                    self.terminal.set_column_mode(132)
+                else:
+                    self.terminal.set_column_mode(80)
+            elif param == constants.DECSCNM_SCREEN_MODE:
+                # DECSCNM: Normal/reverse screen mode
+                self.terminal.reverse_screen = set_mode
+            elif param == constants.DECOM_ORIGIN_MODE:
+                # DECOM: Origin mode - cursor positioning relative to scroll region
+                self.terminal.origin_mode = set_mode
+                # When mode changes, cursor moves to origin
+                if set_mode:
+                    # Origin mode: cursor to scroll region top-left
+                    self.terminal.set_cursor(0, self.terminal.scroll_top)
+                else:
+                    # Normal mode: cursor to absolute home
+                    self.terminal.set_cursor(0, 0)
             # Add more private modes as needed
 
     # --- OSC, DCS, and other String-based Sequence Handlers ---

@@ -85,6 +85,8 @@ class Terminal:
         self.auto_repeat = True  # DECARM: True = auto-repeat enabled, False = disabled
         self.numeric_keypad = True  # DECNKM: True = numeric mode, False = application mode
         self.local_echo = True  # SRM: True = echo enabled, False = echo disabled
+        self.reverse_screen = False  # DECSCNM: False = normal, True = reverse video
+        self.origin_mode = False  # DECOM: False = absolute, True = relative to scroll region
 
         # Screen buffers
         self.primary_buffer = Buffer(width, height)  # With scrollback (future)
@@ -477,6 +479,30 @@ class Terminal:
     def set_cursor(self, x: Optional[int], y: Optional[int]) -> None:
         """Set cursor position (alias for move_cursor)."""
         self.move_cursor(x, y)
+
+    def set_column_mode(self, columns: int) -> None:
+        """Set terminal width for DECCOLM (column mode).
+
+        Args:
+            columns: 80 for normal mode, 132 for wide mode
+        """
+        if columns not in (80, 132):
+            return  # Invalid column count, ignore
+
+        # Only change if different
+        if self.width == columns:
+            return
+
+        # Update terminal width
+        self.width = columns
+
+        # Resize buffers to new width
+        self.primary_buffer.resize(columns, self.height)
+        self.alt_buffer.resize(columns, self.height)
+
+        # Move cursor to home position (required by DECCOLM spec)
+        self.cursor_x = 0
+        self.cursor_y = 0
 
     def repeat_last_character(self, count: int) -> None:
         """Repeat the last printed character count times (REP command)."""

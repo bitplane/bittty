@@ -7,6 +7,9 @@ from bittty.constants import (
     DEFAULT_TERMINAL_WIDTH,
     DEFAULT_TERMINAL_HEIGHT,
     DECAWM_AUTOWRAP,
+    DECCOLM_COLUMN_MODE,
+    DECSCNM_SCREEN_MODE,
+    DECOM_ORIGIN_MODE,
     ESC,
 )
 
@@ -25,6 +28,8 @@ def terminal():
     terminal.auto_wrap = True
     terminal.cursor_visible = True
     terminal.current_ansi_code = ""
+    terminal.reverse_screen = False
+    terminal.origin_mode = False
 
     def _set_cursor(x, y):
         if x is not None:
@@ -32,7 +37,13 @@ def terminal():
         if y is not None:
             terminal.cursor_y = y
 
+    def _set_column_mode(columns):
+        terminal.width = columns
+        terminal.cursor_x = 0
+        terminal.cursor_y = 0
+
     terminal.set_cursor.side_effect = _set_cursor
+    terminal.set_column_mode.side_effect = _set_column_mode
     return terminal
 
 
@@ -172,3 +183,50 @@ def test_csi_dispatch_sm_rm_basic_modes(terminal):
     assert terminal.cursor_visible is False
     parser.feed("\x1b[25h")  # Show cursor
     assert terminal.cursor_visible is True
+
+
+def test_csi_sm_rm_deccolm_column_mode(terminal):
+    """Test CSI ? 3 h (132 Column Mode) and CSI ? 3 l (80 Column Mode)."""
+    parser = Parser(terminal)
+
+    # Set 132 column mode
+    parser.feed(f"{ESC}[?{DECCOLM_COLUMN_MODE}h")
+    assert terminal.width == 132
+    assert terminal.cursor_x == 0  # Cursor should move to home position
+    assert terminal.cursor_y == 0
+
+    # Reset to 80 column mode
+    parser.feed(f"{ESC}[?{DECCOLM_COLUMN_MODE}l")
+    assert terminal.width == 80
+    assert terminal.cursor_x == 0  # Cursor should move to home position
+    assert terminal.cursor_y == 0
+
+
+def test_csi_sm_rm_decscnm_screen_mode(terminal):
+    """Test CSI ? 5 h (Reverse Screen Mode) and CSI ? 5 l (Normal Screen Mode)."""
+    parser = Parser(terminal)
+
+    # Set reverse screen mode
+    parser.feed(f"{ESC}[?{DECSCNM_SCREEN_MODE}h")
+    assert terminal.reverse_screen is True
+
+    # Reset to normal screen mode
+    parser.feed(f"{ESC}[?{DECSCNM_SCREEN_MODE}l")
+    assert terminal.reverse_screen is False
+
+
+def test_csi_sm_rm_decom_origin_mode(terminal):
+    """Test CSI ? 6 h (Origin Mode) and CSI ? 6 l (Normal Mode)."""
+    parser = Parser(terminal)
+
+    # Set origin mode (relative to scroll region)
+    parser.feed(f"{ESC}[?{DECOM_ORIGIN_MODE}h")
+    assert terminal.origin_mode is True
+    assert terminal.cursor_x == 0  # Cursor should move to origin
+    assert terminal.cursor_y == terminal.scroll_top
+
+    # Reset to normal mode (absolute positioning)
+    parser.feed(f"{ESC}[?{DECOM_ORIGIN_MODE}l")
+    assert terminal.origin_mode is False
+    assert terminal.cursor_x == 0  # Cursor should move to home position
+    assert terminal.cursor_y == 0

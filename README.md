@@ -78,9 +78,6 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
 *   **`ZDM` (Zero-Default Mode):** Controls the use of zero as a default value.
 *   **`NRM` (Numeric-Representation Mode):** Manages the representation of numeric values.
 *   **`GRCM` (Graphic-Rendition-Combination Mode):** Controls the combination of graphic renditions.
-*   **`DECCOLM` (Column Mode):** Switches between 80 and 132 columns per line.
-*   **`DECSCNM` (Screen Mode):** Switches between normal and reverse screen video.
-*   **`DECOM` (Origin Mode):** Sets the origin for cursor positioning.
 *   **`DECINLM` (Interlace Mode):** Sets the interlace mode for display.
 *   **`DECPFF` (Print-Form-Feed Mode):** Controls the action of the form-feed character.
 *   **`DECPEX` (Printer-Extent Mode):** Sets the extent of the printer.
