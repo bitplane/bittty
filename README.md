@@ -2,7 +2,7 @@
 
 A pure Python terminal emulator.
 
-Currently buggy and a bit slow, but it's still somewhat usable.
+Almost usable; some scroll region problems, doesn't like textual in textual yet.
 
 ## Demo
 
@@ -35,12 +35,14 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
 
 ## Recent changes
 
-* DEC Special Graphics
-* Faster colour/style parser
-* Split out from `textual-tty` into separate package
+* 🖼️ DEC Special Graphics
+* 🐌 Faster colour/style parser
+* ⛓️‍💥 Split out from `textual-tty` into separate package
 
 ## bugs / todo
 
+- [ ] architecture
+  - [ ] break into router
 - [ ] gui
   - [ ] make a terminal input class, for standalone input
   - [ ] make `framebuffer.py`
@@ -54,7 +56,6 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
   - [ ] corruption in stream - debug it
   - [ ] scroll region: scroll up in `vim` corrupts outside scroll region
   - [ ] underline in vim after load
-  - [x] erase but keep background colour
 - [ ] add terminal visuals
   - [ ] bell flash effect
 - [ ] Support themes
