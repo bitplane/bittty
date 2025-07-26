@@ -123,7 +123,7 @@ class Buffer:
             new_row = row[:x] + row[end_pos:]
             # Pad with spaces to maintain width
             while len(new_row) < self.width:
-                new_row.append(("", " "))
+                new_row.append((Style(), " "))
             self.grid[y] = new_row
 
     def clear_region(self, x1: int, y1: int, x2: int, y2: int, style_or_ansi=None) -> None:
