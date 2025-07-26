@@ -284,8 +284,40 @@ def test_insert_characters_invalid_cursor():
     # Should not raise an error and do nothing
 
 
+def test_insert_characters_with_padding_preserves_style_objects():
+    """Test that insert beyond row length creates proper Style objects when padding."""
+    terminal = Terminal(width=10, height=5)
+    terminal.cursor_x = 8  # Near end of line
+    terminal.cursor_y = 0
+
+    # Insert text that triggers padding in buffer.insert
+    terminal.insert_characters(2, Style(italic=True))
+
+    # Check that all cells have proper Style objects
+    row = terminal.current_buffer.grid[0]
+    for style, char in row:
+        assert isinstance(style, Style), f"Expected Style object, got {type(style)}"
+
+
 def test_delete_characters_invalid_cursor():
     terminal = Terminal(width=10, height=5)
     terminal.cursor_y = 10  # Invalid cursor position
     terminal.delete_characters(1)
     # Should not raise an error and do nothing
+
+
+def test_delete_characters_preserves_style_objects():
+    """Test that delete_characters creates proper Style objects, not empty strings."""
+    terminal = Terminal(width=10, height=5)
+    terminal.current_buffer.set(0, 0, "hello", Style(bold=True))
+    terminal.cursor_x = 1
+    terminal.cursor_y = 0
+
+    # This was the source of the bug - delete_characters -> buffer.delete
+    terminal.delete_characters(3)
+
+    # Check that padding cells have proper Style objects, not empty strings
+    row = terminal.current_buffer.grid[0]
+    for style, char in row:
+        assert isinstance(style, Style), f"Expected Style object, got {type(style)}"
+        assert hasattr(style, "bold"), "Style object should have bold attribute"

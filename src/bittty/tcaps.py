@@ -7,7 +7,7 @@ from __future__ import annotations
 from typing import Dict, Any
 
 
-class Terminal:
+class TermInfo:
     """
     Stores and provides access to a terminal's capabilities from terminfo.
     """

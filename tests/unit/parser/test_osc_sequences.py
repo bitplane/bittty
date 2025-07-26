@@ -129,3 +129,69 @@ def test_osc_string_terminator():
     # Title should not appear in screen content
     output = render_terminal_to_string(terminal)
     assert "My Title" not in output
+
+
+def test_osc_set_icon_title():
+    """Test OSC 1 for setting icon title only."""
+    terminal = Terminal(width=80, height=24)
+    parser = Parser(terminal)
+
+    # OSC 1 sets icon title
+    parser.feed("\x1b]1;Icon Title\x07")
+
+    # Should set icon title attribute
+    assert terminal.icon_title == "Icon Title"
+
+
+def test_osc_set_window_title_only():
+    """Test OSC 2 for setting window title only."""
+    terminal = Terminal(width=80, height=24)
+    parser = Parser(terminal)
+
+    # OSC 2 sets window title only
+    parser.feed("\x1b]2;Window Title\x07")
+
+    # Should set window title attribute
+    assert terminal.title == "Window Title"
+
+
+def test_osc_unknown_command():
+    """Test OSC with unknown command number."""
+    terminal = Terminal(width=80, height=24)
+    parser = Parser(terminal)
+
+    # OSC with unknown command - should be consumed without error
+    parser.feed("\x1b]999;unknown data\x07")
+    parser.feed("Hello")
+
+    # Should still work normally after unknown OSC
+    output = render_terminal_to_string(terminal)
+    assert "Hello" in output
+
+
+def test_osc_malformed_command():
+    """Test OSC with malformed command."""
+    terminal = Terminal(width=80, height=24)
+    parser = Parser(terminal)
+
+    # OSC with non-numeric command
+    parser.feed("\x1b]abc;data\x07")
+    parser.feed("Test")
+
+    # Should still work normally after malformed OSC
+    output = render_terminal_to_string(terminal)
+    assert "Test" in output
+
+
+def test_osc_empty_command():
+    """Test OSC with empty string."""
+    terminal = Terminal(width=80, height=24)
+    parser = Parser(terminal)
+
+    # Empty OSC
+    parser.feed("\x1b]\x07")
+    parser.feed("Normal text")
+
+    # Should work normally
+    output = render_terminal_to_string(terminal)
+    assert "Normal text" in output
