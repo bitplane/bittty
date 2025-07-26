@@ -58,6 +58,7 @@ DECNKM_NUMERIC_KEYPAD = 66
 # Used with CSI ... h/l
 DECKPAM_APPLICATION_KEYPAD = 1
 IRM_INSERT_REPLACE = 4
+SRM_SEND_RECEIVE = 12
 
 # --- SGR (Select Graphic Rendition) Parameters ---
 SGR_RESET = 0

@@ -84,6 +84,7 @@ class Terminal:
         self.scroll_mode = False  # DECSCLM: False = jump scrolling, True = smooth scrolling
         self.auto_repeat = True  # DECARM: True = auto-repeat enabled, False = disabled
         self.numeric_keypad = True  # DECNKM: True = numeric mode, False = application mode
+        self.local_echo = True  # SRM: True = echo enabled, False = echo disabled
 
         # Screen buffers
         self.primary_buffer = Buffer(width, height)  # With scrollback (future)

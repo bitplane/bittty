@@ -610,7 +610,11 @@ class Parser:
             return
 
         for param in self.parsed_params:
-            if param == constants.DECAWM_AUTOWRAP:
+            if param == constants.IRM_INSERT_REPLACE:
+                self.terminal.insert_mode = set_mode
+            elif param == constants.SRM_SEND_RECEIVE:
+                self.terminal.local_echo = not set_mode  # Inverted: h = echo OFF, l = echo ON
+            elif param == constants.DECAWM_AUTOWRAP:
                 self.terminal.auto_wrap = set_mode
             elif param == constants.DECTCEM_SHOW_CURSOR:
                 self.terminal.cursor_visible = set_mode

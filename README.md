@@ -59,7 +59,6 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
 
 ## Unhandled modes
 
-*   **`SRM` (Send/Receive Mode):** Controls whether data is echoed back to the sender.
 *   **`KAM` (Keyboard Action Mode):** Determines how the keyboard is locked.
 *   **`HEM` (Horizontal Editing Mode):** Manages horizontal editing.
 *   **`PUM` (Positioning Unit Mode):** Defines the unit for positioning.
