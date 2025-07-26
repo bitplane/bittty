@@ -530,6 +530,12 @@ class Parser:
                 else:
                     # Normal mode: cursor to absolute home
                     self.terminal.set_cursor(0, 0)
+            elif param == constants.DECARSM_AUTO_RESIZE:
+                # DECARSM: Auto-resize mode - terminal automatically resizes
+                self.terminal.auto_resize_mode = set_mode
+            elif param == constants.DECKBUM_KEYBOARD_USAGE:
+                # DECKBUM: Keyboard usage mode - typewriter keys send functions
+                self.terminal.keyboard_usage_mode = set_mode
             # Add more private modes as needed
 
     # --- OSC, DCS, and other String-based Sequence Handlers ---

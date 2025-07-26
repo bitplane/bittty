@@ -87,6 +87,8 @@ class Terminal:
         self.local_echo = True  # SRM: True = echo enabled, False = echo disabled
         self.reverse_screen = False  # DECSCNM: False = normal, True = reverse video
         self.origin_mode = False  # DECOM: False = absolute, True = relative to scroll region
+        self.auto_resize_mode = False  # DECARSM: False = manual, True = auto-resize
+        self.keyboard_usage_mode = False  # DECKBUM: False = normal, True = typewriter mode
 
         # Screen buffers
         self.primary_buffer = Buffer(width, height)  # With scrollback (future)
