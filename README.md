@@ -33,24 +33,24 @@ WTFPL with one additional clause
 
 Do wtf you want, but don't blame me when it rips a hole in your trousers.
 
-## todo / ideas
+## bugs / todo
 
-- [ ] split pty out into a cross platform package
-- [x] break terminal project out from Textual deps
-  - [x] write a minimal demo that doesn't need textual
-  - [ ] gui
-    - [ ] make `framebuffer.py`
-    - [ ] choose a backend
+- [x] split pty out into a cross platform package
+- [ ] gui
+  - [ ] make a terminal input class, for standalone input
+  - [ ] make `framebuffer.py`
+  - [ ] choose a backend
 - [ ] performance improvements
   - [ ] parse with regex over large buffer sizes
+  - [x] lru_cache style handling
+  - [ ] line cache for outputs
 - [ ] scrollback buffer
   - [ ] implement `logloglog` for scrollback with wrapping
 - [ ] bugs
-  - [ ] blank background to end of line
+  - [x] blank background to end of line
   - [ ] corruption in stream - debug it
   - [ ] scroll region: scroll up in `vim` corrupts outside scroll region
-- [ ] reduce redundancy redundancy of repeated repeated code code
-  - [ ] code code of of redundancy redundancy
+  - [ ] DEC Special Graphics not working
 - [ ] add terminal visuals
   - [ ] bell flash effect
 - [ ] Support themes
