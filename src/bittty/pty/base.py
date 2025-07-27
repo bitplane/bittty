@@ -11,7 +11,7 @@ from abc import ABC, abstractmethod
 from typing import Optional, Dict
 import subprocess
 
-from . import constants
+from .. import constants
 
 
 class PTYBase(ABC):

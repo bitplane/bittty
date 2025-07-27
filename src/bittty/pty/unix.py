@@ -15,8 +15,8 @@ import subprocess
 import logging
 from typing import Optional, Dict
 
-from .pty_base import PTYBase
-from . import constants
+from .base import PTYBase
+from .. import constants
 
 logger = logging.getLogger(__name__)
 

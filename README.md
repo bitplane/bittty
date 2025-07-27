@@ -47,7 +47,7 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
 - [ ] gui
   - [ ] make a terminal input class, for standalone input
   - [ ] make `framebuffer.py`
-  - [ ] choose a backend
+  - [ ] choose a display driver
 - [ ] performance improvements
   - [ ] parse with regex over large buffer sizes
   - [ ] line cache for outputs
@@ -56,10 +56,18 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
 - [ ] bugs
   - [ ] corruption in stream - debug it
   - [ ] scroll region: scroll up in `vim` corrupts outside scroll region
-  - [ ] underline in vim after load
-- [ ] add terminal visuals
+  - [x] underline in vim after load
+- [ ] add terminal overlay visuals
   - [ ] bell flash effect
+  - [ ] make cursor an overlay
+  - [ ] make mouse an overlay
+  - [ ] debug overlay for scroll regions
 - [ ] Support themes
+- [ ] bittty-specific escape sequences
+  - [ ] visible mouse on / off
+  - [ ] debugging info
+  - [ ] record
+  - [ ] list sequences + values
 
 ## Unhandled modes
 

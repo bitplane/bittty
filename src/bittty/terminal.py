@@ -31,14 +31,23 @@ class Terminal:
     """
 
     @staticmethod
-    def get_pty_handler(rows: int = constants.DEFAULT_TERMINAL_HEIGHT, cols: int = constants.DEFAULT_TERMINAL_WIDTH):
+    def get_pty_handler(
+        rows: int = constants.DEFAULT_TERMINAL_HEIGHT,
+        cols: int = constants.DEFAULT_TERMINAL_WIDTH,
+        stdin=None,
+        stdout=None,
+    ):
         """Create a platform-appropriate PTY handler."""
-        if sys.platform == "win32":
-            from .pty_windows import WindowsPTY
+        if stdin is not None and stdout is not None:
+            from .pty import StdioPTY
+
+            return StdioPTY(stdin, stdout, rows, cols)
+        elif sys.platform == "win32":
+            from .pty import WindowsPTY
 
             return WindowsPTY(rows, cols)
         else:
-            from .pty_unix import UnixPTY
+            from .pty import UnixPTY
 
             return UnixPTY(rows, cols)
 
@@ -724,86 +733,32 @@ class Terminal:
         self._send_to_pty(data, flush=True)
 
     def _send_to_pty(self, data: str, flush: bool = False) -> None:
-        """Send data to PTY or stdout with optional flush."""
+        """Send data to PTY with optional flush."""
         if self.pty:
-            # PTY mode
             self.pty.write(data)
             if flush:
                 self.pty.flush()
-        elif self.stdout:
-            # Stream mode
-            self.stdout.write(data)
-            self.stdout.flush()
 
     # Process management
     async def start_process(self) -> None:
-        """Start the child process with PTY or set up stream mode."""
+        """Start the child process with PTY."""
         try:
-            if self.stdin is not None and self.stdout is not None:
-                # Stream mode - create PTY for child process but also read from stdin
-                logger.info("Starting terminal in stream mode")
+            logger.info(f"Starting terminal process: {self.command}")
 
-                # Create PTY and spawn child process (for output)
-                self.pty = Terminal.get_pty_handler(self.height, self.width)
-                logger.info(f"Created PTY: {self.width}x{self.height}")
-                self.process = self.pty.spawn_process(self.command)
-                logger.info(f"Spawned process: pid={self.process.pid}")
+            # Create PTY (will be StdioPTY if stdin/stdout are provided)
+            self.pty = Terminal.get_pty_handler(self.height, self.width, self.stdin, self.stdout)
+            logger.info(f"Created PTY: {self.width}x{self.height}")
 
-                # Start both PTY reader (for child output) and stdin reader (for input)
-                self._pty_reader_task = asyncio.create_task(self._async_read_from_pty())
-                self._stdin_reader_task = asyncio.create_task(self._async_read_from_stdin())
-            else:
-                # PTY mode - create child process
-                logger.info(f"Starting terminal process: {self.command}")
+            # Spawn process attached to PTY
+            self.process = self.pty.spawn_process(self.command)
+            logger.info(f"Spawned process: pid={self.process.pid}")
 
-                # Create PTY socket
-                self.pty = Terminal.get_pty_handler(self.height, self.width)
-                logger.info(f"Created PTY: {self.width}x{self.height}")
-
-                # Spawn process attached to PTY
-                self.process = self.pty.spawn_process(self.command)
-                logger.info(f"Spawned process: pid={self.process.pid}")
-
-                # Start async PTY reader task
-                self._pty_reader_task = asyncio.create_task(self._async_read_from_pty())
+            # Start async PTY reader task
+            self._pty_reader_task = asyncio.create_task(self._async_read_from_pty())
 
         except Exception:
             logger.exception("Failed to start terminal process")
             self.stop_process()
-
-    async def _async_read_from_stdin(self) -> None:
-        """Async task to read from stdin in stream mode."""
-        loop = asyncio.get_running_loop()
-
-        def read_stdin():
-            try:
-                # Read available data from stdin
-                import os
-
-                data = os.read(self.stdin.fileno(), 1024)
-                return data.decode("utf-8", errors="replace")
-            except (OSError, IOError):
-                return ""
-
-        try:
-            while True:
-                # Read from stdin in a thread to avoid blocking
-                data = await loop.run_in_executor(None, read_stdin)
-                if not data:
-                    await asyncio.sleep(0.01)  # Small delay if no data
-                    continue
-
-                # Forward input directly to PTY - parser is for output parsing only
-                try:
-                    if self.pty:
-                        self.pty.write(data)
-                except UnicodeDecodeError:
-                    pass
-
-        except asyncio.CancelledError:
-            pass
-        except Exception as e:
-            logger.exception(f"Error reading from stdin: {e}")
 
     def stop_process(self) -> None:
         """Stop the child process and clean up."""
