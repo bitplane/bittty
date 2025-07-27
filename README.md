@@ -43,6 +43,7 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
 
 - [ ] architecture
   - [ ] break into router
+  - [ ] proper input mapping
 - [ ] gui
   - [ ] make a terminal input class, for standalone input
   - [ ] make `framebuffer.py`

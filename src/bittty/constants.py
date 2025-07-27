@@ -39,6 +39,10 @@ ERASE_ALL = 2
 # --- Private Modes (DECSET/DECRST) ---
 # Used with CSI ? ... h/l
 DECCKM_CURSOR_KEYS_APPLICATION = 1
+DECCOLM_COLUMN_MODE = 3
+DECSCLM_SMOOTH_SCROLL = 4
+DECSCNM_SCREEN_MODE = 5
+DECOM_ORIGIN_MODE = 6
 DECAWM_AUTOWRAP = 7
 DECTCEM_SHOW_CURSOR = 25
 ALT_SCREEN_BUFFER_OLDER = 47
@@ -64,6 +68,35 @@ DECKBUM_KEYBOARD_USAGE = 69
 DECKPAM_APPLICATION_KEYPAD = 1
 IRM_INSERT_REPLACE = 4
 SRM_SEND_RECEIVE = 12
+
+# --- Device Attributes (DA) ---
+# Terminal types for DA2 responses
+DA2_VT100 = 1
+DA2_VT220 = 62
+DA2_VT320 = 63
+DA2_VT420 = 41
+
+# Capabilities for DA1 responses
+DA1_132_COLUMNS = 1  # 132 column mode
+DA1_PRINTER_PORT = 2  # Printer port
+DA1_REGIS_GRAPHICS = 3  # ReGIS graphics
+DA1_SIXEL_GRAPHICS = 4  # Sixel graphics
+DA1_SELECTIVE_ERASE = 6  # Selective erase
+DA1_USER_DEFINED_KEYS = 8  # User-defined keys (UDKs)
+DA1_NATIONAL_REPLACEMENT_CHARSETS = 9  # National replacement character sets
+DA1_TECH_CHARACTERS = 15  # Technical characters
+DA1_LOCATOR_PORT = 16  # Locator port
+DA1_TERMINAL_STATE_INTERROGATION = 17  # Terminal state interrogation
+DA1_USER_WINDOWS = 18  # User windows
+DA1_DUAL_SESSIONS = 19  # Dual sessions
+DA1_HORIZONTAL_SCROLLING = 21  # Horizontal scrolling
+DA1_ANSI_COLOR = 22  # ANSI color
+DA1_GREEK_CHARSET = 23  # Greek character set
+DA1_TURKISH_CHARSET = 24  # Turkish character set
+DA1_ISO_LATIN2_CHARSET = 42  # ISO Latin-2 character set
+DA1_PC_TERM = 44  # PC Term
+DA1_SOFT_KEY_MAP = 45  # Soft key map
+DA1_ASCII_EMULATION = 46  # ASCII emulation
 
 # --- SGR (Select Graphic Rendition) Parameters ---
 SGR_RESET = 0
@@ -124,6 +157,9 @@ SGR_BRIGHT_BG_WHITE = 107
 OSC_SET_TITLE_AND_ICON = 0
 OSC_SET_ICON_TITLE = 1
 OSC_SET_TITLE = 2
+OSC_SET_DEFAULT_FG_COLOR = 10
+OSC_SET_DEFAULT_BG_COLOR = 11
+OSC_SET_CURSOR_COLOR = 12
 
 # --- Mouse Button Modifiers ---
 MOUSE_MOD_SHIFT = 4

@@ -75,6 +75,7 @@ class Terminal:
         self.insert_mode = False
         self.application_keypad = False
         self.cursor_application_mode = False
+        self.smooth_scroll_mode = False
         self.mouse_tracking = False
         self.mouse_button_tracking = False
         self.mouse_any_tracking = False

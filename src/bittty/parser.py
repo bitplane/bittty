@@ -480,14 +480,7 @@ class Parser:
                 # Report OK status
                 self.terminal.respond("\033[0n")
         elif final_char == "c":  # Device Attributes
-            param = self._get_param(0, 0)
-            if param == 0:  # Primary Device Attributes
-                # Report as VT220 with various capabilities:
-                # 1 = 132 columns, 2 = printer port, 6 = selective erase, 8 = user defined keys
-                # 9 = national replacement character sets, 15 = technical character set
-                # 18 = user windows, 19 = dual sessions, 21 = horizontal scrolling
-                # 23 = Greek character sets, 24 = Turkish character sets, 42 = ISO Latin-2 character set
-                self.terminal.respond("\033[?62;1;2;6;8;9;15;18;21;22c")
+            self._handle_device_attributes()
         else:
             # Unknown CSI sequence, log it
             params_str = self.param_buffer if self.param_buffer else "<no params>"
@@ -509,6 +502,8 @@ class Parser:
         for param in self.parsed_params:
             if param == constants.DECCKM_CURSOR_KEYS_APPLICATION:
                 self.terminal.cursor_application_mode = set_mode
+            elif param == constants.DECSCLM_SMOOTH_SCROLL:
+                self.terminal.smooth_scroll_mode = set_mode
             elif param == constants.DECAWM_AUTOWRAP:
                 self.terminal.auto_wrap = set_mode
             elif param == constants.DECTCEM_SHOW_CURSOR:
@@ -615,6 +610,20 @@ class Parser:
             if len(parts) >= 2:
                 title_text = parts[1]
                 self.terminal.set_title(title_text)
+        elif cmd == constants.OSC_SET_DEFAULT_FG_COLOR:
+            # OSC 10 - Set/query default foreground color
+            if len(parts) >= 2 and parts[1] == "?":
+                # Query mode - respond with current foreground color
+                # Default to white (rgb:ffff/ffff/ffff)
+                self.terminal.respond("\033]10;rgb:ffff/ffff/ffff\007")
+            # TODO: Handle setting foreground color if needed
+        elif cmd == constants.OSC_SET_DEFAULT_BG_COLOR:
+            # OSC 11 - Set/query default background color
+            if len(parts) >= 2 and parts[1] == "?":
+                # Query mode - respond with current background color
+                # Default to black (rgb:0000/0000/0000)
+                self.terminal.respond("\033]11;rgb:0000/0000/0000\007")
+            # TODO: Handle setting background color if needed
         else:
             # For other OSC sequences, we just consume them without implementing them
             # This prevents them from leaking through to the terminal output
@@ -670,6 +679,8 @@ class Parser:
         """
         if mode == constants.DECCKM_CURSOR_KEYS_APPLICATION:
             return 1 if self.terminal.cursor_application_mode else 2
+        elif mode == constants.DECSCLM_SMOOTH_SCROLL:
+            return 1 if self.terminal.smooth_scroll_mode else 2
         elif mode == constants.DECAWM_AUTOWRAP:
             return 1 if self.terminal.auto_wrap else 2
         elif mode == constants.DECTCEM_SHOW_CURSOR:
@@ -737,3 +748,34 @@ class Parser:
                 self.terminal.auto_wrap = set_mode
             elif param == constants.DECTCEM_SHOW_CURSOR:
                 self.terminal.cursor_visible = set_mode
+
+    def _handle_device_attributes(self) -> None:
+        """Handle device attributes requests (DA1 and DA2)."""
+        if ">" in self.intermediate_chars:
+            # Secondary Device Attributes (DA2)
+            # Response format: CSI > Pp ; Pv ; Pc c
+            # We identify as VT420 (41), firmware version 95, with 0 for ROM cartridge
+            terminal_type = constants.DA2_VT420
+            firmware_version = 95
+            rom_cartridge = 0
+            self.terminal.respond(f"\033[>{terminal_type};{firmware_version};{rom_cartridge}c")
+        else:
+            # Primary Device Attributes (DA1)
+            param = self._get_param(0, 0)
+            if param == 0:
+                # Build capabilities list based on what bittty actually supports
+                capabilities = [
+                    constants.DA2_VT220,  # Base terminal type
+                    constants.DA1_132_COLUMNS,  # We support resizing
+                    constants.DA1_SELECTIVE_ERASE,  # We have selective erase
+                    constants.DA1_USER_DEFINED_KEYS,  # We support key mapping
+                    constants.DA1_NATIONAL_REPLACEMENT_CHARSETS,  # We have all those charsets!
+                    constants.DA1_TECH_CHARACTERS,  # We support DEC Technical charset
+                    constants.DA1_USER_WINDOWS,  # We support windowing
+                    constants.DA1_HORIZONTAL_SCROLLING,  # We can scroll horizontally
+                    constants.DA1_ANSI_COLOR,  # We definitely support ANSI colors
+                    constants.DA1_GREEK_CHARSET,  # Greek letters in DEC Technical
+                ]
+                # Format: CSI ? Ps ; Ps ; ... Ps c
+                caps_str = ";".join(str(cap) for cap in capabilities)
+                self.terminal.respond(f"\033[?{caps_str}c")
