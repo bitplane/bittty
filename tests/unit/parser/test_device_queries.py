@@ -51,7 +51,7 @@ def test_device_attributes_primary():
     parser.feed("\x1b[c")  # ESC [ c
 
     # Should respond with VT220 capabilities
-    terminal.respond.assert_called_once_with("\033[?62;1;2;6;8;9;15;18;21;22c")
+    terminal.respond.assert_called_once_with("\033[?62;1;6;8;9;15;18;21;22;23c")
 
 
 def test_device_attributes_with_param():
@@ -66,7 +66,7 @@ def test_device_attributes_with_param():
     parser.feed("\x1b[0c")  # ESC [ 0 c
 
     # Should respond with VT220 capabilities
-    terminal.respond.assert_called_once_with("\033[?62;1;2;6;8;9;15;18;21;22c")
+    terminal.respond.assert_called_once_with("\033[?62;1;6;8;9;15;18;21;22;23c")
 
 
 def test_decrqm_private_mode_query_cursor_keys():
@@ -235,7 +235,7 @@ def test_multiple_device_queries():
     expected_calls = [
         (("\033[11;16R",), {}),  # CPR: row 11, col 16 (1-based)
         (("\033[0n",), {}),  # DSR: OK status
-        (("\033[?62;1;2;6;8;9;15;18;21;22c",), {}),  # DA: VT220 capabilities
+        (("\033[?62;1;6;8;9;15;18;21;22;23c",), {}),  # DA: VT220 capabilities
     ]
 
     assert terminal.respond.call_args_list == expected_calls
@@ -260,7 +260,7 @@ def test_vim_compatibility_queries():
 
     # Check specific responses
     calls = [call[0][0] for call in terminal.respond.call_args_list]
-    assert "\033[?62;1;2;6;8;9;15;18;21;22c" in calls  # Device Attributes (appears twice)
+    assert "\033[?62;1;6;8;9;15;18;21;22;23c" in calls  # Device Attributes (appears twice)
     assert "\033[?1;2$y" in calls  # Cursor keys mode (reset by default)
     assert "\033[?25;1$y" in calls  # Cursor visibility (set by default)
 

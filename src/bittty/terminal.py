@@ -75,7 +75,7 @@ class Terminal:
         self.insert_mode = False
         self.application_keypad = False
         self.cursor_application_mode = False
-        self.smooth_scroll_mode = False
+        self.scroll_mode = False
         self.mouse_tracking = False
         self.mouse_button_tracking = False
         self.mouse_any_tracking = False
@@ -277,12 +277,13 @@ class Terminal:
 
     def line_feed(self, is_wrapped: bool = False) -> None:
         """Perform line feed."""
-        if self.cursor_y >= self.scroll_bottom:
-            # Scroll up within scroll region
-            self.scroll_up(1)
-        else:
-            # Move cursor down
+        if self.cursor_y == self.scroll_bottom:
+            # At bottom of scroll region - scroll up
+            self.scroll(1)
+        elif self.cursor_y < self.scroll_bottom:
+            # Not at bottom yet - move cursor down
             self.cursor_y += 1
+        # If cursor is somehow beyond scroll_bottom, don't move it further
 
     def carriage_return(self) -> None:
         """Move cursor to beginning of line."""
@@ -449,37 +450,48 @@ class Terminal:
             return
         self.current_buffer.delete(self.cursor_x, self.cursor_y, count)
 
-    def scroll_up(self, count: int) -> None:
-        """Scroll content up within scroll region."""
-        # Only scroll within the defined scroll region
-        for _ in range(count):
-            if self.scroll_top < self.scroll_bottom:
-                # Shift lines up within the scroll region
+    def scroll(self, lines: int) -> None:
+        """Centralized scrolling method that enforces scroll region boundaries.
+
+        Args:
+            lines: Number of lines to scroll. Positive = up, negative = down.
+        """
+        if lines == 0 or self.scroll_top > self.scroll_bottom:
+            return
+
+        # Get just the background color from current style for clearing
+        bg_ansi = get_background(self.current_ansi_code)
+
+        abs_lines = abs(lines)
+
+        for _ in range(abs_lines):
+            if lines > 0:
+                # Scroll up - content moves up, new line appears at bottom
+                # Shift lines up within scroll region only
                 for y in range(self.scroll_top, self.scroll_bottom):
                     for x in range(self.width):
                         cell = self.current_buffer.get_cell(x, y + 1)
                         self.current_buffer.set_cell(x, y, cell[1], cell[0])
-                # Clear the last line of the scroll region
-                self.current_buffer.clear_line(self.scroll_bottom, constants.ERASE_ALL)
-            else:
-                # If scroll region is 1 line or invalid, just clear it
-                self.current_buffer.clear_line(self.scroll_top, constants.ERASE_ALL)
+                # Clear the bottom line of the scroll region
+                self.current_buffer.clear_line(self.scroll_bottom, constants.ERASE_ALL, 0, bg_ansi)
 
-    def scroll_down(self, count: int) -> None:
-        """Scroll content down within scroll region."""
-        # Only scroll within the defined scroll region
-        for _ in range(count):
-            if self.scroll_top < self.scroll_bottom:
-                # Shift lines down within the scroll region
+            else:  # lines < 0
+                # Scroll down - content moves down, new line appears at top
+                # Shift lines down within scroll region only
                 for y in range(self.scroll_bottom, self.scroll_top, -1):
                     for x in range(self.width):
                         cell = self.current_buffer.get_cell(x, y - 1)
                         self.current_buffer.set_cell(x, y, cell[1], cell[0])
-                # Clear the first line of the scroll region
-                self.current_buffer.clear_line(self.scroll_top, constants.ERASE_ALL)
-            else:
-                # If scroll region is 1 line or invalid, just clear it
-                self.current_buffer.clear_line(self.scroll_top, constants.ERASE_ALL)
+                # Clear the top line of the scroll region
+                self.current_buffer.clear_line(self.scroll_top, constants.ERASE_ALL, 0, bg_ansi)
+
+    def scroll_up(self, count: int) -> None:
+        """Scroll content up within scroll region."""
+        self.scroll(count)
+
+    def scroll_down(self, count: int) -> None:
+        """Scroll content down within scroll region."""
+        self.scroll(-count)
 
     def set_cursor(self, x: Optional[int], y: Optional[int]) -> None:
         """Set cursor position (alias for move_cursor)."""

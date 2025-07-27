@@ -328,7 +328,7 @@ class Parser:
             self.terminal.line_feed()
         elif final_char == "M":  # RI (Reverse Index)
             if self.terminal.cursor_y <= self.terminal.scroll_top:
-                self.terminal.scroll_down(1)
+                self.terminal.scroll(-1)
             else:
                 self.terminal.cursor_y -= 1
         elif final_char == "7":  # DECSC (Save Cursor)
@@ -409,10 +409,10 @@ class Parser:
             self.terminal.delete_characters(count)
         elif final_char == "S":  # SU - Scroll Up
             count = self._get_param(0, 1)
-            self.terminal.scroll_up(count)
+            self.terminal.scroll(count)
         elif final_char == "T":  # SD - Scroll Down
             count = self._get_param(0, 1)
-            self.terminal.scroll_down(count)
+            self.terminal.scroll(-count)
         elif final_char == "r":  # DECSTBM - Set Scroll Region
             top = self._get_param(0, 1) - 1  # Convert to 0-based
             bottom = self._get_param(1, self.terminal.height) - 1  # Convert to 0-based
@@ -503,7 +503,7 @@ class Parser:
             if param == constants.DECCKM_CURSOR_KEYS_APPLICATION:
                 self.terminal.cursor_application_mode = set_mode
             elif param == constants.DECSCLM_SMOOTH_SCROLL:
-                self.terminal.smooth_scroll_mode = set_mode
+                self.terminal.scroll_mode = set_mode
             elif param == constants.DECAWM_AUTOWRAP:
                 self.terminal.auto_wrap = set_mode
             elif param == constants.DECTCEM_SHOW_CURSOR:
@@ -680,7 +680,7 @@ class Parser:
         if mode == constants.DECCKM_CURSOR_KEYS_APPLICATION:
             return 1 if self.terminal.cursor_application_mode else 2
         elif mode == constants.DECSCLM_SMOOTH_SCROLL:
-            return 1 if self.terminal.smooth_scroll_mode else 2
+            return 1 if self.terminal.scroll_mode else 2
         elif mode == constants.DECAWM_AUTOWRAP:
             return 1 if self.terminal.auto_wrap else 2
         elif mode == constants.DECTCEM_SHOW_CURSOR:

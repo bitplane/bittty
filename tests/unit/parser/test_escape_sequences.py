@@ -70,7 +70,7 @@ def test_ri_reverse_index_with_scroll(terminal):
     terminal.cursor_y = 0  # At the top of the scroll region
     terminal.scroll_top = 0
     parser.feed("\x1bM")  # ESC then M
-    terminal.scroll_down.assert_called_once_with(1)
+    terminal.scroll.assert_called_once_with(-1)
     assert parser.current_state == "GROUND"
 
 
