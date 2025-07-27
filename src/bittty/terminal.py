@@ -470,8 +470,12 @@ class Terminal:
                 # Shift lines up within scroll region only
                 for y in range(self.scroll_top, self.scroll_bottom):
                     for x in range(self.width):
-                        cell = self.current_buffer.get_cell(x, y + 1)
-                        self.current_buffer.set_cell(x, y, cell[1], cell[0])
+                        if y + 1 <= self.scroll_bottom:
+                            cell = self.current_buffer.get_cell(x, y + 1)
+                            self.current_buffer.set_cell(x, y, cell[1], cell[0])
+                        else:
+                            # Clear the cell if we can't copy from below
+                            self.current_buffer.set_cell(x, y, bg_ansi, " ")
                 # Clear the bottom line of the scroll region
                 self.current_buffer.clear_line(self.scroll_bottom, constants.ERASE_ALL, 0, bg_ansi)
 
@@ -480,8 +484,12 @@ class Terminal:
                 # Shift lines down within scroll region only
                 for y in range(self.scroll_bottom, self.scroll_top, -1):
                     for x in range(self.width):
-                        cell = self.current_buffer.get_cell(x, y - 1)
-                        self.current_buffer.set_cell(x, y, cell[1], cell[0])
+                        if y - 1 >= self.scroll_top:
+                            cell = self.current_buffer.get_cell(x, y - 1)
+                            self.current_buffer.set_cell(x, y, cell[1], cell[0])
+                        else:
+                            # Clear the cell if we can't copy from above
+                            self.current_buffer.set_cell(x, y, bg_ansi, " ")
                 # Clear the top line of the scroll region
                 self.current_buffer.clear_line(self.scroll_top, constants.ERASE_ALL, 0, bg_ansi)
 

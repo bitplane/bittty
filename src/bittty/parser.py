@@ -421,6 +421,14 @@ class Parser:
             count = self._get_param(0, 1)
             self.terminal.repeat_last_character(count)
         elif final_char == "m":  # SGR - Select Graphic Rendition
+            # Check for malformed sequences: ESC[>...m (device attributes syntax with SGR ending)
+            if ">" in self.intermediate_chars:
+                # This is a malformed sequence - device attributes should end with 'c', not 'm'
+                # Likely from vim's terminal emulation leaking sequences
+                logger.debug(
+                    f"Ignoring malformed device attributes sequence: ESC[{';'.join(self.intermediate_chars)}{self.param_buffer}m"
+                )
+                return
             self._csi_dispatch_sgr()
         elif final_char == "h":  # SM - Set Mode
             self._csi_dispatch_sm_rm(True)
