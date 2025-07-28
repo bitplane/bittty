@@ -41,9 +41,7 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
 
 ## bugs / todo
 
-- [ ] architecture
-  - [ ] break into router
-  - [ ] proper input mapping
+- [ ] [architecture](architecture)
 - [ ] gui
   - [ ] make a terminal input class, for standalone input
   - [ ] make `framebuffer.py`
