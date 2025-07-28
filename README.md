@@ -56,7 +56,6 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
 - [ ] bugs
   - [ ] corruption in stream - debug it
   - [ ] scroll region: scroll up in `vim` corrupts outside scroll region
-  - [x] underline in vim after load
 - [ ] add terminal overlay visuals
   - [ ] bell flash effect
   - [ ] make cursor an overlay
