@@ -20,14 +20,14 @@ def get_color_code(fg: Optional[int] = None, bg: Optional[int] = None) -> str:
     """
     if fg is None and bg is None:
         return ""
-
-    codes = []
-    if fg is not None:
-        codes.append(f"38;5;{fg}")
-    if bg is not None:
-        codes.append(f"48;5;{bg}")
-
-    return f"\033[{';'.join(codes)}m"
+    elif fg is not None and bg is not None:
+        # Both foreground and background set
+        return f"\033[38;5;{fg};48;5;{bg}m"
+    elif fg is not None:
+        # Only foreground set
+        return f"\033[38;5;{fg}m"
+    # Only background set
+    return f"\033[48;5;{bg}m"
 
 
 @lru_cache(maxsize=512)
