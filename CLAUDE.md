@@ -22,32 +22,16 @@ pytest -vv --asyncio-mode=auto tests/unit/parser/test_csi_sequences.py
 pytest -vv --asyncio-mode=auto tests/unit/parser/test_csi_sequences.py::test_cursor_up
 
 # Build coverage report
-make coverage
+make
 
-# Run pre-commit hooks
+# Run pre-commit hooks (formats with ruff)
 pre-commit run --all-files
-
-# Format code with ruff
-ruff format src/ tests/
-
-# Lint code
-ruff check --fix src/ tests/
-
-# Build distribution
-make dist
-
-# Clean all build artifacts
-make clean
 ```
 
 ### Demo Applications
-```bash
-# Run standalone terminal demo
-python ./demo/terminal.py
 
-# Run in Textual TUI
-uvx textual-tty
-```
+Do not run the app as it'll mess with Claude Code's terminal and leak through to the user's terminal.
+Instead ask gaz to run it and he'll tell you which tmux pane to peep.
 
 ## Architecture Overview
 
@@ -112,12 +96,12 @@ Tests use pytest with functional style (no unittest classes). Key test categorie
 From README.md:
 - Scroll region bugs (vim scrolling corrupts outside region)
 - Stream corruption during parsing
-- Textual-in-textual not working properly yet
+- Textual-in-textual not working properly yet (cascading update loop = slow)
 
 ### Development Notes
 
 - Line length: 120 characters (configured in pyproject.toml)
-- Python 3.10+ required
+- Python 3.10+ required, so use appropriate type hints (e.g. `list[str | None]`)
 - Uses ruff for linting and formatting
 - Pre-commit hooks configured for code quality
 - All imports should be at module level (not in functions)

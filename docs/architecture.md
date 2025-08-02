@@ -8,11 +8,11 @@ BitTTY is designed as a "metal box" - a central hub that mirrors the architectur
 
 ### The Metal Box (BiTTY)
 
-The BiTTY class is the chassis that:
+The BiTTY class is the main board (chassis) that:
 - Parses incoming byte streams into control codes and text
-- Maintains a dispatch table for routing control codes to components
-- Manages component registration and capability queries
-- Handles the basic command routing between components
+- Contains the root Board for command routing
+- Manages device registration and capability queries
+- Coordinates the overall terminal system
 
 ### Commands
 
@@ -46,76 +46,122 @@ def command_to_escape(command):
         return command.args[0]
 ```
 
-### Components (Devices)
+### Devices and Boards
 
-Components are pluggable modules that handle specific terminal functionality:
+The system uses two main abstractions:
 
-#### Printer Component
-- Handles line-oriented output (like a teletype printer)
-- Implements line printing modes (LNM, etc.)
+#### Device
+A Device handles specific terminal functionality and plugs into a Board:
+
+**Printer Devices**
+- Handle line-oriented output (like a teletype printer)
+- Implement line printing modes (LNM, etc.)
 - Can be used for logging or actual printing
-- Registers for: CR, LF, FF, VT, and print-related control codes
+- Handle: CR, LF, FF, VT, and print-related control codes
 - State: page position, margins, tab stops
 
-#### Monitor Component
-- Handles screen-oriented output (like a CRT display)
-- Manages screen buffers, cursor position, and visual attributes
-- Implements scroll regions, screen clearing, and cursor movement
-- Registers for: CSI sequences for cursor control, ED, EL, scroll commands, SGR
+**Monitor Devices**
+- Handle screen-oriented output (like a CRT display)
+- Manage screen buffers, cursor position, and visual attributes
+- Implement scroll regions, screen clearing, and cursor movement
+- Handle: CSI sequences for cursor control, ED, EL, scroll commands, SGR
 - State: screen buffers, cursor position, colors, scroll regions
 
-#### Input Component
-- Handles keyboard, mouse, and other input devices
-- Manages input modes (application keypad, mouse tracking, etc.)
-- Translates hardware events into terminal input sequences
+**Input Devices**
+- Handle keyboard, mouse, and other input devices
+- Manage input modes (application keypad, mouse tracking, etc.)
+- Translate hardware events into terminal input sequences
 - Platform-specific implementations (TextualInput, QtInput, WebInput, etc.)
 - State: keyboard modes, mouse tracking state, key mappings
 
-#### PTY Component
-- Manages the connection to the actual process
-- Handles process spawning and I/O
-- Platform-specific (UnixPTY, WindowsPTY, StdioPTY)
+**Connection Devices**
+- Manage the connection to the actual process
+- Handle process spawning and I/O
+- Platform-specific (UnixPTY, WindowsPTY, StdioPTY, SerialPort, etc.)
 - State: process handle, file descriptors
 
-#### Bell Component
-- Handles BEL character
+**Bell Devices**
+- Handle BEL character
 - Can produce audio, visual flash, or system notification
-- Registers for: BEL (0x07)
+- Handle: BEL (0x07)
 
-## Component Interface
+#### Board
+A Board routes commands between devices plugged into it. Boards can plug into other boards (like expansion slots), creating a hierarchy for complex terminal configurations.
+
+## Device and Board Interfaces
 
 ```python
-class Component:
-    """Base class for all terminal components."""
+class Device:
+    """A terminal device - handles specific functionality."""
 
-    def attach(self, terminal: BiTTY) -> None:
-        """Called when component is attached to terminal."""
-        self.terminal = terminal
+    def __init__(self, board: 'Board | None' = None):
+        self.board = board
+        if board:
+            board.plug_in(self)
 
-    def detach(self) -> None:
-        """Called when component is removed from terminal."""
-        self.terminal = None
+    def query(self, feature_name: str) -> Any:
+        """Query device capabilities (terminfo-style)."""
+        return None
 
-    def get_capabilities(self) -> Dict[str, Any]:
-        """Return device capabilities for terminfo/termcap queries."""
+    def handle_command(self, cmd: Command) -> Command | None:
+        """Handle a command. Return None if consumed."""
+        return None
+
+    def get_command_handlers(self) -> dict[str, Callable]:
+        """What commands this device wants to handle."""
         return {}
 
-    def register_commands(self) -> Dict[str, Callable]:
-        """Return mapping of control codes to handler methods."""
-        return {}
+class Board:
+    """A board that devices plug into - handles command routing."""
 
-    def receive_command(self, command: Command) -> None:
-        """Handle an incoming command (for inter-component communication)."""
-        pass
+    def __init__(self, parent_board: 'Board | None' = None):
+        self.devices: list[Device] = []
+        self.dispatch_table: dict[str, list[Callable]] = {}
+        self.parent = parent_board
+
+        if parent_board:
+            parent_board.plug_in_board(self)
+
+    def plug_in(self, device: Device):
+        """Plug a device into this board."""
+        self.devices.append(device)
+        handlers = device.get_command_handlers()
+        for cmd_name, handler in handlers.items():
+            if cmd_name not in self.dispatch_table:
+                self.dispatch_table[cmd_name] = []
+            self.dispatch_table[cmd_name].append(handler)
+
+    def plug_in_board(self, board: 'Board'):
+        """Plug another board into this one (expansion slot)."""
+        self.plug_in(BoardDevice(board))
+
+    def dispatch(self, command: Command) -> Command | None:
+        """Route command to devices."""
+        handlers = self.dispatch_table.get(command.name, [])
+        for handler in handlers:
+            result = handler(command)
+            if result is None:  # Command consumed
+                return None
+        return command  # No one handled it
+
+class BoardDevice(Device):
+    """Wrapper to make a Board look like a Device for nesting."""
+
+    def __init__(self, board: Board):
+        self.wrapped_board = board
+        super().__init__(None)  # Don't auto-register
+
+    def handle_command(self, cmd: Command) -> Command | None:
+        return self.wrapped_board.dispatch(cmd)
 ```
 
-## Control Code Registration
+## Device Registration
 
-Components register which control codes they handle:
+Devices register which commands they handle:
 
 ```python
-class VT100Monitor(Component):
-    def register_commands(self):
+class VT100Monitor(Device):
+    def get_command_handlers(self):
         return {
             # C0 controls
             'C0_BS': self.backspace,
@@ -137,8 +183,8 @@ class VT100Monitor(Component):
             'CSI_SGR': self.set_graphics_rendition,  # ESC[m
         }
 
-class LinePrinter(Component):
-    def register_commands(self):
+class LinePrinter(Device):
+    def get_command_handlers(self):
         return {
             'C0_CR': self.carriage_return,
             'C0_LF': self.line_feed,
@@ -150,57 +196,54 @@ class LinePrinter(Component):
 
 ## Dispatch Flow
 
-1. BiTTY receives bytes from PTY component
+1. BiTTY receives bytes from connection device
 2. Parser identifies control code or text and creates Command
-3. Dispatcher looks up handler in registration table
-4. If found, calls component's handler with command
-5. If not found, logs unsupported sequence
+3. Main board dispatches command to plugged-in devices
+4. If device consumes command (returns None), dispatch stops
+5. If no device handles it, command is logged as unsupported
 
 ```python
 class BiTTY:
     def __init__(self):
-        self.components = []
-        self.dispatch_table = {}
+        self.main_board = Board()
+        self.parser = Parser(self)
 
-    def add(self, component: Component) -> None:
-        """Add a component to the terminal."""
-        self.components.append(component)
-        component.attach(self)
+    def plug_in(self, device: Device) -> None:
+        """Plug a device into the main board."""
+        self.main_board.plug_in(device)
 
-        # Update dispatch table with component's handlers
-        handlers = component.register_commands()
-        for code, handler in handlers.items():
-            if code not in self.dispatch_table:
-                self.dispatch_table[code] = []
-            self.dispatch_table[code].append(handler)
+    def plug_in_board(self, board: Board) -> None:
+        """Plug an expansion board into the main board."""
+        self.main_board.plug_in_board(board)
 
     def dispatch(self, command: Command) -> None:
-        """Route command to appropriate component handlers."""
-        handlers = self.dispatch_table.get(command.name, [])
-        if handlers:
-            for handler in handlers:
-                handler(command)
-        else:
+        """Route command through the board hierarchy."""
+        result = self.main_board.dispatch(command)
+        if result is not None:
             logger.debug(f"Unsupported sequence: {command}")
 ```
 
-## Inter-Component Communication
+## Inter-Device Communication
 
-Components can communicate through the terminal's command bus:
+Devices can communicate by dispatching commands through their board:
 
 ```python
-class TextualInput(Component):
+class TextualInput(Device):
     def enable_mouse_tracking(self):
-        # Tell monitor we need mouse events
-        self.terminal.send_command(
-            Command('ENABLE_MOUSE', 'INTERNAL', ('SGR',), None),
-            target='monitor'
-        )
+        # Send command to other devices on the board
+        mouse_cmd = Command('ENABLE_MOUSE', 'INTERNAL', ('SGR',), None)
+        self.board.dispatch(mouse_cmd)
 
-class TextualMonitor(Component):
-    def receive_command(self, command: Command):
-        if command.name == 'ENABLE_MOUSE':
-            self.mouse_tracking_mode = command.args[0]
+class TextualMonitor(Device):
+    def get_command_handlers(self):
+        return {
+            'ENABLE_MOUSE': self.handle_mouse_enable,
+            # ... other handlers
+        }
+
+    def handle_mouse_enable(self, command: Command):
+        self.mouse_tracking_mode = command.args[0]
+        return None  # Command consumed
 ```
 
 ## Example Configurations
@@ -208,47 +251,75 @@ class TextualMonitor(Component):
 ### Classic VT100 Terminal
 ```python
 tty = BiTTY()
-tty.add(UnixPTY("/bin/bash"))
-tty.add(VT100Monitor())
-tty.add(PS2Keyboard())
-tty.add(AudioBell())
+tty.plug_in(UnixPTY("/bin/bash"))
+tty.plug_in(VT100Monitor())
+tty.plug_in(PS2Keyboard())
+tty.plug_in(AudioBell())
+```
+
+### Modern GUI Terminal with Expansion Boards
+```python
+tty = BiTTY()
+
+# Main terminal connection
+tty.plug_in(UnixPTY("/bin/zsh"))
+
+# Input expansion board
+input_board = Board(tty.main_board)
+TextualKeyboard(input_board)    # Full keyboard support
+TextualMouse(input_board)       # Mouse tracking
+
+# Output expansion board
+output_board = Board(tty.main_board)
+XTermMonitor(output_board)      # 24-bit color, Unicode support
+VisualBell(output_board)        # Flash instead of beep
+ClipboardManager(output_board)  # OSC 52 clipboard support
+
+# Debug expansion board
+debug_board = Board(tty.main_board)
+CommandLogger("debug.log", debug_board)    # Logs all commands
+SequenceRecorder(debug_board)              # Records for playback
 ```
 
 ### 1960s Teletype (ASR-33)
 ```python
 tty = BiTTY()
-tty.add(SerialPort("/dev/ttyS0", baud=110))
-tty.add(LinePrinter(width=72, uppercase_only=True))
-tty.add(TeletypeKeyboard(uppercase_only=True))
-tty.add(MechanicalBell())
-```
-
-### Modern GUI Terminal
-```python
-tty = BiTTY()
-tty.add(UnixPTY("/bin/zsh"))
-tty.add(XTermMonitor())         # Supports 24-bit color, Unicode
-tty.add(TextualInput())         # Full keyboard + mouse
-tty.add(VisualBell())          # Flash instead of beep
-tty.add(ClipboardManager())     # OSC 52 clipboard support
+tty.plug_in(SerialPort("/dev/ttyS0", baud=110))
+tty.plug_in(LinePrinter(width=72, uppercase_only=True))
+tty.plug_in(TeletypeKeyboard(uppercase_only=True))
+tty.plug_in(MechanicalBell())
 ```
 
 ### Telegraph Terminal (1910s)
 ```python
 tty = BiTTY()
-tty.add(TelegraphLine())
-tty.add(TelegraphPrinter())     # Prints on paper tape
-tty.add(TelegraphKey())         # Morse code input
+tty.plug_in(TelegraphLine())
+tty.plug_in(TelegraphPrinter())     # Prints on paper tape
+tty.plug_in(TelegraphKey())         # Morse code input
 ```
 
-### Debug Configuration
+### Complex Multi-Board Configuration
 ```python
 tty = BiTTY()
-tty.add(UnixPTY("/bin/bash"))
-tty.add(VT100Monitor())
-tty.add(PS2Keyboard())
-tty.add(CommandLogger("debug.log"))  # Logs all commands
-tty.add(SequenceRecorder())         # Records for playback
+
+# Connection
+tty.plug_in(UnixPTY("/bin/bash"))
+
+# Video card with multiple displays
+video_board = Board(tty.main_board)
+primary_monitor = VT100Monitor(video_board)
+status_display = StatusLineDisplay(video_board)  # Shows title/status
+
+# Sound card
+audio_board = Board(video_board)  # Plugged into video board
+AudioBell(audio_board)
+SpeechSynthesizer(audio_board)
+
+# Input card with multiple devices
+input_board = Board(tty.main_board)
+PS2Keyboard(input_board)
+PS2Mouse(input_board)
+GamepadInput(input_board)  # For terminal games
 ```
 
 ## Historical Accuracy
