@@ -6,9 +6,9 @@ BitTTY is designed as a "metal box" - a central hub that mirrors the architectur
 
 ## Core Concepts
 
-### The Metal Box (BiTTY)
+### The Metal Box (BitTTY)
 
-The BiTTY class is the chassis that:
+The BitTTY class is the chassis that:
 - Parses incoming byte streams into control codes and text
 - Maintains a dispatch table for routing control codes to components
 - Manages component registration and capability queries
@@ -88,7 +88,7 @@ Components are pluggable modules that handle specific terminal functionality:
 class Component:
     """Base class for all terminal components."""
 
-    def attach(self, terminal: BiTTY) -> None:
+    def attach(self, terminal: BitTTY) -> None:
         """Called when component is attached to terminal."""
         self.terminal = terminal
 
@@ -150,14 +150,14 @@ class LinePrinter(Component):
 
 ## Dispatch Flow
 
-1. BiTTY receives bytes from PTY component
+1. BitTTY receives bytes from PTY component
 2. Parser identifies control code or text and creates Command
 3. Dispatcher looks up handler in registration table
 4. If found, calls component's handler with command
 5. If not found, logs unsupported sequence
 
 ```python
-class BiTTY:
+class BitTTY:
     def __init__(self):
         self.components = []
         self.dispatch_table = {}
@@ -207,7 +207,7 @@ class TextualMonitor(Component):
 
 ### Classic VT100 Terminal
 ```python
-tty = BiTTY()
+tty = BitTTY()
 tty.add(UnixPTY("/bin/bash"))
 tty.add(VT100Monitor())
 tty.add(PS2Keyboard())
@@ -216,7 +216,7 @@ tty.add(AudioBell())
 
 ### 1960s Teletype (ASR-33)
 ```python
-tty = BiTTY()
+tty = BitTTY()
 tty.add(SerialPort("/dev/ttyS0", baud=110))
 tty.add(LinePrinter(width=72, uppercase_only=True))
 tty.add(TeletypeKeyboard(uppercase_only=True))
@@ -225,7 +225,7 @@ tty.add(MechanicalBell())
 
 ### Modern GUI Terminal
 ```python
-tty = BiTTY()
+tty = BitTTY()
 tty.add(UnixPTY("/bin/zsh"))
 tty.add(XTermMonitor())         # Supports 24-bit color, Unicode
 tty.add(TextualInput())         # Full keyboard + mouse
@@ -235,7 +235,7 @@ tty.add(ClipboardManager())     # OSC 52 clipboard support
 
 ### Telegraph Terminal (1910s)
 ```python
-tty = BiTTY()
+tty = BitTTY()
 tty.add(TelegraphLine())
 tty.add(TelegraphPrinter())     # Prints on paper tape
 tty.add(TelegraphKey())         # Morse code input
@@ -243,7 +243,7 @@ tty.add(TelegraphKey())         # Morse code input
 
 ### Debug Configuration
 ```python
-tty = BiTTY()
+tty = BitTTY()
 tty.add(UnixPTY("/bin/bash"))
 tty.add(VT100Monitor())
 tty.add(PS2Keyboard())
