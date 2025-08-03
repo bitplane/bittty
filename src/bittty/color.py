@@ -42,18 +42,16 @@ def get_rgb_code(fg_rgb: Optional[Tuple[int, int, int]] = None, bg_rgb: Optional
     Returns:
         ANSI escape sequence for the RGB colors
     """
-    if fg_rgb is None and bg_rgb is None:
-        return ""
-
-    codes = []
     if fg_rgb is not None:
         r, g, b = fg_rgb
-        codes.append(f"38;2;{r};{g};{b}")
-    if bg_rgb is not None:
+        if bg_rgb is not None:
+            r2, g2, b2 = bg_rgb
+            return f"\033[38;2;{r};{g};{b};48;2;{r2};{g2};{b2}m"
+        return f"\033[38;2;{r};{g};{b}m"
+    elif bg_rgb is not None:
         r, g, b = bg_rgb
-        codes.append(f"48;2;{r};{g};{b}")
-
-    return f"\033[{';'.join(codes)}m"
+        return f"\033[48;2;{r};{g};{b}m"
+    return ""
 
 
 @lru_cache(maxsize=256)
