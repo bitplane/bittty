@@ -3,8 +3,22 @@ bittty: A fast, pure Python terminal emulator library.
 
 bittty (bitplane-tty) is a high-performance terminal emulator engine
 that provides comprehensive ANSI sequence parsing and terminal state management.
+
+The new architecture includes:
+- BitTTY: Hardware-inspired modular terminal emulator
+- Devices: Pluggable components (Monitor, Connection, Bell, etc.)
+- Commands: Lightweight messages for terminal operations
+
+For backward compatibility, the original Terminal class is still available.
 """
 
+# New modular architecture
+from .bittty import BitTTY
+from .device import Device, Board
+from .command import Command, command_to_escape
+from . import devices
+
+# Legacy architecture (for backward compatibility)
 from .terminal import Terminal
 from .buffer import Buffer
 from .parser import Parser
@@ -21,6 +35,14 @@ from .color import (
 __version__ = "0.1.0"
 
 __all__ = [
+    # New architecture
+    "BitTTY",
+    "Device",
+    "Board",
+    "Command",
+    "command_to_escape",
+    "devices",
+    # Legacy architecture
     "Terminal",
     "Buffer",
     "Parser",
