@@ -199,19 +199,3 @@ class MouseDevice(InputDevice):
     def __init__(self, board=None):
         super().__init__(board)
         logger.debug("MouseDevice initialized")
-
-
-class PS2KeyboardDevice(KeyboardDevice):
-    """PS/2 keyboard device (classic PC keyboard)."""
-
-    def __init__(self, board=None):
-        super().__init__(board)
-        logger.debug("PS2KeyboardDevice initialized")
-
-
-class PS2MouseDevice(MouseDevice):
-    """PS/2 mouse device (classic PC mouse)."""
-
-    def __init__(self, board=None):
-        super().__init__(board)
-        logger.debug("PS2MouseDevice initialized")

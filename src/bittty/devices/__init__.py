@@ -5,13 +5,16 @@ plugged into BitTTY boards to provide terminal functionality.
 """
 
 from .monitor import MonitorDevice
+from .tty_monitor import TTYMonitorDevice
 from .connection import ConnectionDevice
 from .bell import BellDevice, AudioBellDevice, VisualBellDevice, SystemBellDevice, SilentBellDevice
 from .printer import PrinterDevice, LinePrinter
-from .input import InputDevice, KeyboardDevice, MouseDevice, PS2KeyboardDevice, PS2MouseDevice
+from .input import InputDevice, KeyboardDevice, MouseDevice
+from .tty_input import TTYInputDevice
 
 __all__ = [
     "MonitorDevice",
+    "TTYMonitorDevice",
     "ConnectionDevice",
     "BellDevice",
     "AudioBellDevice",
@@ -23,6 +26,5 @@ __all__ = [
     "InputDevice",
     "KeyboardDevice",
     "MouseDevice",
-    "PS2KeyboardDevice",
-    "PS2MouseDevice",
+    "TTYInputDevice",
 ]

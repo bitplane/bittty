@@ -37,7 +37,7 @@ class Device:
         """
         self.board = board
         if board:
-            board.plug_in(self)
+            board.attach(self)
 
     def query(self, feature_name: str) -> Any:
         """Query device capabilities (terminfo-style).
@@ -53,7 +53,7 @@ class Device:
         """
         return None
 
-    def handle_command(self, cmd: Command) -> Command | None:
+    def handle_command(self, cmd: "Command") -> "Command | None":
         """Handle a command. Return None if consumed.
 
         This is the main entry point for command processing. Devices
@@ -74,7 +74,7 @@ class Device:
             return handler(cmd)
         return cmd  # Not handled
 
-    def get_command_handlers(self) -> dict[str, Callable[[Command], Command | None]]:
+    def get_command_handlers(self) -> dict[str, Callable[["Command"], "Command | None"]]:
         """What commands this device wants to handle.
 
         Returns a mapping of command names to handler functions.
@@ -85,7 +85,7 @@ class Device:
         """
         return {}
 
-    def dispatch_to_board(self, command: Command) -> Command | None:
+    def dispatch_to_board(self, command: "Command") -> "Command | None":
         """Send a command to other devices on the same board.
 
         This allows devices to communicate with each other by sending
@@ -123,15 +123,24 @@ class Board:
         if parent_board:
             parent_board.plug_in_board(self)
 
-    def plug_in(self, device: Device) -> None:
-        """Plug a device into this board.
+    def attach(self, component: Device | Board) -> None:
+        """Attach a device or board to this board.
 
-        This registers the device and builds the dispatch table
-        based on what commands the device handles.
+        This registers the component and builds the dispatch table
+        based on what commands it handles.
 
         Args:
-            device: The device to plug in
+            component: The device or board to attach
         """
+        if isinstance(component, Device):
+            self._attach_device(component)
+        elif isinstance(component, Board):
+            self._attach_board(component)
+        else:
+            raise TypeError(f"Can only attach Device or Board, got {type(component)}")
+
+    def _attach_device(self, device: Device) -> None:
+        """Attach a device to this board."""
         self.devices.append(device)
         device.board = self
 
@@ -142,19 +151,14 @@ class Board:
                 self.dispatch_table[cmd_name] = []
             self.dispatch_table[cmd_name].append(handler)
 
-        logger.debug(f"Plugged {device.__class__.__name__} into board, handles: {list(handlers.keys())}")
+        logger.debug(f"Attached {device.__class__.__name__} to board, handles: {list(handlers.keys())}")
 
-    def plug_in_board(self, board: Board) -> None:
-        """Plug another board into this one (expansion slot).
-
-        This creates a BoardDevice wrapper to make the board
-        look like a device for nesting purposes.
-
-        Args:
-            board: The board to plug in as an expansion
-        """
-        board_device = BoardDevice(board)
-        self.plug_in(board_device)
+    def _attach_board(self, board: "Board") -> None:
+        """Attach another board as an expansion."""
+        # Boards should be ExpansionDevices to be attachable
+        if not isinstance(board, ExpansionDevice):
+            raise TypeError(f"Only ExpansionDevice can be attached as a board, got {type(board)}")
+        self._attach_device(board)
 
     def dispatch(self, command: Command) -> Command | None:
         """Route command to devices.
@@ -219,64 +223,18 @@ class Board:
         return results
 
 
-class BoardDevice(Device):
-    """Wrapper to make a Board look like a Device for nesting.
+class ExpansionDevice(Device, Board):
+    """A device that can also accept other devices (implements both interfaces).
 
-    This allows boards to be plugged into other boards,
-    creating a hierarchical structure like hardware expansion slots.
+    ExpansionDevices can be attached to boards like regular devices,
+    but they also have attachment points for other devices.
+
+    Examples:
+    - InputExpansionDevice: Handles input coordination, can have KeyboardDevice + MouseDevice
+    - AudioExpansionDevice: Handles audio coordination, can have multiple BellDevices
     """
 
-    def __init__(self, board: Board):
-        """Wrap a board to make it look like a device.
-
-        Args:
-            board: The board to wrap
-        """
-        self.wrapped_board = board
-        super().__init__(None)  # Don't auto-register
-
-    def get_command_handlers(self) -> dict[str, Callable[[Command], Command | None]]:
-        """Return all command handlers from the wrapped board.
-
-        This allows the dispatch table to be built correctly
-        for all devices on the wrapped board.
-        """
-        handlers = {}
-        for device in self.wrapped_board.devices:
-            device_handlers = device.get_command_handlers()
-            for cmd_name, handler in device_handlers.items():
-                if cmd_name not in handlers:
-                    handlers[cmd_name] = []
-                if not isinstance(handlers[cmd_name], list):
-                    handlers[cmd_name] = [handlers[cmd_name]]
-                handlers[cmd_name].append(handler)
-
-        # Return a flattened handler that dispatches to the board
-        result = {}
-        for cmd_name in handlers:
-            result[cmd_name] = lambda cmd, b=self.wrapped_board: b.dispatch(cmd)
-
-        return result
-
-    def handle_command(self, cmd: Command) -> Command | None:
-        """Forward command to the wrapped board.
-
-        Args:
-            cmd: The command to forward
-
-        Returns:
-            The result from the wrapped board's dispatch
-        """
-        return self.wrapped_board.dispatch(cmd)
-
-    def query(self, feature_name: str) -> Any:
-        """Forward capability query to the wrapped board.
-
-        Args:
-            feature_name: The capability to query
-
-        Returns:
-            List of results from the wrapped board's devices
-        """
-        results = self.wrapped_board.query_devices(feature_name)
-        return results if results else None
+    def __init__(self, board: "Board | None" = None):
+        """Initialize as both a device and a board."""
+        Device.__init__(self, board)
+        Board.__init__(self)

@@ -20,26 +20,26 @@ from .command_parser import Parser
 logger = logging.getLogger(__name__)
 
 
-class BitTTY:
-    """The main terminal emulator chassis.
+class BitTTY(Board):
+    """The main terminal emulator chassis/motherboard.
 
-    BitTTY acts as the "metal box" that coordinates all terminal operations.
-    It contains the main board for device registration and handles the core
-    parsing of incoming byte streams into commands.
+    BitTTY is the main board that devices attach to. It coordinates all
+    terminal operations and handles the core parsing of incoming byte
+    streams into commands.
 
     Unlike the old monolithic Terminal class, BitTTY is lightweight and
-    delegates all actual functionality to plugged-in devices.
+    delegates all actual functionality to attached devices.
     """
 
     def __init__(self):
-        """Initialize the BitTTY chassis with a main board and parser."""
-        self.main_board = Board()
+        """Initialize the BitTTY chassis/motherboard and parser."""
+        super().__init__()
         self.parser = Parser(self)
 
         logger.info("BitTTY chassis initialized")
 
-    def plug_in(self, device: Device) -> None:
-        """Plug a device into the main board.
+    def attach(self, component: "Device | Board") -> None:
+        """Attach a device or board to the chassis.
 
         This is the primary way to add functionality to the terminal.
         Common devices include:
@@ -49,35 +49,28 @@ class BitTTY:
         - BellDevice: For notifications
 
         Args:
-            device: The device to plug in
+            component: The device or board to attach
         """
-        self.main_board.plug_in(device)
-        logger.info(f"Plugged {device.__class__.__name__} into main board")
+        super().attach(component)
+        if hasattr(component, "__class__"):
+            logger.info(f"Attached {component.__class__.__name__} to BitTTY")
 
-    def plug_in_board(self, board: Board) -> None:
-        """Plug an expansion board into the main board.
-
-        This allows creating hierarchical device structures,
-        like having specialized boards for input, output, etc.
-
-        Args:
-            board: The expansion board to plug in
-        """
-        self.main_board.plug_in_board(board)
-        logger.info("Plugged expansion board into main board")
-
-    def dispatch(self, command: Command) -> None:
-        """Route command through the board hierarchy.
+    def dispatch(self, command: "Command") -> "Command | None":
+        """Route command through attached devices.
 
         This is the main command dispatch point. Commands that
         aren't handled by any device are logged as unsupported.
 
         Args:
             command: The command to dispatch
+
+        Returns:
+            None if command was consumed, otherwise the command
         """
-        result = self.main_board.dispatch(command)
+        result = super().dispatch(command)
         if result is not None:
             logger.debug(f"Unsupported command: {command}")
+        return result
 
     def feed(self, data: str | bytes) -> None:
         """Feed data to the parser for processing.
@@ -97,6 +90,42 @@ class BitTTY:
 
         self.parser.feed(data)
 
+    def input(self, data: str) -> None:
+        """Send input to the terminal process.
+
+        Args:
+            data: Input data to send
+        """
+        input_cmd = Command("SEND_INPUT", "INTERNAL", (data,), None)
+        self.dispatch(input_cmd)
+
+    def input_key(self, char: str, modifier: int = 1) -> None:
+        """Send a key with modifiers to the terminal process.
+
+        Args:
+            char: The character
+            modifier: Key modifier (1=none, 2=shift, 4=alt, 8=ctrl, etc.)
+        """
+        input_cmd = Command("SEND_INPUT_KEY", "INTERNAL", (char, str(modifier)), None)
+        self.dispatch(input_cmd)
+
+    def send(self, data: str) -> None:
+        """Send data to terminal without flushing.
+
+        Args:
+            data: Data to send
+        """
+        self.input(data)
+
+    def respond(self, data: str) -> None:
+        """Send response data to terminal with flush.
+
+        Args:
+            data: Response data to send
+        """
+        respond_cmd = Command("SEND_RESPONSE", "INTERNAL", (data,), None)
+        self.dispatch(respond_cmd)
+
     def query(self, feature_name: str) -> list:
         """Query all devices for a capability.
 
@@ -109,7 +138,7 @@ class BitTTY:
         Returns:
             List of capability values from supporting devices
         """
-        return self.main_board.query_devices(feature_name)
+        return self.query_devices(feature_name)
 
     def get_devices(self, device_type: type | None = None) -> list[Device]:
         """Get all devices of a specific type.
@@ -121,9 +150,9 @@ class BitTTY:
             List of matching devices
         """
         if device_type is None:
-            return list(self.main_board.devices)
+            return list(self.devices)
 
-        return [device for device in self.main_board.devices if isinstance(device, device_type)]
+        return [device for device in self.devices if isinstance(device, device_type)]
 
     def shutdown(self) -> None:
         """Shutdown the terminal and clean up resources.
@@ -134,8 +163,7 @@ class BitTTY:
         logger.info("Shutting down BitTTY")
 
         # Give devices a chance to clean up
-        # We'll add a cleanup method to Device interface later if needed
-        for device in self.main_board.devices:
+        for device in self.devices:
             if hasattr(device, "cleanup"):
                 try:
                     device.cleanup()
@@ -144,5 +172,5 @@ class BitTTY:
 
     def __repr__(self) -> str:
         """Return a string representation of the BitTTY instance."""
-        device_names = [device.__class__.__name__ for device in self.main_board.devices]
+        device_names = [device.__class__.__name__ for device in self.devices]
         return f"BitTTY(devices={device_names})"

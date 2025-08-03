@@ -142,7 +142,7 @@ def test_alternate_screen():
     # Switch to alternate screen
     tty.feed("\x1b[?1047h")
 
-    assert monitor.in_alt_screen == True
+    assert monitor.in_alt_screen
 
     # Write to alternate screen
     tty.feed("Alternate")
@@ -150,7 +150,7 @@ def test_alternate_screen():
     # Switch back to primary
     tty.feed("\x1b[?1047l")
 
-    assert monitor.in_alt_screen == False
+    assert not monitor.in_alt_screen
 
     # Check primary screen content is restored
     content = monitor.capture_pane()

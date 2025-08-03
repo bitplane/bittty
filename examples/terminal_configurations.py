@@ -41,7 +41,7 @@ def create_modern_gui_terminal():
 
     # Video expansion board
     video_board = Board(tty.main_board)
-    monitor = devices.MonitorDevice(120, 40, video_board)  # Large screen
+    devices.MonitorDevice(120, 40, video_board)  # Large screen
 
     # Audio expansion board
     audio_board = Board(video_board)  # Nested board
@@ -86,7 +86,7 @@ def create_debug_terminal():
     tty.plug_in(devices.SilentBellDevice())  # No noise during debugging
 
     # Debug expansion board
-    debug_board = Board(tty.main_board)
+    Board(tty.main_board)  # Debug board for future expansion
     # Future: CommandLogger, SequenceRecorder devices would go here
 
     return tty
@@ -129,7 +129,7 @@ def create_accessibility_terminal():
     tty.plug_in(devices.VisualBellDevice())
 
     # Accessibility board
-    accessibility_board = Board(tty.main_board)
+    Board(tty.main_board)  # Accessibility board for future expansion
     # Future: ScreenReader, BrailleOutput devices would go here
 
     return tty
@@ -163,7 +163,7 @@ def create_graphics_terminal():
     tty.plug_in(devices.AudioBellDevice())
 
     # Graphics board
-    graphics_board = Board(tty.main_board)
+    Board(tty.main_board)  # Graphics board for future expansion
     # Future: SixelRenderer, ReGISRenderer devices would go here
 
     return tty

@@ -81,7 +81,8 @@ class ConnectionDevice(Device):
             # Internal commands for device communication
             "RESIZE_PTY": self.handle_resize_pty,
             "SEND_INPUT": self.handle_send_input,
-            "SEND_KEY": self.handle_send_key,
+            "SEND_INPUT_KEY": self.handle_send_input_key,
+            "SEND_RESPONSE": self.handle_send_response,
             "SEND_MOUSE": self.handle_send_mouse,
             # Device queries and responses
             "CSI_DA": self.handle_device_attributes,  # Device Attributes
@@ -140,11 +141,21 @@ class ConnectionDevice(Device):
             self.send(data)
         return None
 
-    def handle_send_key(self, command: "Command") -> None:
-        """Handle sending a key sequence to the PTY."""
-        if command.args:
-            key_data = command.args[0]
+    def handle_send_input_key(self, command: "Command") -> None:
+        """Handle sending a key with modifiers to the PTY."""
+        if len(command.args) >= 2:
+            char = command.args[0]
+            modifier = int(command.args[1]) if command.args[1] else 1
+            # Convert key to terminal sequence based on modifier
+            key_data = self._encode_key_input(char, modifier)
             self.send(key_data)
+        return None
+
+    def handle_send_response(self, command: "Command") -> None:
+        """Handle sending response data to the PTY with flush."""
+        if command.args:
+            data = command.args[0]
+            self.send(data, flush=True)
         return None
 
     def handle_send_mouse(self, command: "Command") -> None:
@@ -193,17 +204,9 @@ class ConnectionDevice(Device):
 
     # PTY and process management
 
-    def send(self, data: str) -> None:
-        """Send data to the PTY."""
-        if self.pty:
-            try:
-                self._send_to_pty(data)
-            except Exception as e:
-                logger.error(f"Failed to send data to PTY: {e}")
-
     def respond(self, data: str) -> None:
-        """Send response data to the PTY (same as send for now)."""
-        self.send(data)
+        """Send response data to the PTY with flush."""
+        self.send(data, flush=True)
 
     def _send_to_pty(self, data: str, flush: bool = False) -> None:
         """Send data to the PTY."""
@@ -223,7 +226,7 @@ class ConnectionDevice(Device):
             self.pty = self.get_pty_handler(rows=self.rows, cols=self.cols, stdin=stdin, stdout=stdout)
 
             # Start the process
-            self.process = await self.pty.spawn(self.command)
+            self.process = self.pty.spawn_process(self.command)
 
             # Start reading from PTY
             self._pty_reader_task = asyncio.create_task(self._async_read_from_pty())
@@ -267,7 +270,7 @@ class ConnectionDevice(Device):
         try:
             while self.pty and self.process and self.process.poll() is None:
                 try:
-                    data = await self.pty.read()
+                    data = await self.pty.read_async()
                     if data:
                         if self._pty_data_callback:
                             self._pty_data_callback(data)
@@ -287,6 +290,39 @@ class ConnectionDevice(Device):
             logger.error(f"Unexpected error in PTY reader: {e}")
         finally:
             logger.debug("PTY reader task finished")
+
+    def _encode_key_input(self, char: str, modifier: int) -> str:
+        """Encode a key with modifiers into a terminal sequence."""
+        from .. import constants
+
+        if len(char) == 1:
+            # Handle control characters
+            if modifier & constants.KEY_MOD_CTRL:
+                if "a" <= char.lower() <= "z":
+                    # Convert to control character
+                    return chr(ord(char.lower()) - ord("a") + 1)
+
+            # For other modifiers, return the character as-is for now
+            # A full implementation would handle function keys, arrow keys, etc.
+            return char
+
+        return char
+
+    def send(self, data: str, flush: bool = False) -> None:
+        """Send data to the PTY.
+
+        Args:
+            data: Data to send
+            flush: Whether to flush immediately
+        """
+        if self.pty and not self.pty.closed:
+            try:
+                self.pty.write(data)
+                if flush:
+                    self.pty.flush()
+                logger.debug(f"Sent to PTY: {repr(data)}")
+            except Exception as e:
+                logger.error(f"Failed to send to PTY: {e}")
 
     def cleanup(self) -> None:
         """Clean up resources when device is removed."""
