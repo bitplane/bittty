@@ -5,7 +5,6 @@ works correctly and maintains compatibility with existing functionality.
 """
 
 from bittty import BitTTY, devices, Command, Terminal
-from bittty.device import Board
 from bittty.command import command_to_escape
 
 
@@ -17,8 +16,8 @@ def test_basic_bittty_creation():
     monitor = devices.MonitorDevice(80, 24)
     bell = devices.AudioBellDevice()
 
-    tty.plug_in(monitor)
-    tty.plug_in(bell)
+    tty.attach(monitor)
+    tty.attach(bell)
 
     # Check devices were plugged in
     plugged_devices = tty.get_devices()
@@ -31,7 +30,7 @@ def test_text_output():
     """Test basic text output through the new architecture."""
     tty = BitTTY()
     monitor = devices.MonitorDevice(80, 24)
-    tty.plug_in(monitor)
+    tty.attach(monitor)
 
     # Feed some text
     tty.feed("Hello World")
@@ -47,7 +46,7 @@ def test_cursor_movement():
     """Test cursor movement commands."""
     tty = BitTTY()
     monitor = devices.MonitorDevice(80, 24)
-    tty.plug_in(monitor)
+    tty.attach(monitor)
 
     # Move cursor to position 10,5 (ESC[6;11H - 1-based coordinates)
     tty.feed("\x1b[6;11H")
@@ -60,7 +59,7 @@ def test_bell_handling():
     """Test bell command handling."""
     tty = BitTTY()
     bell = devices.AudioBellDevice()
-    tty.plug_in(bell)
+    tty.attach(bell)
 
     # Send bell character
     tty.feed("\x07")
@@ -73,7 +72,7 @@ def test_color_sequences():
     """Test SGR color sequences."""
     tty = BitTTY()
     monitor = devices.MonitorDevice(80, 24)
-    tty.plug_in(monitor)
+    tty.attach(monitor)
 
     # Set bold red text
     tty.feed("\x1b[1;31mHello")
@@ -86,7 +85,7 @@ def test_screen_clearing():
     """Test screen clearing commands."""
     tty = BitTTY()
     monitor = devices.MonitorDevice(80, 24)
-    tty.plug_in(monitor)
+    tty.attach(monitor)
 
     # Write some text
     tty.feed("Hello World")
@@ -105,8 +104,8 @@ def test_device_communication():
     monitor = devices.MonitorDevice(80, 24)
     bell = devices.AudioBellDevice()
 
-    tty.plug_in(monitor)
-    tty.plug_in(bell)
+    tty.attach(monitor)
+    tty.attach(bell)
 
     # Send combined sequence (text + bell)
     tty.feed("Hello\x07World")
@@ -121,7 +120,7 @@ def test_scroll_region():
     """Test scroll region functionality."""
     tty = BitTTY()
     monitor = devices.MonitorDevice(80, 24)
-    tty.plug_in(monitor)
+    tty.attach(monitor)
 
     # Set scroll region from line 5 to 15 (ESC[6;16r - 1-based)
     tty.feed("\x1b[6;16r")
@@ -134,7 +133,7 @@ def test_alternate_screen():
     """Test alternate screen buffer switching."""
     tty = BitTTY()
     monitor = devices.MonitorDevice(80, 24)
-    tty.plug_in(monitor)
+    tty.attach(monitor)
 
     # Write to primary screen
     tty.feed("Primary")
@@ -161,7 +160,7 @@ def test_character_sets():
     """Test character set switching."""
     tty = BitTTY()
     monitor = devices.MonitorDevice(80, 24)
-    tty.plug_in(monitor)
+    tty.attach(monitor)
 
     # Set G0 to DEC special graphics
     tty.feed("\x1b(0")
@@ -180,8 +179,8 @@ def test_query_capabilities():
     monitor = devices.MonitorDevice(80, 24)
     bell = devices.AudioBellDevice()
 
-    tty.plug_in(monitor)
-    tty.plug_in(bell)
+    tty.attach(monitor)
+    tty.attach(bell)
 
     # Query screen size
     screen_sizes = tty.query("screen_size")
@@ -193,16 +192,15 @@ def test_query_capabilities():
 
 
 def test_board_hierarchy():
-    """Test hierarchical board structure."""
+    """Test device attachment to BitTTY board."""
     tty = BitTTY()
 
-    # Create expansion boards
-    video_board = Board(tty.main_board)
-    audio_board = Board(tty.main_board)
+    # Attach devices directly to BitTTY
+    monitor = devices.MonitorDevice(80, 24)
+    bell = devices.AudioBellDevice()
 
-    # Plug devices into expansion boards
-    monitor = devices.MonitorDevice(80, 24, video_board)
-    bell = devices.AudioBellDevice(audio_board)
+    tty.attach(monitor)
+    tty.attach(bell)
 
     # Test that commands are routed correctly
     tty.feed("Hello\x07")

@@ -154,11 +154,9 @@ class Board:
         logger.debug(f"Attached {device.__class__.__name__} to board, handles: {list(handlers.keys())}")
 
     def _attach_board(self, board: "Board") -> None:
-        """Attach another board as an expansion."""
-        # Boards should be ExpansionDevices to be attachable
-        if not isinstance(board, ExpansionDevice):
-            raise TypeError(f"Only ExpansionDevice can be attached as a board, got {type(board)}")
-        self._attach_device(board)
+        """Attach another board to this board."""
+        # For now, we don't support board-to-board attachment
+        raise NotImplementedError("Board-to-board attachment not yet supported")
 
     def dispatch(self, command: Command) -> Command | None:
         """Route command to devices.
@@ -221,20 +219,3 @@ class Board:
             if result is not None:
                 results.append(result)
         return results
-
-
-class ExpansionDevice(Device, Board):
-    """A device that can also accept other devices (implements both interfaces).
-
-    ExpansionDevices can be attached to boards like regular devices,
-    but they also have attachment points for other devices.
-
-    Examples:
-    - InputExpansionDevice: Handles input coordination, can have KeyboardDevice + MouseDevice
-    - AudioExpansionDevice: Handles audio coordination, can have multiple BellDevices
-    """
-
-    def __init__(self, board: "Board | None" = None):
-        """Initialize as both a device and a board."""
-        Device.__init__(self, board)
-        Board.__init__(self)

@@ -59,11 +59,11 @@ class BitTTYDemo:
         # Basic bell
         self.bell = devices.AudioBellDevice()
 
-        # Plug devices into main board
-        self.bittty.plug_in(self.tty_input)
-        self.bittty.plug_in(self.tty_monitor)
-        self.bittty.plug_in(self.connection)
-        self.bittty.plug_in(self.bell)
+        # Attach devices to main board
+        self.bittty.attach(self.tty_input)
+        self.bittty.attach(self.tty_monitor)
+        self.bittty.attach(self.connection)
+        self.bittty.attach(self.bell)
 
     def configure_modern_terminal(self):
         """Configure a modern terminal with expansion boards."""
@@ -76,21 +76,19 @@ class BitTTYDemo:
         # Connection to child process
         self.connection = devices.ConnectionDevice("/bin/bash")
 
-        # Plug core devices into main board
-        self.bittty.plug_in(self.tty_input)
-        self.bittty.plug_in(self.tty_monitor)
-        self.bittty.plug_in(self.connection)
+        # Attach core devices to main board
+        self.bittty.attach(self.tty_input)
+        self.bittty.attach(self.tty_monitor)
+        self.bittty.attach(self.connection)
 
-        # Audio expansion board
-        from bittty.device import Board
+        # Additional devices attached directly to BitTTY
+        self.bell = devices.VisualBellDevice()
+        keyboard = devices.KeyboardDevice()
+        mouse = devices.MouseDevice()
 
-        audio_board = Board(self.bittty.main_board)
-        self.bell = devices.VisualBellDevice(audio_board)  # Visual instead of audio
-
-        # Input expansion board (for additional input devices)
-        input_board = Board(self.bittty.main_board)
-        devices.KeyboardDevice(input_board)  # Virtual keyboard for features
-        devices.MouseDevice(input_board)  # Virtual mouse for features
+        self.bittty.attach(self.bell)
+        self.bittty.attach(keyboard)
+        self.bittty.attach(mouse)
 
     def configure_teletype(self):
         """Configure a teletype printer simulation."""
@@ -107,12 +105,12 @@ class BitTTYDemo:
         self.printer = devices.LinePrinter(72, uppercase_only=True)
         self.bell = devices.AudioBellDevice()  # Mechanical bell simulation
 
-        # Plug devices into main board
-        self.bittty.plug_in(self.tty_input)
-        self.bittty.plug_in(self.tty_monitor)
-        self.bittty.plug_in(self.connection)
-        self.bittty.plug_in(self.printer)
-        self.bittty.plug_in(self.bell)
+        # Attach devices to main board
+        self.bittty.attach(self.tty_input)
+        self.bittty.attach(self.tty_monitor)
+        self.bittty.attach(self.connection)
+        self.bittty.attach(self.printer)
+        self.bittty.attach(self.bell)
 
     def render_screen(self):
         """Render the current terminal state to the host terminal."""
