@@ -13,11 +13,24 @@ should interact with the bittty API.
 import asyncio
 import os
 import sys
-import termios
-import tty
 import shutil
-import signal
+import platform
 from bittty import Terminal
+
+try:
+    import termios
+    import tty
+    import signal
+    HAS_UNIX_TERMIOS = True
+except ImportError:
+    HAS_UNIX_TERMIOS = False
+    import signal
+
+try:
+    import msvcrt
+    HAS_MSVCRT = True
+except ImportError:
+    HAS_MSVCRT = False
 
 
 class StdoutFrontend:
@@ -36,23 +49,48 @@ class StdoutFrontend:
         self.width = size.columns
         self.height = size.lines - 2  # Reserve 2 lines for status/instructions
 
+        
         # Create the terminal emulator engine
-        self.terminal = Terminal(command="/bin/bash", width=self.width, height=self.height)
+        self.terminal = Terminal(command=command, width=self.width, height=self.height)
 
         self.running = True
         self.old_termios = None
+        self.is_windows = platform.system() == "Windows"
+    
+    def _get_default_shell(self):
+        """Get the default shell command for the current platform."""
+        if platform.system() == "Windows":
+            # Try PowerShell first, then fallback to cmd
+            if shutil.which("pwsh"):
+                return "pwsh"
+            elif shutil.which("powershell"):
+                return "powershell"
+            else:
+                return "cmd"
+        else:
+            # Try to find user's preferred shell
+            shell = os.environ.get("SHELL")
+            if shell and shutil.which(shell):
+                return shell
+            for shell in ["/bin/bash", "/bin/sh", "/usr/bin/bash"]:
+                if os.path.exists(shell):
+                    return shell
+            return "sh"  # Final fallback
 
     def setup_terminal(self):
         """Set up raw terminal mode for proper input handling."""
-        self.old_termios = termios.tcgetattr(sys.stdin.fileno())
-        tty.setraw(sys.stdin.fileno())
+        if HAS_UNIX_TERMIOS:
+            self.old_termios = termios.tcgetattr(sys.stdin.fileno())
+            tty.setraw(sys.stdin.fileno())
+        elif self.is_windows and HAS_MSVCRT:
+            pass
 
         # Hide cursor and clear screen
         print("\033[?25l\033[2J\033[H", end="", flush=True)
 
     def restore_terminal(self):
         """Restore original terminal settings."""
-        if self.old_termios:
+        if HAS_UNIX_TERMIOS and self.old_termios:
             termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, self.old_termios)
         # Show cursor and clear screen
         print("\033[?25h\033[2J\033[H", end="", flush=True)
@@ -116,8 +154,16 @@ class StdoutFrontend:
 
         def read_char():
             try:
-                data = os.read(sys.stdin.fileno(), 1)
-                return data.decode("utf-8", errors="replace")
+                if self.is_windows and HAS_MSVCRT:
+                    if msvcrt.kbhit():
+                        char = msvcrt.getch()
+                        if isinstance(char, bytes):
+                            return char.decode("utf-8", errors="replace")
+                        return char
+                    return None
+                else:
+                    data = os.read(sys.stdin.fileno(), 1)
+                    return data.decode("utf-8", errors="replace")
             except (OSError, BlockingIOError):
                 return None
 
@@ -151,7 +197,7 @@ class StdoutFrontend:
             while self.running:
                 await asyncio.sleep(0.1)
 
-                # Check if bash process has exited
+                # Check if shell process has exited
                 if self.terminal.process and self.terminal.process.poll() is not None:
                     self.running = False
                     break
@@ -183,7 +229,9 @@ async def main():
     """Entry point."""
     # Set up signal handling
     signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
+    
+    if hasattr(signal, 'SIGTERM'):
+        signal.signal(signal.SIGTERM, signal_handler)
 
     # Create and run the demo
     frontend = StdoutFrontend()
