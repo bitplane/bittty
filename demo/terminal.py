@@ -49,17 +49,17 @@ class StdoutFrontend:
         self.width = size.columns
         self.height = size.lines - 2  # Reserve 2 lines for status/instructions
 
-        
+        self.is_windows = platform.system() == "Windows"
+        command = self.get_default_shell()
         # Create the terminal emulator engine
         self.terminal = Terminal(command=command, width=self.width, height=self.height)
 
         self.running = True
         self.old_termios = None
-        self.is_windows = platform.system() == "Windows"
     
-    def _get_default_shell(self):
+    def get_default_shell(self):
         """Get the default shell command for the current platform."""
-        if platform.system() == "Windows":
+        if self.is_windows:
             # Try PowerShell first, then fallback to cmd
             if shutil.which("pwsh"):
                 return "pwsh"
