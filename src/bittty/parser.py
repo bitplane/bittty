@@ -81,6 +81,10 @@ class Parser:
                     self.terminal.cursor_x = self.terminal.width - 1
             elif char == constants.LF:
                 self.terminal.line_feed()
+            elif char == constants.VT:
+                self.terminal.line_feed()
+            elif char == constants.FF:
+                self.terminal.line_feed()
             elif char == constants.CR:
                 self.terminal.carriage_return()
             elif char == constants.SO:

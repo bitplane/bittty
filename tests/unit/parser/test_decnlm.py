@@ -191,3 +191,97 @@ def test_decnlm_wrapped_line_behavior():
     # Should move to column 0 of next line
     assert terminal.cursor_x == 0
     assert terminal.cursor_y == 1
+
+
+def test_decnlm_vertical_tab_default():
+    """Test that vertical tab moves cursor down by default (DECNLM disabled)."""
+    terminal = Terminal(width=10, height=5)
+    parser = Parser(terminal)
+
+    # Move cursor to column 5
+    terminal.cursor_x = 5
+    terminal.cursor_y = 1
+
+    # Send vertical tab (\x0b)
+    parser.feed("\x0b")
+
+    # Should only move cursor down, not affect x position
+    assert terminal.cursor_x == 5
+    assert terminal.cursor_y == 2
+
+
+def test_decnlm_vertical_tab_enabled():
+    """Test that when DECNLM is enabled, vertical tab also performs carriage return."""
+    terminal = Terminal(width=10, height=5)
+    parser = Parser(terminal)
+
+    # Enable DECNLM (ESC [ ? 20 h)
+    parser.feed("\x1b[?20h")
+
+    # Move cursor to column 5
+    terminal.cursor_x = 5
+    terminal.cursor_y = 1
+
+    # Send vertical tab (\x0b)
+    parser.feed("\x0b")
+
+    # Should move cursor down AND to column 0 (CR+LF behavior)
+    assert terminal.cursor_x == 0
+    assert terminal.cursor_y == 2
+
+
+def test_decnlm_form_feed_default():
+    """Test that form feed moves cursor down by default (DECNLM disabled)."""
+    terminal = Terminal(width=10, height=5)
+    parser = Parser(terminal)
+
+    # Move cursor to column 5
+    terminal.cursor_x = 5
+    terminal.cursor_y = 1
+
+    # Send form feed (\x0c)
+    parser.feed("\x0c")
+
+    # Should only move cursor down, not affect x position
+    assert terminal.cursor_x == 5
+    assert terminal.cursor_y == 2
+
+
+def test_decnlm_form_feed_enabled():
+    """Test that when DECNLM is enabled, form feed also performs carriage return."""
+    terminal = Terminal(width=10, height=5)
+    parser = Parser(terminal)
+
+    # Enable DECNLM (ESC [ ? 20 h)
+    parser.feed("\x1b[?20h")
+
+    # Move cursor to column 5
+    terminal.cursor_x = 5
+    terminal.cursor_y = 1
+
+    # Send form feed (\x0c)
+    parser.feed("\x0c")
+
+    # Should move cursor down AND to column 0 (CR+LF behavior)
+    assert terminal.cursor_x == 0
+    assert terminal.cursor_y == 2
+
+
+def test_decnlm_mixed_lf_vt_ff():
+    """Test DECNLM behavior with mixed LF, VT, and FF characters."""
+    terminal = Terminal(width=10, height=5)
+    parser = Parser(terminal)
+
+    # Enable DECNLM
+    parser.feed("\x1b[?20h")
+
+    # Move cursor to column 5
+    terminal.cursor_x = 5
+    terminal.cursor_y = 0
+
+    # Send LF, VT, FF sequence
+    parser.feed("\n\x0b\x0c")
+
+    # All should have moved cursor to column 0 and advanced by 3 rows
+    assert terminal.cursor_x == 0
+    assert terminal.cursor_y == 3
