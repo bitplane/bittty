@@ -514,6 +514,8 @@ class Parser:
                 self.terminal.scroll_mode = set_mode
             elif param == constants.DECAWM_AUTOWRAP:
                 self.terminal.auto_wrap = set_mode
+            elif param == constants.DECNLM_LINEFEED_NEWLINE:
+                self.terminal.linefeed_newline_mode = set_mode
             elif param == constants.DECTCEM_SHOW_CURSOR:
                 self.terminal.cursor_visible = set_mode
             elif param == constants.ALT_SCREEN_BUFFER_OLDER:
