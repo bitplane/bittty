@@ -1,5 +1,5 @@
 import pytest
-from unittest.mock import Mock, call
+from unittest.mock import Mock
 from bittty.parser import Parser
 from bittty.terminal import Terminal
 
@@ -18,22 +18,8 @@ def test_printable_characters(terminal):
     parser = Parser(terminal)
     parser.feed("Hello, World!")
 
-    calls = [
-        call("H", terminal.current_ansi_code),
-        call("e", terminal.current_ansi_code),
-        call("l", terminal.current_ansi_code),
-        call("l", terminal.current_ansi_code),
-        call("o", terminal.current_ansi_code),
-        call(",", terminal.current_ansi_code),
-        call(" ", terminal.current_ansi_code),
-        call("W", terminal.current_ansi_code),
-        call("o", terminal.current_ansi_code),
-        call("r", terminal.current_ansi_code),
-        call("l", terminal.current_ansi_code),
-        call("d", terminal.current_ansi_code),
-        call("!", terminal.current_ansi_code),
-    ]
-    terminal.write_text.assert_has_calls(calls)
+    # The new parser processes printable text in chunks for better performance
+    terminal.write_text.assert_called_once_with("Hello, World!", terminal.current_ansi_code)
 
 
 def test_empty_feed(terminal):

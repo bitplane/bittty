@@ -48,13 +48,11 @@ def test_parse_byte_csi_intermediate_transition(terminal):
     """Test _parse_byte transitions with intermediate characters."""
     parser = Parser(terminal)
     parser.feed("\x1b[?1h")  # ESC [ ? 1 h (CSI with intermediate '?')
-    assert parser.current_state == "GROUND"
     assert parser.parsed_params == [1]
     assert parser.intermediate_chars == ["?"]
 
     parser.reset()
     parser.feed("\x1b[>1c")  # ESC [ > 1 c (CSI with intermediate '>')
-    assert parser.current_state == "GROUND"
     assert parser.parsed_params == [1]
     assert parser.intermediate_chars == [">"]
 
@@ -67,39 +65,72 @@ def test_parse_byte_ht_wraps_cursor(terminal):
     assert terminal.cursor_x == terminal.width - 1  # Should cap at terminal width - 1
 
 
-def test_parse_byte_unknown_escape_sequence(terminal):
-    """Test that an unknown escape sequence returns to GROUND state."""
+def test_unknown_escape_sequences_ignored(terminal):
+    """Test that unknown escape sequences are ignored and don't affect normal parsing."""
     parser = Parser(terminal)
-    parser.feed("\x1bX")  # ESC then an unknown char 'X'
-    assert parser.current_state == "GROUND"
+
+    # Unknown escape sequences should be logged but not crash
+    parser.feed("Before\x1bXAfter")  # ESC X (unknown)
+    parser.feed("\x1bY")  # ESC Y (unknown)
+    parser.feed("End")
+
+    # Text should still be processed normally
+    text_content = terminal.current_buffer.get_line_text(0).strip()
+    assert "Before" in text_content
+    assert "After" in text_content
+    assert "End" in text_content
 
 
-def test_parse_byte_invalid_csi_entry(terminal):
-    """Test that an invalid byte in CSI_ENTRY returns to GROUND state."""
+def test_invalid_csi_sequences_ignored(terminal):
+    """Test that invalid CSI sequences are ignored and don't affect normal parsing."""
     parser = Parser(terminal)
-    parser.feed("\x1b[\x01")  # ESC [ then an invalid byte (STX)
-    assert parser.current_state == "GROUND"
+
+    # Invalid CSI sequences should be ignored, not crash or affect subsequent parsing
+    parser.feed("Hello\x1b[\x01World")  # Invalid control in CSI
+    parser.feed("\x1b[1;\x01More")  # Invalid control in parameters
+    parser.feed("\x1b[?1\x01Text")  # Invalid control in intermediate
+
+    # All the text should still be written normally
+    text_content = terminal.current_buffer.get_line_text(0).strip()
+    assert "Hello" in text_content
+    assert "World" in text_content
+    assert "More" in text_content
+    assert "Text" in text_content
 
 
-def test_parse_byte_invalid_csi_param(terminal):
-    """Test that an invalid byte in CSI_PARAM returns to GROUND state."""
+def test_malformed_csi_recovery(terminal):
+    """Test that parser recovers from malformed CSI sequences."""
     parser = Parser(terminal)
-    parser.feed("\x1b[1;\x01")  # ESC [ 1 ; then an invalid byte (STX)
-    assert parser.current_state == "GROUND"
+
+    # Feed malformed CSI followed by normal text
+    parser.feed("Start\x1b[999;999;999ZEnd")  # Unknown CSI sequence
+
+    # Should still write the text parts
+    text_content = terminal.current_buffer.get_line_text(0).strip()
+    assert "Start" in text_content
+    assert "End" in text_content
 
 
-def test_parse_byte_invalid_csi_intermediate(terminal):
-    """Test that an invalid byte in CSI_INTERMEDIATE returns to GROUND state."""
+def test_incomplete_csi_sequences(terminal):
+    """Test handling of incomplete CSI sequences."""
     parser = Parser(terminal)
-    parser.feed("\x1b[?1\x01")  # ESC [ ? 1 then an invalid byte (STX)
-    assert parser.current_state == "GROUND"
+
+    # Incomplete sequences shouldn't crash
+    parser.feed("Test\x1b[")  # Just CSI introducer
+    parser.feed("More\x1b[1")  # CSI with partial param
+    parser.feed("Text\x1b[1;")  # CSI with trailing semicolon
+
+    # Text should still be processed
+    text_content = terminal.current_buffer.get_line_text(0).strip()
+    assert "Test" in text_content
+    assert "More" in text_content
+    assert "Text" in text_content
 
 
 def test_parse_byte_csi_entry_intermediate_general(terminal):
     """Test CSI_ENTRY with general intermediate characters."""
     parser = Parser(terminal)
     parser.feed("\x1b[!p")  # ESC [ ! p (CSI with intermediate '!')
-    assert parser.current_state == "GROUND"
     assert parser.intermediate_chars == ["!"]
     assert parser.parsed_params == []
 
@@ -108,7 +139,6 @@ def test_parse_byte_csi_param_intermediate(terminal):
     """Test CSI_PARAM with intermediate characters."""
     parser = Parser(terminal)
     parser.feed("\x1b[1;!p")  # ESC [ 1 ; ! p
-    assert parser.current_state == "GROUND"
     # After "1;" we have an empty parameter, which creates [1, None]
     # This is correct behavior - semicolon creates a parameter boundary
     assert parser.parsed_params == [1, None]

@@ -1,95 +1,91 @@
 import pytest
-from unittest.mock import Mock
-from bittty.parser import Parser
-from bittty.terminal import Terminal
-from rich.style import Style
+from bittty.parser import Parser, parse_csi_sequence, parse_string_sequence
 
 
 @pytest.fixture
-def parser_and_terminal():
-    terminal = Mock(spec=Terminal)
-    terminal.current_style = Mock(spec=Style)  # Mock the Style object
+def terminal(standard_terminal):
+    """Return a real Terminal instance for testing."""
+    return standard_terminal
+
+
+def test_parse_csi_basic_sequences():
+    """Test parsing of basic CSI sequences."""
+    # Simple cursor position
+    params, intermediates, final = parse_csi_sequence("\x1b[10;20H")
+    assert params == [10, 20]
+    assert intermediates == []
+    assert final == "H"
+
+
+def test_parse_csi_private_sequences():
+    """Test parsing of private CSI sequences."""
+    # Private mode setting
+    params, intermediates, final = parse_csi_sequence("\x1b[?25h")
+    assert params == [25]
+    assert intermediates == ["?"]
+    assert final == "h"
+
+
+def test_parse_csi_with_intermediates():
+    """Test parsing of CSI sequences with intermediate characters."""
+    # Device attributes with > intermediate
+    params, intermediates, final = parse_csi_sequence("\x1b[>0c")
+    assert params == [0]
+    assert intermediates == [">"]
+    assert final == "c"
+
+
+def test_parse_csi_empty_params():
+    """Test parsing of CSI sequences with empty parameters."""
+    params, intermediates, final = parse_csi_sequence("\x1b[;H")
+    assert params == [None, None]
+    assert intermediates == []
+    assert final == "H"
+
+
+def test_parse_osc_sequences():
+    """Test parsing of OSC (Operating System Command) sequences."""
+    # Window title
+    content = parse_string_sequence("\x1b]2;My Title\x07", "osc")
+    assert content == "2;My Title"
+
+    # With ST terminator
+    content = parse_string_sequence("\x1b]0;Title\x1b\\", "osc")
+    assert content == "0;Title"
+
+
+def test_parse_dcs_sequences():
+    """Test parsing of DCS (Device Control String) sequences."""
+    content = parse_string_sequence("\x1bPHello World\x1b\\", "dcs")
+    assert content == "Hello World"
+
+
+def test_mixed_escape_and_text_parsing(terminal):
+    """Test parsing mixed escape sequences and text."""
     parser = Parser(terminal)
-    return parser, terminal
+
+    # Mix of text, CSI, and text
+    parser.feed("Hello \x1b[31mRed\x1b[0m World")
+
+    # Should have written text and processed color changes
+    text_content = terminal.current_buffer.get_line_text(0).strip()
+    assert "Hello" in text_content
+    assert "Red" in text_content
+    assert "World" in text_content
 
 
-def test_clear_buffers(parser_and_terminal):
-    """Test that _clear resets all internal buffers."""
-    parser, _ = parser_and_terminal
-    # Populate buffers to ensure they are cleared
-    parser.intermediate_chars = ["?"]
-    parser.param_buffer = "1;2"
-    parser.parsed_params = [1, 2]
-    parser.string_buffer = "test_string"
+def test_complete_sequence_processing(terminal):
+    """Test that complete sequences are processed correctly."""
+    parser = Parser(terminal)
 
-    parser._clear()
+    # Feed complete sequences
+    parser.feed("\x1b[10;20H")  # Complete cursor position sequence (row;col format)
 
-    assert parser.intermediate_chars == []
-    assert parser.param_buffer == ""
-    assert parser.parsed_params == []
-    assert parser.string_buffer == ""
+    # CUP format is row;column, so 10;20 means row 10, column 20 (0-based: y=9, x=19)
+    assert terminal.cursor_y == 9  # row 10 -> y=9
+    assert terminal.cursor_x == 19  # column 20 -> x=19
 
-
-def test_split_params_empty_string(parser_and_terminal):
-    """Test _split_params with an empty string."""
-    parser, _ = parser_and_terminal
-    parser._split_params("")
-    assert parser.parsed_params == []
-
-
-def test_split_params_single_param(parser_and_terminal):
-    """Test _split_params with a single parameter."""
-    parser, _ = parser_and_terminal
-    parser._split_params("123")
-    assert parser.parsed_params == [123]
-
-
-def test_split_params_multiple_params(parser_and_terminal):
-    """Test _split_params with multiple parameters separated by semicolon."""
-    parser, _ = parser_and_terminal
-    parser._split_params("1;2;3")
-    assert parser.parsed_params == [1, 2, 3]
-
-
-def test_split_params_with_sub_params(parser_and_terminal):
-    """Test _split_params with sub-parameters separated by colon."""
-    parser, _ = parser_and_terminal
-    parser._split_params("38:5:21")
-    assert parser.parsed_params == [38]
-
-
-def test_split_params_with_empty_parts(parser_and_terminal):
-    """Test _split_params with empty parts (e.g., double semicolons)."""
-    parser, _ = parser_and_terminal
-    parser._split_params("1;;3")
-    assert parser.parsed_params == [1, None, 3]
-
-
-def test_get_param_valid_index(parser_and_terminal):
-    """Test _get_param with a valid index."""
-    parser, _ = parser_and_terminal
-    parser.parsed_params = [10, 20, 30]
-    assert parser._get_param(1, 0) == 20
-
-
-def test_get_param_out_of_bounds_index(parser_and_terminal):
-    """Test _get_param with an out-of-bounds index, expecting default."""
-    parser, _ = parser_and_terminal
-    parser.parsed_params = [10, 20, 30]
-    assert parser._get_param(5, 99) == 99
-
-
-def test_get_param_empty_params(parser_and_terminal):
-    """Test _get_param when parsed_params is empty."""
-    parser, _ = parser_and_terminal
-    parser.parsed_params = []
-    assert parser._get_param(0, 50) == 50
-
-
-def test_reset_terminal(parser_and_terminal):
-    """Test that _reset_terminal calls terminal methods and resets style."""
-    parser, terminal = parser_and_terminal
-    parser._reset_terminal()
-    terminal.clear_screen.assert_called_once_with(2)
-    terminal.set_cursor.assert_called_once_with(0, 0)
-    assert isinstance(parser.terminal.current_style, Style)
+    # Test another complete sequence
+    parser.feed("\x1b[5;10H")  # row 5, column 10
+    assert terminal.cursor_y == 4  # row 5 -> y=4
+    assert terminal.cursor_x == 9  # column 10 -> x=9

@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import Mock
 from bittty.parser import Parser
 from bittty.terminal import Terminal
-from bittty.constants import ESC, BEL, ERASE_ALL, GROUND, CSI_ENTRY
+from bittty.constants import ESC, BEL, ERASE_ALL
 
 
 @pytest.fixture
@@ -33,7 +33,6 @@ def test_escape_to_csi_entry(terminal):
     """Test transition from ESCAPE to CSI_ENTRY state."""
     parser = Parser(terminal)
     parser.feed(f"{ESC}[")  # ESC then [
-    assert parser.current_state == CSI_ENTRY
 
 
 def test_ris_reset_terminal(terminal):
@@ -42,7 +41,6 @@ def test_ris_reset_terminal(terminal):
     parser.feed(f"{ESC}c")  # ESC then c
     terminal.clear_screen.assert_called_once_with(ERASE_ALL)
     terminal.set_cursor.assert_called_once_with(0, 0)
-    assert parser.current_state == GROUND
 
 
 def test_ind_index(terminal):
@@ -50,7 +48,6 @@ def test_ind_index(terminal):
     parser = Parser(terminal)
     parser.feed("\x1bD")  # ESC then D
     terminal.line_feed.assert_called_once()
-    assert parser.current_state == "GROUND"
 
 
 def test_ri_reverse_index_no_scroll(terminal):
@@ -61,7 +58,6 @@ def test_ri_reverse_index_no_scroll(terminal):
     parser.feed("\x1bM")  # ESC then M
     assert terminal.cursor_y == 4
     terminal.scroll_down.assert_not_called()
-    assert parser.current_state == "GROUND"
 
 
 def test_ri_reverse_index_with_scroll(terminal):
@@ -71,7 +67,6 @@ def test_ri_reverse_index_with_scroll(terminal):
     terminal.scroll_top = 0
     parser.feed("\x1bM")  # ESC then M
     terminal.scroll.assert_called_once_with(-1)
-    assert parser.current_state == "GROUND"
 
 
 def test_desc_save_cursor(terminal):
@@ -79,7 +74,6 @@ def test_desc_save_cursor(terminal):
     parser = Parser(terminal)
     parser.feed("\x1b7")  # ESC then 7
     terminal.save_cursor.assert_called_once()
-    assert parser.current_state == "GROUND"
 
 
 def test_decrc_restore_cursor(terminal):
@@ -87,4 +81,3 @@ def test_decrc_restore_cursor(terminal):
     parser = Parser(terminal)
     parser.feed("\x1b8")  # ESC then 8
     terminal.restore_cursor.assert_called_once()
-    assert parser.current_state == "GROUND"
