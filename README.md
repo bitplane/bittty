@@ -35,6 +35,8 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
 
 ## Recent changes
 
+* 🐌 use regex for parsing to speed things up a tad (~2.5x faster)
+* 📚 document half a billion modes we don't support
 * 🔙 DECLM - allow `\n` to act like `\r\n` so we don't have to rely on cooked
   input on the pty when using as a library.
 * 🖼️ DEC Special Graphics

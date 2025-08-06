@@ -21,6 +21,7 @@ try:
     import termios
     import tty
     import signal
+
     HAS_UNIX_TERMIOS = True
 except ImportError:
     HAS_UNIX_TERMIOS = False
@@ -28,6 +29,7 @@ except ImportError:
 
 try:
     import msvcrt
+
     HAS_MSVCRT = True
 except ImportError:
     HAS_MSVCRT = False
@@ -56,7 +58,7 @@ class StdoutFrontend:
 
         self.running = True
         self.old_termios = None
-    
+
     def get_default_shell(self):
         """Get the default shell command for the current platform."""
         if self.is_windows:
@@ -80,8 +82,12 @@ class StdoutFrontend:
     def setup_terminal(self):
         """Set up raw terminal mode for proper input handling."""
         if HAS_UNIX_TERMIOS:
-            self.old_termios = termios.tcgetattr(sys.stdin.fileno())
-            tty.setraw(sys.stdin.fileno())
+            try:
+                self.old_termios = termios.tcgetattr(sys.stdin.fileno())
+                tty.setraw(sys.stdin.fileno())
+            except (termios.error, OSError):
+                # Running in non-interactive environment, skip terminal setup
+                self.old_termios = None
         elif self.is_windows and HAS_MSVCRT:
             pass
 
@@ -225,16 +231,42 @@ def signal_handler(signum, frame):
     sys.exit(0)
 
 
+def sigwinch_handler(signum, frame):
+    """Handle terminal resize signals."""
+    # This will be set by main() to reference the frontend instance
+    if hasattr(sigwinch_handler, "frontend"):
+        frontend = sigwinch_handler.frontend
+        # Get new terminal size
+        size = shutil.get_terminal_size()
+        new_width = size.columns
+        new_height = size.lines - 2  # Reserve 2 lines for status/instructions
+
+        # Update frontend dimensions
+        frontend.width = new_width
+        frontend.height = new_height
+
+        # Resize the terminal emulator
+        frontend.terminal.resize(new_width, new_height)
+
+
 async def main():
     """Entry point."""
     # Set up signal handling
     signal.signal(signal.SIGINT, signal_handler)
-    
-    if hasattr(signal, 'SIGTERM'):
+
+    if hasattr(signal, "SIGTERM"):
         signal.signal(signal.SIGTERM, signal_handler)
+
+    # Set up resize signal handling (Unix only)
+    if hasattr(signal, "SIGWINCH"):
+        signal.signal(signal.SIGWINCH, sigwinch_handler)
 
     # Create and run the demo
     frontend = StdoutFrontend()
+
+    # Make frontend available to signal handler
+    sigwinch_handler.frontend = frontend
+
     await frontend.main_loop()
 
 
