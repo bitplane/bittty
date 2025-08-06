@@ -37,7 +37,7 @@
 | 35 | rxvt | Enable font-shifting functions | X |
 | 36 | DEC | DECHEM - Hebrew Encoding Mode | X |
 | 38 | DEC | DECTEK - Tektronix 4010/4014 Mode | X |
-| 40 | DEC | DECCRNLM - Carriage Return/New Line Mode | X |
+| 40 | DEC | DECCRNLM - Carriage Return/New Line Mode | ✅ |
 | 40 | xterm | Allow 80 ⇒ 132 mode | ✅ |
 | 41 | DEC | DECUPM - Unidirectional Print Mode | X |
 | 41 | xterm | more(1) fix | X |
