@@ -14,6 +14,50 @@ from .style import merge_ansi_styles
 logger = logging.getLogger(__name__)
 
 
+TERM_TOKENIZER = re.compile(
+    r'(?P<osc>\x1b\])'
+    r'|(?P<dcs>\x1bP)'
+    r'|(?P<apc>\x1b_)'
+    r'|(?P<pm>\x1b\^)'
+    r'|(?P<sos>\x1bX)'
+    r'|(?P<csi>\x1b\[)'
+    r'|(?P<ss3>\x1bO.)'
+    r'|(?P<esc>\x1b[^][P_^XO])'  # catch anything not already matched above
+    r'|(?P<st>\x1b\\)'           # string terminator (ST)
+    r'|(?P<bel>\x07)'            # BEL
+    r'|(?P<csi_stop>[\x40-\x7e])' # final byte of CSI
+    r'|(?P<print>[^\x00-\x1f\x7f\x1b]+)'  # printable run
+    r'|(?P<ctrl>[\x00-\x06\x08-\x1a\x1c-\x1f\x7f])' # control codes
+)
+
+
+def tokenize(text):
+    for match in TERM_TOKENIZER.finditer(text):
+        kind = match.lastgroup
+        start = match.start()
+        length = match.end() - start
+        yield (TOKEN_TYPES[kind], start, length)
+
+
+STARTS = {"osc", "dcs", "apc", "pm", "sos", "csi"}
+ALONE  = {"ss3", "esc", "ctrl", "print"}
+STOPS  = {"st", "bel", "csi_stop"}
+
+ALL = STARTS | ALONE | STOPS
+
+WANTS = {
+    "osc": {"st", "bel"},
+    "dcs": {"st"},
+    "apc": {"st"},
+    "pm":  {"st"},
+    "sos": {"st"},
+    "csi": {"csi_stop"},
+    "print": STARTS | ALONE | {"bel", "print"}
+}
+
+
+
+
 class Parser:
     """
     A state machine that parses a stream of terminal control codes.
@@ -45,15 +89,79 @@ class Parser:
         # --- Current Cell Attributes ---
         # ANSI sequence is stored in terminal.current_ansi_code
 
-    def feed(self, data: str) -> None:
+        # --- New tokenizer ---
+        self.buffer = ""
+        self.pos = 0
+        self.mode = "print"
+        self.wants = STARTS | ALONE
+
+
+    def feed(self, chunk: str) -> None:
         """
         Feeds a chunk of text into the parser.
 
         This is the main entry point. It iterates over the data and passes each
         character to the state machine engine.
         """
-        for char in data:
-            self._parse_char(char)
+        self.buffer += chunk
+
+        for kind, start, length in tokenize_with_pos(self.buffer):
+            if kind in self.wants:
+                end = start + length
+                self.dispatch(kind, self.buffer[self.pos:end])
+                self.pos = end
+                self.mode = kind if kind in STARTS else "print"
+                self.wants = WANTS.get(self.mode, STARTS | ALONE)
+
+        # keep anything from self.pos onward in buffer
+        self.buffer = self.buffer[self.pos:]
+        self.pos = 0
+
+    def dispatch(self, kind, data) -> None:
+        if kind == 'ctrl':
+            if data == constants.BEL:
+                self.terminal.bell()
+            elif data == constants.BS:
+                self.terminal.backspace()
+            elif data == constants.DEL:
+                self.terminal.backspace()
+            elif data == constants.HT:
+                # Simple tab handling - move to next tab stop
+                self.terminal.cursor_x = ((self.terminal.cursor_x // 8) + 1) * 8
+                if self.terminal.cursor_x >= self.terminal.width:
+                    self.terminal.cursor_x = self.terminal.width - 1
+            elif data == constants.LF:
+                self.terminal.line_feed()
+            elif data == constants.VT:
+                self.terminal.line_feed()
+            elif data == constants.FF:
+                self.terminal.line_feed()
+            elif data == constants.CR:
+                self.terminal.carriage_return()
+            elif data == constants.SO:
+                self.terminal.shift_out()
+            elif data == constants.SI:
+                self.terminal.shift_in()
+        elif kind == 'print':
+            self.terminal.write_text(data, self.terminal.current_ansi_code)
+        elif kind == 'csi':
+            pass
+        elif kind == 'osc':
+            pass
+        elif kind == 'dcs':
+            pass
+        elif kind == 'apc':
+            pass
+        elif kind == 'pm':
+            pass
+        elif kind == 'sos':
+            pass
+        elif kind == 'csi':
+            pass
+        elif kind == 'ss3':
+            pass
+        elif kind == 'esc':
+            self._handle_escape(data[1:])
 
     def _parse_char(self, char: str) -> None:
         """
@@ -63,37 +171,6 @@ class Parser:
         transition for the given byte, executes the handler, and moves to the
         next state.
         """
-        # Simplified parser - handle basic cases
-        if self.current_state == constants.GROUND:
-            if char == constants.ESC:
-                self.current_state = constants.ESCAPE
-                self._clear()
-            elif char == constants.BEL:
-                self.terminal.bell()
-            elif char == constants.BS:
-                self.terminal.backspace()
-            elif char == constants.DEL:
-                self.terminal.backspace()
-            elif char == constants.HT:
-                # Simple tab handling - move to next tab stop
-                self.terminal.cursor_x = ((self.terminal.cursor_x // 8) + 1) * 8
-                if self.terminal.cursor_x >= self.terminal.width:
-                    self.terminal.cursor_x = self.terminal.width - 1
-            elif char == constants.LF:
-                self.terminal.line_feed()
-            elif char == constants.VT:
-                self.terminal.line_feed()
-            elif char == constants.FF:
-                self.terminal.line_feed()
-            elif char == constants.CR:
-                self.terminal.carriage_return()
-            elif char == constants.SO:
-                self.terminal.shift_out()
-            elif char == constants.SI:
-                self.terminal.shift_in()
-            elif ord(char) >= 0x20:  # Printable characters
-                # Use current ANSI sequence
-                self.terminal.write_text(char, self.terminal.current_ansi_code)
         elif self.current_state == constants.ESCAPE:
             if char == "[":
                 self.current_state = constants.CSI_ENTRY
@@ -305,7 +382,7 @@ class Parser:
 
     # --- Escape (ESC) Sequence Dispatchers ---
 
-    def _esc_dispatch(self, final_char: str) -> None:
+    def _esc_dispatch(self, seq: str) -> None:
         """
         Handles an ESC-based escape sequence (ones that do not start with CSI).
 
@@ -326,18 +403,18 @@ class Parser:
         - `SCSG0_OFF`, `SCSG1_OFF`: Designate G0/G1 charsets as ASCII.
         - `DECALN`: Screen alignment test (fills screen with 'E').
         """
-        if final_char == "c":  # RIS (Reset in State)
+        if seq == "c":  # RIS (Reset in State)
             self._reset_terminal()
-        elif final_char == "D":  # IND (Index)
+        elif seq == "D":  # IND (Index)
             self.terminal.line_feed()
-        elif final_char == "M":  # RI (Reverse Index)
+        elif seq == "M":  # RI (Reverse Index)
             if self.terminal.cursor_y <= self.terminal.scroll_top:
                 self.terminal.scroll(-1)
             else:
                 self.terminal.cursor_y -= 1
-        elif final_char == "7":  # DECSC (Save Cursor)
+        elif seq == "7":  # DECSC (Save Cursor)
             self.terminal.save_cursor()
-        elif final_char == "8":  # DECRC (Restore Cursor)
+        elif seq == "8":  # DECRC (Restore Cursor)
             self.terminal.restore_cursor()
         # Add more ESC sequences as needed
 
