@@ -16,103 +16,67 @@ logger = logging.getLogger(__name__)
 
 
 TERM_TOKENIZER = re.compile(
-    r"(?P<csi_complete>\x1b\[[\x30-\x3f]*[\x20-\x2f]*[\x40-\x7e])"  # complete CSI sequence
-    r"|(?P<osc_complete>\x1b\][^\x07\x1b]*(?:\x07|\x1b\\))"  # complete OSC sequence
-    r"|(?P<dcs_complete>\x1bP[^\x1b]*\x1b\\)"  # complete DCS sequence
-    r"|(?P<apc_complete>\x1b_[^\x1b]*\x1b\\)"  # complete APC sequence
-    r"|(?P<pm_complete>\x1b\^[^\x1b]*\x1b\\)"  # complete PM sequence
-    r"|(?P<sos_complete>\x1bX[^\x1b]*\x1b\\)"  # complete SOS sequence
-    r"|(?P<ss3>\x1bO[\x40-\x7e])"  # SS3 sequences (ESC O + final char)
-    r"|(?P<esc_charset>\x1b[()][A-Za-z0-9<>=@])"  # G0/G1 charset (ESC ( ) + charset)
-    r"|(?P<esc_charset2>\x1b[*+][A-Za-z0-9<>=@])"  # G2/G3 charset (ESC * + + charset)
-    r"|(?P<esc>\x1b[78DMNOc=<>\\])"  # common single ESC sequences
-    r"|(?P<print>[^\x00-\x1f\x7f\x1b]+)"  # printable character runs
-    r"|(?P<ctrl>[\x00-\x06\x08-\x1a\x1c-\x1f\x7f])"  # control codes (C0)
-    r"|(?P<osc>\x1b\])"  # partial OSC start (fallback)
-    r"|(?P<dcs>\x1bP)"  # partial DCS start (fallback)
-    r"|(?P<apc>\x1b_)"  # partial APC start (fallback)
-    r"|(?P<pm>\x1b\^)"  # partial PM start (fallback)
-    r"|(?P<sos>\x1bX)"  # partial SOS start (fallback)
-    r"|(?P<csi>\x1b\[)"  # partial CSI start (fallback)
-    r"|(?P<st>\x1b\\)"  # string terminator (ST)
+    # Paired sequence starters - these put us into "mode"
+    r"(?P<osc>\x1b\])"  # OSC start
+    r"|(?P<dcs>\x1bP)"  # DCS start
+    r"|(?P<apc>\x1b_)"  # APC start
+    r"|(?P<pm>\x1b\^)"  # PM start
+    r"|(?P<sos>\x1bX)"  # SOS start
+    r"|(?P<csi>\x1b\[)"  # CSI start
+    # Complete sequences - these are handled immediately
+    r"|(?P<ss3>\x1bO.)"  # SS3 sequences (complete)
+    r"|(?P<esc_charset>\x1b[()][A-Za-z0-9<>=@])"  # G0/G1 charset
+    r"|(?P<esc_charset2>\x1b[*+][A-Za-z0-9<>=@])"  # G2/G3 charset
+    r"|(?P<esc>\x1b[^][P_^XO])"  # Simple ESC sequences (catch remaining)
+    # Terminators - these end paired sequences
+    r"|(?P<st>\x1b\\\\)"  # String Terminator (ST)
     r"|(?P<bel>\x07)"  # BEL
-    r"|(?P<unknown_esc>\x1b.?)"  # catch any remaining ESC sequences
+    r"|(?P<csi_final>[\x40-\x7e])"  # CSI final byte
+    # Control codes
+    r"|(?P<ctrl>[\x00-\x06\x08-\x1a\x1c-\x1f\x7f])"  # C0/C1 control codes
+    # Everything else is printable (handled by fallback logic)
 )
 
 
-def tokenize(text):
-    for match in TERM_TOKENIZER.finditer(text):
-        kind = match.lastgroup
-        start = match.start()
-        length = match.end() - start
-        yield (TOKEN_TYPES[kind], start, length)
+# Define which sequences are paired (have start/end) vs singular (complete)
+PAIRED = {"osc", "dcs", "apc", "pm", "sos", "csi"}
+SINGULAR = {"ss3", "esc", "esc_charset", "esc_charset2", "ctrl", "bel"}
+STANDALONES = {"ss3", "esc", "esc_charset", "esc_charset2", "ctrl", "bel"}
+SEQUENCE_STARTS = {"osc", "dcs", "apc", "pm", "sos", "csi"}
 
-
-STARTS = {"osc", "dcs", "apc", "pm", "sos", "csi"}
-ALONE = {
-    "ss3",
-    "esc",
-    "esc_charset",
-    "esc_charset2",
-    "ctrl",
-    "print",
-    "csi_complete",
-    "osc_complete",
-    "dcs_complete",
-    "apc_complete",
-    "pm_complete",
-    "sos_complete",
-    "unknown_esc",
-    "bel",
-}
-STOPS = {"st", "bel", "csi_stop"}
-
-ALL = STARTS | ALONE | STOPS
-
-WANTS = {
+# Define valid terminators for each mode
+TERMINATORS = {
+    None: SEQUENCE_STARTS | STANDALONES,  # Printable mode ends at any escape
     "osc": {"st", "bel"},
-    "dcs": {"st"},
+    "dcs": {"st", "bel"},
     "apc": {"st"},
     "pm": {"st"},
     "sos": {"st"},
-    "csi": {"csi_stop"},
-    "print": STARTS | ALONE,
+    "csi": {"csi_final"},
 }
 
-# Map token names to token types
-TOKEN_TYPES = {
-    "csi_complete": "csi_complete",
-    "osc_complete": "osc_complete",
-    "dcs_complete": "dcs_complete",
-    "apc_complete": "apc_complete",
-    "pm_complete": "pm_complete",
-    "sos_complete": "sos_complete",
-    "osc": "osc",
-    "dcs": "dcs",
-    "apc": "apc",
-    "pm": "pm",
-    "sos": "sos",
-    "csi": "csi",
-    "ss3": "ss3",
-    "esc": "esc",
-    "esc_charset": "esc_charset",
-    "esc_charset2": "esc_charset2",
-    "st": "st",
-    "bel": "bel",
-    "csi_stop": "csi_stop",  # This might not be needed anymore
-    "print": "print",
-    "ctrl": "ctrl",
-    "unknown_esc": "unknown_esc",
-}
+# CSI final bytes should only match in CSI mode - not in printable text
+CONTEXT_SENSITIVE = {"csi_final"}
 
 
-def tokenize_with_pos(text, start_pos=0):
-    """Tokenize text starting from start_pos, yielding (kind, start, length)"""
-    for match in TERM_TOKENIZER.finditer(text, start_pos):
-        kind = match.lastgroup
-        start = match.start()
-        length = match.end() - start
-        yield (kind, start, length)
+def tokenize(text):
+    """Tokenize text, yielding (kind, start, end) tuples."""
+    pos = 0
+    while pos < len(text):
+        match = TERM_TOKENIZER.match(text, pos)
+        if match:
+            kind = match.lastgroup
+            start = match.start()
+            end = match.end()
+            yield (kind, start, end)
+            pos = end
+        else:
+            # No pattern matched - this is a printable character
+            # Find the run of printable characters
+            start = pos
+            while pos < len(text) and not TERM_TOKENIZER.match(text, pos):
+                pos += 1
+            yield ("print", start, pos)
 
 
 def parse_csi_sequence(data):
@@ -135,6 +99,13 @@ def parse_csi_sequence(data):
 
     # Remove ESC[ prefix
     content = data[2:]
+
+    # Validate that the sequence doesn't contain invalid control characters
+    # (except for the final character which can be in the control range)
+    for i, char in enumerate(content[:-1]):  # Check all but final char
+        if ord(char) < 0x20:  # Control character
+            # Invalid CSI sequence
+            return [], [], ""
 
     # Final character is last byte
     final_char = content[-1]
@@ -229,55 +200,86 @@ class Parser:
         """
         self.terminal = terminal
 
-        # Buffers for sequence data
+        # Buffers for sequence data (used by CSI dispatch)
         self.intermediate_chars: List[str] = []
         self.parsed_params: List[int | str] = []
-        self.string_buffer: str = ""  # For OSC, DCS, APC strings
 
-        # Tokenizer state
-        self.buffer = ""
-        self.pos = 0
-        self.mode = "print"
-        self.wants = STARTS | ALONE
+        # Parser state
+        self.buffer = ""  # Input buffer
+        self.pos = 0  # Current position in buffer
+        self.mode = None  # Current paired sequence type (None when not in one)
+        self.seq_start = 0  # Start position of current paired sequence
 
     def feed(self, chunk: str) -> None:
         """
         Feeds a chunk of text into the parser.
 
-        This is the main entry point. It iterates over the data and passes each
-        character to the state machine engine.
+        Uses unified terminator algorithm: every mode has terminators,
+        mode=None (printable) terminates on any escape sequence.
         """
         self.buffer += chunk
 
-        for kind, start, length in tokenize_with_pos(self.buffer):
-            if kind in self.wants:
-                end = start + length
-                data = self.buffer[self.pos : end]
-                self.dispatch(kind, data)
-                self.pos = end
-                self.mode = kind if kind in STARTS else "print"
-                self.wants = WANTS.get(self.mode, STARTS | ALONE)
-            else:
-                # Recovery: if we're waiting for a sequence completion but find something else,
-                # reset to print mode and try to process the token again
-                if self.mode != "print" and kind in (STARTS | ALONE):
-                    self.mode = "print"
-                    self.wants = STARTS | ALONE
-                    # Try again with the token
-                    if kind in self.wants:
-                        end = start + length
-                        data = self.buffer[self.pos : end]
-                        self.dispatch(kind, data)
-                        self.pos = end
-                        self.mode = kind if kind in STARTS else "print"
-                        self.wants = WANTS.get(self.mode, STARTS | ALONE)
+        # Track where we started processing for printable text accumulation
+        last_print_pos = self.pos if self.mode is None else None
 
-        # keep anything from self.pos onward in buffer
-        self.buffer = self.buffer[self.pos :]
-        self.pos = 0
+        while self.pos < len(self.buffer):
+            match = TERM_TOKENIZER.search(self.buffer, self.pos)
+            if not match:
+                break
+
+            kind = match.lastgroup
+            start = match.start()
+            end = match.end()
+
+            # Check if this is a terminator for current mode
+            if kind in TERMINATORS[self.mode]:
+                # Found terminator for current mode
+                if self.mode is None:
+                    # In printable mode - dispatch text before the terminator
+                    if start > self.pos:
+                        self.dispatch("print", self.buffer[self.pos : start])
+                else:
+                    # In sequence mode - dispatch the complete sequence
+                    self.dispatch(self.mode, self.buffer[self.seq_start : end])
+
+                # Handle the terminator itself
+                if kind in SEQUENCE_STARTS:
+                    # Enter sequence mode
+                    self.mode = kind
+                    self.seq_start = start
+                    last_print_pos = None  # No longer accumulating printable text
+                elif kind in STANDALONES:
+                    # Dispatch standalone and back to printable
+                    self.dispatch(kind, self.buffer[start:end])
+                    self.mode = None
+                    last_print_pos = end  # Start accumulating printable text from here
+                else:
+                    # Other terminators - back to printable
+                    self.mode = None
+                    last_print_pos = end  # Start accumulating printable text from here
+
+                self.pos = end
+            else:
+                # Not a terminator - skip this match
+                self.pos = end
+
+        # Dispatch any remaining printable text
+        if self.mode is None and last_print_pos is not None and last_print_pos < len(self.buffer):
+            remaining = self.buffer[last_print_pos:]
+            # Don't dispatch if escape in last 3 chars (potential incomplete sequence)
+            if "\x1b" in remaining[-3:]:
+                pass  # Wait for more data
+            else:
+                self.dispatch("print", remaining)
+
+        # Update position to end of buffer
+        self.pos = len(self.buffer)
 
     def dispatch(self, kind, data) -> None:
-        if kind == "ctrl":
+        # Singular sequences
+        if kind == "bel":
+            self.terminal.bell()
+        elif kind == "ctrl":
             if data == constants.BEL:
                 self.terminal.bell()
             elif data == constants.BS:
@@ -303,18 +305,6 @@ class Parser:
                 self.terminal.shift_in()
         elif kind == "print":
             self.terminal.write_text(data, self.terminal.current_ansi_code)
-        elif kind == "csi_complete":
-            self._handle_csi_complete(data)
-        elif kind == "osc_complete":
-            self._handle_osc_complete(data)
-        elif kind == "dcs_complete":
-            self._handle_dcs_complete(data)
-        elif kind == "apc_complete":
-            self._handle_apc_complete(data)
-        elif kind == "pm_complete":
-            self._handle_pm_complete(data)
-        elif kind == "sos_complete":
-            self._handle_sos_complete(data)
         elif kind == "ss3":
             self._handle_ss3(data)
         elif kind == "esc":
@@ -325,25 +315,28 @@ class Parser:
             self._handle_charset_escape(data)
         elif kind == "unknown_esc":
             self._handle_unknown_escape(data)
-        elif kind == "bel":
-            self.terminal.bell()
-        # Fallback for partial sequences (should be rare with improved tokenizer)
+
+        # Paired sequences
         elif kind == "csi":
-            pass  # Wait for more data
+            self._handle_csi_complete(data)
         elif kind == "osc":
-            pass  # Wait for more data
+            self._handle_osc_complete(data)
         elif kind == "dcs":
-            pass  # Wait for more data
+            self._handle_dcs_complete(data)
         elif kind == "apc":
-            pass  # Wait for more data
+            # APC sequences are typically ignored
+            pass
         elif kind == "pm":
-            pass  # Wait for more data
-        elif kind == "sos":
-            pass  # Wait for more data
+            # PM sequences are typically ignored
+            pass
 
     def _handle_csi_complete(self, data):
         """Handle complete CSI sequence using regex-parsed parameters."""
         params, intermediates, final_char = parse_csi_sequence(data)
+
+        # Skip invalid sequences (empty final_char indicates parsing failure)
+        if not final_char:
+            return
 
         # Store parsed data for existing dispatch methods
         self.parsed_params = params
@@ -452,8 +445,8 @@ class Parser:
         self.string_buffer = ""
         self.buffer = ""
         self.pos = 0
-        self.mode = "print"
-        self.wants = STARTS | ALONE
+        self.mode = None
+        self.seq_start = 0
 
     # Legacy methods for test compatibility - will be removed once tests are updated
     def _clear(self) -> None:
