@@ -296,11 +296,15 @@ def dispatch_sm_rm(terminal: Terminal, params: List[Optional[int]], set_mode: bo
 
         if param == 4:  # IRM - Insert/Replace Mode
             terminal.insert_mode = set_mode
+        elif param == 7:  # AWM - Auto Wrap Mode
+            terminal.auto_wrap = set_mode
         elif param == 12:  # SRM - Send/Receive Mode
-            # Controls local echo - we don't implement this
-            pass
+            # SRM works backwards: SET = disable echo, RESET = enable echo
+            terminal.local_echo = not set_mode
         elif param == 20:  # LNM - Line Feed/New Line Mode
-            terminal.line_feed_mode = set_mode
+            terminal.linefeed_newline_mode = set_mode
+        elif param == 25:  # DECTCEM - Text Cursor Enable Mode (standard mode)
+            terminal.cursor_visible = set_mode
         # Add more standard modes as needed
 
 
@@ -311,16 +315,16 @@ def dispatch_sm_rm_private(terminal: Terminal, params: List[Optional[int]], set_
             continue
 
         if param == 1:  # DECCKM - Cursor Keys Mode
-            terminal.application_cursor_keys = set_mode
+            terminal.cursor_application_mode = set_mode
         elif param == 2:  # DECANM - ANSI/VT52 Mode
             # Switch between ANSI and VT52 mode
             terminal.ansi_mode = set_mode
         elif param == 3:  # DECCOLM - 132 Column Mode
             # Switch between 80/132 column mode
             if set_mode:
-                terminal.set_size(132, terminal.height)
+                terminal.resize(132, terminal.height)
             else:
-                terminal.set_size(80, terminal.height)
+                terminal.resize(80, terminal.height)
         elif param == 4:  # DECSCLM - Scrolling Mode
             terminal.scroll_mode = set_mode
         elif param == 5:  # DECSCNM - Screen Mode
@@ -391,6 +395,10 @@ def dispatch_sm_rm_private(terminal: Terminal, params: List[Optional[int]], set_
                 terminal.restore_cursor()
         elif param == 2004:  # Bracketed Paste Mode
             terminal.bracketed_paste = set_mode
+        elif param == 69:  # DECKBUM - Keyboard Usage Mode
+            terminal.keyboard_usage_mode = set_mode
+        elif param == 2028:  # DECARSM - Auto Resize Mode
+            terminal.auto_resize_mode = set_mode
 
 
 def get_private_mode_status(terminal: Terminal, mode: int) -> int:
@@ -403,7 +411,7 @@ def get_private_mode_status(terminal: Terminal, mode: int) -> int:
     # 4 = permanently reset
 
     if mode == 1:  # DECCKM
-        return 1 if terminal.application_cursor_keys else 2
+        return 1 if terminal.cursor_application_mode else 2
     elif mode == 2:  # DECANM
         return 1 if terminal.ansi_mode else 2
     elif mode == 3:  # DECCOLM
@@ -418,6 +426,10 @@ def get_private_mode_status(terminal: Terminal, mode: int) -> int:
         return 1 if terminal.in_alt_screen else 2
     elif mode == 1049:  # Alternate screen + cursor
         return 1 if terminal.in_alt_screen else 2
+    elif mode == 69:  # DECKBUM
+        return 1 if terminal.keyboard_usage_mode else 2
+    elif mode == 2028:  # DECARSM
+        return 1 if terminal.auto_resize_mode else 2
     else:
         return 0  # Not recognized
 
@@ -426,8 +438,15 @@ def get_ansi_mode_status(terminal: Terminal, mode: int) -> int:
     """Get the status of an ANSI mode for DECRQM response."""
     if mode == 4:  # IRM
         return 1 if terminal.insert_mode else 2
+    elif mode == 7:  # AWM
+        return 1 if terminal.auto_wrap else 2
+    elif mode == 12:  # SRM
+        # SRM works backwards: mode set = echo disabled
+        return 1 if not terminal.local_echo else 2
     elif mode == 20:  # LNM
-        return 1 if terminal.line_feed_mode else 2
+        return 1 if terminal.linefeed_newline_mode else 2
+    elif mode == 25:  # DECTCEM
+        return 1 if terminal.cursor_visible else 2
     else:
         return 0  # Not recognized
 
