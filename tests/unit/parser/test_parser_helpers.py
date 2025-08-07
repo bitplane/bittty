@@ -1,4 +1,5 @@
-from bittty.parser import Parser, parse_csi_sequence, parse_string_sequence
+from bittty.parser import Parser, parse_string_sequence
+from bittty.parser.csi import parse_csi_params as parse_csi_sequence
 
 
 def test_parse_csi_basic_sequences():

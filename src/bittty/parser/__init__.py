@@ -11,6 +11,6 @@ through specialized handlers:
 The main Parser class coordinates all these handlers and maintains the state machine.
 """
 
-from .core import Parser, parse_csi_sequence, parse_string_sequence
+from .core import Parser, parse_string_sequence
 
-__all__ = ["Parser", "parse_csi_sequence", "parse_string_sequence"]
+__all__ = ["Parser", "parse_string_sequence"]

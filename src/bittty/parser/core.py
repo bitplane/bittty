@@ -56,79 +56,6 @@ def compile_tokenizer(patterns):
     return re.compile(pattern_str)
 
 
-@lru_cache(maxsize=1000)
-def parse_csi_sequence(data):
-    """BLAZING FAST CSI sequence parser with LRU caching! 🚀
-
-    CSI format: ESC [ [private_chars] [params] [intermediate_chars] final_char
-    - private_chars: ? < = > (0x3C-0x3F)
-    - params: digits and ; separators
-    - intermediate_chars: space to / (0x20-0x2F)
-    - final_char: @ to ~ (0x40-0x7E)
-
-    Args:
-        data: Complete CSI sequence like '\x1b[1;2H' or '\x1b[?25h'
-
-    Returns:
-        tuple: (params_list, intermediate_chars, final_char)
-    """
-    if len(data) < 3 or not data.startswith("\x1b["):
-        return [], [], ""
-
-    content = data[2:]
-    if not content:
-        return [], [], ""
-
-    final_char = content[-1]
-    sequence = content[:-1]
-
-    if not sequence:
-        return [], [], final_char
-
-    # Validate no control chars
-    for char in sequence:
-        if ord(char) < 0x20:
-            return [], [], ""
-
-    # Extract private markers (? < = >) at start
-    private_markers = []
-    param_start = 0
-    for i, char in enumerate(sequence):
-        if char in "?<=>":
-            private_markers.append(char)
-            param_start = i + 1
-        else:
-            break
-
-    # Extract intermediates (0x20-0x2F) at end
-    intermediates = []
-    param_end = len(sequence)
-    for i in range(len(sequence) - 1, -1, -1):
-        char = sequence[i]
-        if 0x20 <= ord(char) <= 0x2F:
-            intermediates.insert(0, char)
-            param_end = i
-        else:
-            break
-
-    # Parse parameters
-    params = []
-    param_part = sequence[param_start:param_end]
-    if param_part:
-        for part in param_part.split(";"):
-            if not part:
-                params.append(None)
-            else:
-                # Handle sub-parameters: take only main part before ':'
-                main_part = part.split(":")[0]
-                try:
-                    params.append(int(main_part))
-                except ValueError:
-                    params.append(main_part)
-
-    return params, private_markers + intermediates, final_char
-
-
 # Define which sequences are paired (have start/end) vs singular (complete)
 PAIRED = {"osc", "dcs", "apc", "pm", "sos", "csi"}
 SINGULAR = {"ss3", "esc", "esc_charset", "esc_charset2", "ctrl", "bel"}
@@ -395,11 +322,9 @@ class Parser:
             logger.debug(f"Unknown charset sequence: {data!r}")
 
     def _handle_csi(self, data: str) -> None:
-        """Handle CSI sequences using new dispatcher."""
-        params, intermediates, final_char = parse_csi_sequence(data)
-
-        # Dispatch using new O(1) lookup table
-        dispatch_csi(self.terminal, final_char, params, intermediates)
+        """Handle CSI sequences using revolutionary new dispatcher! 🚀"""
+        # Pass raw data directly - no redundant parsing!
+        dispatch_csi(self.terminal, data)
 
     def _handle_osc(self, data: str) -> None:
         """Handle OSC sequences using new dispatcher."""

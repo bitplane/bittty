@@ -7,7 +7,8 @@ screen clearing, styling, and terminal mode operations.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, List, Optional, Callable, Dict
+from functools import lru_cache
+from typing import TYPE_CHECKING, List, Optional
 from ..style import merge_ansi_styles
 
 if TYPE_CHECKING:
@@ -17,275 +18,261 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def handle_cup(terminal: Terminal, params: List[Optional[int]], intermediates: List[str]) -> None:
-    """CUP - Cursor Position (H or f)."""
-    row = (params[0] if params and params[0] is not None else 1) - 1  # Convert to 0-based
-    col = (params[1] if len(params) > 1 and params[1] is not None else 1) - 1  # Convert to 0-based
-    terminal.set_cursor(col, row)
+@lru_cache(maxsize=1000)
+def parse_csi_params(data):
+    """Parse CSI parameters when actually needed.
+
+    Args:
+        data: Complete CSI sequence like '\x1b[1;2H' or '\x1b[?25h'
+
+    Returns:
+        tuple: (params_list, intermediate_chars, final_char)
+    """
+    if len(data) < 3 or not data.startswith("\x1b["):
+        return [], [], ""
+
+    content = data[2:]
+    if not content:
+        return [], [], ""
+
+    final_char = content[-1]
+    sequence = content[:-1]
+
+    if not sequence:
+        return [], [], final_char
+
+    # Validate no control chars
+    for char in sequence:
+        if ord(char) < 0x20:
+            return [], [], ""
+
+    # Extract private markers (? < = >) at start
+    private_markers = []
+    param_start = 0
+    for i, char in enumerate(sequence):
+        if char in "?<=>":
+            private_markers.append(char)
+            param_start = i + 1
+        else:
+            break
+
+    # Extract intermediates (0x20-0x2F) at end
+    intermediates = []
+    param_end = len(sequence)
+    for i in range(len(sequence) - 1, -1, -1):
+        char = sequence[i]
+        if 0x20 <= ord(char) <= 0x2F:
+            intermediates.insert(0, char)
+            param_end = i
+        else:
+            break
+
+    # Parse parameters
+    params = []
+    param_part = sequence[param_start:param_end]
+    if param_part:
+        for part in param_part.split(";"):
+            if not part:
+                params.append(None)
+            else:
+                # Handle sub-parameters: take only main part before ':'
+                main_part = part.split(":")[0]
+                try:
+                    params.append(int(main_part))
+                except ValueError:
+                    params.append(main_part)
+
+    return params, private_markers + intermediates, final_char
 
 
-def handle_cuu(terminal: Terminal, params: List[Optional[int]], intermediates: List[str]) -> None:
-    """CUU - Cursor Up (A)."""
-    count = params[0] if params and params[0] is not None else 1
-    terminal.cursor_y = max(0, terminal.cursor_y - count)
+def dispatch_csi(terminal, raw_csi_data):
+    """BLAZING FAST CSI dispatcher with selective parsing and inlined handlers! 🚀
 
+    Revolutionary approach:
+    1. **No redundant parsing**: SGR sequences pass raw to style system
+    2. **Selective parsing**: Only parse parameters when actually needed
+    3. **Inlined handlers**: Zero function call overhead
+    4. **Fast path detection**: Check final char before any work
 
-def handle_cud(terminal: Terminal, params: List[Optional[int]], intermediates: List[str]) -> None:
-    """CUD - Cursor Down (B)."""
-    count = params[0] if params and params[0] is not None else 1
-    terminal.cursor_y = min(terminal.height - 1, terminal.cursor_y + count)
-
-
-def handle_cuf(terminal: Terminal, params: List[Optional[int]], intermediates: List[str]) -> None:
-    """CUF - Cursor Forward (C)."""
-    count = params[0] if params and params[0] is not None else 1
-    terminal.cursor_x = min(terminal.width - 1, terminal.cursor_x + count)
-
-
-def handle_cub(terminal: Terminal, params: List[Optional[int]], intermediates: List[str]) -> None:
-    """CUB - Cursor Backward (D)."""
-    count = params[0] if params and params[0] is not None else 1
-    terminal.cursor_x = max(0, terminal.cursor_x - count)
-
-
-def handle_cha(terminal: Terminal, params: List[Optional[int]], intermediates: List[str]) -> None:
-    """CHA - Cursor Horizontal Absolute (G)."""
-    col = (params[0] if params and params[0] is not None else 1) - 1  # Convert to 0-based
-    terminal.set_cursor(col, None)
-
-
-def handle_vpa(terminal: Terminal, params: List[Optional[int]], intermediates: List[str]) -> None:
-    """VPA - Vertical Position Absolute (d)."""
-    row = (params[0] if params and params[0] is not None else 1) - 1  # Convert to 0-based
-    terminal.set_cursor(None, row)
-
-
-def handle_ed(terminal: Terminal, params: List[Optional[int]], intermediates: List[str]) -> None:
-    """ED - Erase in Display (J)."""
-    mode = params[0] if params and params[0] is not None else 0
-    terminal.clear_screen(mode)
-
-
-def handle_el(terminal: Terminal, params: List[Optional[int]], intermediates: List[str]) -> None:
-    """EL - Erase in Line (K)."""
-    mode = params[0] if params and params[0] is not None else 0
-    terminal.clear_line(mode)
-
-
-def handle_il(terminal: Terminal, params: List[Optional[int]], intermediates: List[str]) -> None:
-    """IL - Insert Lines (L)."""
-    count = params[0] if params and params[0] is not None else 1
-    terminal.insert_lines(count)
-
-
-def handle_dl(terminal: Terminal, params: List[Optional[int]], intermediates: List[str]) -> None:
-    """DL - Delete Lines (M)."""
-    count = params[0] if params and params[0] is not None else 1
-    terminal.delete_lines(count)
-
-
-def handle_ich(terminal: Terminal, params: List[Optional[int]], intermediates: List[str]) -> None:
-    """ICH - Insert Characters (@)."""
-    count = params[0] if params and params[0] is not None else 1
-    # Use current ANSI sequence for inserted spaces
-    terminal.insert_characters(count, terminal.current_ansi_code)
-
-
-def handle_dch(terminal: Terminal, params: List[Optional[int]], intermediates: List[str]) -> None:
-    """DCH - Delete Characters (P)."""
-    count = params[0] if params and params[0] is not None else 1
-    terminal.delete_characters(count)
-
-
-def handle_su(terminal: Terminal, params: List[Optional[int]], intermediates: List[str]) -> None:
-    """SU - Scroll Up (S)."""
-    count = params[0] if params and params[0] is not None else 1
-    terminal.scroll(count)
-
-
-def handle_sd(terminal: Terminal, params: List[Optional[int]], intermediates: List[str]) -> None:
-    """SD - Scroll Down (T)."""
-    count = params[0] if params and params[0] is not None else 1
-    terminal.scroll(-count)
-
-
-def handle_decstbm(terminal: Terminal, params: List[Optional[int]], intermediates: List[str]) -> None:
-    """DECSTBM - Set Scroll Region (r)."""
-    top = (params[0] if params and params[0] is not None else 1) - 1  # Convert to 0-based
-    bottom = (params[1] if len(params) > 1 and params[1] is not None else terminal.height) - 1  # Convert to 0-based
-    terminal.set_scroll_region(top, bottom)
-
-
-def handle_rep(terminal: Terminal, params: List[Optional[int]], intermediates: List[str]) -> None:
-    """REP - Repeat (b)."""
-    count = params[0] if params and params[0] is not None else 1
-    terminal.repeat_last_character(count)
-
-
-def handle_sgr(terminal: Terminal, params: List[Optional[int]], intermediates: List[str]) -> None:
-    """SGR - Select Graphic Rendition (m)."""
-    # Check for malformed sequences: ESC[>...m (device attributes syntax with SGR ending)
-    if ">" in intermediates:
-        # This is a malformed sequence - device attributes should end with 'c', not 'm'
-        # Likely from vim's terminal emulation leaking sequences
-        params_str = ";".join(str(p) for p in params if p is not None)
-        logger.debug(f"Ignoring malformed device attributes sequence: ESC[{';'.join(intermediates)}{params_str}m")
+    Args:
+        terminal: Terminal instance
+        raw_csi_data: Raw CSI sequence like '\x1b[31m' or '\x1b[1;2H'
+    """
+    if len(raw_csi_data) < 3:
         return
 
-    dispatch_sgr(terminal, params)
+    final_char = raw_csi_data[-1]
 
-
-def handle_sm(terminal: Terminal, params: List[Optional[int]], intermediates: List[str]) -> None:
-    """SM - Set Mode (h)."""
-    if "?" in intermediates:
-        dispatch_sm_rm_private(terminal, params, True)
-    else:
-        dispatch_sm_rm(terminal, params, True)
-
-
-def handle_rm(terminal: Terminal, params: List[Optional[int]], intermediates: List[str]) -> None:
-    """RM - Reset Mode (l)."""
-    if "?" in intermediates:
-        dispatch_sm_rm_private(terminal, params, False)
-    else:
-        dispatch_sm_rm(terminal, params, False)
-
-
-def handle_decrqm(terminal: Terminal, params: List[Optional[int]], intermediates: List[str]) -> None:
-    """DECRQM - Request Mode Status (p with $ intermediate)."""
-    mode = params[0] if params and params[0] is not None else 0
-    private = "?" in intermediates
-
-    if private:
-        # Private mode query
-        status = get_private_mode_status(terminal, mode)
-    else:
-        # ANSI mode query
-        status = get_ansi_mode_status(terminal, mode)
-
-    # Response format: ESC[?{mode};{status}$y for private modes
-    # Response format: ESC[{mode};{status}$y for ANSI modes
-    prefix = "?" if private else ""
-    terminal.respond(f"\033[{prefix}{mode};{status}$y")
-
-
-def handle_window_ops(terminal: Terminal, params: List[Optional[int]], intermediates: List[str]) -> None:
-    """Window operations (t) - consume but don't implement."""
-    pass
-
-
-def handle_pm(terminal: Terminal, params: List[Optional[int]], intermediates: List[str]) -> None:
-    """PM - Privacy Message (^) - consume but don't implement."""
-    pass
-
-
-def handle_decsc_alt(terminal: Terminal, params: List[Optional[int]], intermediates: List[str]) -> None:
-    """DECSC - Save Cursor alternative (s)."""
-    terminal.save_cursor()
-
-
-def handle_decrc_alt(terminal: Terminal, params: List[Optional[int]], intermediates: List[str]) -> None:
-    """DECRC - Restore Cursor alternative (u)."""
-    terminal.restore_cursor()
-
-
-def handle_ech(terminal: Terminal, params: List[Optional[int]], intermediates: List[str]) -> None:
-    """ECH - Erase Character (X)."""
-    count = params[0] if params and params[0] is not None else 1
-    # Erase n characters at cursor position
-    for _ in range(count):
-        terminal.current_buffer.set(terminal.cursor_x, terminal.cursor_y, " ", terminal.current_ansi_code)
-        if terminal.cursor_x < terminal.width - 1:
-            terminal.cursor_x += 1
-
-
-def handle_dsr_cpr(terminal: Terminal, params: List[Optional[int]], intermediates: List[str]) -> None:
-    """DSR/CPR - Device Status Report / Cursor Position Report (n)."""
-    param = params[0] if params and params[0] is not None else 0
-    if param == 6:  # CPR - Cursor Position Report
-        row = terminal.cursor_y + 1  # Convert to 1-based
-        col = terminal.cursor_x + 1  # Convert to 1-based
-        terminal.respond(f"\033[{row};{col}R")
-    elif param == 5:  # DSR - Device Status Report
-        # Report OK status
-        terminal.respond("\033[0n")
-
-
-def handle_da(terminal: Terminal, params: List[Optional[int]], intermediates: List[str]) -> None:
-    """DA - Device Attributes (c)."""
-    handle_device_attributes(terminal, params, intermediates)
-
-
-# CSI dispatch table - maps final characters to handler functions
-CSI_DISPATCH_TABLE: Dict[str, Callable[[Terminal, List[Optional[int]], List[str]], None]] = {
-    # Cursor movement
-    "H": handle_cup,  # Cursor Position
-    "f": handle_cup,  # Cursor Position (alternative)
-    "A": handle_cuu,  # Cursor Up
-    "B": handle_cud,  # Cursor Down
-    "C": handle_cuf,  # Cursor Forward
-    "D": handle_cub,  # Cursor Backward
-    "G": handle_cha,  # Cursor Horizontal Absolute
-    "d": handle_vpa,  # Vertical Position Absolute
-    # Screen/line operations
-    "J": handle_ed,  # Erase in Display
-    "K": handle_el,  # Erase in Line
-    "L": handle_il,  # Insert Lines
-    "M": handle_dl,  # Delete Lines
-    "@": handle_ich,  # Insert Characters
-    "P": handle_dch,  # Delete Characters
-    "X": handle_ech,  # Erase Character
-    # Scrolling
-    "S": handle_su,  # Scroll Up
-    "T": handle_sd,  # Scroll Down
-    "r": handle_decstbm,  # Set Scroll Region
-    # Styling and modes
-    "m": handle_sgr,  # Select Graphic Rendition
-    "h": handle_sm,  # Set Mode
-    "l": handle_rm,  # Reset Mode
-    # Cursor save/restore
-    "s": handle_decsc_alt,  # Save Cursor (alternative)
-    "u": handle_decrc_alt,  # Restore Cursor (alternative)
-    # Misc
-    "b": handle_rep,  # Repeat
-    "n": handle_dsr_cpr,  # Device Status Report / Cursor Position Report
-    "c": handle_da,  # Device Attributes
-    "t": handle_window_ops,  # Window operations
-    "^": handle_pm,  # Privacy Message
-}
-
-
-def dispatch_csi(terminal: Terminal, final_char: str, params: List[Optional[int]], intermediates: List[str]) -> None:
-    """Main CSI dispatcher using O(1) lookup table."""
-    # Handle special cases with intermediates first
-    if "$" in intermediates and final_char == "p":
-        handle_decrqm(terminal, params, intermediates)
+    # ⚡ SGR FAST PATH: Pass raw to style system (eliminates double parsing!)
+    if final_char == "m":  # SGR - Select Graphic Rendition
+        # Check for malformed sequences: ESC[>...m
+        if ">" in raw_csi_data:
+            logger.debug(f"Ignoring malformed device attributes sequence: {raw_csi_data}")
+            return
+        # Direct to style system - no parsing needed!
+        terminal.current_ansi_code = merge_ansi_styles(terminal.current_ansi_code, raw_csi_data)
         return
 
-    # Use dispatch table for standard cases
-    handler = CSI_DISPATCH_TABLE.get(final_char)
-    if handler:
-        handler(terminal, params, intermediates)
+    # ⚡ SIMPLE SEQUENCE FAST PATHS: No parameter parsing needed
+    if final_char == "H" and raw_csi_data == "\x1b[H":  # Cursor home
+        terminal.set_cursor(0, 0)
+        return
+    elif final_char == "A" and raw_csi_data == "\x1b[A":  # Cursor up 1
+        terminal.cursor_y = max(0, terminal.cursor_y - 1)
+        return
+    elif final_char == "B" and raw_csi_data == "\x1b[B":  # Cursor down 1
+        terminal.cursor_y = min(terminal.height - 1, terminal.cursor_y + 1)
+        return
+    elif final_char == "C" and raw_csi_data == "\x1b[C":  # Cursor right 1
+        terminal.cursor_x = min(terminal.width - 1, terminal.cursor_x + 1)
+        return
+    elif final_char == "D" and raw_csi_data == "\x1b[D":  # Cursor left 1
+        terminal.cursor_x = max(0, terminal.cursor_x - 1)
+        return
+    elif final_char == "K" and raw_csi_data == "\x1b[K":  # Clear line from cursor
+        terminal.clear_line(0)  # ERASE_FROM_CURSOR_TO_END
+        return
+    elif final_char == "J" and raw_csi_data == "\x1b[2J":  # Clear screen
+        terminal.clear_screen(2)  # ERASE_ALL
+        return
+
+    # Complex sequences need parameter parsing
+    params, intermediates, final_char = parse_csi_params(raw_csi_data)
+
+    # ⚡ INLINED HANDLERS: Direct execution without function calls
+    if final_char in ("H", "f"):  # CUP - Cursor Position
+        row = (params[0] if params and params[0] is not None else 1) - 1
+        col = (params[1] if len(params) > 1 and params[1] is not None else 1) - 1
+        terminal.set_cursor(col, row)
+
+    elif final_char == "A":  # CUU - Cursor Up
+        count = params[0] if params and params[0] is not None else 1
+        terminal.cursor_y = max(0, terminal.cursor_y - count)
+
+    elif final_char == "B":  # CUD - Cursor Down
+        count = params[0] if params and params[0] is not None else 1
+        terminal.cursor_y = min(terminal.height - 1, terminal.cursor_y + count)
+
+    elif final_char == "C":  # CUF - Cursor Forward
+        count = params[0] if params and params[0] is not None else 1
+        terminal.cursor_x = min(terminal.width - 1, terminal.cursor_x + count)
+
+    elif final_char == "D":  # CUB - Cursor Backward
+        count = params[0] if params and params[0] is not None else 1
+        terminal.cursor_x = max(0, terminal.cursor_x - count)
+
+    elif final_char == "G":  # CHA - Cursor Horizontal Absolute
+        col = (params[0] if params and params[0] is not None else 1) - 1
+        terminal.set_cursor(col, None)
+
+    elif final_char == "d":  # VPA - Vertical Position Absolute
+        row = (params[0] if params and params[0] is not None else 1) - 1
+        terminal.set_cursor(None, row)
+
+    elif final_char == "J":  # ED - Erase in Display
+        mode = params[0] if params and params[0] is not None else 0
+        terminal.clear_screen(mode)
+
+    elif final_char == "K":  # EL - Erase in Line
+        mode = params[0] if params and params[0] is not None else 0
+        terminal.clear_line(mode)
+
+    elif final_char == "L":  # IL - Insert Lines
+        count = params[0] if params and params[0] is not None else 1
+        terminal.insert_lines(count)
+
+    elif final_char == "M":  # DL - Delete Lines
+        count = params[0] if params and params[0] is not None else 1
+        terminal.delete_lines(count)
+
+    elif final_char == "@":  # ICH - Insert Characters
+        count = params[0] if params and params[0] is not None else 1
+        terminal.insert_characters(count, terminal.current_ansi_code)
+
+    elif final_char == "P":  # DCH - Delete Characters
+        count = params[0] if params and params[0] is not None else 1
+        terminal.delete_characters(count)
+
+    elif final_char == "X":  # ECH - Erase Character
+        count = params[0] if params and params[0] is not None else 1
+        for _ in range(count):
+            terminal.current_buffer.set(terminal.cursor_x, terminal.cursor_y, " ", terminal.current_ansi_code)
+            if terminal.cursor_x < terminal.width - 1:
+                terminal.cursor_x += 1
+
+    elif final_char == "S":  # SU - Scroll Up
+        count = params[0] if params and params[0] is not None else 1
+        terminal.scroll(count)
+
+    elif final_char == "T":  # SD - Scroll Down
+        count = params[0] if params and params[0] is not None else 1
+        terminal.scroll(-count)
+
+    elif final_char == "r":  # DECSTBM - Set Scroll Region
+        top = (params[0] if params and params[0] is not None else 1) - 1
+        bottom = (params[1] if len(params) > 1 and params[1] is not None else terminal.height) - 1
+        terminal.set_scroll_region(top, bottom)
+
+    elif final_char == "s":  # DECSC - Save Cursor (alternative)
+        terminal.save_cursor()
+
+    elif final_char == "u":  # DECRC - Restore Cursor (alternative)
+        terminal.restore_cursor()
+
+    elif final_char == "b":  # REP - Repeat
+        count = params[0] if params and params[0] is not None else 1
+        terminal.repeat_last_character(count)
+
+    elif final_char == "n":  # DSR/CPR - Device Status Report / Cursor Position Report
+        param = params[0] if params and params[0] is not None else 0
+        if param == 6:  # CPR - Cursor Position Report
+            row = terminal.cursor_y + 1  # Convert to 1-based
+            col = terminal.cursor_x + 1  # Convert to 1-based
+            terminal.respond(f"\033[{row};{col}R")
+        elif param == 5:  # DSR - Device Status Report
+            terminal.respond("\033[0n")
+
+    elif final_char == "c":  # DA - Device Attributes
+        param = params[0] if params and params[0] is not None else 0
+        if not intermediates:  # Primary DA
+            if param == 0:
+                terminal.respond("\033[?62;1;6;8;9;15;18;21;22;23c")
+        elif ">" in intermediates:  # Secondary DA
+            terminal.respond("\033[>1;10;0c")
+
+    elif final_char == "p" and "$" in intermediates:  # DECRQM - Request Mode Status
+        mode = params[0] if params and params[0] is not None else 0
+        private = "?" in intermediates
+        if private:
+            status = get_private_mode_status(terminal, mode)
+        else:
+            status = get_ansi_mode_status(terminal, mode)
+        prefix = "?" if private else ""
+        terminal.respond(f"\033[{prefix}{mode};{status}$y")
+
+    elif final_char == "h":  # SM - Set Mode
+        if "?" in intermediates:
+            dispatch_sm_rm_private(terminal, params, True)
+        else:
+            dispatch_sm_rm(terminal, params, True)
+
+    elif final_char == "l":  # RM - Reset Mode
+        if "?" in intermediates:
+            dispatch_sm_rm_private(terminal, params, False)
+        else:
+            dispatch_sm_rm(terminal, params, False)
+
+    elif final_char == "t":  # Window operations - consume but don't implement
+        pass
+
     else:
-        # Unknown CSI sequence, log it
+        # Unknown CSI sequence
         params_str = ";".join(str(p) for p in params if p is not None) if params else "<no params>"
         intermediates_str = "".join(intermediates)
         logger.debug(f"Unknown CSI sequence: ESC[{intermediates_str}{params_str}{final_char}")
 
 
-def dispatch_sgr(terminal: Terminal, params: List[Optional[int]]) -> None:
-    """Handle SGR (Select Graphic Rendition) sequences."""
-
-    # Use an empty list if params is None
-    if not params:
-        params = [0]  # Reset if no parameters
-
-    # Build the ANSI sequence from the parameters (same as original parser)
-    params_str = ";".join(str(p) if p is not None else "" for p in params)
-    new_ansi_sequence = f"\033[{params_str}m"
-
-    # Merge with existing style
-    terminal.current_ansi_code = merge_ansi_styles(terminal.current_ansi_code, new_ansi_sequence)
+# Utility functions used by the main dispatcher
 
 
 def dispatch_sm_rm(terminal: Terminal, params: List[Optional[int]], set_mode: bool) -> None:
@@ -449,22 +436,3 @@ def get_ansi_mode_status(terminal: Terminal, mode: int) -> int:
         return 1 if terminal.cursor_visible else 2
     else:
         return 0  # Not recognized
-
-
-def handle_device_attributes(terminal: Terminal, params: List[Optional[int]], intermediates: List[str]) -> None:
-    """Handle Device Attributes (DA) request."""
-    param = params[0] if params and params[0] is not None else 0
-
-    if not intermediates:  # Primary DA
-        if param == 0:
-            # VT220 identity with extensive capabilities
-            # 62 = VT220, 1 = 132-columns, 6 = selective erase, 8 = user defined keys
-            # 9 = national replacement character sets, 15 = technical character set
-            # 18 = windowing capability, 21 = horizontal scrolling, 22 = color, 23 = Greek
-            terminal.respond("\033[?62;1;6;8;9;15;18;21;22;23c")
-    elif ">" in intermediates:  # Secondary DA
-        # Report as VT220 with version number
-        terminal.respond("\033[>1;10;0c")
-    elif "=" in intermediates:  # Tertiary DA
-        # Not implemented
-        pass
