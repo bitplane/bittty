@@ -109,7 +109,7 @@ Tests use pytest with functional style (no unittest classes). Key test categorie
 
 ### Known Issues
 
-From README.md:
+From README.md
 - Scroll region bugs (vim scrolling corrupts outside region)
 - Stream corruption during parsing
 - Textual-in-textual not working properly yet
