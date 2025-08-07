@@ -208,7 +208,6 @@ class Parser:
         self.buffer = ""  # Input buffer
         self.pos = 0  # Current position in buffer
         self.mode = None  # Current paired sequence type (None when not in one)
-        self.seq_start = 0  # Start position of current paired sequence
 
     def feed(self, chunk: str) -> None:
         """
@@ -219,61 +218,52 @@ class Parser:
         """
         self.buffer += chunk
 
-        # Track where we started processing for printable text accumulation
-        last_print_pos = self.pos if self.mode is None else None
-
-        while self.pos < len(self.buffer):
-            match = TERM_TOKENIZER.search(self.buffer, self.pos)
-            if not match:
-                break
-
+        for match in TERM_TOKENIZER.finditer(self.buffer, self.pos):
             kind = match.lastgroup
             start = match.start()
             end = match.end()
 
             # Check if this is a terminator for current mode
-            if kind in TERMINATORS[self.mode]:
-                # Found terminator for current mode
-                if self.mode is None:
-                    # In printable mode - dispatch text before the terminator
-                    if start > self.pos:
-                        self.dispatch("print", self.buffer[self.pos : start])
-                else:
-                    # In sequence mode - dispatch the complete sequence
-                    self.dispatch(self.mode, self.buffer[self.seq_start : end])
+            if kind not in TERMINATORS[self.mode]:
+                # Not a terminator for us, skip to next match
+                continue
 
-                # Handle the terminator itself
+            # Found a terminator for current mode
+            if self.mode is None:
+                # In text mode - dispatch text before terminator
+                if start > self.pos:
+                    self.dispatch("print", self.buffer[self.pos : start])
+
+                # Handle the terminator
                 if kind in SEQUENCE_STARTS:
-                    # Enter sequence mode
+                    # Enter sequence mode, don't consume terminator yet
                     self.mode = kind
-                    self.seq_start = start
-                    last_print_pos = None  # No longer accumulating printable text
+                    self.pos = start
                 elif kind in STANDALONES:
-                    # Dispatch standalone and back to printable
+                    # Dispatch standalone sequence
                     self.dispatch(kind, self.buffer[start:end])
-                    self.mode = None
-                    last_print_pos = end  # Start accumulating printable text from here
-                else:
-                    # Other terminators - back to printable
-                    self.mode = None
-                    last_print_pos = end  # Start accumulating printable text from here
-
-                self.pos = end
+                    self.pos = end
             else:
-                # Not a terminator - skip this match
+                # In sequence mode - dispatch complete sequence including terminator
+                self.dispatch(self.mode, self.buffer[self.pos : end])
+                self.mode = None
                 self.pos = end
 
-        # Dispatch any remaining printable text
-        if self.mode is None and last_print_pos is not None and last_print_pos < len(self.buffer):
-            remaining = self.buffer[last_print_pos:]
-            # Don't dispatch if escape in last 3 chars (potential incomplete sequence)
-            if "\x1b" in remaining[-3:]:
-                pass  # Wait for more data
-            else:
-                self.dispatch("print", remaining)
+        # No more matches - handle remaining text if in text mode
+        if self.mode is None and self.pos < len(self.buffer):
+            end = len(self.buffer)
+            # Guard against escape truncation
+            if "\x1b" in self.buffer[-3:]:
+                end -= 3
 
-        # Update position to end of buffer
-        self.pos = len(self.buffer)
+            if end > self.pos:
+                self.dispatch("print", self.buffer[self.pos : end])
+                self.pos = end
+
+        # Clean up processed buffer
+        if self.pos > 0:
+            self.buffer = self.buffer[self.pos :]
+            self.pos = 0
 
     def dispatch(self, kind, data) -> None:
         # Singular sequences
