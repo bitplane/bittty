@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """Benchmark script to compare parser performance."""
 
+import cProfile
 import gzip
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime
 from pathlib import Path
@@ -20,11 +23,50 @@ def get_git_commit_hash() -> str:
         return "N/A"
 
 
-def benchmark_parser(ansi_content: str, runs: int = 5) -> list[float]:
-    """Benchmark the parser with the given ANSI content."""
+def get_git_branch_name() -> str:
+    """Get the current git branch name."""
+    try:
+        return subprocess.check_output(["git", "branch", "--show-current"]).decode("ascii").strip()
+    except Exception:
+        return "unknown"
+
+
+def benchmark_parser(ansi_content: str, runs: int = 5, temp_profile_path: str = None) -> tuple[list[float], str]:
+    """Benchmark the parser with the given ANSI content.
+
+    Returns:
+        tuple: (times_list, profile_filename)
+    """
     times = []
 
-    for _ in range(runs):
+    # Profile the first run for detailed analysis
+    if temp_profile_path is None:
+        branch_name = get_git_branch_name()
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Use temp location, will be moved later
+        temp_dir = tempfile.gettempdir()
+        profile_filename = str(Path(temp_dir) / f"{timestamp}_{branch_name}_profile.prof")
+    else:
+        profile_filename = temp_profile_path
+
+    # First run with profiling
+    terminal = Terminal()
+    parser = Parser(terminal)
+
+    profiler = cProfile.Profile()
+    start_time = time.perf_counter()
+    profiler.enable()
+    parser.feed(ansi_content)
+    profiler.disable()
+    end_time = time.perf_counter()
+
+    times.append(end_time - start_time)
+
+    # Save profile data
+    profiler.dump_stats(profile_filename)
+
+    # Remaining runs without profiling for cleaner timing
+    for _ in range(runs - 1):
         terminal = Terminal()
         parser = Parser(terminal)
 
@@ -35,43 +77,59 @@ def benchmark_parser(ansi_content: str, runs: int = 5) -> list[float]:
         elapsed = end_time - start_time
         times.append(elapsed)
 
-    return times
+    return times, profile_filename
 
 
 def main():
     """Main function to run the benchmark."""
 
-    times = 10
+    num_runs = 10
 
-    logs_dir = Path("logs")
-    logs_dir.mkdir(exist_ok=True)
+    # Use project root logs/perf directory structure
+    project_root = Path(__file__).parent.parent.parent
+    perf_base_dir = project_root / "logs" / "perf"
+    perf_base_dir.mkdir(parents=True, exist_ok=True)
 
-    # We assume this script is in tests/performance, so we go up two levels
-    # to get to the project root, then down into tests to find the files.
-    # This is so no matter where you run the script from, it finds the files.
-    test_dir = Path(__file__).parent.parent
-    gzipped_files = sorted(list(test_dir.rglob("*.ansi.gz")))
+    # Test cases relative to this script in tests/ subdirectory
+    script_dir = Path(__file__).parent
+    test_files_dir = script_dir / "tests"
+    gzipped_files = sorted(list(test_files_dir.glob("*.gz")))
 
     if not gzipped_files:
         print("Error: No *.ansi.gz files found in the tests directory.", file=sys.stderr)
         return 1
 
     commit_hash = get_git_commit_hash()
+    branch_name = get_git_branch_name()
 
     for ansi_file in gzipped_files:
+        # Extract test case name (remove .gz and any .ansi extension)
+        test_case = ansi_file.stem
+        if test_case.endswith(".ansi"):
+            test_case = test_case[:-5]  # Remove .ansi
+
+        # Create timestamp for this run
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+        # Create directory structure: logs/perf/{branch}/{timestamp}/
+        run_dir = perf_base_dir / branch_name / timestamp
+        run_dir.mkdir(parents=True, exist_ok=True)
+
         with gzip.open(ansi_file, "rt", encoding="utf-8") as f:
             ansi_content = f.read()
 
         report_lines = [
             f"Benchmark Report for: {ansi_file.name}",
+            f"Test Case:            {test_case}",
+            f"Git Branch:           {branch_name}",
             f"Git Commit Hash:      {commit_hash}",
             f"Timestamp:            {datetime.now().isoformat()}",
             f"File Size:            {len(ansi_content)} characters",
-            "Runs:                  {times}",
+            f"Runs:                  {num_runs}",
             "",
         ]
 
-        times = benchmark_parser(ansi_content, runs=times)
+        times, profile_filename = benchmark_parser(ansi_content, runs=num_runs)
 
         for i, elapsed in enumerate(times):
             report_lines.append(f"Run {i+1}: {elapsed:.6f} seconds")
@@ -89,15 +147,75 @@ def main():
         report = "\n".join(report_lines)
         print(report)
 
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        log_file_name = f"{timestamp}_{ansi_file.stem}_perf.log"
-        log_file_path = logs_dir / log_file_name
+        # Create descriptive filenames with branch and test case
+        branch_safe = branch_name.replace("-", "_").replace("/", "_")
+        test_safe = test_case.replace(".", "_").replace("-", "_")
+
+        # Save to organized directory structure
+        log_file_path = run_dir / f"{branch_safe}_{test_safe}.log"
+        profile_path = run_dir / f"{branch_safe}_{test_safe}.prof"
+        profile_txt_path = run_dir / f"{branch_safe}_{test_safe}.txt"
 
         with open(log_file_path, "w", encoding="utf-8") as f:
             f.write(report)
             f.write("\n")
 
-        print(f"\nReport saved to {log_file_path}")
+        # Move profile file to organized location
+        if Path(profile_filename).exists():
+            shutil.move(profile_filename, profile_path)
+
+        try:
+            # Use subprocess to generate profile text
+            cmd = [
+                sys.executable,
+                "-c",
+                f"""
+import pstats
+stats = pstats.Stats('{profile_path}')
+print('Profile Report for: {ansi_file.name}')
+print('Test Case: {test_case}')
+print('Git Branch: {branch_name}')
+print('Git Commit Hash: {commit_hash}')
+print('Timestamp: {datetime.now().isoformat()}')
+print('=' * 80)
+print()
+print('TOP 30 FUNCTIONS BY CUMULATIVE TIME:')
+print('-' * 50)
+stats.sort_stats('cumulative').print_stats(30)
+print()
+print('TOP 20 FUNCTIONS BY INTERNAL TIME:')
+print('-' * 50)
+stats.sort_stats('tottime').print_stats(20)
+""",
+            ]
+            result = subprocess.run(cmd, capture_output=True, text=True)
+            with open(profile_txt_path, "w", encoding="utf-8") as f:
+                f.write(result.stdout)
+                if result.stderr:
+                    f.write(f"\n\nErrors:\n{result.stderr}")
+        except Exception as e:
+            # Fallback: just create basic profile info
+            with open(profile_txt_path, "w", encoding="utf-8") as f:
+                f.write(f"Profile Report for: {ansi_file.name}\n")
+                f.write(f"Test Case: {test_case}\n")
+                f.write(f"Git Branch: {branch_name}\n")
+                f.write(f"Git Commit Hash: {commit_hash}\n")
+                f.write(f"Timestamp: {datetime.now().isoformat()}\n")
+                f.write("=" * 80 + "\n\n")
+                f.write(f"Profile data saved to: {profile_path}\n")
+                f.write(f"Error generating text report: {e}\n")
+                f.write("Use: python -c \"import pstats; pstats.Stats('profile.prof').print_stats()\"\n")
+
+        # Show relative paths from project root
+        rel_log = log_file_path.relative_to(project_root)
+        rel_profile = profile_path.relative_to(project_root)
+        rel_txt = profile_txt_path.relative_to(project_root)
+
+        print("\nResults:")
+        print(f"  Report: {rel_log}")
+        print(f"  Profile: {rel_profile}")
+        print(f"  Profile text: {rel_txt}")
+        print(f"\nView: snakeviz {rel_profile}")
         print("-" * 80)
 
     return 0

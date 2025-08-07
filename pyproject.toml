@@ -22,7 +22,8 @@ dev = [
     "build",
     "twine",
     "ruff",
-    "pydoc-markdown"
+    "pydoc-markdown",
+    "snakeviz"
 ]
 
 [build-system]
