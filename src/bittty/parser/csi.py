@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 from typing import TYPE_CHECKING, List, Optional, Callable, Dict
+from ..style import merge_ansi_styles
 
 if TYPE_CHECKING:
     from ..terminal import Terminal
@@ -274,7 +275,6 @@ def dispatch_csi(terminal: Terminal, final_char: str, params: List[Optional[int]
 
 def dispatch_sgr(terminal: Terminal, params: List[Optional[int]]) -> None:
     """Handle SGR (Select Graphic Rendition) sequences."""
-    from ..style import merge_ansi_styles
 
     # Use an empty list if params is None
     if not params:

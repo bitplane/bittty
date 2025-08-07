@@ -132,24 +132,50 @@ OSC_DISPATCH_TABLE: Dict[int, Callable[[Terminal, str], None]] = {
 }
 
 
+# Global cache for OSC command parsing - provides speedup for repeated commands
+_OSC_CACHE = {}
+_OSC_CACHE_MAX_SIZE = 500  # Smaller than CSI cache since OSC sequences are less frequent
+
+
 def dispatch_osc(terminal: Terminal, string_buffer: str) -> None:
-    """Main OSC dispatcher using O(1) lookup table."""
+    """BLAZING FAST OSC dispatcher with caching! 🚀
+
+    Optimizations:
+    1. **Caching**: Parse results for repeated OSC commands (window titles repeat)
+    2. **Fast paths**: Handle common OSC commands with minimal processing
+    3. **Reduced allocations**: Cache parsed command numbers and data splits
+    """
+    global _OSC_CACHE
+
     if not string_buffer:
         return
 
-    # Parse OSC command: number;data
-    parts = string_buffer.split(";", 1)
-    if len(parts) < 1:
-        return
+    # Periodic cache cleanup to prevent memory leaks
+    if len(_OSC_CACHE) > _OSC_CACHE_MAX_SIZE:
+        _OSC_CACHE.clear()
 
-    try:
-        cmd = int(parts[0])
-    except ValueError:
-        logger.debug(f"Invalid OSC command number: {parts[0]}")
-        return
-
-    # Get data part (everything after first semicolon)
-    data = parts[1] if len(parts) >= 2 else ""
+    # Cache lookup for repeated OSC sequences
+    if string_buffer in _OSC_CACHE:
+        cmd, data = _OSC_CACHE[string_buffer]
+    else:
+        # ⚡ FAST PATH: Check for common simple patterns first
+        # Pattern: "0;title" or "2;title" (extremely common for window titles)
+        if len(string_buffer) > 2 and string_buffer[1] == ";" and string_buffer[0].isdigit():
+            cmd = int(string_buffer[0])
+            data = string_buffer[2:]
+            _OSC_CACHE[string_buffer] = (cmd, data)
+        # Pattern: "10;color" or "11;color" (common for colors)
+        elif len(string_buffer) > 3 and string_buffer[2] == ";" and string_buffer[:2].isdigit():
+            cmd = int(string_buffer[:2])
+            data = string_buffer[3:]
+            _OSC_CACHE[string_buffer] = (cmd, data)
+        else:
+            # Complex parsing needed (less common)
+            cmd, data = _parse_osc_complex(string_buffer)
+            if cmd is not None:
+                _OSC_CACHE[string_buffer] = (cmd, data)
+            else:
+                return  # Invalid sequence
 
     # Use dispatch table for O(1) lookup
     handler = OSC_DISPATCH_TABLE.get(cmd)
@@ -159,3 +185,22 @@ def dispatch_osc(terminal: Terminal, string_buffer: str) -> None:
         # Unknown OSC command - log and consume
         logger.debug(f"Unknown OSC command: {cmd} with data: {data}")
         # We still consume the sequence to prevent it from leaking through
+
+
+def _parse_osc_complex(string_buffer: str) -> tuple[int, str]:
+    """Handle complex OSC parsing that needs full string splitting."""
+    # Parse OSC command: number;data
+    parts = string_buffer.split(";", 1)
+    if len(parts) < 1:
+        return None, ""
+
+    try:
+        cmd = int(parts[0])
+    except ValueError:
+        logger.debug(f"Invalid OSC command number: {parts[0]}")
+        return None, ""
+
+    # Get data part (everything after first semicolon)
+    data = parts[1] if len(parts) >= 2 else ""
+
+    return cmd, data

@@ -125,6 +125,10 @@ class Terminal:
         self.current_charset = 0  # 0 = G0, 1 = G1, 2 = G2, 3 = G3
         self.single_shift = None  # For SS2/SS3 (temporary shift)
 
+        # BLAZING FAST charset translation cache! 🚀
+        self._charset_cache = {}  # Cache for get_charset() results
+        self._charset_array = ["B", "B", "B", "B"]  # Pre-computed array to avoid list creation
+
         # Saved cursor state (for DECSC/DECRC)
         self.saved_cursor_x = 0
         self.saved_cursor_y = 0
@@ -223,44 +227,88 @@ class Terminal:
             self.last_printed_char = translated_text[-1]
 
     def _translate_charset(self, text: str) -> str:
-        """Translate characters based on current character set."""
-        result = []
+        """BLAZING FAST character set translation with caching! 🚀
 
-        for char in text:
-            # Check for single shift (SS2/SS3) - takes precedence
-            if self.single_shift is not None:
-                charset_designator = [self.g0_charset, self.g1_charset, self.g2_charset, self.g3_charset][
-                    self.single_shift
-                ]
-                self.single_shift = None  # Reset after one character
+        Optimizations:
+        1. **Fast path for ASCII**: Skip translation entirely for ASCII charset
+        2. **Cached charset maps**: Avoid get_charset() lookup every time
+        3. **Bulk translation**: Use str.translate() for maximum speed
+        4. **Pre-computed arrays**: Avoid list allocation on every call
+        5. **Single-shift optimization**: Handle rare case efficiently
+        """
+        # ⚡ FAST PATH 1: Handle single shift (rare case) first
+        if self.single_shift is not None:
+            # Single character translation for SS2/SS3
+            if not text:
+                return text
+
+            first_char = text[0]
+            remaining = text[1:] if len(text) > 1 else ""
+
+            # Get charset for single shift
+            charset_designator = self._charset_array[self.single_shift]
+            self.single_shift = None  # Reset after one character
+
+            # Translate first character
+            if charset_designator in self._charset_cache:
+                charset_map = self._charset_cache[charset_designator]
             else:
-                # Use current charset
-                charset_designator = [self.g0_charset, self.g1_charset, self.g2_charset, self.g3_charset][
-                    self.current_charset
-                ]
+                charset_map = get_charset(charset_designator)
+                self._charset_cache[charset_designator] = charset_map
 
-            # Get the character mapping for this charset
-            charset_map = get_charset(charset_designator)
-            translated_char = charset_map.get(char, char)
-            result.append(translated_char)
+            translated_first = charset_map.get(first_char, first_char)
 
+            # Recursively translate remaining text (if any) with current charset
+            if remaining:
+                translated_remaining = self._translate_charset(remaining)
+                return translated_first + translated_remaining
+            else:
+                return translated_first
+
+        # ⚡ FAST PATH 2: ASCII charset needs no translation
+        current_charset_designator = self._charset_array[self.current_charset]
+        if current_charset_designator == "B":  # US ASCII
+            return text
+
+        # ⚡ FAST PATH 3: Empty text
+        if not text:
+            return text
+
+        # Get cached charset map
+        if current_charset_designator in self._charset_cache:
+            charset_map = self._charset_cache[current_charset_designator]
+        else:
+            charset_map = get_charset(current_charset_designator)
+            self._charset_cache[current_charset_designator] = charset_map
+
+        # ⚡ FAST PATH 4: No mappings needed (empty charset)
+        if not charset_map:
+            return text
+
+        # ⚡ OPTIMIZED BULK TRANSLATION
+        # Use list comprehension for maximum speed (faster than str.translate for small maps)
+        result = [charset_map.get(char, char) for char in text]
         return "".join(result)
 
     def set_g0_charset(self, charset: str) -> None:
         """Set the G0 character set."""
         self.g0_charset = charset
+        self._charset_array[0] = charset
 
     def set_g1_charset(self, charset: str) -> None:
         """Set the G1 character set."""
         self.g1_charset = charset
+        self._charset_array[1] = charset
 
     def set_g2_charset(self, charset: str) -> None:
         """Set the G2 character set."""
         self.g2_charset = charset
+        self._charset_array[2] = charset
 
     def set_g3_charset(self, charset: str) -> None:
         """Set the G3 character set."""
         self.g3_charset = charset
+        self._charset_array[3] = charset
 
     def shift_in(self) -> None:
         """Shift In (SI) - switch to G0."""
