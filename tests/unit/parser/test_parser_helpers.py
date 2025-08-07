@@ -1,11 +1,4 @@
-import pytest
 from bittty.parser import Parser, parse_csi_sequence, parse_string_sequence
-
-
-@pytest.fixture
-def terminal(standard_terminal):
-    """Return a real Terminal instance for testing."""
-    return standard_terminal
 
 
 def test_parse_csi_basic_sequences():

@@ -42,8 +42,8 @@ class Color:
 
 @dataclass(frozen=True)
 class Style:
-    fg: Color = Color("default")
-    bg: Color = Color("default")
+    fg: Optional[Color] = None
+    bg: Optional[Color] = None
     bold: Optional[bool] = None
     dim: Optional[bool] = None
     italic: Optional[bool] = None
@@ -64,8 +64,8 @@ class Style:
             return base_attr
 
         return Style(
-            fg=other.fg if other.fg.mode != "default" else self.fg,
-            bg=other.bg if other.bg.mode != "default" else self.bg,
+            fg=other.fg if other.fg is not None else self.fg,
+            bg=other.bg if other.bg is not None else self.bg,
             bold=merge_attr(self.bold, other.bold),
             dim=merge_attr(self.dim, other.dim),
             italic=merge_attr(self.italic, other.italic),
@@ -206,7 +206,7 @@ def get_background(ansi: str) -> str:
         ANSI sequence with just the background color, or empty string
     """
     style = parse_sgr_sequence(ansi)
-    if style.bg.mode == "default":
+    if style.bg is None or style.bg.mode == "default":
         return ""
     elif style.bg.mode == "indexed":
         if style.bg.value < 8:
@@ -282,28 +282,30 @@ def style_to_ansi(style: Style) -> str:
         params.append("9")
 
     # Foreground color
-    if style.fg.mode == "indexed":
-        if style.fg.value < 8:
-            params.append(str(30 + style.fg.value))
-        elif style.fg.value < 16:
-            params.append(str(90 + style.fg.value - 8))
-        else:
-            params.append(f"38;5;{style.fg.value}")
-    elif style.fg.mode == "rgb":
-        r, g, b = style.fg.value
-        params.append(f"38;2;{r};{g};{b}")
+    if style.fg is not None:
+        if style.fg.mode == "indexed":
+            if style.fg.value < 8:
+                params.append(str(30 + style.fg.value))
+            elif style.fg.value < 16:
+                params.append(str(90 + style.fg.value - 8))
+            else:
+                params.append(f"38;5;{style.fg.value}")
+        elif style.fg.mode == "rgb":
+            r, g, b = style.fg.value
+            params.append(f"38;2;{r};{g};{b}")
 
     # Background color
-    if style.bg.mode == "indexed":
-        if style.bg.value < 8:
-            params.append(str(40 + style.bg.value))
-        elif style.bg.value < 16:
-            params.append(str(100 + style.bg.value - 8))
-        else:
-            params.append(f"48;5;{style.bg.value}")
-    elif style.bg.mode == "rgb":
-        r, g, b = style.bg.value
-        params.append(f"48;2;{r};{g};{b}")
+    if style.bg is not None:
+        if style.bg.mode == "indexed":
+            if style.bg.value < 8:
+                params.append(str(40 + style.bg.value))
+            elif style.bg.value < 16:
+                params.append(str(100 + style.bg.value - 8))
+            else:
+                params.append(f"48;5;{style.bg.value}")
+        elif style.bg.mode == "rgb":
+            r, g, b = style.bg.value
+            params.append(f"48;2;{r};{g};{b}")
 
     if not params:
         return ""
@@ -318,28 +320,30 @@ def _parse_ansi_to_tuple(ansi: str) -> tuple:
 
     # Convert colors to old format
     fg = None
-    if style.fg.mode == "indexed":
-        if style.fg.value < 8:
-            fg = str(30 + style.fg.value)
-        elif style.fg.value < 16:
-            fg = str(90 + style.fg.value - 8)
-        else:
-            fg = f"38;5;{style.fg.value}"
-    elif style.fg.mode == "rgb":
-        r, g, b = style.fg.value
-        fg = f"38;2;{r};{g};{b}"
+    if style.fg is not None:
+        if style.fg.mode == "indexed":
+            if style.fg.value < 8:
+                fg = str(30 + style.fg.value)
+            elif style.fg.value < 16:
+                fg = str(90 + style.fg.value - 8)
+            else:
+                fg = f"38;5;{style.fg.value}"
+        elif style.fg.mode == "rgb":
+            r, g, b = style.fg.value
+            fg = f"38;2;{r};{g};{b}"
 
     bg = None
-    if style.bg.mode == "indexed":
-        if style.bg.value < 8:
-            bg = str(40 + style.bg.value)
-        elif style.bg.value < 16:
-            bg = str(100 + style.bg.value - 8)
-        else:
-            bg = f"48;5;{style.bg.value}"
-    elif style.bg.mode == "rgb":
-        r, g, b = style.bg.value
-        bg = f"48;2;{r};{g};{b}"
+    if style.bg is not None:
+        if style.bg.mode == "indexed":
+            if style.bg.value < 8:
+                bg = str(40 + style.bg.value)
+            elif style.bg.value < 16:
+                bg = str(100 + style.bg.value - 8)
+            else:
+                bg = f"48;5;{style.bg.value}"
+        elif style.bg.mode == "rgb":
+            r, g, b = style.bg.value
+            bg = f"48;2;{r};{g};{b}"
 
     return (
         fg,

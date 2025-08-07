@@ -15,27 +15,37 @@ from .style import merge_ansi_styles
 logger = logging.getLogger(__name__)
 
 
-TERM_TOKENIZER = re.compile(
+# Base escape sequence patterns
+ESCAPE_PATTERNS = {
     # Paired sequence starters - these put us into "mode"
-    r"(?P<osc>\x1b\])"  # OSC start
-    r"|(?P<dcs>\x1bP)"  # DCS start
-    r"|(?P<apc>\x1b_)"  # APC start
-    r"|(?P<pm>\x1b\^)"  # PM start
-    r"|(?P<sos>\x1bX)"  # SOS start
-    r"|(?P<csi>\x1b\[)"  # CSI start
+    "osc": r"\x1b\]",  # OSC start
+    "dcs": r"\x1bP",  # DCS start
+    "apc": r"\x1b_",  # APC start
+    "pm": r"\x1b\^",  # PM start
+    "sos": r"\x1bX",  # SOS start
+    "csi": r"\x1b\[",  # CSI start
     # Complete sequences - these are handled immediately
-    r"|(?P<ss3>\x1bO.)"  # SS3 sequences (complete)
-    r"|(?P<esc_charset>\x1b[()][A-Za-z0-9<>=@])"  # G0/G1 charset
-    r"|(?P<esc_charset2>\x1b[*+][A-Za-z0-9<>=@])"  # G2/G3 charset
-    r"|(?P<esc>\x1b[^][P_^XO])"  # Simple ESC sequences (catch remaining)
+    "ss3": r"\x1bO.",  # SS3 sequences (application keypad mode)
+    "esc_charset": r"\x1b[()][A-Za-z0-9<>=@]",  # G0/G1 charset
+    "esc_charset2": r"\x1b[*+][A-Za-z0-9<>=@]",  # G2/G3 charset
     # Terminators - these end paired sequences
-    r"|(?P<st>\x1b\\\\)"  # String Terminator (ST)
-    r"|(?P<bel>\x07)"  # BEL
-    r"|(?P<csi_final>[\x40-\x7e])"  # CSI final byte
+    "st": r"\x1b\\",  # String Terminator (ST)
+    "esc": r"\x1b[^][P_^XO\\]",  # Simple ESC sequences (catch remaining, exclude ST)
+    "bel": r"\x07",  # BEL
+    "csi_final": r"[\x40-\x7e]",  # CSI final byte
     # Control codes
-    r"|(?P<ctrl>[\x00-\x06\x08-\x1a\x1c-\x1f\x7f])"  # C0/C1 control codes
-    # Everything else is printable (handled by fallback logic)
-)
+    "ctrl": r"[\x00-\x06\x08-\x1a\x1c-\x1f\x7f]",  # C0/C1 control codes
+}
+
+# Context-specific patterns
+SS3_APPLICATION = r"\x1bO."  # Application keypad mode (3 chars)
+SS3_CHARSET = r"\x1bO"  # Single shift 3 for charset (2 chars)
+
+
+def compile_tokenizer(patterns):
+    """Compile a tokenizer regex from a dict of patterns."""
+    pattern_str = "|".join(f"(?P<{k}>{v})" for k, v in patterns.items())
+    return re.compile(pattern_str)
 
 
 # Define which sequences are paired (have start/end) vs singular (complete)
@@ -57,26 +67,6 @@ TERMINATORS = {
 
 # CSI final bytes should only match in CSI mode - not in printable text
 CONTEXT_SENSITIVE = {"csi_final"}
-
-
-def tokenize(text):
-    """Tokenize text, yielding (kind, start, end) tuples."""
-    pos = 0
-    while pos < len(text):
-        match = TERM_TOKENIZER.match(text, pos)
-        if match:
-            kind = match.lastgroup
-            start = match.start()
-            end = match.end()
-            yield (kind, start, end)
-            pos = end
-        else:
-            # No pattern matched - this is a printable character
-            # Find the run of printable characters
-            start = pos
-            while pos < len(text) and not TERM_TOKENIZER.match(text, pos):
-                pos += 1
-            yield ("print", start, pos)
 
 
 def parse_csi_sequence(data):
@@ -209,6 +199,25 @@ class Parser:
         self.pos = 0  # Current position in buffer
         self.mode = None  # Current paired sequence type (None when not in one)
 
+        # Dynamic tokenizer - update based on terminal state
+        self.escape_patterns = ESCAPE_PATTERNS.copy()
+        self.update_tokenizer()
+
+    def update_tokenizer(self):
+        """Update the tokenizer regex based on current terminal state."""
+        # Update SS3 pattern based on keypad mode
+        if self.terminal.application_keypad:
+            self.escape_patterns["ss3"] = SS3_APPLICATION  # 3-char for app keypad
+        else:
+            self.escape_patterns["ss3"] = SS3_CHARSET  # 2-char for charset shift
+
+        self.tokenizer = compile_tokenizer(self.escape_patterns)
+
+    def update_pattern(self, key: str, pattern: str):
+        """Update a specific pattern in the tokenizer."""
+        self.escape_patterns[key] = pattern
+        self.update_tokenizer()
+
     def feed(self, chunk: str) -> None:
         """
         Feeds a chunk of text into the parser.
@@ -218,7 +227,7 @@ class Parser:
         """
         self.buffer += chunk
 
-        for match in TERM_TOKENIZER.finditer(self.buffer, self.pos):
+        for match in self.tokenizer.finditer(self.buffer, self.pos):
             kind = match.lastgroup
             start = match.start()
             end = match.end()
@@ -363,11 +372,24 @@ class Parser:
         pass
 
     def _handle_ss3(self, data):
-        """Handle SS3 sequence (ESC O x)."""
-        if len(data) >= 3:
-            # SS3 sequences are typically application keypad or function keys
-            # For character set switching, we use single_shift_3
+        """Handle SS3 sequence - keypad or charset shift based on mode."""
+        if len(data) == 2:  # ESC O only - charset single shift
+            # Single shift 3 for next character
             self.terminal.single_shift_3()
+        elif len(data) >= 3:  # ESC O x - application keypad sequence
+            seq_char = data[2]
+            # Handle application keypad sequences
+            if seq_char == "A":  # Cursor Up
+                self.terminal.respond("\033OA")
+            elif seq_char == "B":  # Cursor Down
+                self.terminal.respond("\033OB")
+            elif seq_char == "C":  # Cursor Right
+                self.terminal.respond("\033OC")
+            elif seq_char == "D":  # Cursor Left
+                self.terminal.respond("\033OD")
+            # Add more keypad sequences as needed
+            else:
+                logger.debug(f"Unknown SS3 sequence: {data!r}")
 
     def _handle_escape_complete(self, data):
         """Handle complete escape sequence."""
@@ -393,9 +415,11 @@ class Parser:
         elif seq_char == "=":  # DECKPAM (Application Keypad)
             self.terminal.set_mode(constants.DECKPAM_APPLICATION_KEYPAD, True)
             self.terminal.numeric_keypad = False
+            self.update_tokenizer()  # Update SS3 pattern
         elif seq_char == ">":  # DECKPNM (Numeric Keypad)
             self.terminal.set_mode(constants.DECKPAM_APPLICATION_KEYPAD, False)
             self.terminal.numeric_keypad = True
+            self.update_tokenizer()  # Update SS3 pattern
         elif seq_char == "\\":  # ST (String Terminator)
             pass  # Already handled by complete sequence patterns
         elif seq_char == "N":  # SS2 (Single Shift 2)
