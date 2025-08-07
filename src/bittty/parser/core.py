@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import re
-from typing import TYPE_CHECKING, List, Optional
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..terminal import Terminal
@@ -330,10 +330,6 @@ class Parser:
         """
         self.terminal = terminal
 
-        # Buffers for sequence data (used by CSI dispatch)
-        self.intermediate_chars: List[str] = []
-        self.parsed_params: List[Optional[int]] = []
-
         # Parser state
         self.buffer = ""  # Input buffer
         self.pos = 0  # Current position in buffer
@@ -342,10 +338,6 @@ class Parser:
         # Dynamic tokenizer - update based on terminal state
         self.escape_patterns = ESCAPE_PATTERNS.copy()
         self.update_tokenizer()
-
-        # Legacy fields for backward compatibility
-        self.string_buffer = ""
-        self.seq_start = 0
 
     def update_tokenizer(self):
         """Update the tokenizer regex based on current terminal state."""
@@ -507,10 +499,6 @@ class Parser:
         """Handle CSI sequences using new dispatcher."""
         params, intermediates, final_char = parse_csi_sequence(data)
 
-        # Store for legacy compatibility
-        self.parsed_params = params
-        self.intermediate_chars = intermediates
-
         # Dispatch using new O(1) lookup table
         dispatch_csi(self.terminal, final_char, params, intermediates)
 
@@ -518,18 +506,12 @@ class Parser:
         """Handle OSC sequences using new dispatcher."""
         string_content = parse_string_sequence(data, "osc")
 
-        # Store for legacy compatibility
-        self.string_buffer = string_content
-
         # Dispatch using new O(1) lookup table
         dispatch_osc(self.terminal, string_content)
 
     def _handle_dcs(self, data: str) -> None:
         """Handle DCS sequences using new dispatcher."""
         string_content = parse_string_sequence(data, "dcs")
-
-        # Store for legacy compatibility
-        self.string_buffer = string_content
 
         # Dispatch using new dispatcher
         dispatch_dcs(self.terminal, string_content)
@@ -549,56 +531,10 @@ class Parser:
         # SOS sequences are consumed but not implemented
         logger.debug(f"SOS sequence received (not implemented): {data}")
 
-    def _get_param(self, index: int, default: int = 0) -> int:
-        """
-        Gets a CSI parameter at the given index, or default if missing.
-
-        Args:
-            index: Parameter index (0-based)
-            default: Default value if parameter is missing or None
-
-        Returns:
-            Parameter value or default
-        """
-        if index < len(self.parsed_params):
-            param = self.parsed_params[index]
-            return param if param is not None else default
-        return default
-
     def reset(self) -> None:
         """
         Resets the parser to its initial state.
         """
-        self.intermediate_chars.clear()
-        self.parsed_params.clear()
-        self.string_buffer = ""
         self.buffer = ""
         self.pos = 0
         self.mode = None
-        self.seq_start = 0
-
-    # Legacy methods for test compatibility - will be removed once tests are updated
-    def _clear(self) -> None:
-        """Clears temporary buffers (legacy method for tests)."""
-        self.intermediate_chars.clear()
-        self.parsed_params.clear()
-        self.string_buffer = ""
-
-    def _split_params(self, param_string: str) -> None:
-        """Parse parameter string (legacy method for tests)."""
-        self.parsed_params.clear()
-        if not param_string:
-            return
-
-        for part in param_string.split(";"):
-            if not part:
-                self.parsed_params.append(None)
-                continue
-
-            # Handle sub-parameters: take only the main part before ':'
-            main_part = part.split(":")[0]
-
-            try:
-                self.parsed_params.append(int(main_part))
-            except ValueError:
-                self.parsed_params.append(0)
