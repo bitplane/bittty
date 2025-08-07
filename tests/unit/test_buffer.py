@@ -2,6 +2,7 @@
 
 from bittty.buffer import Buffer
 from bittty.style import Style
+from bittty import constants
 
 
 def test_get_cell_out_of_bounds():
@@ -290,8 +291,6 @@ def test_clear_line_with_style_object():
     buffer = Buffer(width=5, height=3)
     buffer.set(0, 0, "XXXXX")
 
-    from bittty import constants
-
     style = Style(italic=True)
     buffer.clear_line(0, constants.ERASE_ALL, 0, style)
 
@@ -306,8 +305,6 @@ def test_clear_line_with_invalid_style():
     """Test clear_line with invalid style_or_ansi falls back to default (line 160)."""
     buffer = Buffer(width=5, height=3)
     buffer.set(0, 0, "XXXXX")
-
-    from bittty import constants
 
     # Pass invalid type - should fall back to default Style
     buffer.clear_line(0, constants.ERASE_ALL, 0, 123)
