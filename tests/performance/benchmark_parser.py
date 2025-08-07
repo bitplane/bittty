@@ -40,6 +40,9 @@ def benchmark_parser(ansi_content: str, runs: int = 5) -> list[float]:
 
 def main():
     """Main function to run the benchmark."""
+
+    times = 10
+
     logs_dir = Path("logs")
     logs_dir.mkdir(exist_ok=True)
 
@@ -64,11 +67,11 @@ def main():
             f"Git Commit Hash:      {commit_hash}",
             f"Timestamp:            {datetime.now().isoformat()}",
             f"File Size:            {len(ansi_content)} characters",
-            "Runs:                 5",
+            "Runs:                  {times}",
             "",
         ]
 
-        times = benchmark_parser(ansi_content, runs=5)
+        times = benchmark_parser(ansi_content, runs=times)
 
         for i, elapsed in enumerate(times):
             report_lines.append(f"Run {i+1}: {elapsed:.6f} seconds")
