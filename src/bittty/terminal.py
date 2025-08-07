@@ -465,7 +465,7 @@ class Terminal:
         self.current_buffer.delete(self.cursor_x, self.cursor_y, count)
 
     def scroll(self, lines: int) -> None:
-        """Centralized scrolling method that enforces scroll region boundaries.
+        """BLAZING FAST centralized scrolling with bulk operations! 🚀
 
         Args:
             lines: Number of lines to scroll. Positive = up, negative = down.
@@ -473,39 +473,14 @@ class Terminal:
         if lines == 0 or self.scroll_top > self.scroll_bottom:
             return
 
-        # Get just the background color from current style for clearing
-        bg_ansi = get_background(self.current_ansi_code)
-
         abs_lines = abs(lines)
 
-        for _ in range(abs_lines):
-            if lines > 0:
-                # Scroll up - content moves up, new line appears at bottom
-                # Shift lines up within scroll region only
-                for y in range(self.scroll_top, self.scroll_bottom):
-                    for x in range(self.width):
-                        if y + 1 <= self.scroll_bottom:
-                            cell = self.current_buffer.get_cell(x, y + 1)
-                            self.current_buffer.set_cell(x, y, cell[1], cell[0])
-                        else:
-                            # Clear the cell if we can't copy from below
-                            self.current_buffer.set_cell(x, y, bg_ansi, " ")
-                # Clear the bottom line of the scroll region
-                self.current_buffer.clear_line(self.scroll_bottom, constants.ERASE_ALL, 0, bg_ansi)
-
-            else:  # lines < 0
-                # Scroll down - content moves down, new line appears at top
-                # Shift lines down within scroll region only
-                for y in range(self.scroll_bottom, self.scroll_top, -1):
-                    for x in range(self.width):
-                        if y - 1 >= self.scroll_top:
-                            cell = self.current_buffer.get_cell(x, y - 1)
-                            self.current_buffer.set_cell(x, y, cell[1], cell[0])
-                        else:
-                            # Clear the cell if we can't copy from above
-                            self.current_buffer.set_cell(x, y, bg_ansi, " ")
-                # Clear the top line of the scroll region
-                self.current_buffer.clear_line(self.scroll_top, constants.ERASE_ALL, 0, bg_ansi)
+        if lines > 0:
+            # Scroll up - use optimized bulk region scroll
+            self.current_buffer.scroll_region_up(self.scroll_top, self.scroll_bottom, abs_lines)
+        else:
+            # Scroll down - use optimized bulk region scroll
+            self.current_buffer.scroll_region_down(self.scroll_top, self.scroll_bottom, abs_lines)
 
     def scroll_up(self, count: int) -> None:
         """Scroll content up within scroll region."""

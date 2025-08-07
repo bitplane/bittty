@@ -9,3 +9,4 @@ docs/pydoc
 *.log
 *.strace
 uv.lock
+*.prof
