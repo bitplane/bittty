@@ -35,21 +35,26 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
 
 ## Recent changes
 
-* 🖧 Architecture changes
+* 🐌 use regex for parsing to speed things up a tad (~2x faster)
+* 📚 document half a billion DEC private modes we don't support
+* 🔙 DECLM - allow `\n` to act like `\r\n` so we don't have to rely on cooked
+  input on the pty when using as a library.
 * 🖼️ DEC Special Graphics
 * 🐌 Faster colour/style parser
 * ⛓️‍💥 Split out from `textual-tty` into separate package
 
 ## bugs / todo
 
-- [ ] [architecture](architecture)
+- [ ] [architecture](architecture) - pretty big
 - [ ] gui
   - [ ] make a terminal input class, for standalone input
   - [ ] make `framebuffer.py`
   - [ ] choose a display driver
 - [ ] performance improvements
-  - [ ] parse with regex over large buffer sizes
+  - [x] parse with regex over large buffer sizes
+    - [ ] reconsider CSI end char approach
   - [ ] line cache for outputs
+  - [ ] revisit colours
 - [ ] scrollback buffer
   - [ ] implement `logloglog` for scrollback with wrapping
 - [ ] bugs
@@ -66,7 +71,5 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
   - [ ] debugging info
   - [ ] record
   - [ ] list sequences + values
-
-## Unhandled modes
-
-*   **`DECRLM` (Right-to-Left-Language Mode):** Enables right-to-left language support.
+- [ ] Document all the escape sequences
+  - [ ] build a terminal library

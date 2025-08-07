@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Callable, List, Optional
+import re
+from typing import TYPE_CHECKING, List
 
 if TYPE_CHECKING:
     from .terminal import Terminal
@@ -12,6 +13,163 @@ from . import constants
 from .style import merge_ansi_styles
 
 logger = logging.getLogger(__name__)
+
+
+# Base escape sequence patterns
+ESCAPE_PATTERNS = {
+    # Paired sequence starters - these put us into "mode"
+    "osc": r"\x1b\]",  # OSC start
+    "dcs": r"\x1bP",  # DCS start
+    "apc": r"\x1b_",  # APC start
+    "pm": r"\x1b\^",  # PM start
+    "sos": r"\x1bX",  # SOS start
+    "csi": r"\x1b\[",  # CSI start
+    # Complete sequences - these are handled immediately
+    "ss3": r"\x1bO.",  # SS3 sequences (application keypad mode)
+    "esc_charset": r"\x1b[()][A-Za-z0-9<>=@]",  # G0/G1 charset
+    "esc_charset2": r"\x1b[*+][A-Za-z0-9<>=@]",  # G2/G3 charset
+    # Terminators - these end paired sequences
+    "st": r"\x1b\\",  # String Terminator (ST)
+    "esc": r"\x1b[^][P_^XO\\]",  # Simple ESC sequences (catch remaining, exclude ST)
+    "bel": r"\x07",  # BEL
+    "csi_final": r"[\x40-\x7e]",  # CSI final byte
+    # Control codes
+    "ctrl": r"[\x00-\x06\x08-\x1a\x1c-\x1f\x7f]",  # C0/C1 control codes
+}
+
+# Context-specific patterns
+SS3_APPLICATION = r"\x1bO."  # Application keypad mode (3 chars)
+SS3_CHARSET = r"\x1bO"  # Single shift 3 for charset (2 chars)
+
+
+def compile_tokenizer(patterns):
+    """Compile a tokenizer regex from a dict of patterns."""
+    pattern_str = "|".join(f"(?P<{k}>{v})" for k, v in patterns.items())
+    return re.compile(pattern_str)
+
+
+# Define which sequences are paired (have start/end) vs singular (complete)
+PAIRED = {"osc", "dcs", "apc", "pm", "sos", "csi"}
+SINGULAR = {"ss3", "esc", "esc_charset", "esc_charset2", "ctrl", "bel"}
+STANDALONES = {"ss3", "esc", "esc_charset", "esc_charset2", "ctrl", "bel"}
+SEQUENCE_STARTS = {"osc", "dcs", "apc", "pm", "sos", "csi"}
+
+# Define valid terminators for each mode
+TERMINATORS = {
+    None: SEQUENCE_STARTS | STANDALONES,  # Printable mode ends at any escape
+    "osc": {"st", "bel"},
+    "dcs": {"st", "bel"},
+    "apc": {"st"},
+    "pm": {"st"},
+    "sos": {"st"},
+    "csi": {"csi_final"},
+}
+
+# CSI final bytes should only match in CSI mode - not in printable text
+CONTEXT_SENSITIVE = {"csi_final"}
+
+
+def parse_csi_sequence(data):
+    """Parse complete CSI sequence and return params, intermediates, final char.
+
+    CSI format: ESC [ [private_chars] [params] [intermediate_chars] final_char
+    - private_chars: ? < = > (0x3C-0x3F)
+    - params: digits and ; separators
+    - intermediate_chars: space to / (0x20-0x2F)
+    - final_char: @ to ~ (0x40-0x7E)
+
+    Args:
+        data: Complete CSI sequence like '\x1b[1;2H' or '\x1b[?25h'
+
+    Returns:
+        tuple: (params_list, intermediate_chars, final_char)
+    """
+    if len(data) < 3 or not data.startswith("\x1b["):
+        return [], [], ""
+
+    # Remove ESC[ prefix
+    content = data[2:]
+
+    # Validate that the sequence doesn't contain invalid control characters
+    # (except for the final character which can be in the control range)
+    for i, char in enumerate(content[:-1]):  # Check all but final char
+        if ord(char) < 0x20:  # Control character
+            # Invalid CSI sequence
+            return [], [], ""
+
+    # Final character is last byte
+    final_char = content[-1]
+    sequence = content[:-1]
+
+    # Extract private parameter markers (? < = > at start)
+    private_markers = []
+    param_start = 0
+    for i, char in enumerate(sequence):
+        if char in "?<=>":
+            private_markers.append(char)
+            param_start = i + 1
+        else:
+            break
+
+    # Extract intermediate characters (0x20-0x2F) at the end
+    intermediates = []
+    param_end = len(sequence)
+    for i in range(len(sequence) - 1, -1, -1):
+        char = sequence[i]
+        if 0x20 <= ord(char) <= 0x2F:
+            intermediates.insert(0, char)
+            param_end = i
+        else:
+            break
+
+    # Parse parameters (between private markers and intermediates)
+    params = []
+    param_part = sequence[param_start:param_end]
+
+    if param_part:
+        for part in param_part.split(";"):
+            if not part:
+                params.append(None)
+            else:
+                # Handle sub-parameters: take only main part before ':'
+                main_part = part.split(":")[0]
+                try:
+                    params.append(int(main_part))
+                except ValueError:
+                    params.append(main_part)
+
+    # Combine private markers with intermediates for backward compatibility
+    all_intermediates = private_markers + intermediates
+
+    return params, all_intermediates, final_char
+
+
+def parse_string_sequence(data, sequence_type):
+    """Parse complete string sequence (OSC, DCS, APC, etc.).
+
+    Args:
+        data: Complete sequence like '\x1b]0;title\x07'
+        sequence_type: Type of sequence ('osc', 'dcs', etc.)
+
+    Returns:
+        str: The string content without escape codes
+    """
+    prefixes = {"osc": "\x1b]", "dcs": "\x1bP", "apc": "\x1b_", "pm": "\x1b^", "sos": "\x1bX"}
+
+    prefix = prefixes.get(sequence_type, "")
+    if not data.startswith(prefix):
+        return ""
+
+    # Remove prefix
+    content = data[len(prefix) :]
+
+    # Remove terminator (BEL or ST)
+    if content.endswith("\x07"):  # BEL
+        content = content[:-1]
+    elif content.endswith("\x1b\\"):  # ST
+        content = content[:-2]
+
+    return content
 
 
 class Parser:
@@ -32,247 +190,287 @@ class Parser:
         """
         self.terminal = terminal
 
-        # The current state of the parser (e.g., 'GROUND', 'ESCAPE').
-        self.current_state: str = constants.GROUND
-
-        # --- Buffers for collecting sequence data ---
+        # Buffers for sequence data (used by CSI dispatch)
         self.intermediate_chars: List[str] = []
-        self.param_buffer: str = ""
         self.parsed_params: List[int | str] = []
-        self.string_buffer: str = ""  # For OSC, DCS, APC strings
-        self._string_exit_handler: Optional[Callable] = None
 
-        # --- Current Cell Attributes ---
-        # ANSI sequence is stored in terminal.current_ansi_code
+        # Parser state
+        self.buffer = ""  # Input buffer
+        self.pos = 0  # Current position in buffer
+        self.mode = None  # Current paired sequence type (None when not in one)
 
-    def feed(self, data: str) -> None:
+        # Dynamic tokenizer - update based on terminal state
+        self.escape_patterns = ESCAPE_PATTERNS.copy()
+        self.update_tokenizer()
+
+    def update_tokenizer(self):
+        """Update the tokenizer regex based on current terminal state."""
+        # Update SS3 pattern based on keypad mode
+        if self.terminal.application_keypad:
+            self.escape_patterns["ss3"] = SS3_APPLICATION  # 3-char for app keypad
+        else:
+            self.escape_patterns["ss3"] = SS3_CHARSET  # 2-char for charset shift
+
+        self.tokenizer = compile_tokenizer(self.escape_patterns)
+
+    def update_pattern(self, key: str, pattern: str):
+        """Update a specific pattern in the tokenizer."""
+        self.escape_patterns[key] = pattern
+        self.update_tokenizer()
+
+    def feed(self, chunk: str) -> None:
         """
         Feeds a chunk of text into the parser.
 
-        This is the main entry point. It iterates over the data and passes each
-        character to the state machine engine.
+        Uses unified terminator algorithm: every mode has terminators,
+        mode=None (printable) terminates on any escape sequence.
         """
-        for char in data:
-            self._parse_char(char)
+        self.buffer += chunk
 
-    def _parse_char(self, char: str) -> None:
-        """
-        The core state machine engine.
+        for match in self.tokenizer.finditer(self.buffer, self.pos):
+            kind = match.lastgroup
+            start = match.start()
+            end = match.end()
 
-        It looks up the current state, finds the appropriate
-        transition for the given byte, executes the handler, and moves to the
-        next state.
-        """
-        # Simplified parser - handle basic cases
-        if self.current_state == constants.GROUND:
-            if char == constants.ESC:
-                self.current_state = constants.ESCAPE
-                self._clear()
-            elif char == constants.BEL:
+            # Check if this is a terminator for current mode
+            if kind not in TERMINATORS[self.mode]:
+                # Not a terminator for us, skip to next match
+                continue
+
+            # Found a terminator for current mode
+            if self.mode is None:
+                # In text mode - dispatch text before terminator
+                if start > self.pos:
+                    self.dispatch("print", self.buffer[self.pos : start])
+
+                # Handle the terminator
+                if kind in SEQUENCE_STARTS:
+                    # Enter sequence mode, don't consume terminator yet
+                    self.mode = kind
+                    self.pos = start
+                elif kind in STANDALONES:
+                    # Dispatch standalone sequence
+                    self.dispatch(kind, self.buffer[start:end])
+                    self.pos = end
+            else:
+                # In sequence mode - dispatch complete sequence including terminator
+                self.dispatch(self.mode, self.buffer[self.pos : end])
+                self.mode = None
+                self.pos = end
+
+        # No more matches - handle remaining text if in text mode
+        if self.mode is None and self.pos < len(self.buffer):
+            end = len(self.buffer)
+            # Guard against escape truncation
+            if "\x1b" in self.buffer[-3:]:
+                end -= 3
+
+            if end > self.pos:
+                self.dispatch("print", self.buffer[self.pos : end])
+                self.pos = end
+
+        # Clean up processed buffer
+        if self.pos > 0:
+            self.buffer = self.buffer[self.pos :]
+            self.pos = 0
+
+    def dispatch(self, kind, data) -> None:
+        # Singular sequences
+        if kind == "bel":
+            self.terminal.bell()
+        elif kind == "ctrl":
+            if data == constants.BEL:
                 self.terminal.bell()
-            elif char == constants.BS:
+            elif data == constants.BS:
                 self.terminal.backspace()
-            elif char == constants.DEL:
+            elif data == constants.DEL:
                 self.terminal.backspace()
-            elif char == constants.HT:
+            elif data == constants.HT:
                 # Simple tab handling - move to next tab stop
                 self.terminal.cursor_x = ((self.terminal.cursor_x // 8) + 1) * 8
                 if self.terminal.cursor_x >= self.terminal.width:
                     self.terminal.cursor_x = self.terminal.width - 1
-            elif char == constants.LF:
+            elif data == constants.LF:
                 self.terminal.line_feed()
-            elif char == constants.CR:
+            elif data == constants.VT:
+                self.terminal.line_feed()
+            elif data == constants.FF:
+                self.terminal.line_feed()
+            elif data == constants.CR:
                 self.terminal.carriage_return()
-            elif char == constants.SO:
+            elif data == constants.SO:
                 self.terminal.shift_out()
-            elif char == constants.SI:
+            elif data == constants.SI:
                 self.terminal.shift_in()
-            elif ord(char) >= 0x20:  # Printable characters
-                # Use current ANSI sequence
-                self.terminal.write_text(char, self.terminal.current_ansi_code)
-        elif self.current_state == constants.ESCAPE:
-            if char == "[":
-                self.current_state = constants.CSI_ENTRY
-            elif char == "]":
-                self._clear()
-                self.current_state = constants.OSC_STRING
-            elif char == "=":
-                self.terminal.set_mode(constants.DECKPAM_APPLICATION_KEYPAD, True)
-                self.terminal.numeric_keypad = False  # Application mode
-                self.current_state = constants.GROUND
-            elif char == ">":
-                self.terminal.set_mode(constants.DECKPAM_APPLICATION_KEYPAD, False)
-                self.terminal.numeric_keypad = True  # Numeric mode
-                self.current_state = constants.GROUND
-            elif char == "P":
-                self._clear()
-                self.current_state = constants.DCS_STRING
-            elif char == "\\":
-                self.current_state = constants.GROUND
-            elif char == "c":
-                self._esc_dispatch(char)
-                self.current_state = constants.GROUND
-            elif char == "D":
-                self._esc_dispatch(char)
-                self.current_state = constants.GROUND
-            elif char == "M":
-                self._esc_dispatch(char)
-                self.current_state = constants.GROUND
-            elif char == "7":
-                self._esc_dispatch(char)
-                self.current_state = constants.GROUND
-            elif char == "8":
-                self._esc_dispatch(char)
-                self.current_state = constants.GROUND
-            elif char == ">":
-                self.current_state = constants.GROUND
-            elif char == "(":
-                self.current_state = constants.CHARSET_G0
-            elif char == ")":
-                self.current_state = constants.CHARSET_G1
-            elif char == "*":
-                self.current_state = constants.CHARSET_G2
-            elif char == "+":
-                self.current_state = constants.CHARSET_G3
-            elif char == "N":
-                # SS2 - Single Shift 2
-                self.terminal.single_shift_2()
-                self.current_state = constants.GROUND
-            elif char == "O":
-                # SS3 - Single Shift 3
-                self.terminal.single_shift_3()
-                self.current_state = constants.GROUND
-            else:
-                logger.debug(f"Unknown escape sequence: ESC {char!r}")
-                self.current_state = constants.GROUND
-        elif self.current_state in (constants.CSI_ENTRY, constants.CSI_PARAM, constants.CSI_INTERMEDIATE):
-            self._handle_csi(char)
-        elif self.current_state == constants.OSC_STRING:
-            if char == constants.BEL:
-                self._handle_osc_dispatch()
-                self.current_state = constants.GROUND
-            elif char == constants.ESC:
-                self.current_state = constants.OSC_ESC
-            else:
-                self.string_buffer += char
-        elif self.current_state == constants.OSC_ESC:
-            if char == "\\":
-                self._handle_osc_dispatch()
-                self.current_state = constants.GROUND
-            else:
-                self.string_buffer += constants.ESC + char
-                self.current_state = constants.OSC_STRING
-        elif self.current_state == constants.DCS_STRING:
-            if char == constants.BEL:
-                self._handle_dcs_dispatch()
-                self.current_state = constants.GROUND
-            elif char == constants.ESC:
-                self.current_state = constants.DCS_ESC
-            else:
-                self.string_buffer += char
-        elif self.current_state == constants.DCS_ESC:
-            if char == "\\":
-                self._handle_dcs_dispatch()
-                self.current_state = constants.GROUND
-            else:
-                self.string_buffer += constants.ESC + char
-                self.current_state = constants.DCS_STRING
-        elif self.current_state == constants.CHARSET_G0:
-            # ESC ( <charset> - Set G0 character set
-            self.terminal.set_g0_charset(char)
-            self.current_state = constants.GROUND
-        elif self.current_state == constants.CHARSET_G1:
-            # ESC ) <charset> - Set G1 character set
-            self.terminal.set_g1_charset(char)
-            self.current_state = constants.GROUND
-        elif self.current_state == constants.CHARSET_G2:
-            # ESC * <charset> - Set G2 character set
-            self.terminal.set_g2_charset(char)
-            self.current_state = constants.GROUND
-        elif self.current_state == constants.CHARSET_G3:
-            # ESC + <charset> - Set G3 character set
-            self.terminal.set_g3_charset(char)
-            self.current_state = constants.GROUND
+        elif kind == "print":
+            self.terminal.write_text(data, self.terminal.current_ansi_code)
+        elif kind == "ss3":
+            self._handle_ss3(data)
+        elif kind == "esc":
+            self._handle_escape_complete(data)
+        elif kind == "esc_charset":
+            self._handle_charset_escape(data)
+        elif kind == "esc_charset2":
+            self._handle_charset_escape(data)
+        elif kind == "unknown_esc":
+            self._handle_unknown_escape(data)
 
-    def _handle_csi(self, char: str) -> None:
-        """Generic handler for CSI_ENTRY, CSI_PARAM, and CSI_INTERMEDIATE states."""
-        # Final byte is the same for all CSI states
-        if "\x40" <= char <= "\x7e":
-            self._csi_dispatch(char)
-            self.current_state = constants.GROUND
+        # Paired sequences
+        elif kind == "csi":
+            self._handle_csi_complete(data)
+        elif kind == "osc":
+            self._handle_osc_complete(data)
+        elif kind == "dcs":
+            self._handle_dcs_complete(data)
+        elif kind == "apc":
+            # APC sequences are typically ignored
+            pass
+        elif kind == "pm":
+            # PM sequences are typically ignored
+            pass
+
+    def _handle_csi_complete(self, data):
+        """Handle complete CSI sequence using regex-parsed parameters."""
+        params, intermediates, final_char = parse_csi_sequence(data)
+
+        # Skip invalid sequences (empty final_char indicates parsing failure)
+        if not final_char:
             return
 
-        # Parameter bytes
-        if "\x30" <= char <= "\x3b":
-            self._collect_parameter(char)
-            if self.current_state == constants.CSI_ENTRY:
-                self.current_state = constants.CSI_PARAM
-            return
+        # Store parsed data for existing dispatch methods
+        self.parsed_params = params
+        self.intermediate_chars = intermediates
 
-        # Intermediate bytes
-        if "\x20" <= char <= "\x2f":
-            self._collect_intermediate(char)
-            self.current_state = constants.CSI_INTERMEDIATE
-            return
+        # Dispatch using existing CSI logic
+        self._csi_dispatch(final_char)
 
-        # Private parameter bytes (only valid in CSI_ENTRY)
-        if "\x3c" <= char <= "\x3f":
-            if self.current_state == constants.CSI_ENTRY:
-                self._collect_intermediate(char)
-                self.current_state = constants.CSI_PARAM
+    def _handle_osc_complete(self, data):
+        """Handle complete OSC sequence."""
+        content = parse_string_sequence(data, "osc")
+        self.string_buffer = content
+        self._handle_osc_dispatch()
+
+    def _handle_dcs_complete(self, data):
+        """Handle complete DCS sequence."""
+        content = parse_string_sequence(data, "dcs")
+        self.string_buffer = content
+        self._handle_dcs_dispatch()
+
+    def _handle_apc_complete(self, data):
+        """Handle complete APC sequence."""
+        # APC sequences are typically ignored by terminal emulators
+        pass
+
+    def _handle_pm_complete(self, data):
+        """Handle complete PM sequence."""
+        # PM sequences are typically ignored by terminal emulators
+        pass
+
+    def _handle_sos_complete(self, data):
+        """Handle complete SOS sequence."""
+        # SOS sequences are typically ignored by terminal emulators
+        pass
+
+    def _handle_ss3(self, data):
+        """Handle SS3 sequence - keypad or charset shift based on mode."""
+        if len(data) == 2:  # ESC O only - charset single shift
+            # Single shift 3 for next character
+            self.terminal.single_shift_3()
+        elif len(data) >= 3:  # ESC O x - application keypad sequence
+            seq_char = data[2]
+            # Handle application keypad sequences
+            if seq_char == "A":  # Cursor Up
+                self.terminal.respond("\033OA")
+            elif seq_char == "B":  # Cursor Down
+                self.terminal.respond("\033OB")
+            elif seq_char == "C":  # Cursor Right
+                self.terminal.respond("\033OC")
+            elif seq_char == "D":  # Cursor Left
+                self.terminal.respond("\033OD")
+            # Add more keypad sequences as needed
             else:
-                logger.debug(f"Invalid CSI character: {char!r}")
-                self.current_state = constants.GROUND
+                logger.debug(f"Unknown SS3 sequence: {data!r}")
+
+    def _handle_escape_complete(self, data):
+        """Handle complete escape sequence."""
+        if len(data) < 2:
             return
 
-        logger.debug(f"Invalid CSI character: {char!r}")
-        self.current_state = constants.GROUND
+        seq_char = data[1]  # Character after ESC
+
+        # Simple ESC sequences
+        if seq_char == "c":  # RIS (Reset in State)
+            self._reset_terminal()
+        elif seq_char == "D":  # IND (Index)
+            self.terminal.line_feed()
+        elif seq_char == "M":  # RI (Reverse Index)
+            if self.terminal.cursor_y <= self.terminal.scroll_top:
+                self.terminal.scroll(-1)
+            else:
+                self.terminal.cursor_y -= 1
+        elif seq_char == "7":  # DECSC (Save Cursor)
+            self.terminal.save_cursor()
+        elif seq_char == "8":  # DECRC (Restore Cursor)
+            self.terminal.restore_cursor()
+        elif seq_char == "=":  # DECKPAM (Application Keypad)
+            self.terminal.set_mode(constants.DECKPAM_APPLICATION_KEYPAD, True)
+            self.terminal.numeric_keypad = False
+            self.update_tokenizer()  # Update SS3 pattern
+        elif seq_char == ">":  # DECKPNM (Numeric Keypad)
+            self.terminal.set_mode(constants.DECKPAM_APPLICATION_KEYPAD, False)
+            self.terminal.numeric_keypad = True
+            self.update_tokenizer()  # Update SS3 pattern
+        elif seq_char == "\\":  # ST (String Terminator)
+            pass  # Already handled by complete sequence patterns
+        elif seq_char == "N":  # SS2 (Single Shift 2)
+            self.terminal.single_shift_2()
+        elif seq_char == "O":  # SS3 (Single Shift 3)
+            self.terminal.single_shift_3()
+        else:
+            logger.debug(f"Unknown escape sequence: ESC {seq_char!r}")
+
+    def _handle_charset_escape(self, data):
+        """Handle charset designation escape sequences like ESC(B."""
+        if len(data) < 3:
+            return
+
+        designator = data[1]  # (, ), *, or +
+        charset = data[2]  # A, B, 0, etc.
+
+        if designator == "(":
+            self.terminal.set_g0_charset(charset)
+        elif designator == ")":
+            self.terminal.set_g1_charset(charset)
+        elif designator == "*":
+            self.terminal.set_g2_charset(charset)
+        elif designator == "+":
+            self.terminal.set_g3_charset(charset)
+
+    def _handle_unknown_escape(self, data):
+        """Handle unknown escape sequences."""
+        logger.debug(f"Unknown escape sequence: {data!r}")
 
     def reset(self) -> None:
         """
-        Resets the parser to its initial ground state.
-        """
-        self._clear()
-        self.current_state = constants.GROUND
-
-    # --- State Buffer and Parameter Handling Methods ---
-
-    def _clear(self) -> None:
-        """
-        Clears all temporary buffers used for parsing sequences.
-
-        This is called when entering a new escape sequence (ESC, CSI, OSC, etc.)
-        to ensure old parameter or intermediate data is discarded.
+        Resets the parser to its initial state.
         """
         self.intermediate_chars.clear()
-        self.param_buffer = ""
+        self.parsed_params.clear()
+        self.string_buffer = ""
+        self.buffer = ""
+        self.pos = 0
+        self.mode = None
+        self.seq_start = 0
+
+    # Legacy methods for test compatibility - will be removed once tests are updated
+    def _clear(self) -> None:
+        """Clears temporary buffers (legacy method for tests)."""
+        self.intermediate_chars.clear()
         self.parsed_params.clear()
         self.string_buffer = ""
 
-    def _collect_intermediate(self, char: str) -> None:
-        """
-        Collects an intermediate character for an escape sequence.
-
-        In a sequence like `CSI ? 25 h`, the '?' is an intermediate character.
-        This method appends it to an internal buffer.
-        """
-        self.intermediate_chars.append(char)
-
-    def _collect_parameter(self, char: str) -> None:
-        """
-        Collects a parameter character for a sequence.
-
-        This collects characters like '3', '8', ';', '5' from a parameter
-        string like "38;5;21". The `_split_params` method will later parse this.
-        """
-        self.param_buffer += char
-
     def _split_params(self, param_string: str) -> None:
-        """
-        Parses parameter string like "1;2;3" or "38;5;196" into integers.
-
-        Handles empty parameters and sub-parameters (takes only the first part before ':').
-        """
+        """Parse parameter string (legacy method for tests)."""
         self.parsed_params.clear()
         if not param_string:
             return
@@ -290,6 +488,12 @@ class Parser:
             except ValueError:
                 self.parsed_params.append(0)
 
+    def _reset_terminal(self) -> None:
+        """Reset terminal to initial state."""
+        self.terminal.clear_screen(constants.ERASE_ALL)
+        self.terminal.set_cursor(0, 0)
+        self.terminal.current_ansi_code = ""
+
     def _get_param(self, index: int, default: int) -> int:
         """
         Gets a numeric parameter from the parsed list, with a default value.
@@ -298,44 +502,6 @@ class Parser:
             param = self.parsed_params[index]
             return param if param is not None else default
         return default
-
-    # --- Escape (ESC) Sequence Dispatchers ---
-
-    def _esc_dispatch(self, final_char: str) -> None:
-        """
-        Handles an ESC-based escape sequence (ones that do not start with CSI).
-
-        This is a top-level dispatcher that will look up the sequence in a
-        dispatch table and call the appropriate handler method.
-
-        Relevant constants (`enum input_esc_type`):
-        - `DECSC`: Save cursor position and attributes.
-        - `DECRC`: Restore saved cursor position and attributes.
-        - `DECKPAM`: Enter keypad application mode.
-        - `DECKPNM`: Exit keypad numeric mode.
-        - `RIS`: Hard reset to initial state.
-        - `IND`: Index (move cursor down one line).
-        - `NEL`: Next Line (equivalent to CR+LF).
-        - `HTS`: Set a horizontal tab stop at the current cursor column.
-        - `RI`: Reverse Index (move cursor up one line, scrolling if needed).
-        - `SCSG0_ON`, `SCSG1_ON`: Designate G0/G1 charsets as ACS line drawing.
-        - `SCSG0_OFF`, `SCSG1_OFF`: Designate G0/G1 charsets as ASCII.
-        - `DECALN`: Screen alignment test (fills screen with 'E').
-        """
-        if final_char == "c":  # RIS (Reset in State)
-            self._reset_terminal()
-        elif final_char == "D":  # IND (Index)
-            self.terminal.line_feed()
-        elif final_char == "M":  # RI (Reverse Index)
-            if self.terminal.cursor_y <= self.terminal.scroll_top:
-                self.terminal.scroll(-1)
-            else:
-                self.terminal.cursor_y -= 1
-        elif final_char == "7":  # DECSC (Save Cursor)
-            self.terminal.save_cursor()
-        elif final_char == "8":  # DECRC (Restore Cursor)
-            self.terminal.restore_cursor()
-        # Add more ESC sequences as needed
 
     # --- Control Sequence Introducer (CSI) Dispatchers ---
 
@@ -362,8 +528,7 @@ class Parser:
         - `REP`: Repeat the preceding character N times.
         - `DECSCUSR`: Set cursor style (block, underline, bar).
         """
-        # Parse parameters
-        self._split_params(self.param_buffer)
+        # Parameters are already parsed by _handle_csi_complete and stored in self.parsed_params
 
         # Handle common CSI sequences
         if final_char == "H" or final_char == "f":  # CUP - Cursor Position
@@ -425,8 +590,9 @@ class Parser:
             if ">" in self.intermediate_chars:
                 # This is a malformed sequence - device attributes should end with 'c', not 'm'
                 # Likely from vim's terminal emulation leaking sequences
+                params_str = ";".join(str(p) for p in self.parsed_params)
                 logger.debug(
-                    f"Ignoring malformed device attributes sequence: ESC[{';'.join(self.intermediate_chars)}{self.param_buffer}m"
+                    f"Ignoring malformed device attributes sequence: ESC[{';'.join(self.intermediate_chars)}{params_str}m"
                 )
                 return
             self._csi_dispatch_sgr()
@@ -491,8 +657,9 @@ class Parser:
             self._handle_device_attributes()
         else:
             # Unknown CSI sequence, log it
-            params_str = self.param_buffer if self.param_buffer else "<no params>"
-            logger.debug(f"Unknown CSI sequence: ESC[{params_str}{final_char}")
+            params_str = ";".join(str(p) for p in self.parsed_params) if self.parsed_params else "<no params>"
+            intermediates_str = "".join(self.intermediate_chars)
+            logger.debug(f"Unknown CSI sequence: ESC[{intermediates_str}{params_str}{final_char}")
 
     def _csi_dispatch_sm_rm_private(self, set_mode: bool) -> None:
         """
@@ -514,6 +681,8 @@ class Parser:
                 self.terminal.scroll_mode = set_mode
             elif param == constants.DECAWM_AUTOWRAP:
                 self.terminal.auto_wrap = set_mode
+            elif param == constants.DECNLM_LINEFEED_NEWLINE:
+                self.terminal.linefeed_newline_mode = set_mode
             elif param == constants.DECTCEM_SHOW_CURSOR:
                 self.terminal.cursor_visible = set_mode
             elif param == constants.ALT_SCREEN_BUFFER_OLDER:

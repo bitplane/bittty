@@ -96,6 +96,7 @@ class Terminal:
         self.numeric_keypad = True  # DECNKM: True = numeric mode, False = application mode
         self.local_echo = True  # SRM: True = echo enabled, False = echo disabled
         self.reverse_screen = False  # DECSCNM: False = normal, True = reverse video
+        self.linefeed_newline_mode = False  # DECNLM: False = LF only, True = CR+LF
         self.origin_mode = False  # DECOM: False = absolute, True = relative to scroll region
         self.auto_resize_mode = False  # DECARSM: False = manual, True = auto-resize
         self.keyboard_usage_mode = False  # DECKBUM: False = normal, True = typewriter mode
@@ -285,7 +286,7 @@ class Terminal:
             self.cursor_y = max(0, min(y, self.height - 1))
 
     def line_feed(self, is_wrapped: bool = False) -> None:
-        """Perform line feed."""
+        """Perform line feed, with optional carriage return if DECNLM is enabled."""
         if self.cursor_y == self.scroll_bottom:
             # At bottom of scroll region - scroll up
             self.scroll(1)
@@ -293,6 +294,10 @@ class Terminal:
             # Not at bottom yet - move cursor down
             self.cursor_y += 1
         # If cursor is somehow beyond scroll_bottom, don't move it further
+
+        # DECNLM: When enabled, line feed also performs carriage return
+        if self.linefeed_newline_mode:
+            self.cursor_x = 0
 
     def carriage_return(self) -> None:
         """Move cursor to beginning of line."""

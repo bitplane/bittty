@@ -1,9 +1,27 @@
 """Shared fixtures for parser tests."""
 
 import pytest
+import io
 from bittty.parser import Parser
 from bittty.terminal import Terminal
 from bittty.constants import DEFAULT_TERMINAL_WIDTH, DEFAULT_TERMINAL_HEIGHT
+
+
+@pytest.fixture
+def terminal():
+    """Create a real Terminal with stdio streams for integration testing."""
+    # Use StringIO streams for testing - Terminal creates StdioPTY internally
+    stdin = io.StringIO()
+    stdout = io.StringIO()
+
+    term = Terminal(width=80, height=24, stdin=stdin, stdout=stdout)
+    return term
+
+
+@pytest.fixture
+def parser(terminal):
+    """Create a Parser attached to a real Terminal."""
+    return Parser(terminal)
 
 
 @pytest.fixture

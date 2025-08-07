@@ -1,43 +1,16 @@
-import pytest
-from unittest.mock import Mock, call
-from bittty.parser import Parser
-from bittty.terminal import Terminal
-
-
-@pytest.fixture
-def terminal():
-    """Return a mock Screen object."""
-    terminal = Mock(spec=Terminal)
-    terminal.current_style = Mock()
-    terminal.current_ansi_code = ""
-    return terminal
-
-
-def test_printable_characters(terminal):
+def test_printable_characters(parser, terminal):
     """Test that printable characters are written to the terminal."""
-    parser = Parser(terminal)
     parser.feed("Hello, World!")
 
-    calls = [
-        call("H", terminal.current_ansi_code),
-        call("e", terminal.current_ansi_code),
-        call("l", terminal.current_ansi_code),
-        call("l", terminal.current_ansi_code),
-        call("o", terminal.current_ansi_code),
-        call(",", terminal.current_ansi_code),
-        call(" ", terminal.current_ansi_code),
-        call("W", terminal.current_ansi_code),
-        call("o", terminal.current_ansi_code),
-        call("r", terminal.current_ansi_code),
-        call("l", terminal.current_ansi_code),
-        call("d", terminal.current_ansi_code),
-        call("!", terminal.current_ansi_code),
-    ]
-    terminal.write_text.assert_has_calls(calls)
+    # Check that the text appears in the terminal buffer
+    line_text = terminal.current_buffer.get_line_text(0)
+    assert "Hello, World!" in line_text
 
 
-def test_empty_feed(terminal):
+def test_empty_feed(parser, terminal):
     """Test that feeding empty bytes doesn't break the parser."""
-    parser = Parser(terminal)
     parser.feed("")
-    terminal.write_text.assert_not_called()
+
+    # Buffer should remain empty
+    line_text = terminal.current_buffer.get_line_text(0)
+    assert line_text.strip() == ""

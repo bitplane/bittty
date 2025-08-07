@@ -1,7 +1,7 @@
 [project]
 name = "bittty"
 description = "a pure python tty"
-version = "0.1.0"
+version = "0.0.7"
 authors = [
     { name = "Gareth Davidson", email = "gaz@bitplane.net" }
 ]
@@ -9,7 +9,7 @@ readme = "README.md"
 requires-python = ">=3.10"
 
 dependencies = [
-
+    "pywinpty>=2.0.15; sys_platform == 'win32'",
 ]
 
 [project.optional-dependencies]
