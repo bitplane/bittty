@@ -1,7 +1,7 @@
 [project]
 name = "bittty"
 description = "a pure python tty"
-version = "0.0.7"
+version = "0.0.8"
 authors = [
     { name = "Gareth Davidson", email = "gaz@bitplane.net" }
 ]
