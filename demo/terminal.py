@@ -201,7 +201,7 @@ class StdoutFrontend:
 
             # Main loop - just wait for process to exit
             while self.running:
-                await asyncio.sleep(0.1)
+                await asyncio.sleep(0.01)  # Check more frequently
 
                 # Check if shell process has exited
                 if self.terminal.process and self.terminal.process.poll() is not None:
@@ -212,7 +212,12 @@ class StdoutFrontend:
                     self.running = False
                     break
 
+            # Cancel input task immediately when process exits
             input_task.cancel()
+            try:
+                await input_task
+            except asyncio.CancelledError:
+                pass
 
         except KeyboardInterrupt:
             pass
