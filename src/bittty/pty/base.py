@@ -15,6 +15,11 @@ from .. import constants
 ENV = {"TERM": "xterm-256color"}
 
 
+def high_bits(byte: int) -> int:
+    """how many bits are set on the right side of this byte?"""
+    return 8 - ((~byte & 0xFF).bit_length())
+
+
 class PTY:
     """
     A generic PTY that lacks OS integration.
@@ -58,21 +63,36 @@ class PTY:
 
     def read(self, size: int = constants.DEFAULT_PTY_BUFFER_SIZE) -> str:
         """Read data with UTF-8 buffering."""
-        raw_data = self.read_bytes(size)
-        if not raw_data:
-            return ""
+        new_data = self.read_bytes(size)
 
         # deal with split UTF8 sequences
-        raw_data = self._buffer + raw_data
-        utf8_split = len(raw_data) - 1
-        while 0 <= utf8_split < (len(raw_data) - 4) and (raw_data[utf8_split] & 0x80):
-            utf8_split -= 1
+        data = self._buffer + new_data
+        self._buffer = b""
 
-        self._buffer = raw_data[utf8_split:]
-        raw_data = raw_data[:utf8_split]
+        if not new_data:
+            return data.decode("utf-8", errors="replace")
 
-        text = raw_data.decode("utf-8", errors="replace")
-        return text
+        end = len(data)
+
+        # Check if last few bytes form valid UTF-8 sequence endings
+        u1 = 0, high_bits(data[-1])  # Last byte: ASCII only
+        u2 = 2, high_bits(data[-2]) if end > 1 else 0  # 2nd to last: ASCII or 2-byte start
+        u3 = 3, high_bits(data[-3]) if end > 2 else 0  # 3rd to last: ASCII or 3-byte start
+
+        for pos, (allowed, actual) in enumerate((u1, u2, u3)):
+            if actual in (0, allowed):
+                # Valid position - sequence is complete
+                break
+            elif actual != 1:
+                # Not a continuation byte and not valid - split here
+                end = end - pos - 1
+                break
+            # actual == 1 means continuation byte, keep checking
+
+        self._buffer = data[end:]
+        data = data[:end]
+
+        return data.decode("utf-8", errors="replace")
 
     def write(self, data: str) -> int:
         """Write string as UTF-8 bytes."""
