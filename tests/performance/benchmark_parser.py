@@ -2,8 +2,10 @@
 """Benchmark script to compare parser performance."""
 
 import cProfile
+import csv
 import gzip
 import shutil
+import statistics
 import subprocess
 import sys
 import tempfile
@@ -75,6 +77,34 @@ def benchmark_parser(ansi_content: str, runs: int = 5, temp_profile_path: str = 
         times.append(elapsed)
 
     return times, profile_filename
+
+
+def update_runs_csv(csv_path: Path, run_data: dict):
+    """Update runs.csv with new benchmark data, using atomic write."""
+    fieldnames = [
+        "run_ts", "branch", "test_case", "time_min", "runs", 
+        "time_mean", "time_median", "time_max", "dir_path"
+    ]
+    
+    # Read existing data
+    existing_rows = []
+    if csv_path.exists():
+        with open(csv_path, "r", newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            existing_rows = list(reader)
+    
+    # Add new row
+    existing_rows.append(run_data)
+    
+    # Write atomically via temp file
+    temp_path = csv_path.with_suffix(".csv.tmp")
+    with open(temp_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(existing_rows)
+    
+    # Atomic rename
+    temp_path.rename(csv_path)
 
 
 def main():
@@ -200,6 +230,21 @@ stats.sort_stats('tottime').print_stats(20)
                 f.write(f"Profile data saved to: {profile_path}\n")
                 f.write(f"Error generating text report: {e}\n")
                 f.write("Use: python -c \"import pstats; pstats.Stats('profile.prof').print_stats()\"\n")
+
+        # Update CSV database
+        csv_path = perf_base_dir / "runs.csv"
+        run_data = {
+            "run_ts": datetime.now().isoformat(),
+            "branch": branch_name,
+            "test_case": test_case,
+            "time_min": min(times),
+            "runs": num_runs,
+            "time_mean": statistics.mean(times),
+            "time_median": statistics.median(times),
+            "time_max": max(times),
+            "dir_path": str(run_dir.relative_to(perf_base_dir))
+        }
+        update_runs_csv(csv_path, run_data)
 
         # Show relative paths from project root
         rel_log = log_file_path.relative_to(project_root)
