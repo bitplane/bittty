@@ -4,18 +4,19 @@ Unix/Linux/macOS PTY implementation.
 
 import os
 import struct
-import fcntl
 import signal
 import asyncio
 import subprocess
 import logging
 
 try:
+    import fcntl
     import pty
     import termios
 except ImportError:
-    termios = None
+    pcntl = None
     pty = None
+    termios = None
 
 from .base import PTY, ENV
 from .. import constants
