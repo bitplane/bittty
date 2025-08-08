@@ -12,8 +12,6 @@ warn() { printf '%s%s%s\n' "$YELLOW" "$*" "$NC"; }
 err()  { printf '%s%s%s\n' "$RED" "$*" "$NC" >&2; }
 
 # --- Defaults / CLI parsing ---
-USE_WIP=0
-USE_WORKTREE=0
 MAKE_TARGET="perf"
 JOBS=""
 CPU_PIN=""
@@ -30,8 +28,6 @@ Options:
   -t PATTERN       Include tags matching regex (repeatable). Default: all tags.
   -b PATTERN       Include branches matching regex (repeatable). Default: all branches (excl current).
   -x PATTERN       Exclude refs matching regex (repeatable).
-  --use-wip        Use performance tools from the current working tree (uncommitted OK).
-  --worktree       Use 'git worktree' inside the temp clone (faster checkouts).
   --make-target T  Make target to run (default: perf).
   -j N             Set MAKEFLAGS=-jN.
   --cpu N          Pin to CPU core N with taskset (optional).
@@ -40,8 +36,8 @@ Examples:
   # Only tags v1.* and release branches, exclude rc:
   $0 -t '^v1\\.' -b '^release/' -x 'rc'
 
-  # Use working-tree tools and 8-way make:
-  $0 --use-wip -j 8
+  # Use 8-way make:
+  $0 -j 8
 EOF
 }
 
@@ -51,8 +47,6 @@ while (( $# )); do
     -t) tag_includes+=("$2"); shift 2 ;;
     -b) branch_includes+=("$2"); shift 2 ;;
     -x) excludes+=("$2"); shift 2 ;;
-    --use-wip) USE_WIP=1; shift ;;
-    --worktree) USE_WORKTREE=1; shift ;;
     --make-target) MAKE_TARGET="$2"; shift 2 ;;
     -j) JOBS="$2"; shift 2 ;;
     --cpu) CPU_PIN="$2"; shift 2 ;;
@@ -126,7 +120,19 @@ info "Starting…"
 
 (
   tmpdir=$(mktemp -d)
-  trap 'rm -rf "$tmpdir"' EXIT
+
+  # Cleanup function to restore original venv
+  cleanup() {
+    info "Restoring original version…"
+    if (cd "$original_repo" && source .venv/bin/activate && touch pyproject.toml && make dev >/dev/null 2>&1); then
+      ok "Original version restored"
+    else
+      warn "Failed to restore original version"
+    fi
+    rm -rf "$tmpdir"
+  }
+
+  trap cleanup EXIT
   warn "Working in: $tmpdir"
 
   # Clone repository
@@ -137,51 +143,7 @@ info "Starting…"
 
   git config advice.detachedHead false
 
-  # Install dependencies first (while on master/main branch)
-  say "Installing dependencies with make dev…"
-  if ! make dev >/dev/null 2>&1; then
-    warn "make dev failed, continuing anyway…"
-  fi
-
-  # Ensure original logs directory exists
-  mkdir -p "$original_repo/logs"
-
-  # Decide where to source perf tools from
-  src_ref=""
-  if (( ! USE_WIP )); then
-    if git rev-parse --verify --quiet "refs/heads/$original_branch"; then
-      src_ref="$original_branch"
-    fi
-  fi
-
-  copy_perf_tools() {
-    # Clean up old test files first
-    rm -rf tests/performance/ 2>/dev/null || true
-
-    if [[ -n "$src_ref" ]]; then
-      # From branch in the clone
-      git checkout "$src_ref" -- tests/performance/ 2>/dev/null || true
-      git checkout "$src_ref" -- Makefile 2>/dev/null || true
-    else
-      # From original working tree - use find and cp
-      mkdir -p tests/performance
-      if [[ -d "$original_repo/tests/performance" ]]; then
-        find "$original_repo/tests/performance" -type f | while IFS= read -r file; do
-          rel="${file#"$original_repo"/tests/performance/}"
-          tgt="tests/performance/$rel"
-          mkdir -p "$(dirname "$tgt")"
-          cp "$file" "$tgt" || true
-        done
-      fi
-      if [[ -f "$original_repo/Makefile" ]]; then
-        cp -f "$original_repo/Makefile" ./ 2>/dev/null || true
-      fi
-    fi
-
-    # Setup logs symlink for each run
-    rm -rf logs 2>/dev/null || true
-    ln -s "$original_repo/logs" logs
-  }
+  # We'll install each version into our original venv and run perf from there
 
   # Sanitize ref for branch names/paths
   safe_name() { printf '%s' "$1" | sed 's|[^a-zA-Z0-9._/-]|_|g'; }
@@ -192,70 +154,43 @@ info "Starting…"
     "${cmd[@]}"
   }
 
-  test_version_checkout_branch() {
+  install_and_benchmark() {
     local ref="$1" kind="$2"
-    local safe; safe=$(safe_name "$ref")
-    local perf_branch="perf/${safe}"
+    local sha; sha=$(git rev-parse --short "$ref")
 
-    if git show-ref --verify --quiet "refs/heads/$perf_branch"; then
-      say "Switching to existing branch $perf_branch"
-      git checkout "$perf_branch" >/dev/null
-    else
-      git checkout "$ref" >/dev/null
-      git checkout -b "$perf_branch" >/dev/null
-    fi
-
-    copy_perf_tools
-
-    local sha; sha=$(git rev-parse --short HEAD)
     say ""
-    info "Benchmarking $kind: $ref ($sha)…"
-    if run_make; then
-      ok "✓ Complete: $ref"
-      # Stash any changes (including new files) then drop the stash
-      git add -A 2>/dev/null || true
-      git stash push -m "temp perf files" >/dev/null 2>&1 || true
-      git stash drop >/dev/null 2>&1 || true
-    else
-      err "✗ Failed: $ref"
-      # Clean up on failure too
-      git add -A 2>/dev/null || true
-      git stash push -m "temp perf files" >/dev/null 2>&1 || true
-      git stash drop >/dev/null 2>&1 || true
-    fi
-    say ""
-  }
+    info "Installing $kind: $ref ($sha)…"
 
-  test_version_worktree() {
-    local ref="$1" kind="$2"
-    local sha dir
-    sha=$(git rev-parse --short "$ref")
-    dir="$tmpdir/repo-wt/$(safe_name "$ref")"
-    mkdir -p "$(dirname "$dir")"
-    git worktree add --detach "$dir" "$ref" >/dev/null
-    (
-      cd "$dir"
-      copy_perf_tools
+    # Check out the version
+    git checkout "$ref" >/dev/null 2>&1 || {
+      err "✗ Failed to checkout $ref"
+      return 1
+    }
+
+    # Get commit date for this specific version
+    local commit_date; commit_date=$(git log -1 --format='%cI' HEAD)
+
+    # Install this version into our venv and run benchmark from our directory
+    if (cd "$original_repo" && source .venv/bin/activate && pip install -e "$tmpdir/repo" >/dev/null 2>&1); then
       info "Benchmarking $kind: $ref ($sha)…"
-      if run_make; then ok "✓ Complete: $ref"; else err "✗ Failed: $ref"; fi
-      say ""
-    )
-    git worktree remove --force "$dir" >/dev/null
+      if (cd "$original_repo" && source .venv/bin/activate && scripts/perf.sh "$ref" "$commit_date" >/dev/null 2>&1); then
+        ok "✓ Complete: $ref"
+      else
+        err "✗ Benchmark failed: $ref"
+      fi
+    else
+      err "✗ Install failed: $ref"
+    fi
+
+    # Go back to tmpdir for next iteration
+    cd "$tmpdir/repo"
   }
 
-  test_version() {
-    local ref="$1" kind="$2"
-    if (( USE_WORKTREE )); then
-      test_version_worktree "$ref" "$kind"
-    else
-      test_version_checkout_branch "$ref" "$kind"
-    fi
-  }
 
   # Process tags
   if [[ -n "$tags" ]]; then
     for tag in $tags; do
-      test_version "$tag" "tag"
+      install_and_benchmark "$tag" "tag"
     done
   fi
 
@@ -263,11 +198,22 @@ info "Starting…"
   if [[ -n "$branches" ]]; then
     for br in $branches; do
       [[ "$br" == "$original_branch" ]] && continue
-      test_version "$br" "branch"
+      install_and_benchmark "$br" "branch"
     done
   fi
 
+  # Reinstall our original version
+  cd "$original_repo"
+  info "Reinstalling original version…"
+  if source .venv/bin/activate && touch pyproject.toml && make dev >/dev/null 2>&1; then
+    ok "Original version restored"
+  else
+    warn "Failed to restore original version"
+  fi
+
+  # Debug: check git state before cleanup
+  info "Final git state: $(git rev-parse --short HEAD 2>/dev/null || echo 'UNKNOWN')"
   ok "Performance comparison complete."
 )
 
-warn "See: logs/perf/ (including logs/perf/runs.csv) for results."
+warn "See: logs/perf/parser/ (including logs/perf/parser/runs.csv) for results."

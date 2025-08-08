@@ -18,10 +18,9 @@ test: .venv/.installed-dev  ## run the project's tests
 coverage: .venv/.installed-dev scripts/coverage.sh  ## build the html coverage report
 	scripts/coverage.sh $(PROJECT_NAME)
 
-perf: .venv/.installed-dev  ## run performance benchmark and generate profile
-	@echo "Running performance benchmark for branch: $$(git branch --show-current)"
-	@PYTHONPATH=src python tests/performance/benchmark_parser.py
-	@if [ -f logs/perf/combined.txt ]; then cat logs/perf/combined.txt; fi
+perf: .venv/.installed-dev scripts/perf.sh  ## run performance benchmark and generate profile
+	@scripts/perf.sh
+	@if [ -f logs/perf/parser/combined.txt ]; then cat logs/perf/parser/combined.txt; fi
 
 docs: .venv/.installed-dev scripts/docs.sh docs/index.md README.md pyproject.toml ## build the documentation
 	scripts/docs.sh

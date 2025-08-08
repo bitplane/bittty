@@ -1,1 +1,1 @@
-disable=SC1091 # don't follow .venv/bin/activate
+disable=SC1091,SC2317

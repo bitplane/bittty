@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """Benchmark script to compare parser performance."""
 
+import argparse
 import cProfile
 import csv
 import gzip
+import os
 import shutil
 import statistics
 import subprocess
@@ -34,6 +36,10 @@ def get_git_commit_hash() -> str:
 
 def get_git_commit_date() -> str:
     """Get commit date in ISO8601 format."""
+    # Use environment variable if provided (for compare script)
+    if "COMMIT_DATE" in os.environ:
+        return os.environ["COMMIT_DATE"]
+
     try:
         return subprocess.check_output(["git", "show", "-s", "--format=%cI", "HEAD"]).decode("ascii").strip()
     except Exception:
@@ -295,11 +301,18 @@ def generate_combined_chart(test_cases: dict, perf_base_dir: Path):
 def main():
     """Main function to run the benchmark."""
 
-    num_runs = 5
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="Benchmark bittty parser performance")
+    parser.add_argument("--run-name", help="Run name for this benchmark")
+    parser.add_argument("--timestamp", help="Timestamp for this benchmark (default: current time)")
+    parser.add_argument("--run-count", type=int, default=5, help="Number of benchmark runs (default: 5)")
+    args = parser.parse_args()
 
-    # Use project root logs/perf directory structure
+    num_runs = args.run_count
+
+    # Use project root logs/perf/parser directory structure
     project_root = Path(__file__).parent.parent.parent
-    perf_base_dir = project_root / "logs" / "perf"
+    perf_base_dir = project_root / "logs" / "perf" / "parser"
     perf_base_dir.mkdir(parents=True, exist_ok=True)
 
     # Test cases relative to this script in tests/ subdirectory
@@ -311,8 +324,9 @@ def main():
         print("Error: No *.ansi.gz files found in the tests directory.", file=sys.stderr)
         return 1
 
-    commit_hash = get_git_commit_hash()
-    branch_name = get_git_branch_name()
+    # Get run name and timestamp
+    run_name = args.run_name or "benchmark"
+    timestamp = args.timestamp or datetime.now().isoformat()
 
     for ansi_file in gzipped_files:
         # Extract test case name (remove .gz only)
@@ -322,7 +336,7 @@ def main():
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
 
         # Create directory structure: logs/perf/{branch}/{timestamp}/
-        run_dir = perf_base_dir / branch_name / timestamp
+        run_dir = perf_base_dir / run_name / timestamp
         run_dir.mkdir(parents=True, exist_ok=True)
 
         with gzip.open(ansi_file, "rt", encoding="utf-8") as f:
@@ -331,8 +345,8 @@ def main():
         report_lines = [
             f"Benchmark Report for: {ansi_file.name}",
             f"Test Case:            {test_case}",
-            f"Git Branch:           {branch_name}",
-            f"Git Commit Hash:      {commit_hash}",
+            f"Run Name:             {run_name}",
+            f"Timestamp:            {timestamp}",
             f"Timestamp:            {datetime.now().isoformat()}",
             f"File Size:            {len(ansi_content)} characters",
             f"Runs:                  {num_runs}",
@@ -357,8 +371,8 @@ def main():
         report = "\n".join(report_lines)
         print(report)
 
-        # Create descriptive filenames with branch and test case
-        branch_safe = branch_name.replace("/", "_")
+        # Create descriptive filenames with run name and test case
+        branch_safe = run_name.replace("/", "_")
         test_safe = test_case
 
         # Save to organized directory structure
@@ -384,9 +398,8 @@ import pstats
 stats = pstats.Stats('{profile_path}')
 print('Profile Report for: {ansi_file.name}')
 print('Test Case: {test_case}')
-print('Git Branch: {branch_name}')
-print('Git Commit Hash: {commit_hash}')
-print('Timestamp: {datetime.now().isoformat()}')
+print(f'Run Name: {run_name}')
+print(f'Timestamp: {timestamp}')
 print('=' * 80)
 print()
 print('TOP 30 FUNCTIONS BY CUMULATIVE TIME:')
@@ -408,9 +421,8 @@ stats.sort_stats('tottime').print_stats(20)
             with open(profile_txt_path, "w", encoding="utf-8") as f:
                 f.write(f"Profile Report for: {ansi_file.name}\n")
                 f.write(f"Test Case: {test_case}\n")
-                f.write(f"Git Branch: {branch_name}\n")
-                f.write(f"Git Commit Hash: {commit_hash}\n")
-                f.write(f"Timestamp: {datetime.now().isoformat()}\n")
+                f.write(f"Run Name: {run_name}\n")
+                f.write(f"Timestamp: {timestamp}\n")
                 f.write("=" * 80 + "\n\n")
                 f.write(f"Profile data saved to: {profile_path}\n")
                 f.write(f"Error generating text report: {e}\n")
@@ -420,8 +432,8 @@ stats.sort_stats('tottime').print_stats(20)
         csv_path = perf_base_dir / "runs.csv"
         run_data = {
             "run_ts": datetime.now().isoformat(),
-            "commit_date": get_git_commit_date(),
-            "branch": branch_name,
+            "commit_date": timestamp,
+            "branch": run_name,
             "test_case": test_case,
             "time_min": min(times),
             "runs": num_runs,
