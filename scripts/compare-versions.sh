@@ -103,6 +103,7 @@ echo -e "${BLUE}Starting performance comparison...${NC}"
 
         # Copy current performance tools from original branch
         echo "Updating performance tools..."
+        rm -rf tests/performance/ 2>/dev/null || true
         git checkout "$original_branch" -- tests/performance/ 2>/dev/null || true
         git checkout "$original_branch" -- Makefile 2>/dev/null || true
 
@@ -148,7 +149,21 @@ echo -e "${BLUE}Starting performance comparison...${NC}"
     # Copy results back to original repository
     echo -e "${YELLOW}Copying results back to original repository...${NC}"
     if [[ -d "logs/perf" ]]; then
-        cp -r logs/perf/* "$original_repo/logs/perf/" 2>/dev/null || true
+        mkdir -p "$original_repo/logs/perf"
+
+        # Copy all files and directories, creating parent dirs as needed
+        find logs/perf -type f | while IFS= read -r file; do
+            # Get relative path from logs/perf
+            rel_path="${file#logs/perf/}"
+            target_file="$original_repo/logs/perf/$rel_path"
+            target_dir=$(dirname "$target_file")
+
+            # Create target directory if it doesn't exist
+            mkdir -p "$target_dir"
+
+            # Copy the file
+            cp "$file" "$target_file" || true
+        done
     fi
 
     echo -e "${GREEN}Performance comparison complete!${NC}"
