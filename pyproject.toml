@@ -37,3 +37,11 @@ target-version = "py310"
 
 [tool.ruff.format]
 docstring-code-format = true
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "unix: marks tests as Unix/Linux/macOS only",
+    "windows: marks tests as Windows only",
+    "integration: marks tests as integration tests (require real PTY)",
+]

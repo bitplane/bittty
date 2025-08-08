@@ -18,6 +18,36 @@ from .. import constants
 logger = logging.getLogger(__name__)
 
 
+class WinptyFileWrapper:
+    """File-like wrapper for winpty.PTY to work with base PTY class."""
+
+    def __init__(self, winpty_pty):
+        self.pty = winpty_pty
+
+    def read(self, size: int = -1) -> bytes:
+        """Read data as bytes."""
+        data = self.pty.read(size)  # Returns bytes
+        return data if data else b""
+
+    def write(self, data: bytes) -> int:
+        """Write bytes data."""
+        return self.pty.write(data)
+
+    def close(self) -> None:
+        """Close the PTY."""
+        # winpty doesn't have explicit close, process death handles it
+        pass
+
+    @property
+    def closed(self) -> bool:
+        """Check if closed."""
+        return not self.pty.isalive()
+
+    def flush(self) -> None:
+        """Flush - no-op for winpty."""
+        pass
+
+
 class WinptyProcessWrapper:
     """Wrapper to provide subprocess.Popen-like interface for winpty PTY."""
 
@@ -64,34 +94,18 @@ class WindowsPTY(PTY):
 
         self.pty = winpty.PTY(cols, rows)
 
-        super().__init__(self.pty, self.pty, rows, cols)
+        # Wrap winpty in file-like interface for base class
+        wrapper = WinptyFileWrapper(self.pty)
+        super().__init__(wrapper, wrapper, rows, cols)
 
     def resize(self, rows: int, cols: int) -> None:
         """Resize the terminal."""
         super().resize(rows, cols)
         self.pty.set_size(cols, rows)
 
-    def read_bytes(self, size: int) -> bytes:
-        """Read raw bytes from winpty."""
-        data = self.pty.read(size)  # Returns str
-        return data.encode("utf-8") if data else b""
-
-    def write_bytes(self, data: bytes) -> int:
-        """Write raw bytes to winpty."""
-        text = data.decode("utf-8", errors="replace")
-        return self.pty.write(text)
-
-    def read(self, size: int = constants.DEFAULT_PTY_BUFFER_SIZE) -> str:
-        """Read string directly from winpty (no UTF-8 truncation issues)."""
-        return self.pty.read(size) or ""
-
-    def write(self, data: str) -> int:
-        """Write string directly to winpty."""
-        return self.pty.write(data)
-
     def spawn_process(self, command: str, env: Optional[Dict[str, str]] = ENV) -> subprocess.Popen:
         """Spawn a process attached to this PTY."""
-        if self._closed:
+        if self.closed:
             raise OSError("PTY is closed")
 
         self.pty.spawn(command, env=env)

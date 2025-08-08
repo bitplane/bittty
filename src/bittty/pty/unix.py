@@ -32,8 +32,11 @@ class UnixPTY(PTY):
         flags = fcntl.fcntl(self.master_fd, fcntl.F_GETFL)
         fcntl.fcntl(self.master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
 
-        # Initialize base class with the master fd for both input and output
-        super().__init__(self.master_fd, self.master_fd, rows, cols)
+        # Create a single file object for both reading and writing
+        self.master_file = os.fdopen(self.master_fd, "rb+", buffering=0)
+
+        # Initialize base class with file object
+        super().__init__(self.master_file, self.master_file, rows, cols)
 
         self.resize(rows, cols)
 
@@ -49,7 +52,7 @@ class UnixPTY(PTY):
 
     def close(self) -> None:
         """Close the PTY file descriptors."""
-        if not self._closed:
+        if not self.closed:
             logger.info(f"Closing PTY: master_fd={self.master_fd}, slave_fd={self.slave_fd}")
 
             # Send SIGHUP to process group (like a shell would)
@@ -62,7 +65,7 @@ class UnixPTY(PTY):
 
             # Remove from asyncio event loop first
             try:
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
                 if self.master_fd and isinstance(self.master_fd, int):
                     loop.remove_reader(self.master_fd)
                     logger.info(f"Removed master_fd {self.master_fd} from event loop")
@@ -127,7 +130,7 @@ class UnixPTY(PTY):
         Uses loop.add_reader() with file descriptors for maximum efficiency on Unix.
         This is the most performant approach since Unix supports select/poll on PTY fds.
         """
-        if self._closed:
+        if self.closed:
             return ""
 
         loop = asyncio.get_running_loop()
@@ -146,7 +149,8 @@ class UnixPTY(PTY):
                 except OSError as e:
                     loop.remove_reader(self.master_fd)
                     if e.errno in (constants.EBADF, constants.EINVAL):
-                        self._closed = True
+                        # Mark as closed by closing the file
+                        self.master_file.close()
                     future.set_result("")
 
             loop.add_reader(self.master_fd, read_ready)
