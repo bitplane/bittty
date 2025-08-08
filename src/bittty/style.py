@@ -233,7 +233,7 @@ def merge_ansi_styles(base: str, new: str) -> str:
         Merged ANSI sequence
     """
     # Check for reset sequence first
-    if new and ("\x1b[0m" in new or "\x1b[00m" in new):
+    if new and ("\x1b[0m" in new or "\x1b[00m" in new or "\x1b[m" in new):
         # Reset overwrites everything
         return style_to_ansi(parse_sgr_sequence(new))
 

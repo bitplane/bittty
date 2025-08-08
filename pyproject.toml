@@ -1,7 +1,7 @@
 [project]
 name = "bittty"
 description = "a pure python tty"
-version = "0.0.7"
+version = "0.0.10"
 authors = [
     { name = "Gareth Davidson", email = "gaz@bitplane.net" }
 ]
@@ -19,10 +19,12 @@ dev = [
     "coverage",
     "pytest-cov",
     "pytest-asyncio",
+    "plotext",
     "build",
     "twine",
     "ruff",
-    "pydoc-markdown"
+    "pydoc-markdown",
+    "snakeviz"
 ]
 
 [build-system]
@@ -35,3 +37,11 @@ target-version = "py310"
 
 [tool.ruff.format]
 docstring-code-format = true
+
+[tool.pytest.ini_options]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "unix: marks tests as Unix/Linux/macOS only",
+    "windows: marks tests as Windows only",
+    "integration: marks tests as end-to-end integration tests (require demo app)",
+]

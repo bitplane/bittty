@@ -2,18 +2,54 @@
 Windows PTY implementation using pywinpty.
 """
 
-from __future__ import annotations
-
-import os
-import asyncio
 import subprocess
 import logging
+import time
 from typing import Optional, Dict
 
-from .base import PTYBase
+try:
+    import winpty
+except ImportError:
+    winpty = None
+
+from .base import PTY, ENV
 from .. import constants
 
 logger = logging.getLogger(__name__)
+
+
+class WinptyFileWrapper:
+    """File-like wrapper for winpty.PTY to work with base PTY class."""
+
+    def __init__(self, winpty_pty):
+        self.pty = winpty_pty
+
+    def read(self, size: int = -1) -> str:
+        """Read data as strings."""
+        data = self.pty.read(size)
+        return data or ""
+
+    def write(self, data: str) -> int:
+        """Write string data."""
+        return self.pty.write(data)
+
+    def close(self) -> None:
+        """Close the PTY."""
+        # winpty doesn't have explicit close, process death handles it
+        pass
+
+    @property
+    def closed(self) -> bool:
+        """Check if closed."""
+        try:
+            return not self.pty.isalive()
+        except Exception:
+            # If we can't check, assume it's not closed yet
+            return False
+
+    def flush(self) -> None:
+        """Flush - no-op for winpty."""
+        pass
 
 
 class WinptyProcessWrapper:
@@ -35,7 +71,6 @@ class WinptyProcessWrapper:
 
     def wait(self):
         """Wait for process to complete."""
-        import time
 
         while self.pty.isalive():
             time.sleep(constants.PTY_POLL_INTERVAL)
@@ -54,126 +89,59 @@ class WinptyProcessWrapper:
         return self._pid
 
 
-class WindowsPTY(PTYBase):
-    """Windows PTY implementation using pywinpty."""
+class WindowsPTY(PTY):
+    """Windows PTY implementation using pywinpty.
+
+    Note: This PTY operates in text mode - winpty handles UTF-8 internally.
+    The read/write methods work directly with strings for performance,
+    with bytes conversion only when needed for compatibility.
+    """
 
     def __init__(self, rows: int = constants.DEFAULT_TERMINAL_HEIGHT, cols: int = constants.DEFAULT_TERMINAL_WIDTH):
-        super().__init__(rows, cols)
-        try:
-            import winpty
-
-            self.winpty = winpty
-            self.pty = winpty.PTY(cols, rows)
-        except ImportError:
+        if not winpty:
             raise OSError("pywinpty not installed. Install with: pip install textual-terminal[windows]")
 
+        self._pty = winpty.PTY(cols, rows)
+
+        # Wrap winpty in file-like interface for base class
+        wrapper = WinptyFileWrapper(self._pty)
+        super().__init__(wrapper, wrapper, rows, cols)
+
     def read(self, size: int = constants.DEFAULT_PTY_BUFFER_SIZE) -> str:
-        """Read data from the PTY."""
-        if self._closed:
+        """Read data directly from winpty (text mode, no UTF-8 splitting needed)."""
+        if self.closed:
             return ""
-        try:
-            data = self.pty.read(size)
-            # winpty might return bytes or str, ensure we return str
-            if isinstance(data, bytes):
-                return data.decode("utf-8", errors="replace")
-            return data or ""
-        except Exception:
-            return ""
+        return self.from_process.read(size)
 
     def write(self, data: str) -> int:
-        """Write data to the PTY."""
-        if self._closed:
+        """Write string data directly to winpty (text mode)."""
+        if self.closed:
             return 0
-        try:
-            return self.pty.write(data)
-        except Exception:
-            return 0
+        return self.to_process.write(data)
 
     def resize(self, rows: int, cols: int) -> None:
         """Resize the terminal."""
-        self.rows = rows
-        self.cols = cols
-        if not self._closed:
-            try:
-                self.pty.set_size(cols, rows)
-            except Exception:
-                pass
+        super().resize(rows, cols)
+        self._pty.set_size(cols, rows)
 
-    def close(self) -> None:
-        """Close the PTY."""
-        if not self._closed:
-            try:
-                os.close(self.pty.fd)
-            except Exception:
-                pass
-            self._closed = True
-
-    def spawn_process(self, command: str, env: Optional[Dict[str, str]] = None) -> subprocess.Popen:
+    def spawn_process(self, command: str, env: Optional[Dict[str, str]] = ENV) -> subprocess.Popen:
         """Spawn a process attached to this PTY."""
-        if self._closed:
+        if self.closed:
             raise OSError("PTY is closed")
 
-        # Set environment variables for the process
+        # Convert env dict to winpty format: null-separated "KEY=VALUE" string
         if env:
+            env_strs = []
             for key, value in env.items():
-                os.environ[key] = value
-
-        # Add terminal environment variables
-        os.environ.update(
-            {
-                "TERM": "xterm-256color",
-                # Don't set LINES/COLUMNS - let process discover size via ioctl
-                # Setting these prevents ncurses from responding to SIGWINCH properly
-            }
-        )
-
-        # Use winpty to spawn the process attached to the PTY
-        # winpty.spawn expects a string, not bytes
-        if isinstance(command, str):
-            # For shell commands, use cmd.exe
-            if command.strip().startswith(("cmd", "powershell", "pwsh")):
-                spawn_command = command
-            else:
-                spawn_command = f'cmd.exe /c "{command}"'
+                env_strs.append(f"{key}={value}")
+            env_string = "\0".join(env_strs) + "\0"
         else:
-            # If command is a list, join it
-            spawn_command = " ".join(command) if isinstance(command, list) else str(command)
+            env_string = ""
 
-        self.pty.spawn(spawn_command)
+        self._pty.spawn(command, env=env_string)
 
         # Return a process-like object that provides compatibility with subprocess.Popen
-        process = WinptyProcessWrapper(self.pty)
+        process = WinptyProcessWrapper(self._pty)
         # Store process reference for cleanup
         self._process = process
         return process
-
-    def set_nonblocking(self) -> None:
-        """Set the PTY to non-blocking mode for async operations."""
-        # Windows PTYs handle non-blocking I/O differently
-        # pywinpty already provides non-blocking behavior
-        pass
-
-    async def read_async(self, size: int = constants.DEFAULT_PTY_BUFFER_SIZE) -> str:
-        """Async read from PTY. Returns empty string when no data available."""
-        if self._closed:
-            return ""
-
-        loop = asyncio.get_event_loop()
-        try:
-            data = await loop.run_in_executor(None, self.pty.read, size)
-            if isinstance(data, bytes):
-                return data.decode("utf-8", errors="replace")
-            return data or ""
-        except Exception:
-            return ""
-
-    def flush(self) -> None:
-        """Flush any buffered output."""
-        if self._closed:
-            return
-        try:
-            # Windows PTY doesn't need explicit flushing
-            # pywinpty handles this automatically
-            pass
-        except Exception:
-            pass

@@ -35,6 +35,8 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
 
 ## Recent changes
 
+* 🪟 tests run on Windows runner
+* 📉 added parser benchmarking and tui graphs
 * 🐌 use regex for parsing to speed things up a tad (~2x faster)
 * 📚 document half a billion DEC private modes we don't support
 * 🔙 DECLM - allow `\n` to act like `\r\n` so we don't have to rely on cooked
@@ -51,14 +53,13 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
   - [ ] make `framebuffer.py`
   - [ ] choose a display driver
 - [ ] performance improvements
-  - [x] parse with regex over large buffer sizes
-    - [ ] reconsider CSI end char approach
+  - [ ] reconsider CSI end char approach
   - [ ] line cache for outputs
-  - [ ] revisit colours
+  - [.] revisit colours / styles
 - [ ] scrollback buffer
   - [ ] implement `logloglog` for scrollback with wrapping
 - [ ] bugs
-  - [ ] corruption in stream - debug it
+  - [x] corruption in stream - debug it - utf8 split on boundary
   - [ ] scroll region: scroll up in `vim` corrupts outside scroll region
 - [ ] add terminal overlay visuals
   - [ ] bell flash effect
@@ -72,4 +73,4 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
   - [ ] record
   - [ ] list sequences + values
 - [ ] Document all the escape sequences
-  - [ ] build a terminal library
+  - [ ] collect books for a terminal library

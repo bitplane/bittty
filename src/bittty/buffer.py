@@ -20,8 +20,18 @@ class Buffer:
         """Initialize buffer with given dimensions."""
         self.width = width
         self.height = height
+
+        # Cache a default empty style to avoid creating new ones
+        self._empty_style = Style()
+
         # Initialize grid with empty cells (default style, space character)
-        self.grid: List[List[Cell]] = [[(Style(), " ") for _ in range(width)] for _ in range(height)]
+        self.grid: List[List[Cell]] = []
+        for _ in range(height):
+            self.grid.append(self._create_empty_row())
+
+    def _create_empty_row(self) -> List[Cell]:
+        """Create a row filled with empty cells, reusing the cached empty style."""
+        return [(self._empty_style, " ") for _ in range(self.width)]
 
     def get_content(self) -> List[List[Cell]]:
         """Get buffer content as a 2D grid."""
@@ -168,20 +178,67 @@ class Buffer:
             for x in range(0, min(cursor_x + 1, self.width)):
                 self.grid[y][x] = (style, " ")
         elif mode == constants.ERASE_ALL:
-            # Clear entire line
-            self.grid[y] = [(style, " ") for _ in range(self.width)]
+            # Clear entire line - use cached style if it's the default empty style
+            if style is self._empty_style:
+                self.grid[y] = self._create_empty_row()
+            else:
+                self.grid[y] = [(style, " ") for _ in range(self.width)]
 
     def scroll_up(self, count: int) -> None:
         """Scroll content up, removing top lines and adding blank lines at bottom."""
-        for _ in range(count):
-            self.grid.pop(0)
-            self.grid.append([(Style(), " ") for _ in range(self.width)])
+        count = min(count, len(self.grid))  # Clamp to available rows
+        if count <= 0:
+            return
+
+        # Bulk remove from top and bulk add to bottom
+        del self.grid[:count]
+        # Pre-create empty rows in bulk
+        empty_rows = [self._create_empty_row() for _ in range(count)]
+        self.grid.extend(empty_rows)
 
     def scroll_down(self, count: int) -> None:
         """Scroll content down, removing bottom lines and adding blank lines at top."""
-        for _ in range(count):
-            self.grid.pop()
-            self.grid.insert(0, [(Style(), " ") for _ in range(self.width)])
+        count = min(count, len(self.grid))  # Clamp to available rows
+        if count <= 0:
+            return
+
+        # Bulk remove from bottom and bulk add to top
+        del self.grid[-count:]
+        # Pre-create empty rows in bulk and insert at top
+        empty_rows = [self._create_empty_row() for _ in range(count)]
+        self.grid[:0] = empty_rows
+
+    def scroll_region_up(self, top: int, bottom: int, count: int) -> None:
+        """Scroll a specific region up by count lines. BLAZING FAST bulk operation!"""
+        if count <= 0 or top > bottom or bottom >= self.height:
+            return
+
+        # Clamp count to region size
+        region_height = bottom - top + 1
+        count = min(count, region_height)
+
+        # Bulk slice operations - move rows up within region
+        self.grid[top : bottom + 1 - count] = self.grid[top + count : bottom + 1]
+
+        # Fill bottom of region with empty rows
+        for i in range(bottom + 1 - count, bottom + 1):
+            self.grid[i] = self._create_empty_row()
+
+    def scroll_region_down(self, top: int, bottom: int, count: int) -> None:
+        """Scroll a specific region down by count lines. BLAZING FAST bulk operation!"""
+        if count <= 0 or top > bottom or bottom >= self.height:
+            return
+
+        # Clamp count to region size
+        region_height = bottom - top + 1
+        count = min(count, region_height)
+
+        # Bulk slice operations - move rows down within region
+        self.grid[top + count : bottom + 1] = self.grid[top : bottom + 1 - count]
+
+        # Fill top of region with empty rows
+        for i in range(top, top + count):
+            self.grid[i] = self._create_empty_row()
 
     def resize(self, width: int, height: int) -> None:
         """Resize buffer to new dimensions."""

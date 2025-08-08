@@ -1,5 +1,5 @@
 # the things that don't have output files or run every time
-.PHONY: help all install test dev coverage clean \
+.PHONY: help all install test dev coverage clean perf \
 		pre-commit update-pre-commit
 
 
@@ -17,6 +17,10 @@ test: .venv/.installed-dev  ## run the project's tests
 
 coverage: .venv/.installed-dev scripts/coverage.sh  ## build the html coverage report
 	scripts/coverage.sh $(PROJECT_NAME)
+
+perf: .venv/.installed-dev scripts/perf.sh  ## run performance benchmark and generate profile
+	@scripts/perf.sh
+	@if [ -f logs/perf/parser/combined.txt ]; then cat logs/perf/parser/combined.txt; fi
 
 docs: .venv/.installed-dev scripts/docs.sh docs/index.md README.md pyproject.toml ## build the documentation
 	scripts/docs.sh
