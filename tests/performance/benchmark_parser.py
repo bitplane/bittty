@@ -13,6 +13,13 @@ import time
 from datetime import datetime
 from pathlib import Path
 
+try:
+    import plotext as plt
+
+    HAS_PLOTEXT = True
+except ImportError:
+    HAS_PLOTEXT = False
+
 from bittty.parser import Parser
 from bittty.terminal import Terminal
 
@@ -23,6 +30,14 @@ def get_git_commit_hash() -> str:
         return subprocess.check_output(["git", "rev-parse", "HEAD"]).decode("ascii").strip()
     except Exception:
         return "N/A"
+
+
+def get_git_commit_date() -> str:
+    """Get commit date in ISO8601 format."""
+    try:
+        return subprocess.check_output(["git", "show", "-s", "--format=%cI", "HEAD"]).decode("ascii").strip()
+    except Exception:
+        return datetime.now().isoformat()
 
 
 def get_git_branch_name() -> str:
@@ -83,6 +98,7 @@ def update_runs_csv(csv_path: Path, run_data: dict):
     """Update runs.csv with new benchmark data, using atomic write."""
     fieldnames = [
         "run_ts",
+        "commit_date",
         "branch",
         "test_case",
         "time_min",
@@ -112,6 +128,81 @@ def update_runs_csv(csv_path: Path, run_data: dict):
 
     # Atomic rename
     temp_path.rename(csv_path)
+
+
+def generate_visualizations(perf_base_dir: Path):
+    """Generate performance graphs for each test case."""
+    if not HAS_PLOTEXT:
+        print("plotext not installed, skipping visualization")
+        return
+
+    csv_path = perf_base_dir / "runs.csv"
+    if not csv_path.exists():
+        return
+
+    # Read all data
+    with open(csv_path, "r", newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        all_data = list(reader)
+
+    if not all_data:
+        return
+
+    # Group by test case
+    test_cases = {}
+    for row in all_data:
+        test = row["test_case"]
+        if test not in test_cases:
+            test_cases[test] = []
+        test_cases[test].append(row)
+
+    # Generate a graph for each test case
+    for test_name, test_data in test_cases.items():
+        # Sort by commit date (newest first)
+        test_data.sort(key=lambda x: x["commit_date"], reverse=True)
+
+        # Prepare data
+        branches = []
+        times = []
+        for row in test_data:
+            # Abbreviate branch name to 5 chars max
+            branch = row["branch"]
+            if len(branch) > 5:
+                branch = branch[:4] + "…"
+            branches.append(branch)
+            times.append(float(row["time_mean"]))
+
+        # Create plot
+        plt.clear_data()
+        plt.clear_color()
+
+        # Set theme for black background
+        plt.theme("dark")
+
+        # Bar chart with branches on x-axis, time on y-axis
+        plt.bar(branches, times, color="cyan")
+
+        # Configure plot
+        plt.title(f"Performance: {test_name}")
+        plt.xlabel("Branch/Version")
+        plt.ylabel("Time (seconds)")
+
+        # Set size - 24 rows height, auto width based on samples
+        width = max(60, len(branches) * 6 + 20)  # 6 chars per sample + margins
+        plt.plotsize(width, 24)
+
+        # Fancy border
+        plt.grid(True, True)
+
+        # Generate the plot as text
+        plot_text = plt.build()
+
+        # Save to file
+        output_file = perf_base_dir / f"{test_name}.txt"
+        with open(output_file, "w", encoding="utf-8") as f:
+            f.write(plot_text)
+
+        print(f"  Generated: {output_file.relative_to(perf_base_dir.parent.parent)}")
 
 
 def main():
@@ -242,6 +333,7 @@ stats.sort_stats('tottime').print_stats(20)
         csv_path = perf_base_dir / "runs.csv"
         run_data = {
             "run_ts": datetime.now().isoformat(),
+            "commit_date": get_git_commit_date(),
             "branch": branch_name,
             "test_case": test_case,
             "time_min": min(times),
@@ -264,6 +356,10 @@ stats.sort_stats('tottime').print_stats(20)
         print(f"  Profile text: {rel_txt}")
         print(f"\nView: snakeviz {rel_profile}")
         print("-" * 80)
+
+    # Generate visualizations
+    print("Generating performance visualizations...")
+    generate_visualizations(perf_base_dir)
 
     return 0
 

@@ -86,10 +86,8 @@ command -v gsort >/dev/null 2>&1 && sort_cmd="gsort"
 
 # --- Collect refs ---
 tags=$(git tag | "$sort_cmd" -V || true)
-# branches: local + remote (strip origin/, drop HEAD and bare 'origin')
-local_branches=$(git branch --format='%(refname:short)' || true)
-remote_branches=$(git branch -r --format='%(refname:short)' | grep -v '->' | grep -v '^origin$' | sed 's|^origin/||' || true)
-branches=$(printf '%s\n%s\n' "$local_branches" "$remote_branches" | sort -u | grep -v -F -x "$original_branch" || true)
+# branches: local only (no remote branches)
+branches=$(git branch --format='%(refname:short)' | grep -v -F -x "$original_branch" || true)
 
 # Apply includes/excludes
 filter_set() {
@@ -251,17 +249,11 @@ info "Starting…"
     done
   fi
 
-  # Process branches (prefer local; fall back to origin/<name>)
+  # Process branches (local only)
   if [[ -n "$branches" ]]; then
     for br in $branches; do
       [[ "$br" == "$original_branch" ]] && continue
-      if git show-ref --verify --quiet "refs/heads/$br"; then
-        test_version "$br" "branch"
-      elif git show-ref --verify --quiet "refs/remotes/origin/$br"; then
-        test_version "origin/$br" "branch"
-      else
-        err "Branch not found: $br (skipping)"
-      fi
+      test_version "$br" "branch"
     done
   fi
 
