@@ -41,7 +41,7 @@ class UnixPTY(PTY):
         """Resize the terminal using TIOCSWINSZ ioctl."""
         super().resize(rows, cols)  # Update dimensions
 
-        if self._closed:
+        if self.closed:
             return
 
         winsize = struct.pack("HHHH", rows, cols, 0, 0)

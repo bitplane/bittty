@@ -71,4 +71,4 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
   - [ ] record
   - [ ] list sequences + values
 - [ ] Document all the escape sequences
-  - [ ] build a terminal library
+  - [ ] collect books for a terminal library
