@@ -249,32 +249,23 @@ def generate_combined_chart(test_cases: dict, perf_base_dir: Path):
             label = label[-10:]
         branch_labels.append(label)
 
-    # Colors for different test cases
-    colors = ["cyan", "magenta", "yellow", "green", "red", "blue", "white"]
-
     plt.clear_data()
     plt.clear_color()
     plt.theme("dark")
 
-    # Add data for each test case
-    color_idx = 0
-    for test_name, test_data in test_cases.items():
-        # Create a dict for quick lookup
-        test_times = {}
-        for row in test_data:
-            time_val = float(row["time_mean"])
-            if time_val > 0:  # Skip invalid values
-                test_times[row["branch"]] = time_val
+    # Prepare data for stacked bar chart
+    all_times = []
+    test_names = []
+    # Sort test cases to ensure consistent order
+    for test_name, test_data in sorted(test_cases.items()):
+        test_names.append(test_name)
+        test_times = {row["branch"]: float(row["time_mean"]) for row in test_data if float(row["time_mean"]) > 0}
+        times_for_test = [test_times.get(branch, 0) for branch in sorted_branches]
+        all_times.append(times_for_test)
 
-        # Build times array matching sorted_branches order
-        times_for_test = []
-        for branch in sorted_branches:
-            times_for_test.append(test_times.get(branch, 0))  # 0 if no data for this branch
-
-        # Add bar chart for this test case
-        color = colors[color_idx % len(colors)]
-        plt.bar(branch_labels, times_for_test, label=test_name, color=color)
-        color_idx += 1
+    # Create stacked bar chart
+    if all_times:
+        plt.stacked_bar(branch_labels, all_times, labels=test_names)
 
     # Configure plot
     plt.title("Performance Comparison: All Tests")
@@ -287,7 +278,6 @@ def generate_combined_chart(test_cases: dict, perf_base_dir: Path):
 
     # Add grid and legend
     plt.grid(True, True)
-    # plt.show_legend()  # Not available in this version of plotext
 
     # Generate and save
     plot_text = plt.build()
