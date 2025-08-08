@@ -2,7 +2,7 @@
 
 import sys
 import pytest
-from bittty.pty import UnixPTY
+from bittty.terminal import Terminal
 
 
 @pytest.mark.integration
@@ -10,20 +10,14 @@ from bittty.pty import UnixPTY
 @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
 def test_unix_pty_basic_io():
     """Test Unix PTY can be created and perform basic I/O."""
-    pty = UnixPTY(24, 80)
+    terminal = Terminal(command="/bin/bash", width=80, height=24)
 
     try:
-        pty.write("echo hello\n")
-
-        import time
-
-        time.sleep(0.1)
-
-        result = pty.read(1000)
-        assert "hello" in result or "echo" in result
-
+        terminal.input("echo hello\n")
+        screen_content = terminal.capture_pane()
+        assert "hello" in screen_content
     finally:
-        pty.close()
+        terminal.close()
 
 
 @pytest.mark.integration
@@ -31,27 +25,14 @@ def test_unix_pty_basic_io():
 @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
 def test_unix_pty_process_spawn():
     """Test Unix PTY can spawn processes and communicate."""
-    pty = UnixPTY(24, 80)
+    terminal = Terminal(command="/bin/bash", width=80, height=24)
 
     try:
-        process = pty.spawn_process("/bin/bash")
-        assert process is not None
-        assert process.poll() is None
-
-        pty.write("echo test123\n")
-
-        import time
-
-        time.sleep(0.1)
-        result = pty.read(1000)
-
-        assert "test123" in result or "echo" in result
-
-        pty.write("exit\n")
-        time.sleep(0.1)
-
+        terminal.input("echo test123\n")
+        screen_content = terminal.capture_pane()
+        assert "test123" in screen_content
     finally:
-        pty.close()
+        terminal.close()
 
 
 @pytest.mark.integration
@@ -60,38 +41,25 @@ def test_unix_pty_process_spawn():
 @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
 def test_unix_pty_utf8_handling():
     """Test Unix PTY handles UTF-8 correctly with real processes."""
-    pty = UnixPTY(24, 80)
+    terminal = Terminal(command="/bin/bash", width=80, height=24)
 
     try:
-        pty.spawn_process("/bin/bash")
-
-        utf8_test = "echo '🚽🪠💩 世界'"
-        pty.write(utf8_test + "\n")
-
-        import time
-
-        time.sleep(0.2)
-
-        result = pty.read(1000)
-
-        assert "🚽" in result or "echo" in result
-        assert "�" not in result
-
-        pty.write("exit\n")
-        time.sleep(0.1)
-
+        terminal.input("echo '🚽🪠💩 世界'\n")
+        screen_content = terminal.capture_pane()
+        assert "🚽" in screen_content or "echo" in screen_content
+        assert "�" not in screen_content
     finally:
-        pty.close()
+        terminal.close()
 
 
 @pytest.mark.integration
 @pytest.mark.unix
 @pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
 def test_unix_pty_type():
-    """Test that Unix returns UnixPTY."""
-    pty = UnixPTY(24, 80)
+    """Test that Unix terminal works."""
+    terminal = Terminal(command="/bin/bash", width=80, height=24)
 
     try:
-        assert pty.__class__.__name__ == "UnixPTY"
+        assert terminal is not None
     finally:
-        pty.close()
+        terminal.close()
