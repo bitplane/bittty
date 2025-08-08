@@ -2,8 +2,6 @@
 Unix/Linux/macOS PTY implementation.
 """
 
-from __future__ import annotations
-
 import os
 import pty
 import termios
@@ -13,57 +11,41 @@ import signal
 import asyncio
 import subprocess
 import logging
-from typing import Optional, Dict
 
-from .base import PTYBase
+from .base import PTY, ENV
 from .. import constants
 
 logger = logging.getLogger(__name__)
 
 
-class UnixPTY(PTYBase):
+UNIX_ENV = ENV | {"LC_ALL": os.environ.get("LC_ALL", "en_US.UTF-8")}
+
+
+class UnixPTY(PTY):
     """Unix/Linux/macOS PTY implementation."""
 
     def __init__(self, rows: int = constants.DEFAULT_TERMINAL_HEIGHT, cols: int = constants.DEFAULT_TERMINAL_WIDTH):
-        super().__init__(rows, cols)
         self.master_fd, self.slave_fd = pty.openpty()
         logger.info(f"Created PTY: master_fd={self.master_fd}, slave_fd={self.slave_fd}")
+
+        # set non-blocking
+        flags = fcntl.fcntl(self.master_fd, fcntl.F_GETFL)
+        fcntl.fcntl(self.master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+
+        # Initialize base class with the master fd for both input and output
+        super().__init__(self.master_fd, self.master_fd, rows, cols)
+
         self.resize(rows, cols)
-
-    def read(self, size: int = constants.DEFAULT_PTY_BUFFER_SIZE) -> str:
-        """Read data from the PTY."""
-        if self._closed:
-            return ""
-        try:
-            data = os.read(self.master_fd, size)
-            return data.decode("utf-8", errors="replace")
-        except OSError as e:
-            if e.errno in (constants.EBADF, constants.EINVAL):
-                self._closed = True
-                raise
-            return ""
-
-    def write(self, data: str) -> int:
-        """Write data to the PTY."""
-        if self._closed:
-            return 0
-        try:
-            return os.write(self.master_fd, data.encode("utf-8"))
-        except OSError:
-            return 0
 
     def resize(self, rows: int, cols: int) -> None:
         """Resize the terminal using TIOCSWINSZ ioctl."""
-        self.rows = rows
-        self.cols = cols
+        super().resize(rows, cols)  # Update dimensions
+
         if self._closed:
             return
 
-        try:
-            winsize = struct.pack("HHHH", rows, cols, 0, 0)
-            fcntl.ioctl(self.master_fd, termios.TIOCSWINSZ, winsize)
-        except OSError:
-            pass
+        winsize = struct.pack("HHHH", rows, cols, 0, 0)
+        fcntl.ioctl(self.master_fd, termios.TIOCSWINSZ, winsize)
 
     def close(self) -> None:
         """Close the PTY file descriptors."""
@@ -88,38 +70,18 @@ class UnixPTY(PTYBase):
                 # Event loop not running or fd not registered
                 pass
 
-            try:
-                if self.master_fd and isinstance(self.master_fd, int):
-                    os.close(self.master_fd)
-            except OSError:
-                pass
+            # Close slave fd manually
             try:
                 if self.slave_fd and isinstance(self.slave_fd, int):
                     os.close(self.slave_fd)
             except OSError:
                 pass
-            self._closed = True
 
-    def spawn_process(self, command: str, env: Optional[Dict[str, str]] = None) -> subprocess.Popen:
+            # Let base class close master_fd
+            super().close()
+
+    def spawn_process(self, command: str, env: dict[str, str] = UNIX_ENV) -> subprocess.Popen:
         """Spawn a process attached to this PTY."""
-        process_env = dict(os.environ)
-        if env:
-            process_env.update(env)
-
-        # Add terminal environment variables
-        process_env.update(
-            {
-                "TERM": "xterm-256color",
-                # Don't set LINES/COLUMNS - let process discover size via ioctl
-                # Setting these prevents ncurses from responding to SIGWINCH properly
-            }
-        )
-
-        # Ensure UTF-8 locale if not already set
-        if "LANG" not in process_env or "UTF-8" not in process_env.get("LANG", ""):
-            process_env["LANG"] = "en_US.UTF-8"
-        if "LC_ALL" not in process_env:
-            process_env["LC_ALL"] = process_env.get("LANG", "en_US.UTF-8")
 
         def preexec_fn():
             """Set up the child process to use PTY as controlling terminal."""
@@ -136,7 +98,7 @@ class UnixPTY(PTYBase):
             stdout=self.slave_fd,
             stderr=self.slave_fd,
             preexec_fn=preexec_fn,
-            env=process_env,
+            env=env,
         )
 
         # Close slave fd in parent (child has its own copy)
@@ -148,19 +110,27 @@ class UnixPTY(PTYBase):
 
         return process
 
-    def set_nonblocking(self) -> None:
-        """Set the PTY to non-blocking mode for async operations."""
-        if self._closed:
-            return
-        flags = fcntl.fcntl(self.master_fd, fcntl.F_GETFL)
-        fcntl.fcntl(self.master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
+    def flush(self) -> None:
+        """
+        Flush output using os.fsync() for real PTY file descriptor.
+
+        More efficient than generic flush() - ensures data is written through
+        to the terminal device, not just buffered. Important for interactive
+        terminal responsiveness.
+        """
+        os.fsync(self.master_fd)
 
     async def read_async(self, size: int = constants.DEFAULT_PTY_BUFFER_SIZE) -> str:
-        """Async read from PTY. Returns empty string when no data available."""
+        """
+        Async read from PTY using efficient file descriptor monitoring.
+
+        Uses loop.add_reader() with file descriptors for maximum efficiency on Unix.
+        This is the most performant approach since Unix supports select/poll on PTY fds.
+        """
         if self._closed:
             return ""
 
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         try:
             # Use asyncio's add_reader for efficient async I/O
             future = loop.create_future()
@@ -183,12 +153,3 @@ class UnixPTY(PTYBase):
             return await future
         except Exception:
             return ""
-
-    def flush(self) -> None:
-        """Flush any buffered output."""
-        if self._closed:
-            return
-        try:
-            os.fsync(self.master_fd)
-        except OSError:
-            pass

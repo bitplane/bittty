@@ -808,8 +808,6 @@ class Terminal:
 
     async def _async_read_from_pty(self) -> None:
         """Async task to read PTY data and dispatch to callback or process directly."""
-        # Set PTY to non-blocking mode
-        self.pty.set_nonblocking()
 
         while self.pty is not None and not self.pty.closed:
             try:

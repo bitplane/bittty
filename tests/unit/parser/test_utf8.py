@@ -1,48 +1,70 @@
 """Test UTF-8 handling through PTY layer."""
 
-import os
-from unittest.mock import patch
+import io
+from bittty.pty import PTY
 
 
-def test_utf8_through_pty_small_buffer(parser, terminal):
-    """Test that UTF-8 characters work correctly through PTY with small buffer."""
-    from bittty.pty.unix import UnixPTY
+def test_utf8_through_dummy_pty_with_split_bytes():
+    """Test that UTF-8 bytes split across reads are reconstructed properly."""
 
-    print("Creating PTY...")
-    # Create a PTY
-    pty = UnixPTY(rows=24, cols=80)
-
-    print("PTY created")
     # Test data: toilet, plunger, poop emojis repeated
-    # Each emoji is 4 bytes in UTF-8
+    test_string = "🚽🪠💩" * 10
+    test_bytes = test_string.encode("utf-8")
+
+    # Create a BytesIO with the test data
+    input_stream = io.BytesIO(test_bytes)
+    pty = PTY(from_process=input_stream)
+
+    # Read with small buffer to force UTF-8 splits
+    result = ""
+    while True:
+        # Read 7 bytes at a time (prime number to ensure splits)
+        chunk = pty.read(7)
+        if not chunk:
+            break
+        result += chunk
+
+    # This should reconstruct all UTF-8 properly, no replacement chars
+    assert result == test_string
+    assert "�" not in result  # No replacement characters
+    assert "🚽🪠💩" * 10 == result
+
+    pty.close()
+
+
+def test_utf8_through_parser_with_dummy_pty(parser, terminal):
+    """Test that UTF-8 characters work correctly through parser with DummyPTY."""
+
+    # Test data: toilet, plunger, poop emojis repeated
     test_string = "🚽🪠💩" * 10
 
-    print(f"Writing {len(test_string.encode('utf-8'))} bytes to PTY slave...")
-    # Write to PTY slave (what a program would output)
-    os.write(pty.slave_fd, test_string.encode("utf-8"))
+    # Create DummyPTY and inject the test data
+    input_stream = io.BytesIO(test_string.encode("utf-8"))
+    pty = PTY(from_process=input_stream)
 
-    print("Starting read loop...")
-    # Read from PTY master with tiny buffer (7 bytes)
-    # This guarantees UTF-8 sequences will be split mid-emoji
-    result = ""
-    with patch("bittty.constants.DEFAULT_PTY_BUFFER_SIZE", 7):
-        read_count = 0
-        while True:
-            print(f"Reading chunk {read_count}...")
-            chunk = pty.read(7)
-            print(f"Got chunk: {repr(chunk)}")
-            if not chunk:
-                break
-            result += chunk
-            parser.feed(chunk)  # Feed each chunk to parser
-            read_count += 1
-            if read_count > 100:  # Safety break
-                print("Too many reads, breaking")
-                break
+    # Read from PTY and feed to parser (simulating terminal behavior)
+    while True:
+        chunk = pty.read(1024)  # Read in chunks
+        if not chunk:
+            break
+        parser.feed(chunk)
 
-    print("Checking output...")
     # Verify all the emojis made it through intact
     output = terminal.capture_pane()
     assert "🚽🪠💩" * 10 in output
 
     pty.close()
+
+
+def test_utf8_through_parser(parser, terminal):
+    """Test that UTF-8 characters work correctly through the parser directly."""
+    # Test data: toilet, plunger, poop emojis repeated
+    test_string = "🚽🪠💩" * 10
+
+    # Feed the complete Unicode string to the parser
+    # This is what actually happens - PTY decodes bytes to Unicode
+    parser.feed(test_string)
+
+    # Verify all the emojis made it through intact
+    output = terminal.capture_pane()
+    assert "🚽🪠💩" * 10 in output
