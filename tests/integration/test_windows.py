@@ -10,11 +10,12 @@ from bittty.pty import WindowsPTY
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
 def test_windows_pty_basic_io():
     """Test Windows PTY can be created and perform basic I/O."""
-    pytest.importorskip("winpty", reason="pywinpty not installed")
-
     pty = WindowsPTY(24, 80)
 
     try:
+        # Need to spawn a process first
+        pty.spawn_process("cmd.exe")
+
         pty.write("echo hello\r\n")
 
         import time
@@ -33,7 +34,6 @@ def test_windows_pty_basic_io():
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
 def test_windows_pty_process_spawn():
     """Test Windows PTY can spawn processes and communicate."""
-    pytest.importorskip("winpty", reason="pywinpty not installed")
 
     pty = WindowsPTY(24, 80)
 
@@ -63,7 +63,6 @@ def test_windows_pty_process_spawn():
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
 def test_windows_pty_utf8_handling():
     """Test Windows PTY handles UTF-8 correctly with real processes."""
-    pytest.importorskip("winpty", reason="pywinpty not installed")
 
     pty = WindowsPTY(24, 80)
 
@@ -93,7 +92,6 @@ def test_windows_pty_utf8_handling():
 @pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
 def test_windows_pty_type():
     """Test that Windows returns WindowsPTY."""
-    pytest.importorskip("winpty", reason="pywinpty not installed")
 
     pty = WindowsPTY(24, 80)
 
