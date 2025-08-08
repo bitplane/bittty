@@ -31,8 +31,13 @@ class WinptyFileWrapper:
 
     def write(self, data: bytes) -> int:
         """Write bytes data."""
-        # winpty.write() actually expects bytes according to stub but error suggests strings
-        return self.pty.write(data)
+        # winpty.write() expects strings, not bytes
+        try:
+            return self.pty.write(data)
+        except TypeError:
+            # Fallback: convert bytes to string
+            text = data.decode("utf-8", errors="replace")
+            return self.pty.write(text)
 
     def close(self) -> None:
         """Close the PTY."""
@@ -113,7 +118,16 @@ class WindowsPTY(PTY):
         if self.closed:
             raise OSError("PTY is closed")
 
-        self.pty.spawn(command, env=env)
+        # Convert env dict to winpty format: null-separated "KEY=VALUE" string
+        if env:
+            env_strs = []
+            for key, value in env.items():
+                env_strs.append(f"{key}={value}")
+            env_string = "\0".join(env_strs) + "\0"
+        else:
+            env_string = ""
+
+        self.pty.spawn(command, env=env_string)
 
         # Return a process-like object that provides compatibility with subprocess.Popen
         process = WinptyProcessWrapper(self.pty)
