@@ -24,20 +24,14 @@ class WinptyFileWrapper:
     def __init__(self, winpty_pty):
         self.pty = winpty_pty
 
-    def read(self, size: int = -1) -> bytes:
-        """Read data as bytes."""
-        data = self.pty.read(size)  # Returns bytes according to stub
-        return data if data else b""
+    def read(self, size: int = -1) -> str:
+        """Read data as strings."""
+        data = self.pty.read(size)
+        return data or ""
 
-    def write(self, data: bytes) -> int:
-        """Write bytes data."""
-        # winpty.write() expects strings, not bytes
-        try:
-            return self.pty.write(data)
-        except TypeError:
-            # Fallback: convert bytes to string
-            text = data.decode("utf-8", errors="replace")
-            return self.pty.write(text)
+    def write(self, data: str) -> int:
+        """Write string data."""
+        return self.pty.write(data)
 
     def close(self) -> None:
         """Close the PTY."""
@@ -96,22 +90,39 @@ class WinptyProcessWrapper:
 
 
 class WindowsPTY(PTY):
-    """Windows PTY implementation using pywinpty."""
+    """Windows PTY implementation using pywinpty.
+
+    Note: This PTY operates in text mode - winpty handles UTF-8 internally.
+    The read/write methods work directly with strings for performance,
+    with bytes conversion only when needed for compatibility.
+    """
 
     def __init__(self, rows: int = constants.DEFAULT_TERMINAL_HEIGHT, cols: int = constants.DEFAULT_TERMINAL_WIDTH):
         if not winpty:
             raise OSError("pywinpty not installed. Install with: pip install textual-terminal[windows]")
 
-        self.pty = winpty.PTY(cols, rows)
+        self._pty = winpty.PTY(cols, rows)
 
         # Wrap winpty in file-like interface for base class
-        wrapper = WinptyFileWrapper(self.pty)
+        wrapper = WinptyFileWrapper(self._pty)
         super().__init__(wrapper, wrapper, rows, cols)
+
+    def read(self, size: int = constants.DEFAULT_PTY_BUFFER_SIZE) -> str:
+        """Read data directly from winpty (text mode, no UTF-8 splitting needed)."""
+        if self.closed:
+            return ""
+        return self.from_process.read(size)
+
+    def write(self, data: str) -> int:
+        """Write string data directly to winpty (text mode)."""
+        if self.closed:
+            return 0
+        return self.to_process.write(data)
 
     def resize(self, rows: int, cols: int) -> None:
         """Resize the terminal."""
         super().resize(rows, cols)
-        self.pty.set_size(cols, rows)
+        self._pty.set_size(cols, rows)
 
     def spawn_process(self, command: str, env: Optional[Dict[str, str]] = ENV) -> subprocess.Popen:
         """Spawn a process attached to this PTY."""
@@ -127,10 +138,10 @@ class WindowsPTY(PTY):
         else:
             env_string = ""
 
-        self.pty.spawn(command, env=env_string)
+        self._pty.spawn(command, env=env_string)
 
         # Return a process-like object that provides compatibility with subprocess.Popen
-        process = WinptyProcessWrapper(self.pty)
+        process = WinptyProcessWrapper(self._pty)
         # Store process reference for cleanup
         self._process = process
         return process
