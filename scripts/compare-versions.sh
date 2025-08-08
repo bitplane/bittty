@@ -17,7 +17,6 @@ JOBS=""
 CPU_PIN=""
 
 tag_includes=()     # -t PATTERN (regex). Repeatable.
-branch_includes=()  # -b PATTERN (regex). Repeatable.
 excludes=()         # -x PATTERN (regex). Repeatable.
 
 usage() {
@@ -26,15 +25,14 @@ Usage: $0 [options]
 
 Options:
   -t PATTERN       Include tags matching regex (repeatable). Default: all tags.
-  -b PATTERN       Include branches matching regex (repeatable). Default: all branches (excl current).
   -x PATTERN       Exclude refs matching regex (repeatable).
   --make-target T  Make target to run (default: perf).
   -j N             Set MAKEFLAGS=-jN.
   --cpu N          Pin to CPU core N with taskset (optional).
 
 Examples:
-  # Only tags v1.* and release branches, exclude rc:
-  $0 -t '^v1\\.' -b '^release/' -x 'rc'
+  # Only tags v1.*, exclude rc:
+  $0 -t '^v1\\.' -x 'rc'
 
   # Use 8-way make:
   $0 -j 8
@@ -45,7 +43,6 @@ EOF
 while (( $# )); do
   case "$1" in
     -t) tag_includes+=("$2"); shift 2 ;;
-    -b) branch_includes+=("$2"); shift 2 ;;
     -x) excludes+=("$2"); shift 2 ;;
     --make-target) MAKE_TARGET="$2"; shift 2 ;;
     -j) JOBS="$2"; shift 2 ;;
@@ -80,8 +77,6 @@ command -v gsort >/dev/null 2>&1 && sort_cmd="gsort"
 
 # --- Collect refs ---
 tags=$(git tag | "$sort_cmd" -V || true)
-# branches: local only (no remote branches)
-branches=$(git branch --format='%(refname:short)' | grep -v -F -x "$original_branch" || true)
 
 # Apply includes/excludes
 filter_set() {
@@ -109,12 +104,9 @@ exclude_set() {
 }
 
 tags=$(exclude_set "$(filter_set "$tags" "${tag_includes[@]}")" "${excludes[@]}" | grep -v '^$' || true)
-branches=$(exclude_set "$(filter_set "$branches" "${branch_includes[@]}")" "${excludes[@]}" | grep -v '^$' || true)
 
 warn "Tags to test:"
 if [[ -n "$tags" ]]; then echo "$tags" | while IFS= read -r line; do printf '  %s\n' "$line"; done; else say "  (none)"; fi
-warn "Branches to test:"
-if [[ -n "$branches" ]]; then echo "$branches" | while IFS= read -r line; do printf '  %s\n' "$line"; done; else say "  (none)"; fi
 
 info "Starting…"
 
@@ -191,14 +183,6 @@ info "Starting…"
   if [[ -n "$tags" ]]; then
     for tag in $tags; do
       install_and_benchmark "$tag" "tag"
-    done
-  fi
-
-  # Process branches (local only)
-  if [[ -n "$branches" ]]; then
-    for br in $branches; do
-      [[ "$br" == "$original_branch" ]] && continue
-      install_and_benchmark "$br" "branch"
     done
   fi
 
