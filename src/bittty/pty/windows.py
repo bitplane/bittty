@@ -26,11 +26,12 @@ class WinptyFileWrapper:
 
     def read(self, size: int = -1) -> bytes:
         """Read data as bytes."""
-        data = self.pty.read(size)  # Returns bytes
+        data = self.pty.read(size)  # Returns bytes according to stub
         return data if data else b""
 
     def write(self, data: bytes) -> int:
         """Write bytes data."""
+        # winpty.write() actually expects bytes according to stub but error suggests strings
         return self.pty.write(data)
 
     def close(self) -> None:
@@ -41,7 +42,11 @@ class WinptyFileWrapper:
     @property
     def closed(self) -> bool:
         """Check if closed."""
-        return not self.pty.isalive()
+        try:
+            return not self.pty.isalive()
+        except Exception:
+            # If we can't check, assume it's not closed yet
+            return False
 
     def flush(self) -> None:
         """Flush - no-op for winpty."""

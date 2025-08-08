@@ -1,11 +1,13 @@
 """Unix PTY integration tests."""
 
+import sys
 import pytest
 from bittty.pty import UnixPTY
 
 
 @pytest.mark.integration
 @pytest.mark.unix
+@pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
 def test_unix_pty_basic_io():
     """Test Unix PTY can be created and perform basic I/O."""
     pty = UnixPTY(24, 80)
@@ -26,6 +28,7 @@ def test_unix_pty_basic_io():
 
 @pytest.mark.integration
 @pytest.mark.unix
+@pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
 def test_unix_pty_process_spawn():
     """Test Unix PTY can spawn processes and communicate."""
     pty = UnixPTY(24, 80)
@@ -54,6 +57,7 @@ def test_unix_pty_process_spawn():
 @pytest.mark.integration
 @pytest.mark.unix
 @pytest.mark.slow
+@pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
 def test_unix_pty_utf8_handling():
     """Test Unix PTY handles UTF-8 correctly with real processes."""
     pty = UnixPTY(24, 80)
@@ -82,6 +86,7 @@ def test_unix_pty_utf8_handling():
 
 @pytest.mark.integration
 @pytest.mark.unix
+@pytest.mark.skipif(sys.platform == "win32", reason="Unix-only test")
 def test_unix_pty_type():
     """Test that Unix returns UnixPTY."""
     pty = UnixPTY(24, 80)

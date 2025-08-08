@@ -1,11 +1,13 @@
 """Windows PTY integration tests."""
 
+import sys
 import pytest
 from bittty.pty import WindowsPTY
 
 
 @pytest.mark.integration
 @pytest.mark.windows
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
 def test_windows_pty_basic_io():
     """Test Windows PTY can be created and perform basic I/O."""
     pytest.importorskip("winpty", reason="pywinpty not installed")
@@ -28,6 +30,7 @@ def test_windows_pty_basic_io():
 
 @pytest.mark.integration
 @pytest.mark.windows
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
 def test_windows_pty_process_spawn():
     """Test Windows PTY can spawn processes and communicate."""
     pytest.importorskip("winpty", reason="pywinpty not installed")
@@ -57,6 +60,7 @@ def test_windows_pty_process_spawn():
 @pytest.mark.integration
 @pytest.mark.windows
 @pytest.mark.slow
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
 def test_windows_pty_utf8_handling():
     """Test Windows PTY handles UTF-8 correctly with real processes."""
     pytest.importorskip("winpty", reason="pywinpty not installed")
@@ -86,6 +90,7 @@ def test_windows_pty_utf8_handling():
 
 @pytest.mark.integration
 @pytest.mark.windows
+@pytest.mark.skipif(sys.platform != "win32", reason="Windows-only test")
 def test_windows_pty_type():
     """Test that Windows returns WindowsPTY."""
     pytest.importorskip("winpty", reason="pywinpty not installed")
