@@ -12,42 +12,14 @@ make dev
 # Run all tests
 make test
 
-# Run tests with verbose output
-pytest -vv --asyncio-mode=auto .
-
-# Run a specific test file
-pytest -vv --asyncio-mode=auto tests/unit/parser/test_csi_sequences.py
-
-# Run a specific test
-pytest -vv --asyncio-mode=auto tests/unit/parser/test_csi_sequences.py::test_cursor_up
-
-# Build coverage report
-make coverage
-
 # Run pre-commit hooks
 pre-commit run --all-files
-
-# Format code with ruff
-ruff format src/ tests/
-
-# Lint code
-ruff check --fix src/ tests/
-
-# Build distribution
-make dist
 
 # Clean all build artifacts
 make clean
 ```
 
-### Demo Applications
-```bash
-# Run standalone terminal demo
-python ./demo/terminal.py
 
-# Run in Textual TUI
-uvx textual-tty
-```
 
 ## Architecture Overview
 
@@ -59,7 +31,7 @@ uvx textual-tty
 - Maintains terminal modes, cursor position, and screen buffers (primary/alternate)
 - No UI dependencies - designed to be subclassed by UI frameworks
 
-**Parser** (`src/bittty/parser.py`)
+**Parser** (`src/bittty/parser/core.py`)
 - State machine for processing ANSI escape sequences
 - Handles C0 controls, CSI sequences, OSC sequences, and DEC private modes
 - Maintains parsing state and buffers for sequence data
@@ -85,13 +57,30 @@ uvx textual-tty
 
 ### Key Design Patterns
 
-1. **State Machine Pattern**: Parser uses explicit states (GROUND, ESCAPE, CSI_ENTRY, etc.) for sequence parsing
+1. **State Machine Pattern**: Uses regex to parse inputs.
 2. **Platform Abstraction**: PTY implementations hide platform differences behind common interface
 3. **Separation of Concerns**: Terminal logic separate from UI, making it framework-agnostic
 4. **Style Objects**: Immutable style representation allows efficient diffing and caching
 
+## CODING STANDARDS
+
+* When there's a bug, write a test case for the component.
+* Failing tests are good tests.
+* The only functionality that is required, is functionality that is covered by a test. The only
+  exception to this is where it has a comment that explains what it supposed to do, why it is
+  important enough to exist yet simultaneously not important enough to be covered by a test.
+* Do not use mocks in tests. They make a mockery of our codebase.
+* The project will degrade into verbose, brittle spaghetti if left unchecked. Periodically propose
+  simplifications.
+* Branches are a source of shame and disgust. They should be used sparingly.
+* Defensive programming is for the weak.
+* Do not guess, read the docs. All the files are in source control or in the `.venv` dir at the
+  project root.
+
 ### Terminal Modes and Features
 
+- Aim to support all modes in future. Even the really obscure ones. Eventually we will add our own
+  private modes.
 - DEC private modes (DECARM, DECBKM, DECSCLM, DECNKM, etc.)
 - Mouse tracking (basic, button, any, SGR, extended)
 - Character sets (ASCII, DEC Special Graphics, UK, etc.)
@@ -105,19 +94,21 @@ Tests use pytest with functional style (no unittest classes). Key test categorie
 - **Parser tests**: Verify escape sequence parsing and state transitions
 - **Terminal tests**: Test terminal operations (cursor, scrolling, clearing, etc.)
 - **Integration tests**: End-to-end parsing with real terminal instances
-- **Performance tests**: Benchmarking parser performance
+- **Performance tests**: Benchmarking parser performance. More perf tests will be added over time.
 
 ### Known Issues
 
 From README.md
 - Scroll region bugs (vim scrolling corrupts outside region)
-- Stream corruption during parsing
-- Textual-in-textual not working properly yet
+
+From user
+- We need to keep tidying up. The code is too long and looks like a procedural fizzbuzz enterprise
+  edition.
 
 ### Development Notes
 
 - Line length: 120 characters (configured in pyproject.toml)
-- Python 3.10+ required
+- Python 3.10+ required. So type hints rarely need `typing` module.
 - Uses ruff for linting and formatting
 - Pre-commit hooks configured for code quality
 - All imports should be at module level (not in functions)
