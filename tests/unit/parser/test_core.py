@@ -2,7 +2,7 @@
 
 import pytest
 
-from bittty.parser.core import Parser, parse_string_sequence
+from bittty.parser.core import parse_string_sequence
 
 
 @pytest.mark.parametrize(
@@ -36,30 +36,31 @@ def test_parse_string_sequence(sequence_type, data, expected):
     assert parse_string_sequence(data.decode("latin-1"), sequence_type) == expected
 
 
-def test_parser_feed_truncated_escape():
-    """Test that the parser handles truncated escape sequences correctly."""
+def test_parser_feed_interrupted_osc(parser, terminal):
+    """Test that the parser handles an OSC sequence interrupted by another escape."""
+    # OSC sequence containing an escape, split across two feeds
+    parser.feed("Hello \x1b]2;some text here\x1b[A")
+    parser.feed("more text\x07world")
 
-    # This is a simplified mock. In a real scenario, you'd have a more complete mock
-    # or a real Terminal object.
-    class MockTerminal:
-        def __init__(self):
-            self.written_text = ""
-            self.application_keypad = False
-            self.current_ansi_code = ""
+    assert "Hello world" in terminal.capture_pane()
+    assert terminal.title == "some text here\x1b[Amore text"
 
-        def write_text(self, text, code):
-            self.written_text += text
 
-    terminal = MockTerminal()
-    parser = Parser(terminal)
+def test_parser_feed_multiple_escapes(parser, terminal):
+    """Test that the parser handles multiple escape characters correctly."""
+    parser.feed("hello\x1b\x1b")
+    assert "hello" in terminal.capture_pane()
+    # The two escape characters should be consumed and dispatched as 'esc' events
+    assert parser.buffer == ""
 
-    # Feed a chunk of text with a truncated escape sequence at the end
+
+def test_parser_feed_simple_truncate(parser, terminal):
+    """Test a simple truncated escape sequence."""
     parser.feed("hello\x1b")
-    assert terminal.written_text == "hello"
+    assert "hello" in terminal.capture_pane()
     assert parser.buffer == "\x1b"
 
-    # Feed the rest of the escape sequence
-    parser.feed("[A")
-    # This is a CSI sequence, which is handled by a different part of the parser.
-    # For this test, we just want to ensure the buffer is cleared.
+    parser.feed("[1;1H")
+    assert terminal.cursor_x == 0
+    assert terminal.cursor_y == 0
     assert parser.buffer == ""

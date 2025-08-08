@@ -224,8 +224,9 @@ class Parser:
         if self.mode is None and self.pos < len(self.buffer):
             end = len(self.buffer)
             # Guard against escape truncation
-            if "\x1b" in self.buffer[-3:]:
-                end -= 3
+            partial_escape = self.buffer[-3:].find("\x1b")
+            if partial_escape != -1:
+                end -= 3 - partial_escape
 
             if end > self.pos:
                 self.dispatch("print", self.buffer[self.pos : end])
