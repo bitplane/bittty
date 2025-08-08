@@ -43,9 +43,10 @@ def benchmark_parser(ansi_content: str, runs: int = 5, temp_profile_path: str = 
     if temp_profile_path is None:
         branch_name = get_git_branch_name()
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        # Use temp location, will be moved later
+        # Use temp location, will be moved later - sanitize branch name for filesystem
+        branch_safe = branch_name.replace("/", "_")
         temp_dir = tempfile.gettempdir()
-        profile_filename = str(Path(temp_dir) / f"{timestamp}_{branch_name}_profile.prof")
+        profile_filename = str(Path(temp_dir) / f"{timestamp}_{branch_safe}_profile.prof")
     else:
         profile_filename = temp_profile_path
 
@@ -103,10 +104,8 @@ def main():
     branch_name = get_git_branch_name()
 
     for ansi_file in gzipped_files:
-        # Extract test case name (remove .gz and any .ansi extension)
+        # Extract test case name (remove .gz only)
         test_case = ansi_file.stem
-        if test_case.endswith(".ansi"):
-            test_case = test_case[:-5]  # Remove .ansi
 
         # Create timestamp for this run
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -148,8 +147,8 @@ def main():
         print(report)
 
         # Create descriptive filenames with branch and test case
-        branch_safe = branch_name.replace("-", "_").replace("/", "_")
-        test_safe = test_case.replace(".", "_").replace("-", "_")
+        branch_safe = branch_name.replace("/", "_")
+        test_safe = test_case
 
         # Save to organized directory structure
         log_file_path = run_dir / f"{branch_safe}_{test_safe}.log"
