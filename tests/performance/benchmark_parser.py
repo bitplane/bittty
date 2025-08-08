@@ -158,25 +158,34 @@ def generate_visualizations(perf_base_dir: Path):
 
     # Generate a graph for each test case
     for test_name, test_data in test_cases.items():
-        # Sort by commit date (newest first)
-        test_data.sort(key=lambda x: x["commit_date"], reverse=True)
+        # Sort by commit date (oldest first for left-to-right chronological order)
+        test_data.sort(key=lambda x: x["commit_date"])
 
         # Prepare data
         branches = []
         times = []
         for row in test_data:
-            # Abbreviate branch name to 5 chars max
-            branch = row["branch"]
-            if len(branch) > 5:
-                branch = branch[:4] + "…"
+            time_val = float(row["time_mean"])
+            # Skip zero or negative values
+            if time_val <= 0:
+                continue
+
+            # Get branch name - split on / and take last part, then truncate to 10 chars from back
+            branch = row["branch"].split("/")[-1]
+            if len(branch) > 10:
+                branch = branch[-10:]
             branches.append(branch)
-            times.append(float(row["time_mean"]))
+            times.append(time_val)
+
+        # Skip if no valid data points
+        if not branches or not times:
+            continue
 
         # Create plot
         plt.clear_data()
         plt.clear_color()
 
-        # Set theme for black background
+        # Set theme for black background with colors
         plt.theme("dark")
 
         # Bar chart with branches on x-axis, time on y-axis
@@ -186,6 +195,9 @@ def generate_visualizations(perf_base_dir: Path):
         plt.title(f"Performance: {test_name}")
         plt.xlabel("Branch/Version")
         plt.ylabel("Time (seconds)")
+
+        # Use linear scale for now (log scale causing issues)
+        # plt.yscale("log")
 
         # Set size - 24 rows height, auto width based on samples
         width = max(60, len(branches) * 6 + 20)  # 6 chars per sample + margins
@@ -203,6 +215,81 @@ def generate_visualizations(perf_base_dir: Path):
             f.write(plot_text)
 
         print(f"  Generated: {output_file.relative_to(perf_base_dir.parent.parent)}")
+
+    # Generate combined stacked chart
+    generate_combined_chart(test_cases, perf_base_dir)
+
+
+def generate_combined_chart(test_cases: dict, perf_base_dir: Path):
+    """Generate a combined chart with all test cases."""
+    if not HAS_PLOTEXT or not test_cases:
+        return
+
+    # Get all unique branches across all test cases, sorted by commit date
+    all_branches = {}  # branch -> commit_date
+    for test_data in test_cases.values():
+        for row in test_data:
+            branch = row["branch"]
+            all_branches[branch] = row["commit_date"]
+
+    # Sort branches chronologically
+    sorted_branches = sorted(all_branches.keys(), key=lambda b: all_branches[b])
+
+    # Prepare branch labels (last 10 chars)
+    branch_labels = []
+    for branch in sorted_branches:
+        label = branch.split("/")[-1]
+        if len(label) > 10:
+            label = label[-10:]
+        branch_labels.append(label)
+
+    # Colors for different test cases
+    colors = ["cyan", "magenta", "yellow", "green", "red", "blue", "white"]
+
+    plt.clear_data()
+    plt.clear_color()
+    plt.theme("dark")
+
+    # Add data for each test case
+    color_idx = 0
+    for test_name, test_data in test_cases.items():
+        # Create a dict for quick lookup
+        test_times = {}
+        for row in test_data:
+            time_val = float(row["time_mean"])
+            if time_val > 0:  # Skip invalid values
+                test_times[row["branch"]] = time_val
+
+        # Build times array matching sorted_branches order
+        times_for_test = []
+        for branch in sorted_branches:
+            times_for_test.append(test_times.get(branch, 0))  # 0 if no data for this branch
+
+        # Add bar chart for this test case
+        color = colors[color_idx % len(colors)]
+        plt.bar(branch_labels, times_for_test, label=test_name, color=color)
+        color_idx += 1
+
+    # Configure plot
+    plt.title("Performance Comparison: All Tests")
+    plt.xlabel("Branch/Version")
+    plt.ylabel("Time (seconds)")
+
+    # Set size - taller for combined chart
+    width = max(80, len(branch_labels) * 8 + 30)
+    plt.plotsize(width, 30)
+
+    # Add grid and legend
+    plt.grid(True, True)
+    # plt.show_legend()  # Not available in this version of plotext
+
+    # Generate and save
+    plot_text = plt.build()
+    output_file = perf_base_dir / "combined.txt"
+    with open(output_file, "w", encoding="utf-8") as f:
+        f.write(plot_text)
+
+    print(f"  Generated: {output_file.relative_to(perf_base_dir.parent.parent)}")
 
 
 def main():

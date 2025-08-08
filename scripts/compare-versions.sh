@@ -200,16 +200,22 @@ info "Starting…"
     fi
 
     copy_perf_tools
-    git add tests/performance/ Makefile 2>/dev/null || true
-    git -c user.name=perf -c user.email=perf@example.invalid commit -m "Update performance tools for $ref" --no-verify >/dev/null || true
 
     local sha; sha=$(git rev-parse --short HEAD)
     say ""
     info "Benchmarking $kind: $ref ($sha)…"
     if run_make; then
       ok "✓ Complete: $ref"
+      # Stash any changes (including new files) then drop the stash
+      git add -A 2>/dev/null || true
+      git stash push -m "temp perf files" >/dev/null 2>&1 || true
+      git stash drop >/dev/null 2>&1 || true
     else
       err "✗ Failed: $ref"
+      # Clean up on failure too
+      git add -A 2>/dev/null || true
+      git stash push -m "temp perf files" >/dev/null 2>&1 || true
+      git stash drop >/dev/null 2>&1 || true
     fi
     say ""
   }
@@ -224,8 +230,6 @@ info "Starting…"
     (
       cd "$dir"
       copy_perf_tools
-      git add tests/performance/ Makefile 2>/dev/null || true
-      git -c user.name=perf -c user.email=perf@example.invalid commit -m "Update performance tools for $ref" --no-verify >/dev/null || true
       info "Benchmarking $kind: $ref ($sha)…"
       if run_make; then ok "✓ Complete: $ref"; else err "✗ Failed: $ref"; fi
       say ""
