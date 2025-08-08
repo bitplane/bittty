@@ -50,24 +50,20 @@ def benchmark_parser(ansi_content: str, runs: int = 5, temp_profile_path: str = 
     else:
         profile_filename = temp_profile_path
 
-    # First run with profiling
+    # Run with profiling for profile data (don't include timing)
     terminal = Terminal()
     parser = Parser(terminal)
 
     profiler = cProfile.Profile()
-    start_time = time.perf_counter()
     profiler.enable()
     parser.feed(ansi_content)
     profiler.disable()
-    end_time = time.perf_counter()
-
-    times.append(end_time - start_time)
 
     # Save profile data
     profiler.dump_stats(profile_filename)
 
-    # Remaining runs without profiling for cleaner timing
-    for _ in range(runs - 1):
+    # Now run without profiling for clean timing data
+    for _ in range(runs):
         terminal = Terminal()
         parser = Parser(terminal)
 
@@ -84,7 +80,7 @@ def benchmark_parser(ansi_content: str, runs: int = 5, temp_profile_path: str = 
 def main():
     """Main function to run the benchmark."""
 
-    num_runs = 10
+    num_runs = 5
 
     # Use project root logs/perf directory structure
     project_root = Path(__file__).parent.parent.parent

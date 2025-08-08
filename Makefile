@@ -21,9 +21,6 @@ coverage: .venv/.installed-dev scripts/coverage.sh  ## build the html coverage r
 perf: .venv/.installed-dev  ## run performance benchmark and generate profile
 	@echo "Running performance benchmark for branch: $$(git branch --show-current)"
 	@PYTHONPATH=src python tests/performance/benchmark_parser.py
-	@echo ""
-	@echo "Generated files in logs/:"
-	@ls -1t logs/ | grep "$$(date +%Y%m%d)_.*$$(git branch --show-current)" | head -3 | sed 's/^/  /'
 
 docs: .venv/.installed-dev scripts/docs.sh docs/index.md README.md pyproject.toml ## build the documentation
 	scripts/docs.sh
