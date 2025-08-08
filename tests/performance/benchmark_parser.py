@@ -82,27 +82,34 @@ def benchmark_parser(ansi_content: str, runs: int = 5, temp_profile_path: str = 
 def update_runs_csv(csv_path: Path, run_data: dict):
     """Update runs.csv with new benchmark data, using atomic write."""
     fieldnames = [
-        "run_ts", "branch", "test_case", "time_min", "runs", 
-        "time_mean", "time_median", "time_max", "dir_path"
+        "run_ts",
+        "branch",
+        "test_case",
+        "time_min",
+        "runs",
+        "time_mean",
+        "time_median",
+        "time_max",
+        "dir_path",
     ]
-    
+
     # Read existing data
     existing_rows = []
     if csv_path.exists():
         with open(csv_path, "r", newline="", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             existing_rows = list(reader)
-    
+
     # Add new row
     existing_rows.append(run_data)
-    
+
     # Write atomically via temp file
     temp_path = csv_path.with_suffix(".csv.tmp")
     with open(temp_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(existing_rows)
-    
+
     # Atomic rename
     temp_path.rename(csv_path)
 
@@ -242,7 +249,7 @@ stats.sort_stats('tottime').print_stats(20)
             "time_mean": statistics.mean(times),
             "time_median": statistics.median(times),
             "time_max": max(times),
-            "dir_path": str(run_dir.relative_to(perf_base_dir))
+            "dir_path": str(run_dir.relative_to(perf_base_dir)),
         }
         update_runs_csv(csv_path, run_data)
 
