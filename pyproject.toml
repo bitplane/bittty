@@ -1,7 +1,7 @@
 [project]
 name = "bittty"
 description = "a pure python tty"
-version = "0.0.9"
+version = "0.0.10"
 authors = [
     { name = "Gareth Davidson", email = "gaz@bitplane.net" }
 ]
@@ -43,5 +43,5 @@ markers = [
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "unix: marks tests as Unix/Linux/macOS only",
     "windows: marks tests as Windows only",
-    "integration: marks tests as integration tests (require real PTY)",
+    "integration: marks tests as end-to-end integration tests (require demo app)",
 ]
