@@ -318,8 +318,8 @@ def main():
         # Extract test case name (remove .gz only)
         test_case = ansi_file.stem
 
-        # Create timestamp for this run
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        # Create timestamp for this run (include microseconds to avoid collisions)
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
 
         # Create directory structure: logs/perf/{branch}/{timestamp}/
         run_dir = perf_base_dir / branch_name / timestamp

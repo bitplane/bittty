@@ -137,12 +137,14 @@ info "Starting…"
 
   git config advice.detachedHead false
 
-  # Restore runs.csv
-  if [[ -f "$original_repo/logs/perf/runs.csv" ]]; then
-    say "Copying existing runs.csv…"
-    mkdir -p logs/perf
-    cp "$original_repo/logs/perf/runs.csv" logs/perf/
+  # Install dependencies first (while on master/main branch)
+  say "Installing dependencies with make dev…"
+  if ! make dev >/dev/null 2>&1; then
+    warn "make dev failed, continuing anyway…"
   fi
+
+  # Ensure original logs directory exists
+  mkdir -p "$original_repo/logs"
 
   # Decide where to source perf tools from
   src_ref=""
@@ -175,6 +177,10 @@ info "Starting…"
         cp -f "$original_repo/Makefile" ./ 2>/dev/null || true
       fi
     fi
+
+    # Setup logs symlink for each run
+    rm -rf logs 2>/dev/null || true
+    ln -s "$original_repo/logs" logs
   }
 
   # Sanitize ref for branch names/paths
@@ -258,18 +264,6 @@ info "Starting…"
     for br in $branches; do
       [[ "$br" == "$original_branch" ]] && continue
       test_version "$br" "branch"
-    done
-  fi
-
-  # Copy results back
-  warn "Copying results back to original repository…"
-  if [[ -d "logs/perf" ]]; then
-    mkdir -p "$original_repo/logs/perf"
-    find logs/perf -type f | while IFS= read -r file; do
-      rel="${file#logs/perf/}"
-      tgt="$original_repo/logs/perf/$rel"
-      mkdir -p "$(dirname "$tgt")"
-      cp "$file" "$tgt" || true
     done
   fi
 
