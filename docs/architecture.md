@@ -1,5 +1,9 @@
 # BitTTY Architecture: A Hardware-Inspired Terminal Emulator
 
+## Note
+
+This is the future plan, not the current state of the project.
+
 ## Overview
 
 BitTTY is a modular terminal emulator designed around the hardware metaphor of physical terminals. Components are separated into clear responsibilities that mirror how real terminal hardware was organized.
