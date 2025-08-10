@@ -47,6 +47,7 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
 
 ## bugs / todo
 
+- [ ] SIGWINCH handler atomicity + buffer resizes
 - [ ] [architecture](architecture) - pretty big
 - [ ] gui
   - [ ] make a terminal input class, for standalone input

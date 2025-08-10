@@ -129,10 +129,7 @@ class StdoutFrontend:
 
         This demonstrates proper input handling via bittty's API.
         """
-        if ord(char) == 3:  # Ctrl+C
-            # Let bittty handle Ctrl+C (will send to bash)
-            self.terminal.input_key("c", modifier=2)  # KEY_MOD_CTRL = 2
-        elif ord(char) == 4:  # Ctrl+D (EOF)
+        if ord(char) == 4:  # Ctrl+D (EOF)
             self.terminal.input(char)
         elif ord(char) == 27:  # ESC - might be escape sequence
             # For this demo, just send ESC directly
