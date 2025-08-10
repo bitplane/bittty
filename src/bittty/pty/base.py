@@ -8,16 +8,12 @@ with platform-specific subclasses overriding only the byte-level I/O methods.
 import asyncio
 from typing import Optional, BinaryIO
 import subprocess
+import codecs
 from io import BytesIO
 
 from .. import constants
 
 ENV = {"TERM": "xterm-256color"}
-
-
-def high_bits(byte: int) -> int:
-    """how many bits are set on the right side of this byte?"""
-    return 8 - ((~byte & 0xFF).bit_length())
 
 
 class PTY:
@@ -50,7 +46,8 @@ class PTY:
         self.rows = rows
         self.cols = cols
         self._process = None
-        self._buffer = b""  # Buffer for incomplete UTF-8 sequences
+        self._buffer = b""
+        self._dec = codecs.getincrementaldecoder("utf-8")(errors="replace")
 
     def read_bytes(self, size: int) -> bytes:
         """Read raw bytes. Override in subclasses for platform-specific I/O."""
@@ -62,37 +59,20 @@ class PTY:
         return self.to_process.write(data) or 0
 
     def read(self, size: int = constants.DEFAULT_PTY_BUFFER_SIZE) -> str:
-        """Read data with UTF-8 buffering."""
-        new_data = self.read_bytes(size)
-
-        # deal with split UTF8 sequences
-        data = self._buffer + new_data
-        self._buffer = b""
-
-        if not new_data:
-            return data.decode("utf-8", errors="replace")
-
-        end = len(data)
-
-        # Check if last few bytes form valid UTF-8 sequence endings
-        u1 = 0, high_bits(data[-1])  # Last byte: ASCII only
-        u2 = 2, high_bits(data[-2]) if end > 1 else 0  # 2nd to last: ASCII or 2-byte start
-        u3 = 3, high_bits(data[-3]) if end > 2 else 0  # 3rd to last: ASCII or 3-byte start
-
-        for pos, (allowed, actual) in enumerate((u1, u2, u3)):
-            if actual in (0, allowed):
-                # Valid position - sequence is complete
-                break
-            elif actual != 1:
-                # Not a continuation byte and not valid - split here
-                end = end - pos - 1
-                break
-            # actual == 1 means continuation byte, keep checking
-
-        self._buffer = data[end:]
-        data = data[:end]
-
-        return data.decode("utf-8", errors="replace")
+        """Read data using the C incremental UTF-8 decoder (buffers split code points)."""
+        b = self.read_bytes(size)
+        if b:
+            s = self._dec.decode(b, final=False)  # holds incomplete tails internally
+            # expose undecoded tail for tests/inspection
+            tail, _state = self._dec.getstate()  # tail is bytes of an incomplete seq (if any)
+            self._buffer = tail
+            return s
+        else:
+            # EOF / no new data: flush any incomplete sequence per 'replace' policy
+            s = self._dec.decode(b"", final=True)
+            self._dec.reset()
+            self._buffer = b""
+            return s
 
     def write(self, data: str) -> int:
         """Write string as UTF-8 bytes."""
