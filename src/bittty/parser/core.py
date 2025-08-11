@@ -1,6 +1,7 @@
-"""Core Parser class with state machine and sequence dispatching."""
+"""Core Parser class with state machine and sequence dispatching (fast state-specific scanners)."""
 
 from __future__ import annotations
+
 import logging
 import re
 from functools import lru_cache
@@ -12,15 +13,16 @@ if TYPE_CHECKING:
 from .. import constants
 from .csi import dispatch_csi
 from .osc import dispatch_osc
-
-# keep DCS/ESC handlers as before
 from .dcs import dispatch_dcs
 from .escape import dispatch_escape, handle_charset_escape
 
 logger = logging.getLogger(__name__)
 
-# Unified 7-bit + 8-bit tokens (single named groups → no aliasing)
-ESCAPE_PATTERNS = {
+# -------------------------
+# Unified 7-bit + 8-bit tokens (GROUND only)
+# Order matters: specific before generic.
+# -------------------------
+GROUND_PATTERNS = {
     # Paired sequence starters
     "osc": r"(?:\x1b\]|\x9D)",
     "dcs": r"(?:\x1bP|\x90)",
@@ -28,85 +30,65 @@ ESCAPE_PATTERNS = {
     "pm": r"(?:\x1b\^|\x9E)",
     "sos": r"(?:\x1bX|\x98)",
     "csi": r"(?:\x1b\[|\x9B)",
-    # Terminators / cancel
-    "st": r"(?:\x1b\\|\x9C)",  # String Terminator
-    "bel": r"\x07",
-    "cancel": r"[\x18\x1A]",  # CAN / SUB abort current sequence
+    # SCS (charset designation) MUST precede generic ESC minis
+    "esc_charset": r"\x1b[()][A-Za-z0-9<>=@]",  # G0/G1
+    "esc_charset2": r"\x1b[*+][A-Za-z0-9<>=@]",  # G2/G3
     # Singles / minis
     "ss2": r"(?:\x1bN|\x8E)",
     "ss3": r"(?:\x1bO|\x8F)",
-    # Simple ESC minis (not starters for paired strings)
-    "esc": r"\x1b[^][P_^XO\\]",  # excludes [,],P,_,^,X,ST
-    "esc_charset": r"\x1b[()][A-Za-z0-9<>=@]",  # G0/G1
-    "esc_charset2": r"\x1b[*+][A-Za-z0-9<>=@]",  # G2/G3
-    # CSI final (only relevant in CSI mode)
-    "csi_final": r"[\x40-\x7E]",
-    # C0/C1 single-byte controls (excluding BEL/CAN/SUB here)
-    "ctrl": r"[\x00-\x06\x08-\x17\x19\x1B-\x1F\x7F]",
-    # End-of-buffer guard: incomplete starter at buffer end (no ST here)
+    # Generic simple ESC minis (not starters for paired strings)
+    # excludes [, ], P, _, ^, X, and ST (\)
+    "esc": r"\x1b[^][P_^XO\\]",
+    # C0/C1 controls except BEL/CAN/SUB/ESC (ESC handled via others; ESC alone should hit 'trail')
+    "ctrl": r"[\x00-\x06\x08-\x17\x19\x1C-\x1F\x7F]",
+    # Specials
+    "bel": r"\x07",
+    "cancel": r"[\x18\x1A]",  # CAN / SUB (abort current sequence if in one)
+    # End-of-buffer guard: incomplete starter right at buffer end
     "trail": r"(?:\x1b[\[\]P_^X]|\x90|\x9B|\x9D|\x9E|\x9F|\x98)\Z",
 }
 
+
+def _compile(name_to_pat: dict[str, str]) -> re.Pattern:
+    return re.compile("|".join(f"(?P<{k}>{v})" for k, v in name_to_pat.items()))
+
+
+# Ground scanner
+GROUND_RE = _compile(GROUND_PATTERNS)
+
+# CSI: only final byte or cancel. (No trail inside CSI; just wait for more.)
+CSI_TERM_RE = re.compile(r"(?P<csi_final>[\x40-\x7E])|(?P<cancel>[\x18\x1A])")
+
+# STRING terminators (ST always; BEL also for OSC), plus cancel.
+ST_RE = re.compile(r"(?P<st>(?:\x1b\\|\x9C))|(?P<cancel>[\x18\x1A])")
+OSC_RE = re.compile(r"(?P<st>(?:\x1b\\|\x9C))|(?P<bel>\x07)|(?P<cancel>[\x18\x1A])")
+
 PAIRED = {"osc", "dcs", "apc", "pm", "sos", "csi"}
 STANDALONES = {"ss2", "ss3", "esc", "esc_charset", "esc_charset2", "ctrl", "bel"}
-SEQUENCE_STARTS = {"osc", "dcs", "apc", "pm", "sos", "csi"}
-
-TERMINATORS = {
-    None: SEQUENCE_STARTS | STANDALONES | {"cancel"},  # in GROUND, these trigger handling
-    "osc": {"st", "bel", "cancel"},
-    "dcs": {"st", "bel", "cancel"},
-    "apc": {"st", "cancel"},
-    "pm": {"st", "cancel"},
-    "sos": {"st", "cancel"},
-    "csi": {"csi_final", "cancel"},
-}
 
 
 @lru_cache(maxsize=300)
 def parse_string_sequence(data: str, sequence_type: str) -> str:
-    """Return string content without prefix/terminator (OSC/DCS/APC/PM/SOS)."""
+    """Strip prefix and terminator for OSC/DCS/APC/PM/SOS."""
     if not data:
         return ""
-    # Remove prefix (supports 7-bit ESC-prefixed and 8-bit C1)
+    # Remove prefix (support both 7-bit ESC-prefixed and 8-bit C1)
     if sequence_type == "osc":
-        if data[0] == "\x9d":
-            content = data[1:]
-        elif data.startswith("\x1b]"):
-            content = data[2:]
-        else:
-            return ""
+        content = data[1:] if data[:1] == "\x9d" else (data[2:] if data.startswith("\x1b]") else "")
     elif sequence_type == "dcs":
-        if data[0] == "\x90":
-            content = data[1:]
-        elif data.startswith("\x1bP"):
-            content = data[2:]
-        else:
-            return ""
+        content = data[1:] if data[:1] == "\x90" else (data[2:] if data.startswith("\x1bP") else "")
     elif sequence_type == "apc":
-        if data[0] == "\x9f":
-            content = data[1:]
-        elif data.startswith("\x1b_"):
-            content = data[2:]
-        else:
-            return ""
+        content = data[1:] if data[:1] == "\x9f" else (data[2:] if data.startswith("\x1b_") else "")
     elif sequence_type == "pm":
-        if data[0] == "\x9e":
-            content = data[1:]
-        elif data.startswith("\x1b^"):
-            content = data[2:]
-        else:
-            return ""
+        content = data[1:] if data[:1] == "\x9e" else (data[2:] if data.startswith("\x1b^") else "")
     elif sequence_type == "sos":
-        if data[0] == "\x98":
-            content = data[1:]
-        elif data.startswith("\x1bX"):
-            content = data[2:]
-        else:
-            return ""
+        content = data[1:] if data[:1] == "\x98" else (data[2:] if data.startswith("\x1bX") else "")
     else:
         return ""
+    if not content:
+        return ""
 
-    # Strip terminator: ST (ESC \ or 0x9C) or BEL (OSC only)
+    # Strip terminator
     if content.endswith("\x1b\\"):
         return content[:-2]
     if content.endswith("\x9c"):
@@ -116,89 +98,140 @@ def parse_string_sequence(data: str, sequence_type: str) -> str:
     return content
 
 
-def compile_tokenizer(patterns: dict[str, str]) -> re.Pattern:
-    return re.compile("|".join(f"(?P<{k}>{v})" for k, v in patterns.items()))
-
-
 class Parser:
+    """
+    State machine: GROUND → (CSI | STRING[osc|dcs|apc|pm|sos]) → GROUND
+    Uses small, state-specific scanners for speed.
+    """
+
     def __init__(self, terminal: Terminal) -> None:
         self.terminal = terminal
         self.buffer = ""
         self.pos = 0
-        self.mode: str | None = None
-        self.escape_patterns = ESCAPE_PATTERNS.copy()
-        self.tokenizer = compile_tokenizer(self.escape_patterns)
+        self.mode: str | None = None  # None, 'csi', 'osc', 'dcs', 'apc', 'pm', 'sos'
+
+        # kept for API compatibility
+        self.escape_patterns = GROUND_PATTERNS.copy()
+        self.tokenizer = GROUND_RE
+
+        # bounds for current paired sequence
+        self._seq_start = 0  # index where introducer starts
+        self._scan_from = 0  # index just after introducer (for searching finals)
 
     def update_tokenizer(self) -> None:
-        # kept for API compatibility; tokenizer is static in this design
-        self.tokenizer = compile_tokenizer(self.escape_patterns)
+        # API compat; nothing dynamic here
+        self.tokenizer = GROUND_RE
 
     def update_pattern(self, key: str, pattern: str) -> None:
+        # Rarely used; keep behavior if you mutate patterns externally
         self.escape_patterns[key] = pattern
-        self.update_tokenizer()
+        self.tokenizer = _compile(self.escape_patterns)
 
+    # ---- internal helpers ----
+    def _set_seq_bounds(self, start: int) -> None:
+        """Set seq_start and scan_from based on 7-bit/8-bit introducer length."""
+        self._seq_start = start
+        b = self.buffer
+        # 8-bit forms are single-char; 7-bit are ESC + one char
+        if b[start] == "\x1b":
+            self._scan_from = start + 2
+        else:
+            self._scan_from = start + 1
+
+    # ---- main entry ----
     def feed(self, chunk: str) -> None:
         self.buffer += chunk
-        trail_start: int | None = None
 
-        for match in self.tokenizer.finditer(self.buffer, self.pos):
-            kind = match.lastgroup
-            start, end = match.start(), match.end()
-
-            if kind == "trail":
-                trail_start = start
-                break
-
-            if kind not in TERMINATORS[self.mode]:
-                continue
-
+        while True:
             if self.mode is None:
-                # flush preceding printables
-                if start > self.pos:
-                    self.dispatch("print", self.buffer[self.pos : start])
+                # ---- GROUND: scan for next token
+                trail_start: int | None = None
+                for m in self.tokenizer.finditer(self.buffer, self.pos):
+                    kind = m.lastgroup
+                    start, end = m.start(), m.end()
 
-                if kind in SEQUENCE_STARTS:
-                    # enter paired sequence; don't consume starter
-                    self.mode = kind
-                    self.pos = start
-                elif kind == "cancel":
-                    # CAN/SUB in ground: ignore
-                    self.pos = end
-                elif kind in STANDALONES:
+                    if kind == "trail":
+                        trail_start = start
+                        break
+
+                    # flush preceding printables
+                    if start > self.pos:
+                        self.dispatch("print", self.buffer[self.pos : start])
+                        self.pos = start
+
+                    if kind in PAIRED:
+                        # enter a paired sequence; keep starter in buffer
+                        self.mode = kind
+                        self._set_seq_bounds(start)
+                        break
+
+                    if kind == "cancel":
+                        # CAN/SUB in ground: ignore
+                        self.pos = end
+                        continue
+
+                    # Standalone controls/minis
                     self.dispatch(kind, self.buffer[start:end])
                     self.pos = end
-            else:
-                # inside a paired sequence
-                if kind == "cancel":
-                    # abort sequence: drop buffered content
-                    self.mode = None
-                    self.pos = end
-                elif self.mode == "csi" and kind == "csi_final":
-                    self.dispatch("csi", self.buffer[self.pos : end])
-                    self.mode = None
-                    self.pos = end
                 else:
-                    # strings (OSC/DCS/APC/PM/SOS) terminated by ST/BEL
-                    self.dispatch(self.mode, self.buffer[self.pos : end])
-                    self.mode = None
+                    # no more matches
+                    if self.pos < len(self.buffer):
+                        self.dispatch("print", self.buffer[self.pos :])
+                        self.pos = len(self.buffer)
+
+                # hit a trailing starter → leave it buffered for next chunk
+                if trail_start is not None:
+                    if self.pos < trail_start:
+                        self.dispatch("print", self.buffer[self.pos : trail_start])
+                        self.pos = trail_start
+                    break  # wait for more data
+
+                # if we entered a mode, handle it now
+                if self.mode is None:
+                    break
+
+            if self.mode == "csi":
+                # Find final or cancel, searching AFTER the introducer
+                m = CSI_TERM_RE.search(self.buffer, self._scan_from)
+                if not m:
+                    # incomplete CSI, wait for more
+                    break
+                end = m.end()
+                if m.lastgroup == "cancel":
+                    # abort CSI
                     self.pos = end
+                    self.mode = None
+                    continue
+                # dispatch full sequence from introducer to final
+                self.dispatch("csi", self.buffer[self._seq_start : end])
+                self.pos = end
+                self.mode = None
+                continue
 
-        # After scanning, handle trailing starter guard
-        if trail_start is not None:
-            if self.mode is None and trail_start > self.pos:
-                self.dispatch("print", self.buffer[self.pos : trail_start])
-                self.pos = trail_start
-        else:
-            # no trailing starter; flush remaining printables in ground
-            if self.mode is None and self.pos < len(self.buffer):
-                self.dispatch("print", self.buffer[self.pos :])
-                self.pos = len(self.buffer)
+            # STRING modes (OSC/DCS/APC/PM/SOS)
+            term_re = OSC_RE if self.mode == "osc" else ST_RE
+            m = term_re.search(self.buffer, self._scan_from)
+            if not m:
+                # incomplete string, wait
+                break
+            end = m.end()
+            if m.lastgroup == "cancel":
+                # abort string
+                self.pos = end
+                self.mode = None
+                continue
+            # include from starter to ST/BEL
+            self.dispatch(self.mode, self.buffer[self._seq_start : end])
+            self.pos = end
+            self.mode = None
+            # loop to handle next token immediately
 
-        # compact buffer
+        # compact processed buffer
         if self.pos > 0:
             self.buffer = self.buffer[self.pos :]
             self.pos = 0
 
+    # ---- dispatchers ----
     def dispatch(self, kind: str, data: str) -> None:
         if kind == "print":
             self.terminal.write_text(data, self.terminal.current_ansi_code)
@@ -255,7 +288,7 @@ class Parser:
         elif ch == constants.BS:
             self.terminal.backspace()
         elif ch == constants.HT:
-            # real terminals use a tab stop table; simple next-8 for now
+            # TODO: proper tab stops; next-8 for now
             next_tab = ((self.terminal.cursor_x // 8) + 1) * 8
             self.terminal.cursor_x = min(next_tab, self.terminal.width - 1)
         elif ch in (constants.LF, constants.VT, constants.FF):
@@ -274,3 +307,5 @@ class Parser:
         self.buffer = ""
         self.pos = 0
         self.mode = None
+        self._seq_start = 0
+        self._scan_from = 0
