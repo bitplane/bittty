@@ -19,58 +19,8 @@ Instead of abstract "services" and "controllers", BitTTY uses concrete component
 - **Monitor**: shows stuff on screen
 - **Keyboard**: gets keypresses
 
-## Current Architecture
+## Architecture
 
-```
-BitTTY (Board)
-├── Parser (command_parser.py)
-│   └── converts bytes → Commands → dispatch to devices
-│
-├── Devices (all inherit from Device)
-│   ├── MonitorDevice
-│   │   ├── Buffer (primary_buffer)
-│   │   ├── Buffer (alt_buffer)
-│   │   ├── cursor position (x, y)
-│   │   ├── character sets (G0-G3)
-│   │   ├── screen modes (alt screen, scroll regions)
-│   │   ├── SGR processing (colors, styles)
-│   │   └── text rendering
-│   │
-│   ├── TTYMonitorDevice (extends MonitorDevice)
-│   │   ├── terminfo queries
-│   │   ├── host terminal capabilities
-│   │   └── ANSI output to sys.stdout
-│   │
-│   ├── ConnectionDevice
-│   │   ├── PTY management
-│   │   ├── process spawning
-│   │   ├── termios control
-│   │   └── I/O with child process
-│   │
-│   ├── TTYInputDevice
-│   │   ├── raw mode setup
-│   │   ├── stdin reading
-│   │   └── key translation
-│   │
-│   ├── BellDevice
-│   │   └── AudioBellDevice / VisualBellDevice
-│   │
-│   ├── PrinterDevice
-│   │   └── LinePrinter
-│   │
-│   └── InputDevice (base class)
-│       ├── KeyboardDevice
-│       └── MouseDevice
-│
-└── Command System
-    ├── Command (namedtuple)
-    ├── create_*_command() functions
-    └── dispatch routing
-```
-
-## Emerging Architecture (Work in Progress)
-
-Through analysis of terminal input/output flows and cross-platform concerns, we're evolving toward:
 
 ### Component Separation
 
