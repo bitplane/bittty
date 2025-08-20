@@ -121,13 +121,12 @@ class UnixPTY(PTY):
 
     def flush(self) -> None:
         """
-        Flush output using os.fsync() for real PTY file descriptor.
+        PTY master file descriptors don't support fsync - data flows immediately.
 
-        More efficient than generic flush() - ensures data is written through
-        to the terminal device, not just buffered. Important for interactive
-        terminal responsiveness.
+        For Unix PTYs, data written to the master side appears immediately
+        on the slave side, so no explicit flushing is needed.
         """
-        os.fsync(self.master_fd)
+        pass
 
     async def read_async(self, size: int = constants.DEFAULT_PTY_BUFFER_SIZE) -> str:
         """
