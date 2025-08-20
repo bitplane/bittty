@@ -5,8 +5,7 @@ from __future__ import annotations
 from typing import List, Tuple
 
 from . import constants
-from .color import get_cursor_code, reset_code
-from .style import Style, parse_sgr_sequence
+from .style import Style, parse_sgr_sequence, CURSOR_CODE, RESET_CODE
 
 
 # Type alias for a cell: (Style, character)
@@ -307,7 +306,7 @@ class Buffer:
                 # For cursor, we need to apply cursor style on top of cell style
                 transition = current_style.diff(cell_style)
                 parts.append(transition)
-                parts.append(get_cursor_code())
+                parts.append(CURSOR_CODE)
                 parts.append(char)
                 parts.append("\033[27m")  # Turn off reverse video only
                 current_style = cell_style  # Update tracking
@@ -366,7 +365,7 @@ class Buffer:
             # Handle text cursor position
             if show_cursor and x == cursor_x and y == cursor_y:
                 # Add cursor style
-                parts.extend(("ansi", ansi_code, "cursor", get_cursor_code(), "char", char, "cursor_end", "\033[27m"))
+                parts.extend(("ansi", ansi_code, "cursor", CURSOR_CODE, "char", char, "cursor_end", "\033[27m"))
             else:
                 # Normal cell
                 parts.extend(("ansi", ansi_code, "char", char))
@@ -375,9 +374,9 @@ class Buffer:
         current_width = min(len(row), width)
         if current_width < width:
             # Reset all attributes for padding (including background)
-            parts.extend(("reset", reset_code(), "pad", " " * (width - current_width)))
+            parts.extend(("reset", RESET_CODE, "pad", " " * (width - current_width)))
 
         # Always end with a reset to prevent bleeding to next line
-        parts.extend(("final_reset", reset_code()))
+        parts.extend(("final_reset", RESET_CODE))
 
         return tuple(parts)

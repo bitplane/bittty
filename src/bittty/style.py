@@ -5,6 +5,12 @@ from functools import lru_cache
 from typing import Literal, Tuple, Union, Optional
 
 
+# --- Constants --- #
+
+CURSOR_CODE = "\033[7m"  # Reverse video for cursor display
+RESET_CODE = "\033[0m"  # Reset all formatting
+
+
 # --- Color Model --- #
 
 
