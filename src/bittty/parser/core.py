@@ -290,9 +290,7 @@ class Parser:
         elif ch == constants.BS:
             self.terminal.backspace()
         elif ch == constants.HT:
-            # TODO: proper tab stops; next-8 for now
-            next_tab = ((self.terminal.cursor_x // 8) + 1) * 8
-            self.terminal.cursor_x = min(next_tab, self.terminal.width - 1)
+            self.terminal.cursor_x = self.terminal.next_tab_stop()
         elif ch in (constants.LF, constants.VT, constants.FF):
             self.terminal.line_feed()
         elif ch == constants.CR:

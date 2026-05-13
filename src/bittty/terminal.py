@@ -72,6 +72,7 @@ class Terminal:
         self.cursor_x = 0
         self.cursor_y = 0
         self.cursor_visible = True
+        self.cursor_blinking = False
 
         # Mouse position
         self.mouse_x = 0
@@ -83,6 +84,7 @@ class Terminal:
         self.auto_wrap = True
         self.insert_mode = False
         self.application_keypad = False
+        self.ansi_mode = True
         self.cursor_application_mode = False
         self.scroll_mode = False
         self.mouse_tracking = False
@@ -90,6 +92,7 @@ class Terminal:
         self.mouse_any_tracking = False
         self.mouse_sgr_mode = False
         self.mouse_extended_mode = False
+        self.urxvt_mouse = False
         self.backarrow_key_sends_bs = False  # DECBKM: False = sends DEL, True = sends BS
         self.scroll_mode = False  # DECSCLM: False = jump scrolling, True = smooth scrolling
         self.auto_repeat = True  # DECARM: True = auto-repeat enabled, False = disabled
@@ -100,6 +103,10 @@ class Terminal:
         self.origin_mode = False  # DECOM: False = absolute, True = relative to scroll region
         self.auto_resize_mode = False  # DECARSM: False = manual, True = auto-resize
         self.keyboard_usage_mode = False  # DECKBUM: False = normal, True = typewriter mode
+        self.bracketed_paste = False
+
+        # Horizontal tab stops, 0-indexed. Terminals default to every 8 columns.
+        self.tab_stops = set(range(8, width, 8))
 
         # Screen buffers
         self.primary_buffer = Buffer(width, height)  # With scrollback (future)
@@ -157,6 +164,7 @@ class Terminal:
         """Resize terminal to new dimensions."""
         self.width = width
         self.height = height
+        self.tab_stops = {stop for stop in self.tab_stops if stop < width}
 
         # Resize both buffers
         self.primary_buffer.resize(width, height)
@@ -351,6 +359,20 @@ class Terminal:
         """Move cursor to beginning of line."""
         self.cursor_x = 0
 
+    def set_tab_stop(self, x: Optional[int] = None) -> None:
+        """Set a horizontal tab stop at the given column."""
+        if x is None:
+            x = self.cursor_x
+        if 0 <= x < self.width:
+            self.tab_stops.add(x)
+
+    def next_tab_stop(self) -> int:
+        """Return the next horizontal tab stop, clamped to the last column."""
+        for stop in sorted(self.tab_stops):
+            if stop > self.cursor_x:
+                return min(stop, self.width - 1)
+        return self.width - 1
+
     def backspace(self) -> None:
         """Move cursor back one position."""
         if self.cursor_x > 0:
@@ -475,29 +497,17 @@ class Terminal:
 
     def insert_lines(self, count: int) -> None:
         """Insert blank lines at cursor position."""
-        for _ in range(count):
-            # Shift lines down and clear current line
-            for y in range(self.height - 1, self.cursor_y, -1):
-                if y - 1 >= 0:
-                    # Copy line above to current line
-                    for x in range(self.width):
-                        cell = self.current_buffer.get_cell(x, y - 1)
-                        self.current_buffer.set_cell(x, y, cell[1], cell[0])
-            # Clear the current line
-            self.current_buffer.clear_line(self.cursor_y, constants.ERASE_ALL)
+        if count <= 0 or not (self.scroll_top <= self.cursor_y <= self.scroll_bottom):
+            return
+
+        self.current_buffer.scroll_region_down(self.cursor_y, self.scroll_bottom, count)
 
     def delete_lines(self, count: int) -> None:
         """Delete lines at cursor position."""
-        for _ in range(count):
-            # Shift lines up
-            for y in range(self.cursor_y, self.height - 1):
-                if y + 1 < self.height:
-                    # Copy line below to current line
-                    for x in range(self.width):
-                        cell = self.current_buffer.get_cell(x, y + 1)
-                        self.current_buffer.set_cell(x, y, cell[1], cell[0])
-            # Clear the bottom line
-            self.current_buffer.clear_line(self.height - 1, constants.ERASE_ALL)
+        if count <= 0 or not (self.scroll_top <= self.cursor_y <= self.scroll_bottom):
+            return
+
+        self.current_buffer.scroll_region_up(self.cursor_y, self.scroll_bottom, count)
 
     def insert_characters(self, count: int, ansi_code: str = "") -> None:
         """Insert blank characters at cursor position."""

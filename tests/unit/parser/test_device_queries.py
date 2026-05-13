@@ -165,6 +165,17 @@ def test_decrqm_private_mode_query_alternate_screen():
     terminal.respond.assert_called_with("\033[?1049;1$y")
 
 
+def test_decrqm_private_mode_query_ansi_mode_default():
+    """DECANM status query should not require prior mode initialization by parser."""
+    terminal = Terminal(width=80, height=24)
+    parser = Parser(terminal)
+    terminal.respond = Mock()
+
+    parser.feed("\x1b[?2$p")
+
+    terminal.respond.assert_called_with("\033[?2;1$y")
+
+
 def test_decrqm_ansi_mode_query_insert_mode():
     """Test DECRQM ANSI mode query for insert/replace mode."""
     terminal = Terminal(width=80, height=24)

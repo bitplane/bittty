@@ -32,6 +32,18 @@ def test_horizontal_tab(terminal):
     assert terminal.cursor_x == 8
 
 
+def test_horizontal_tab_uses_set_tab_stop(terminal):
+    """ESC H should set a tab stop used by subsequent horizontal tabs."""
+    parser = Parser(terminal)
+
+    terminal.set_cursor(3, 0)
+    parser.feed("\x1bH")
+    terminal.set_cursor(0, 0)
+    parser.feed(HT)
+
+    assert terminal.cursor_x == 3
+
+
 def test_line_feed(terminal):
     """Test that a line feed moves the cursor down."""
     parser = Parser(terminal)

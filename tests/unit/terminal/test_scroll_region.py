@@ -1,5 +1,6 @@
 """Tests for scroll region functionality."""
 
+from bittty.parser import Parser
 from bittty.terminal import Terminal
 
 
@@ -143,3 +144,62 @@ def test_reset_scroll_region():
     terminal.set_scroll_region(0, 9)  # This is what CSI r with no params should do
     assert terminal.scroll_top == 0
     assert terminal.scroll_bottom == 9
+
+
+def test_insert_lines_within_scroll_region():
+    """CSI IL should only shift rows from cursor to scroll-region bottom."""
+    terminal = Terminal(width=10, height=10)
+    parser = Parser(terminal)
+    for i in range(10):
+        terminal.current_buffer.set(0, i, f"Line {i}")
+
+    terminal.set_scroll_region(2, 6)
+    terminal.set_cursor(0, 4)
+    parser.feed("\x1b[2L")
+
+    assert terminal.current_buffer.get_line_text(0) == "Line 0    "
+    assert terminal.current_buffer.get_line_text(1) == "Line 1    "
+    assert terminal.current_buffer.get_line_text(2) == "Line 2    "
+    assert terminal.current_buffer.get_line_text(3) == "Line 3    "
+    assert terminal.current_buffer.get_line_text(4) == "          "
+    assert terminal.current_buffer.get_line_text(5) == "          "
+    assert terminal.current_buffer.get_line_text(6) == "Line 4    "
+    assert terminal.current_buffer.get_line_text(7) == "Line 7    "
+    assert terminal.current_buffer.get_line_text(8) == "Line 8    "
+    assert terminal.current_buffer.get_line_text(9) == "Line 9    "
+
+
+def test_delete_lines_within_scroll_region():
+    """CSI DL should only shift rows from cursor to scroll-region bottom."""
+    terminal = Terminal(width=10, height=10)
+    parser = Parser(terminal)
+    for i in range(10):
+        terminal.current_buffer.set(0, i, f"Line {i}")
+
+    terminal.set_scroll_region(2, 6)
+    terminal.set_cursor(0, 4)
+    parser.feed("\x1b[2M")
+
+    assert terminal.current_buffer.get_line_text(0) == "Line 0    "
+    assert terminal.current_buffer.get_line_text(1) == "Line 1    "
+    assert terminal.current_buffer.get_line_text(2) == "Line 2    "
+    assert terminal.current_buffer.get_line_text(3) == "Line 3    "
+    assert terminal.current_buffer.get_line_text(4) == "Line 6    "
+    assert terminal.current_buffer.get_line_text(5) == "          "
+    assert terminal.current_buffer.get_line_text(6) == "          "
+    assert terminal.current_buffer.get_line_text(7) == "Line 7    "
+    assert terminal.current_buffer.get_line_text(8) == "Line 8    "
+    assert terminal.current_buffer.get_line_text(9) == "Line 9    "
+
+
+def test_insert_delete_lines_ignore_cursor_outside_scroll_region():
+    terminal = Terminal(width=10, height=10)
+    for i in range(10):
+        terminal.current_buffer.set(0, i, f"Line {i}")
+
+    terminal.set_scroll_region(2, 6)
+    terminal.set_cursor(0, 7)
+    terminal.insert_lines(1)
+    terminal.delete_lines(1)
+
+    assert [terminal.current_buffer.get_line_text(i) for i in range(10)] == [f"Line {i}    " for i in range(10)]
