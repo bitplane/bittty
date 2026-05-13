@@ -323,10 +323,7 @@ def dispatch_sm_rm_private(terminal: Terminal, params: List[Optional[int]], set_
         elif param == 8:  # DECARM - Auto Repeat Mode
             terminal.auto_repeat = set_mode
         elif param == 9:  # X10 Mouse Tracking
-            if set_mode:
-                terminal.mouse_mode = "x10"
-            else:
-                terminal.mouse_mode = None
+            terminal.mouse_tracking = set_mode
         elif param == 12:  # Cursor Blinking
             terminal.cursor_blinking = set_mode
         elif param == 20:  # DECNLM - Line Feed/New Line Mode
@@ -345,22 +342,15 @@ def dispatch_sm_rm_private(terminal: Terminal, params: List[Optional[int]], set_
         elif param == 67:  # DECBKM - Backarrow Key Mode
             terminal.backarrow_key_sends_bs = set_mode
         elif param == 1000:  # VT200 Mouse Tracking
-            if set_mode:
-                terminal.mouse_mode = "vt200"
-            else:
-                terminal.mouse_mode = None
+            terminal.mouse_tracking = set_mode
         elif param == 1002:  # Button Event Mouse Tracking
-            if set_mode:
-                terminal.mouse_mode = "button"
-            else:
-                terminal.mouse_mode = None
+            terminal.mouse_tracking = set_mode
+            terminal.mouse_button_tracking = set_mode
         elif param == 1003:  # Any Event Mouse Tracking
-            if set_mode:
-                terminal.mouse_mode = "any"
-            else:
-                terminal.mouse_mode = None
+            terminal.mouse_tracking = set_mode
+            terminal.mouse_any_tracking = set_mode
         elif param == 1006:  # SGR Mouse Mode
-            terminal.sgr_mouse = set_mode
+            terminal.mouse_sgr_mode = set_mode
         elif param == 1015:  # URXVT Mouse Mode
             terminal.urxvt_mouse = set_mode
         elif param == 1047:  # Alternate Screen Buffer (alternative)

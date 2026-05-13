@@ -59,6 +59,8 @@ class StdoutFrontend:
         self.running = True
         self.old_termios = None
         self.old_stdin_blocking = None
+        self.host_mouse_mode = None
+        self.input_sequence_buffer = ""
 
     def get_default_shell(self):
         """Get the default shell command for the current platform."""
@@ -104,6 +106,7 @@ class StdoutFrontend:
 
     def restore_terminal(self):
         """Restore original terminal settings."""
+        self.disable_host_mouse()
         if HAS_UNIX_TERMIOS and self.old_termios:
             termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, self.old_termios)
         if self.old_stdin_blocking is not None:
@@ -113,6 +116,35 @@ class StdoutFrontend:
                 pass
         # Show cursor and clear screen
         print("\033[?25h\033[2J\033[H", end="", flush=True)
+
+    def disable_host_mouse(self):
+        """Disable host-terminal mouse reporting modes used by the demo."""
+        if self.host_mouse_mode is not None:
+            print("\033[?1000l\033[?1002l\033[?1003l\033[?1006l", end="", flush=True)
+            self.host_mouse_mode = None
+
+    def sync_host_mouse(self):
+        """Mirror bittty's requested mouse mode onto the host terminal."""
+        if self.terminal.mouse_any_tracking:
+            mode = "any"
+            enable = "\033[?1003h\033[?1006h"
+        elif self.terminal.mouse_button_tracking:
+            mode = "button"
+            enable = "\033[?1002h\033[?1006h"
+        elif self.terminal.mouse_tracking:
+            mode = "basic"
+            enable = "\033[?1000h\033[?1006h"
+        else:
+            mode = None
+            enable = ""
+
+        if mode == self.host_mouse_mode:
+            return
+
+        self.disable_host_mouse()
+        if mode is not None:
+            print(enable, end="", flush=True)
+            self.host_mouse_mode = mode
 
     def render_screen(self):
         """
@@ -161,8 +193,64 @@ class StdoutFrontend:
         # Feed data to bittty's parser
         self.terminal.parser.feed(data)
 
+        # Child output may have changed mouse reporting modes.
+        self.sync_host_mouse()
+
         # Re-render the screen
         self.render_screen()
+
+    def handle_sgr_mouse_sequence(self, sequence: str) -> bool:
+        """Parse host SGR mouse reports and forward them through bittty."""
+        if not sequence.startswith("\033[<") or sequence[-1] not in "Mm":
+            return False
+
+        try:
+            button_s, x_s, y_s = sequence[3:-1].split(";")
+            button = int(button_s)
+            x = int(x_s)
+            y = int(y_s)
+        except ValueError:
+            return False
+
+        modifiers = set()
+        if button & 4:
+            modifiers.add("shift")
+        if button & 8:
+            modifiers.add("meta")
+        if button & 16:
+            modifiers.add("ctrl")
+
+        event_type = "release" if sequence[-1] == "m" else "press"
+        base_button = button & ~(4 | 8 | 16)
+        if base_button & 32:
+            event_type = "move"
+            base_button &= ~32
+
+        self.terminal.input_mouse(x, y, base_button, event_type, modifiers)
+        return True
+
+    def handle_input(self, char):
+        """Handle keyboard input, buffering complete SGR mouse sequences."""
+        if self.input_sequence_buffer:
+            self.input_sequence_buffer += char
+            if "\033[<".startswith(self.input_sequence_buffer):
+                return
+            if self.input_sequence_buffer.startswith("\033[<"):
+                if self.input_sequence_buffer[-1] in "Mm":
+                    sequence = self.input_sequence_buffer
+                    self.input_sequence_buffer = ""
+                    if not self.handle_sgr_mouse_sequence(sequence):
+                        self.terminal.input(sequence)
+                return
+            self.terminal.input(self.input_sequence_buffer)
+            self.input_sequence_buffer = ""
+            return
+
+        if char == "\033":
+            self.input_sequence_buffer = char
+            return
+
+        self.handle_input_char(char)
 
     async def input_loop(self):
         """Handle keyboard input in async loop."""
@@ -191,7 +279,7 @@ class StdoutFrontend:
                     self.running = False
                     break
                 elif char:
-                    self.handle_input_char(char)
+                    self.handle_input(char)
                 await asyncio.sleep(0.01)
             except Exception:
                 break

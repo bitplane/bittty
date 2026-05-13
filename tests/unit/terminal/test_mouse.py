@@ -1,4 +1,16 @@
 from bittty.terminal import Terminal
+from bittty.parser import Parser
+
+
+class CapturePTY:
+    def __init__(self):
+        self.data = []
+
+    def write(self, data):
+        self.data.append(data)
+
+    def flush(self):
+        pass
 
 
 def test_show_mouse_cursor():
@@ -59,6 +71,50 @@ def test_input_mouse_sgr_mode():
     # Should handle the input without errors
     assert terminal.mouse_x == 15
     assert terminal.mouse_y == 8
+
+
+def test_decset_mouse_modes_enable_sgr_reporting():
+    """Mouse DECSET sequences should enable the fields used by input_mouse."""
+    terminal = Terminal(width=80, height=24)
+    terminal.pty = CapturePTY()
+    parser = Parser(terminal)
+
+    parser.feed("\x1b[?1000h")  # VT200 mouse tracking
+    parser.feed("\x1b[?1006h")  # SGR mouse encoding
+    terminal.input_mouse(15, 8, 0, "press", {"shift", "ctrl"})
+
+    assert terminal.mouse_tracking is True
+    assert terminal.mouse_sgr_mode is True
+    assert terminal.pty.data == ["\x1b[<20;15;8M"]
+
+
+def test_decset_mouse_modes_disable_reporting():
+    """DECRST should turn off the same tracking fields DECSET enables."""
+    terminal = Terminal(width=80, height=24)
+    terminal.pty = CapturePTY()
+    parser = Parser(terminal)
+
+    parser.feed("\x1b[?1000h\x1b[?1006h")
+    parser.feed("\x1b[?1000l\x1b[?1006l")
+    terminal.input_mouse(15, 8, 0, "press", set())
+
+    assert terminal.mouse_tracking is False
+    assert terminal.mouse_sgr_mode is False
+    assert terminal.pty.data == []
+
+
+def test_decset_any_event_mouse_reports_motion():
+    """Any-event tracking should allow motion reports."""
+    terminal = Terminal(width=80, height=24)
+    terminal.pty = CapturePTY()
+    parser = Parser(terminal)
+
+    parser.feed("\x1b[?1003h\x1b[?1006h")
+    terminal.input_mouse(15, 8, 0, "move", set())
+
+    assert terminal.mouse_tracking is True
+    assert terminal.mouse_any_tracking is True
+    assert terminal.pty.data == ["\x1b[<35;15;8M"]
 
 
 def test_input_numpad_key_numeric_mode():
