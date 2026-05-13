@@ -58,6 +58,7 @@ class StdoutFrontend:
 
         self.running = True
         self.old_termios = None
+        self.old_stdin_blocking = None
 
     def get_default_shell(self):
         """Get the default shell command for the current platform."""
@@ -83,11 +84,18 @@ class StdoutFrontend:
         """Set up raw terminal mode for proper input handling."""
         if HAS_UNIX_TERMIOS:
             try:
+                self.old_stdin_blocking = os.get_blocking(sys.stdin.fileno())
                 self.old_termios = termios.tcgetattr(sys.stdin.fileno())
                 tty.setraw(sys.stdin.fileno())
             except (termios.error, OSError):
                 # Running in non-interactive environment, skip terminal setup
                 self.old_termios = None
+            try:
+                if self.old_stdin_blocking is None:
+                    self.old_stdin_blocking = os.get_blocking(sys.stdin.fileno())
+                os.set_blocking(sys.stdin.fileno(), False)
+            except OSError:
+                self.old_stdin_blocking = None
         elif self.is_windows and HAS_MSVCRT:
             pass
 
@@ -98,6 +106,11 @@ class StdoutFrontend:
         """Restore original terminal settings."""
         if HAS_UNIX_TERMIOS and self.old_termios:
             termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, self.old_termios)
+        if self.old_stdin_blocking is not None:
+            try:
+                os.set_blocking(sys.stdin.fileno(), self.old_stdin_blocking)
+            except OSError:
+                pass
         # Show cursor and clear screen
         print("\033[?25h\033[2J\033[H", end="", flush=True)
 
@@ -153,7 +166,6 @@ class StdoutFrontend:
 
     async def input_loop(self):
         """Handle keyboard input in async loop."""
-        loop = asyncio.get_event_loop()
 
         def read_char():
             try:
@@ -166,14 +178,19 @@ class StdoutFrontend:
                     return None
                 else:
                     data = os.read(sys.stdin.fileno(), 1)
+                    if data == b"":
+                        return ""
                     return data.decode("utf-8", errors="replace")
             except (OSError, BlockingIOError):
                 return None
 
         while self.running:
             try:
-                char = await loop.run_in_executor(None, read_char)
-                if char:
+                char = read_char()
+                if char == "":
+                    self.running = False
+                    break
+                elif char:
                     self.handle_input_char(char)
                 await asyncio.sleep(0.01)
             except Exception:
