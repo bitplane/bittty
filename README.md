@@ -35,6 +35,7 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
 
 ## Recent changes
 
+* 🐛 scroll region: scroll up in `vim` corrupts outside scroll region
 * 🏃 squeeze another 15% performance out of it
 * ✀ fix utf8 and escape code splitting across buffer boundaries
 * 🪟 tests run on Windows runner
@@ -63,8 +64,6 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
   - [.] revisit colours / styles
 - [ ] scrollback buffer
   - [ ] implement `logloglog` for scrollback with wrapping
-- [ ] bugs
-  - [ ] scroll region: scroll up in `vim` corrupts outside scroll region
 - [ ] add terminal overlay visuals
   - [ ] bell flash effect
   - [ ] make cursor an overlay

@@ -253,33 +253,50 @@ class StdoutFrontend:
         )
         return True
 
-    def handle_input(self, char):
-        """Handle keyboard input, buffering complete SGR mouse sequences."""
-        if self.input_sequence_buffer:
-            self.input_sequence_buffer += char
-            if "\033[<".startswith(self.input_sequence_buffer):
-                return
-            if self.input_sequence_buffer.startswith("\033[<"):
-                if self.input_sequence_buffer[-1] in "Mm":
-                    sequence = self.input_sequence_buffer
-                    self.input_sequence_buffer = ""
-                    if not self.handle_sgr_mouse_sequence(sequence):
-                        self.terminal.input(sequence)
-                return
-            self.terminal.input(self.input_sequence_buffer)
-            self.input_sequence_buffer = ""
-            return
+    def handle_input(self, data: str):
+        """Forward input to bittty, intercepting only host SGR mouse reports."""
+        stream = self.input_sequence_buffer + data
+        self.input_sequence_buffer = ""
 
-        if char == "\033":
-            self.input_sequence_buffer = char
-            return
+        plain_input = []
+        index = 0
+        mouse_prefix = "\033[<"
 
-        self.handle_input_char(char)
+        while index < len(stream):
+            if stream.startswith(mouse_prefix, index):
+                if plain_input:
+                    self.terminal.input("".join(plain_input))
+                    plain_input = []
+
+                end = index + len(mouse_prefix)
+                while end < len(stream) and stream[end] not in "Mm":
+                    end += 1
+
+                if end >= len(stream):
+                    self.input_sequence_buffer = stream[index:]
+                    return
+
+                sequence = stream[index : end + 1]
+                if not self.handle_sgr_mouse_sequence(sequence):
+                    self.terminal.input(sequence)
+                index = end + 1
+                continue
+
+            remaining = stream[index:]
+            if mouse_prefix.startswith(remaining):
+                self.input_sequence_buffer = remaining
+                break
+
+            plain_input.append(stream[index])
+            index += 1
+
+        if plain_input:
+            self.terminal.input("".join(plain_input))
 
     async def input_loop(self):
         """Handle keyboard input in async loop."""
 
-        def read_char():
+        def read_input():
             try:
                 if self.is_windows and HAS_MSVCRT:
                     if msvcrt.kbhit():
@@ -292,7 +309,7 @@ class StdoutFrontend:
                     readable, _, _ = select.select([sys.stdin.fileno()], [], [], 0)
                     if not readable:
                         return None
-                    data = os.read(sys.stdin.fileno(), 1)
+                    data = os.read(sys.stdin.fileno(), 4096)
                     if data == b"":
                         return ""
                     return data.decode("utf-8", errors="replace")
@@ -301,12 +318,12 @@ class StdoutFrontend:
 
         while self.running:
             try:
-                char = read_char()
-                if char == "":
+                data = read_input()
+                if data == "":
                     self.running = False
                     break
-                elif char:
-                    self.handle_input(char)
+                elif data:
+                    self.handle_input(data)
                 await asyncio.sleep(0.01)
             except Exception:
                 logger.exception("Error in input loop")

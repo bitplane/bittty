@@ -701,15 +701,8 @@ class Terminal:
 
     def input(self, data: str) -> None:
         """Translate control codes based on terminal modes and send to PTY."""
-        # Check if this is a cursor key sequence that needs mode translation
-        if data.startswith(f"{constants.ESC}[") and len(data) == 3 and data[2] in "ABCD":
-            # This is a cursor key: ESC[A, ESC[B, ESC[C, ESC[D
-            if self.cursor_application_mode:
-                # Convert to application mode: ESC[A -> ESC OA
-                key_char = data[2]
-                translated = f"{constants.ESC}O{key_char}"
-                self.send(translated)
-                return
+        if self.cursor_application_mode and f"{constants.ESC}[" in data:
+            data = self._translate_application_cursor_keys(data)
 
         # Check if this is a function key that needs keypad mode translation
         # F1-F4 in application keypad mode might behave differently
@@ -717,6 +710,24 @@ class Terminal:
 
         # No special translation needed, send as-is
         self.send(data)
+
+    def _translate_application_cursor_keys(self, data: str) -> str:
+        """Translate embedded normal cursor-key CSI sequences to application mode."""
+        result = []
+        index = 0
+        while index < len(data):
+            if (
+                data[index] == constants.ESC
+                and index + 2 < len(data)
+                and data[index + 1] == "["
+                and data[index + 2] in "ABCD"
+            ):
+                result.append(f"{constants.ESC}O{data[index + 2]}")
+                index += 3
+            else:
+                result.append(data[index])
+                index += 1
+        return "".join(result)
 
     def input_mouse(self, x: int, y: int, button: int, event_type: str, modifiers: set[str]) -> None:
         """

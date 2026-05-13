@@ -34,6 +34,27 @@ def test_cursor_keys_application_mode():
     terminal.pty.write.assert_called_with("\x1bOB")
 
 
+def test_cursor_keys_application_mode_translates_input_stream():
+    """Raw frontend streams may contain multiple cursor-key sequences."""
+    terminal = Terminal()
+    terminal.pty = Mock()
+    terminal.cursor_application_mode = True
+
+    terminal.input("\x1b[B\x1b[B")
+
+    terminal.pty.write.assert_called_with("\x1bOB\x1bOB")
+
+
+def test_cursor_keys_application_mode_translates_embedded_sequence():
+    terminal = Terminal()
+    terminal.pty = Mock()
+    terminal.cursor_application_mode = True
+
+    terminal.input("x\x1b[By")
+
+    terminal.pty.write.assert_called_with("x\x1bOBy")
+
+
 def test_modified_cursor_keys():
     """Test cursor keys with modifiers always use CSI format."""
     terminal = Terminal()

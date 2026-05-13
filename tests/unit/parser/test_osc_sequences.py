@@ -1,5 +1,7 @@
 """Tests for OSC (Operating System Command) sequences."""
 
+from unittest.mock import Mock
+
 from bittty.parser import Parser
 from bittty.terminal import Terminal
 from bittty.constants import (
@@ -231,3 +233,28 @@ def test_osc_set_title_and_icon_no_semicolon():
 
     assert terminal.title == "Initial Title"
     assert terminal.icon_title == "Initial Icon"
+
+
+def test_osc_repeated_query_runs_each_time():
+    """Repeated OSC queries must not be skipped by function-level caching."""
+    terminal = Terminal(width=80, height=24)
+    parser = Parser(terminal)
+    terminal.respond = Mock()
+
+    parser.feed("\x1b]10;?\x07")
+    parser.feed("\x1b]10;?\x07")
+
+    assert terminal.respond.call_count == 2
+    terminal.respond.assert_called_with("\033]10;rgb:ffff/ffff/ffff\007")
+
+
+def test_osc_same_sequence_applies_to_different_terminals():
+    """OSC dispatch mutates the target terminal and must not cache by sequence only."""
+    first = Terminal(width=80, height=24)
+    second = Terminal(width=80, height=24)
+
+    Parser(first).feed("\x1b]2;Shared Title\x07")
+    Parser(second).feed("\x1b]2;Shared Title\x07")
+
+    assert first.title == "Shared Title"
+    assert second.title == "Shared Title"

@@ -7,7 +7,6 @@ color palette changes, and other system-level commands.
 from __future__ import annotations
 
 import logging
-from functools import lru_cache
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -17,15 +16,8 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-@lru_cache(maxsize=500)
 def dispatch_osc(terminal: Terminal, string_buffer: str) -> None:
-    """BLAZING FAST OSC dispatcher with LRU caching and inlined handlers! 🚀
-
-    3.77x faster than the original through:
-    1. **LRU caching**: Smart eviction beats custom cache clearing
-    2. **Inlined handlers**: No function call overhead
-    3. **Fast paths**: Handle 95% of OSC commands with minimal parsing
-    """
+    """Dispatch OSC sequences to terminal state changes and query responses."""
     if not string_buffer:
         return
 
