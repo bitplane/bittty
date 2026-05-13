@@ -11,10 +11,13 @@ should interact with the bittty API.
 """
 
 import asyncio
+import logging
 import os
+import select
 import sys
 import shutil
 import platform
+from pathlib import Path
 from bittty import Terminal
 
 try:
@@ -33,6 +36,22 @@ try:
     HAS_MSVCRT = True
 except ImportError:
     HAS_MSVCRT = False
+
+
+LOG_PATH = Path(__file__).resolve().parents[1] / "logs" / "demo" / "terminal.log"
+logger = logging.getLogger(__name__)
+
+
+def setup_logging() -> None:
+    """Write demo and bittty logs to logs/demo/terminal.log."""
+    LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    logging.basicConfig(
+        filename=LOG_PATH,
+        filemode="w",
+        level=logging.DEBUG,
+        format="%(asctime)s %(levelname)s [%(name)s] %(message)s",
+    )
+    logger.info("Demo logging started: %s", LOG_PATH)
 
 
 class StdoutFrontend:
@@ -58,7 +77,6 @@ class StdoutFrontend:
 
         self.running = True
         self.old_termios = None
-        self.old_stdin_blocking = None
         self.host_mouse_mode = None
         self.input_sequence_buffer = ""
 
@@ -84,20 +102,15 @@ class StdoutFrontend:
 
     def setup_terminal(self):
         """Set up raw terminal mode for proper input handling."""
+        logger.info("Setting up terminal: %sx%s", self.width, self.height)
         if HAS_UNIX_TERMIOS:
             try:
-                self.old_stdin_blocking = os.get_blocking(sys.stdin.fileno())
                 self.old_termios = termios.tcgetattr(sys.stdin.fileno())
                 tty.setraw(sys.stdin.fileno())
             except (termios.error, OSError):
                 # Running in non-interactive environment, skip terminal setup
+                logger.info("Raw terminal mode unavailable; continuing without it", exc_info=True)
                 self.old_termios = None
-            try:
-                if self.old_stdin_blocking is None:
-                    self.old_stdin_blocking = os.get_blocking(sys.stdin.fileno())
-                os.set_blocking(sys.stdin.fileno(), False)
-            except OSError:
-                self.old_stdin_blocking = None
         elif self.is_windows and HAS_MSVCRT:
             pass
 
@@ -106,20 +119,17 @@ class StdoutFrontend:
 
     def restore_terminal(self):
         """Restore original terminal settings."""
+        logger.info("Restoring terminal")
         self.disable_host_mouse()
         if HAS_UNIX_TERMIOS and self.old_termios:
             termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, self.old_termios)
-        if self.old_stdin_blocking is not None:
-            try:
-                os.set_blocking(sys.stdin.fileno(), self.old_stdin_blocking)
-            except OSError:
-                pass
         # Show cursor and clear screen
         print("\033[?25h\033[2J\033[H", end="", flush=True)
 
     def disable_host_mouse(self):
         """Disable host-terminal mouse reporting modes used by the demo."""
         if self.host_mouse_mode is not None:
+            logger.debug("Disabling host mouse mode: %s", self.host_mouse_mode)
             print("\033[?1000l\033[?1002l\033[?1003l\033[?1006l", end="", flush=True)
             self.host_mouse_mode = None
 
@@ -143,6 +153,7 @@ class StdoutFrontend:
 
         self.disable_host_mouse()
         if mode is not None:
+            logger.debug("Enabling host mouse mode: %s", mode)
             print(enable, end="", flush=True)
             self.host_mouse_mode = mode
 
@@ -190,14 +201,18 @@ class StdoutFrontend:
 
         This is called when the terminal process sends output.
         """
-        # Feed data to bittty's parser
-        self.terminal.parser.feed(data)
+        try:
+            # Feed data to bittty's parser
+            self.terminal.parser.feed(data)
 
-        # Child output may have changed mouse reporting modes.
-        self.sync_host_mouse()
+            # Child output may have changed mouse reporting modes.
+            self.sync_host_mouse()
 
-        # Re-render the screen
-        self.render_screen()
+            # Re-render the screen
+            self.render_screen()
+        except Exception:
+            logger.exception("Error handling PTY data: %r", data[-200:])
+            raise
 
     def handle_sgr_mouse_sequence(self, sequence: str) -> bool:
         """Parse host SGR mouse reports and forward them through bittty."""
@@ -227,6 +242,15 @@ class StdoutFrontend:
             base_button &= ~32
 
         self.terminal.input_mouse(x, y, base_button, event_type, modifiers)
+        logger.debug(
+            "Forwarded mouse sequence=%r x=%s y=%s button=%s event=%s modifiers=%s",
+            sequence,
+            x,
+            y,
+            base_button,
+            event_type,
+            sorted(modifiers),
+        )
         return True
 
     def handle_input(self, char):
@@ -265,6 +289,9 @@ class StdoutFrontend:
                         return char
                     return None
                 else:
+                    readable, _, _ = select.select([sys.stdin.fileno()], [], [], 0)
+                    if not readable:
+                        return None
                     data = os.read(sys.stdin.fileno(), 1)
                     if data == b"":
                         return ""
@@ -282,10 +309,12 @@ class StdoutFrontend:
                     self.handle_input(char)
                 await asyncio.sleep(0.01)
             except Exception:
+                logger.exception("Error in input loop")
                 break
 
     async def main_loop(self):
         """Main demo loop."""
+        logger.info("Starting main loop")
         try:
             self.setup_terminal()
 
@@ -322,12 +351,17 @@ class StdoutFrontend:
                 pass
 
         except KeyboardInterrupt:
+            logger.info("Keyboard interrupt")
             pass
+        except Exception:
+            logger.exception("Unhandled demo error")
+            raise
         finally:
             self.cleanup()
 
     def cleanup(self):
         """Clean up resources."""
+        logger.info("Cleaning up demo")
         self.running = False
         self.terminal.stop_process()
         self.restore_terminal()
@@ -335,6 +369,7 @@ class StdoutFrontend:
 
 def signal_handler(signum, frame):
     """Handle signals gracefully."""
+    logger.info("Received signal %s", signum)
     sys.exit(0)
 
 
@@ -353,6 +388,7 @@ def sigwinch_handler(signum, frame):
         frontend.height = new_height
 
         # Resize the terminal emulator
+        logger.info("Resize signal: %sx%s", new_width, new_height)
         frontend.terminal.resize(new_width, new_height)
 
 
@@ -378,4 +414,9 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    setup_logging()
+    try:
+        asyncio.run(main())
+    except Exception:
+        logger.exception("Demo crashed")
+        raise
