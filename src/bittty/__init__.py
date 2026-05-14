@@ -8,7 +8,8 @@ that provides comprehensive ANSI sequence parsing and terminal state management.
 from .terminal import Terminal
 from .buffer import Buffer
 from .parser import Parser
-from .operations import Operation, OperationSink, TerminalOperationSink
+from .devices.terminal import TerminalOperationSink
+from .operations import Operation, OperationSink
 from .style import (
     CURSOR_CODE,
     RESET_CODE,

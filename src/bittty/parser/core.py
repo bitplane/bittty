@@ -11,7 +11,8 @@ if TYPE_CHECKING:
     from ..terminal import Terminal
     from ..operations import OperationSink
 
-from ..operations import Operation, TerminalOperationSink, control_name
+from ..devices.terminal import TerminalOperationSink
+from ..operations import Operation, control_name
 from .csi import parse_csi_operation
 from .dcs import parse_dcs_operation
 from .escape import parse_charset_operation, parse_escape_operation
