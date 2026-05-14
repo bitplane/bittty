@@ -1,5 +1,6 @@
 """Device adapters for applying parser operations."""
 
+from .board import TerminalBoard
 from .charset import CharsetDevice
 from .control import ControlDevice
 from .cursor import CursorDevice
@@ -22,6 +23,7 @@ __all__ = [
     "QueryDevice",
     "ScreenDevice",
     "StyleDevice",
+    "TerminalBoard",
     "TerminalOperationSink",
     "TitleDevice",
 ]

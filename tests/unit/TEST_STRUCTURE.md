@@ -3,7 +3,7 @@
 This tree now mirrors the architecture split:
 
 - `parser/`: parser/tokenizer unit tests. These should assert emitted `Operation` values or parser state-machine behavior, not terminal screen side effects.
-- `devices/`: direct device tests. These should exercise cursor, screen, charset, style, modes, title, keyboard, mouse, control, and query devices through operations or device APIs.
+- `devices/`: board and direct device tests. These should exercise board routing plus cursor, screen, charset, style, modes, title, keyboard, mouse, control, and query devices through operations or device APIs.
 - `e2e/`: parser-to-terminal integration tests. These keep confidence that real escape sequences still produce the expected terminal behavior.
 - `terminal/`: compatibility/facade tests for the legacy `Terminal` public API. These should shrink over time as equivalent direct device coverage grows.
 - `pty/`: platform PTY unit tests.

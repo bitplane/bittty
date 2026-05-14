@@ -63,23 +63,9 @@ class Terminal:
         self.stdin = stdin
         self.stdout = stdout
 
-        from .devices.charset import CharsetDevice
-        from .devices.cursor import CursorDevice
-        from .devices.keyboard import KeyboardDevice
-        from .devices.modes import ModeDevice
-        from .devices.mouse import MouseDevice
-        from .devices.screen import ScreenDevice
-        from .devices.style import StyleDevice
-        from .devices.title import TitleDevice
+        from .devices.board import TerminalBoard
 
-        self.charset = CharsetDevice(self)
-        self.cursor = CursorDevice(self)
-        self.keyboard = KeyboardDevice(self)
-        self.modes = ModeDevice(self)
-        self.mouse = MouseDevice(self)
-        self.screen = ScreenDevice(self)
-        self.style = StyleDevice(self)
-        self.title_device = TitleDevice(self)
+        self.board = TerminalBoard(self)
 
         # Process management
         self.process: Optional[subprocess.Popen] = None
@@ -90,7 +76,7 @@ class Terminal:
         self._pty_data_callback: Optional[Callable[[str], None]] = None
 
         # Parser
-        self.parser = Parser(self)
+        self.parser = Parser(self, sink=self.board)
 
     @property
     def cursor_x(self) -> int:
