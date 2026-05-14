@@ -69,8 +69,9 @@ class Terminal:
         # Terminal state - these can be made reactive in subclasses
         self.title = "Terminal"
         self.icon_title = "Terminal"
-        self.cursor_x = 0
-        self.cursor_y = 0
+        from .devices.cursor import CursorDevice
+
+        self.cursor = CursorDevice(self)
         self.cursor_visible = True
         self.cursor_blinking = False
 
@@ -136,11 +137,6 @@ class Terminal:
         self._charset_cache = {}  # Cache for get_charset() results
         self._charset_array = ["B", "B", "B", "B"]  # Pre-computed array to avoid list creation
 
-        # Saved cursor state (for DECSC/DECRC)
-        self.saved_cursor_x = 0
-        self.saved_cursor_y = 0
-        self.saved_ansi_code: str = ""
-
         # Process management
         self.process: Optional[subprocess.Popen] = None
         self.pty: Optional[Any] = None
@@ -151,6 +147,51 @@ class Terminal:
 
         # Parser
         self.parser = Parser(self)
+
+    @property
+    def cursor_x(self) -> int:
+        """Current cursor column."""
+        return self.cursor.x
+
+    @cursor_x.setter
+    def cursor_x(self, value: int) -> None:
+        self.cursor.x = value
+
+    @property
+    def cursor_y(self) -> int:
+        """Current cursor row."""
+        return self.cursor.y
+
+    @cursor_y.setter
+    def cursor_y(self, value: int) -> None:
+        self.cursor.y = value
+
+    @property
+    def saved_cursor_x(self) -> int:
+        """Saved cursor column for DECSC/DECRC compatibility."""
+        return self.cursor.saved_x
+
+    @saved_cursor_x.setter
+    def saved_cursor_x(self, value: int) -> None:
+        self.cursor.saved_x = value
+
+    @property
+    def saved_cursor_y(self) -> int:
+        """Saved cursor row for DECSC/DECRC compatibility."""
+        return self.cursor.saved_y
+
+    @saved_cursor_y.setter
+    def saved_cursor_y(self, value: int) -> None:
+        self.cursor.saved_y = value
+
+    @property
+    def saved_ansi_code(self) -> str:
+        """Saved ANSI style for DECSC/DECRC compatibility."""
+        return self.cursor.saved_ansi_code
+
+    @saved_ansi_code.setter
+    def saved_ansi_code(self, value: str) -> None:
+        self.cursor.saved_ansi_code = value
 
     def set_pty_data_callback(self, callback: Callable[[str], None]) -> None:
         """Set callback for handling PTY data asynchronously."""
@@ -174,8 +215,7 @@ class Terminal:
         self.scroll_bottom = height - 1
 
         # Clamp cursor position
-        self.cursor_x = min(self.cursor_x, width - 1)
-        self.cursor_y = min(self.cursor_y, height - 1)
+        self.cursor.clamp_to_terminal()
 
         # Resize PTY if running
         if self.pty is not None:
@@ -336,10 +376,7 @@ class Terminal:
 
     def move_cursor(self, x: Optional[int], y: Optional[int]) -> None:
         """Move cursor to position."""
-        if x is not None:
-            self.cursor_x = max(0, min(x, self.width - 1))
-        if y is not None:
-            self.cursor_y = max(0, min(y, self.height - 1))
+        self.cursor.set_position(x, y)
 
     def line_feed(self, is_wrapped: bool = False) -> None:
         """Perform line feed, with optional carriage return if DECNLM is enabled."""
@@ -480,15 +517,11 @@ class Terminal:
 
     def save_cursor(self) -> None:
         """Save cursor position and attributes."""
-        self.saved_cursor_x = self.cursor_x
-        self.saved_cursor_y = self.cursor_y
-        self.saved_ansi_code = self.current_ansi_code
+        self.cursor.save()
 
     def restore_cursor(self) -> None:
         """Restore cursor position and attributes."""
-        self.cursor_x = self.saved_cursor_x
-        self.cursor_y = self.saved_cursor_y
-        self.current_ansi_code = self.saved_ansi_code
+        self.cursor.restore()
 
     def set_scroll_region(self, top: int, bottom: int) -> None:
         """Set scroll region."""
