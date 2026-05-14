@@ -1,93 +1,51 @@
-"""OSC (Operating System Command) sequence handlers.
-
-Handles OSC sequences that start with ESC]. These include window title operations,
-color palette changes, and other system-level commands.
-"""
+"""OSC (Operating System Command) operation parser."""
 
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from ..terminal import Terminal
+from ..operations import Operation
 
 
 logger = logging.getLogger(__name__)
 
 
-def dispatch_osc(terminal: Terminal, string_buffer: str) -> None:
-    """Dispatch OSC sequences to terminal state changes and query responses."""
+def parse_osc_operation(string_buffer: str, raw: str = "") -> Operation | None:
+    """Return a semantic operation for an OSC sequence."""
     if not string_buffer:
-        return
+        return Operation("osc", "OSC_EMPTY", raw=raw)
 
-    # ⚡ FAST PATH: Parse common patterns inline
+    parsed = _parse_osc(string_buffer)
+    if parsed is None:
+        return Operation("osc", "OSC_INVALID", (string_buffer,), raw)
+
+    cmd, data = parsed
+    if cmd == 0:
+        return Operation("title", "SET_ICON_AND_WINDOW_TITLE", (data,), raw)
+    if cmd == 1:
+        return Operation("title", "SET_ICON_TITLE", (data,), raw)
+    if cmd == 2:
+        return Operation("title", "SET_WINDOW_TITLE", (data,), raw)
+    if cmd == 10 and data == "?":
+        return Operation("query", "OSC_FOREGROUND_COLOR", raw=raw)
+    if cmd == 11 and data == "?":
+        return Operation("query", "OSC_BACKGROUND_COLOR", raw=raw)
+
+    return Operation("osc", "OSC_UNHANDLED", (cmd, data), raw)
+
+
+def _parse_osc(string_buffer: str) -> tuple[int, str] | None:
     if len(string_buffer) > 2 and string_buffer[1] == ";" and string_buffer[0].isdigit():
-        # Pattern: "0;title" or "2;title" (extremely common)
-        cmd = int(string_buffer[0])
-        data = string_buffer[2:]
-    elif len(string_buffer) > 3 and string_buffer[2] == ";" and string_buffer[:2].isdigit():
-        # Pattern: "10;color" or "11;color" (common)
-        cmd = int(string_buffer[:2])
-        data = string_buffer[3:]
-    else:
-        # Complex parsing (uncommon)
-        parts = string_buffer.split(";", 1)
-        if not parts:
-            return
-        try:
-            cmd = int(parts[0])
-            data = parts[1] if len(parts) >= 2 else ""
-        except ValueError:
-            logger.debug(f"Invalid OSC command number: {parts[0] if parts else 'empty'}")
-            return
+        return int(string_buffer[0]), string_buffer[2:]
+    if len(string_buffer) > 3 and string_buffer[2] == ";" and string_buffer[:2].isdigit():
+        return int(string_buffer[:2]), string_buffer[3:]
 
-    # ⚡ INLINED HANDLERS: No dispatch table lookup or function calls
-    if cmd == 0:  # Set both window title and icon title
-        terminal.set_title(data)
-        terminal.set_icon_title(data)
-    elif cmd == 1:  # Set icon title only
-        terminal.set_icon_title(data)
-    elif cmd == 2:  # Set window title only
-        terminal.set_title(data)
-    elif cmd == 4:  # Set color palette entry
-        # TODO: Implement color palette setting if needed
-        pass
-    elif cmd == 7:  # Set current working directory/URL
-        # TODO: Implement if needed for directory tracking
-        pass
-    elif cmd == 8:  # Define hyperlink
-        # TODO: Implement hyperlink support if needed
-        pass
-    elif cmd == 10:  # Query or set default foreground color
-        if data == "?":
-            # Query mode - respond with current foreground color
-            terminal.respond("\033]10;rgb:ffff/ffff/ffff\007")
-        # TODO: Handle setting foreground color if needed
-    elif cmd == 11:  # Query or set default background color
-        if data == "?":
-            # Query mode - respond with current background color
-            terminal.respond("\033]11;rgb:0000/0000/0000\007")
-        # TODO: Handle setting background color if needed
-    elif cmd == 12:  # Set cursor color
-        # TODO: Implement cursor color setting if needed
-        pass
-    elif cmd == 52:  # Set/query clipboard content
-        # TODO: Implement clipboard operations if needed
-        pass
-    elif cmd == 104:  # Reset color palette entry
-        # TODO: Implement color palette reset if needed
-        pass
-    elif cmd == 110:  # Reset default foreground color
-        # TODO: Implement if needed
-        pass
-    elif cmd == 111:  # Reset default background color
-        # TODO: Implement if needed
-        pass
-    elif cmd == 112:  # Reset cursor color
-        # TODO: Implement if needed
-        pass
-    else:
-        # Unknown OSC command - log and consume
-        logger.debug(f"Unknown OSC command: {cmd} with data: {data}")
-        # We still consume the sequence to prevent it from leaking through
+    parts = string_buffer.split(";", 1)
+    if not parts:
+        return None
+    try:
+        cmd = int(parts[0])
+    except ValueError:
+        logger.debug(f"Invalid OSC command number: {parts[0] if parts else 'empty'}")
+        return None
+    return cmd, parts[1] if len(parts) >= 2 else ""

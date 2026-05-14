@@ -9,12 +9,13 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from ..terminal import Terminal
+    from ..operations import OperationSink
 
-from .. import constants
-from .csi import dispatch_csi
-from .osc import dispatch_osc
-from .dcs import dispatch_dcs
-from .escape import dispatch_escape, handle_charset_escape
+from ..operations import Operation, TerminalOperationSink, control_name
+from .csi import parse_csi_operation
+from .dcs import parse_dcs_operation
+from .escape import parse_charset_operation, parse_escape_operation
+from .osc import parse_osc_operation
 
 logger = logging.getLogger(__name__)
 
@@ -102,8 +103,9 @@ class Parser:
     Uses small, state-specific scanners for speed.
     """
 
-    def __init__(self, terminal: Terminal) -> None:
+    def __init__(self, terminal: Terminal, sink: OperationSink | None = None) -> None:
         self.terminal = terminal
+        self.sink = sink if sink is not None else TerminalOperationSink(terminal)
         self.buffer = ""
         self.pos = 0
         self.mode: str | None = None  # None, 'csi', 'osc', 'dcs', 'apc', 'pm', 'sos'
@@ -236,72 +238,55 @@ class Parser:
     # ---- dispatchers ----
     def dispatch(self, kind: str, data: str) -> None:
         if kind == "print":
-            self.terminal.write_text(data, self.terminal.current_ansi_code)
+            self.emit(Operation("text", "PRINT", (data,), data))
             return
 
         # Standalones
         if kind == "bel":
-            self.terminal.bell()
+            self.emit(Operation("control", "C0_BEL", raw=data))
             return
         if kind == "ctrl":
-            self._handle_control(data)
+            self.emit(Operation("control", control_name(data), raw=data))
             return
         if kind == "ss2":
-            self.terminal.single_shift_2()
+            self.emit(Operation("escape", "SS2", raw=data))
             return
         if kind == "ss3":
-            self.terminal.single_shift_3()
+            self.emit(Operation("escape", "SS3", raw=data))
             return
         if kind == "esc":
-            if not dispatch_escape(self.terminal, data):
-                logger.debug("Unknown ESC: %r", data)
+            self.emit(parse_escape_operation(data) or Operation("escape", "ESC", raw=data))
             return
         if kind in ("esc_charset", "esc_charset2"):
-            if not handle_charset_escape(self.terminal, data):
-                logger.debug("Unknown SCS: %r", data)
+            self.emit(parse_charset_operation(data) or Operation("escape", "SCS", raw=data))
             return
 
         # Paired sequences
         if kind == "csi":
-            dispatch_csi(self.terminal, data)
+            self.emit(parse_csi_operation(data) or Operation("csi", "CSI", raw=data))
             return
         if kind == "osc":
-            dispatch_osc(self.terminal, parse_string_sequence(data, "osc"))
+            self.emit(
+                parse_osc_operation(parse_string_sequence(data, "osc"), data) or Operation("osc", "OSC", raw=data)
+            )
             return
         if kind == "dcs":
-            dispatch_dcs(self.terminal, parse_string_sequence(data, "dcs"))
+            self.emit(parse_dcs_operation(parse_string_sequence(data, "dcs"), data))
             return
         if kind == "apc":
-            logger.debug("APC: %r", data)
+            self.emit(Operation("apc", "APC", (parse_string_sequence(data, "apc"),), data))
             return
         if kind == "pm":
-            logger.debug("PM: %r", data)
+            self.emit(Operation("pm", "PM", (parse_string_sequence(data, "pm"),), data))
             return
         if kind == "sos":
-            logger.debug("SOS: %r", data)
+            self.emit(Operation("sos", "SOS", (parse_string_sequence(data, "sos"),), data))
             return
 
         logger.debug("Unknown kind: %s", kind)
 
-    def _handle_control(self, ch: str) -> None:
-        # ch is a single codepoint
-        if ch == constants.BEL:
-            self.terminal.bell()
-        elif ch == constants.BS:
-            self.terminal.backspace()
-        elif ch == constants.HT:
-            self.terminal.cursor_x = self.terminal.next_tab_stop()
-        elif ch in (constants.LF, constants.VT, constants.FF):
-            self.terminal.line_feed()
-        elif ch == constants.CR:
-            self.terminal.cursor_x = 0
-        elif ch == constants.SO:
-            self.terminal.current_charset = 1
-        elif ch == constants.SI:
-            self.terminal.current_charset = 0
-        elif ch == constants.DEL:
-            # DEL is a no-op (do not treat as backspace)
-            pass
+    def emit(self, operation: Operation) -> None:
+        self.sink.handle_operation(operation)
 
     def reset(self) -> None:
         self.buffer = ""
