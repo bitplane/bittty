@@ -13,11 +13,8 @@ from typing import Any, Optional, Callable
 
 import logging
 
-from .buffer import Buffer
 from .parser import Parser
 from . import constants
-from .style import get_background
-from .charsets import get_charset
 
 logger = logging.getLogger(__name__)
 
@@ -66,76 +63,23 @@ class Terminal:
         self.stdin = stdin
         self.stdout = stdout
 
-        # Terminal state - these can be made reactive in subclasses
-        self.title = "Terminal"
-        self.icon_title = "Terminal"
+        from .devices.charset import CharsetDevice
         from .devices.cursor import CursorDevice
+        from .devices.keyboard import KeyboardDevice
+        from .devices.modes import ModeDevice
+        from .devices.mouse import MouseDevice
+        from .devices.screen import ScreenDevice
+        from .devices.style import StyleDevice
+        from .devices.title import TitleDevice
 
+        self.charset = CharsetDevice(self)
         self.cursor = CursorDevice(self)
-        self.cursor_visible = True
-        self.cursor_blinking = False
-
-        # Mouse position
-        self.mouse_x = 0
-        self.mouse_y = 0
-
-        self.show_mouse = False
-
-        # Terminal modes
-        self.auto_wrap = True
-        self.insert_mode = False
-        self.application_keypad = False
-        self.ansi_mode = True
-        self.cursor_application_mode = False
-        self.scroll_mode = False
-        self.mouse_tracking = False
-        self.mouse_button_tracking = False
-        self.mouse_any_tracking = False
-        self.mouse_sgr_mode = False
-        self.mouse_extended_mode = False
-        self.urxvt_mouse = False
-        self.backarrow_key_sends_bs = False  # DECBKM: False = sends DEL, True = sends BS
-        self.scroll_mode = False  # DECSCLM: False = jump scrolling, True = smooth scrolling
-        self.auto_repeat = True  # DECARM: True = auto-repeat enabled, False = disabled
-        self.numeric_keypad = True  # DECNKM: True = numeric mode, False = application mode
-        self.local_echo = True  # SRM: True = echo enabled, False = echo disabled
-        self.reverse_screen = False  # DECSCNM: False = normal, True = reverse video
-        self.linefeed_newline_mode = False  # DECNLM: False = LF only, True = CR+LF
-        self.origin_mode = False  # DECOM: False = absolute, True = relative to scroll region
-        self.auto_resize_mode = False  # DECARSM: False = manual, True = auto-resize
-        self.keyboard_usage_mode = False  # DECKBUM: False = normal, True = typewriter mode
-        self.bracketed_paste = False
-
-        # Horizontal tab stops, 0-indexed. Terminals default to every 8 columns.
-        self.tab_stops = set(range(8, width, 8))
-
-        # Screen buffers
-        self.primary_buffer = Buffer(width, height)  # With scrollback (future)
-        self.alt_buffer = Buffer(width, height)  # No scrollback
-        self.current_buffer = self.primary_buffer
-        self.in_alt_screen = False
-
-        # Scroll region (top, bottom) - 0-indexed
-        self.scroll_top = 0
-        self.scroll_bottom = height - 1
-
-        # Current ANSI code for next write
-        self.current_ansi_code: str = ""
-
-        # Last printed character (for REP command)
-        self.last_printed_char = " "
-
-        # Character set state (G0-G3 sets)
-        self.g0_charset = "B"  # Default: US ASCII
-        self.g1_charset = "B"  # Default: US ASCII
-        self.g2_charset = "B"  # Default: US ASCII
-        self.g3_charset = "B"  # Default: US ASCII
-        self.current_charset = 0  # 0 = G0, 1 = G1, 2 = G2, 3 = G3
-        self.single_shift = None  # For SS2/SS3 (temporary shift)
-
-        # BLAZING FAST charset translation cache! 🚀
-        self._charset_cache = {}  # Cache for get_charset() results
-        self._charset_array = ["B", "B", "B", "B"]  # Pre-computed array to avoid list creation
+        self.keyboard = KeyboardDevice(self)
+        self.modes = ModeDevice(self)
+        self.mouse = MouseDevice(self)
+        self.screen = ScreenDevice(self)
+        self.style = StyleDevice(self)
+        self.title_device = TitleDevice(self)
 
         # Process management
         self.process: Optional[subprocess.Popen] = None
@@ -193,6 +137,396 @@ class Terminal:
     def saved_ansi_code(self, value: str) -> None:
         self.cursor.saved_ansi_code = value
 
+    @property
+    def tab_stops(self) -> set[int]:
+        """Horizontal tab stops, 0-indexed."""
+        return self.cursor.tab_stops
+
+    @tab_stops.setter
+    def tab_stops(self, value: set[int]) -> None:
+        self.cursor.tab_stops = value
+
+    @property
+    def primary_buffer(self):
+        """Primary screen buffer."""
+        return self.screen.primary_buffer
+
+    @primary_buffer.setter
+    def primary_buffer(self, value) -> None:
+        self.screen.primary_buffer = value
+
+    @property
+    def alt_buffer(self):
+        """Alternate screen buffer."""
+        return self.screen.alt_buffer
+
+    @alt_buffer.setter
+    def alt_buffer(self, value) -> None:
+        self.screen.alt_buffer = value
+
+    @property
+    def current_buffer(self):
+        """Currently active screen buffer."""
+        return self.screen.current_buffer
+
+    @current_buffer.setter
+    def current_buffer(self, value) -> None:
+        self.screen.current_buffer = value
+
+    @property
+    def in_alt_screen(self) -> bool:
+        """Whether the alternate screen buffer is active."""
+        return self.screen.in_alt_screen
+
+    @in_alt_screen.setter
+    def in_alt_screen(self, value: bool) -> None:
+        self.screen.in_alt_screen = value
+
+    @property
+    def scroll_top(self) -> int:
+        """Top row of the active scroll region."""
+        return self.screen.scroll_top
+
+    @scroll_top.setter
+    def scroll_top(self, value: int) -> None:
+        self.screen.scroll_top = value
+
+    @property
+    def scroll_bottom(self) -> int:
+        """Bottom row of the active scroll region."""
+        return self.screen.scroll_bottom
+
+    @scroll_bottom.setter
+    def scroll_bottom(self, value: int) -> None:
+        self.screen.scroll_bottom = value
+
+    @property
+    def last_printed_char(self) -> str:
+        """Last printable character for REP compatibility."""
+        return self.screen.last_printed_char
+
+    @last_printed_char.setter
+    def last_printed_char(self, value: str) -> None:
+        self.screen.last_printed_char = value
+
+    @property
+    def g0_charset(self) -> str:
+        """G0 character set designator."""
+        return self.charset.g0_charset
+
+    @g0_charset.setter
+    def g0_charset(self, value: str) -> None:
+        self.charset.set_g0_charset(value)
+
+    @property
+    def g1_charset(self) -> str:
+        """G1 character set designator."""
+        return self.charset.g1_charset
+
+    @g1_charset.setter
+    def g1_charset(self, value: str) -> None:
+        self.charset.set_g1_charset(value)
+
+    @property
+    def g2_charset(self) -> str:
+        """G2 character set designator."""
+        return self.charset.g2_charset
+
+    @g2_charset.setter
+    def g2_charset(self, value: str) -> None:
+        self.charset.set_g2_charset(value)
+
+    @property
+    def g3_charset(self) -> str:
+        """G3 character set designator."""
+        return self.charset.g3_charset
+
+    @g3_charset.setter
+    def g3_charset(self, value: str) -> None:
+        self.charset.set_g3_charset(value)
+
+    @property
+    def current_charset(self) -> int:
+        """Currently selected GL character set index."""
+        return self.charset.current_charset
+
+    @current_charset.setter
+    def current_charset(self, value: int) -> None:
+        self.charset.current_charset = value
+
+    @property
+    def single_shift(self) -> int | None:
+        """Single-shift charset selection for the next character."""
+        return self.charset.single_shift
+
+    @single_shift.setter
+    def single_shift(self, value: int | None) -> None:
+        self.charset.single_shift = value
+
+    @property
+    def _charset_cache(self):
+        """Charset translation cache compatibility shim."""
+        return self.charset.cache
+
+    @_charset_cache.setter
+    def _charset_cache(self, value) -> None:
+        self.charset.cache = value
+
+    @property
+    def _charset_array(self):
+        """Precomputed charset designator array compatibility shim."""
+        return self.charset.charset_array
+
+    @_charset_array.setter
+    def _charset_array(self, value) -> None:
+        self.charset.charset_array = value
+
+    @property
+    def current_ansi_code(self) -> str:
+        """Current ANSI style for subsequent writes."""
+        return self.style.current_ansi_code
+
+    @current_ansi_code.setter
+    def current_ansi_code(self, value: str) -> None:
+        self.style.current_ansi_code = value
+
+    @property
+    def title(self) -> str:
+        """Window title."""
+        return self.title_device.title
+
+    @title.setter
+    def title(self, value: str) -> None:
+        self.title_device.title = value
+
+    @property
+    def icon_title(self) -> str:
+        """Icon title."""
+        return self.title_device.icon_title
+
+    @icon_title.setter
+    def icon_title(self, value: str) -> None:
+        self.title_device.icon_title = value
+
+    @property
+    def mouse_x(self) -> int:
+        """Last mouse column, 1-based."""
+        return self.mouse.x
+
+    @mouse_x.setter
+    def mouse_x(self, value: int) -> None:
+        self.mouse.x = value
+
+    @property
+    def mouse_y(self) -> int:
+        """Last mouse row, 1-based."""
+        return self.mouse.y
+
+    @mouse_y.setter
+    def mouse_y(self, value: int) -> None:
+        self.mouse.y = value
+
+    @property
+    def show_mouse(self) -> bool:
+        """Whether to render the local mouse cursor."""
+        return self.mouse.show
+
+    @show_mouse.setter
+    def show_mouse(self, value: bool) -> None:
+        self.mouse.show = value
+
+    @property
+    def auto_wrap(self) -> bool:
+        return self.modes.auto_wrap
+
+    @auto_wrap.setter
+    def auto_wrap(self, value: bool) -> None:
+        self.modes.auto_wrap = value
+
+    @property
+    def insert_mode(self) -> bool:
+        return self.modes.insert_mode
+
+    @insert_mode.setter
+    def insert_mode(self, value: bool) -> None:
+        self.modes.insert_mode = value
+
+    @property
+    def application_keypad(self) -> bool:
+        return self.modes.application_keypad
+
+    @application_keypad.setter
+    def application_keypad(self, value: bool) -> None:
+        self.modes.application_keypad = value
+
+    @property
+    def ansi_mode(self) -> bool:
+        return self.modes.ansi_mode
+
+    @ansi_mode.setter
+    def ansi_mode(self, value: bool) -> None:
+        self.modes.ansi_mode = value
+
+    @property
+    def cursor_application_mode(self) -> bool:
+        return self.modes.cursor_application_mode
+
+    @cursor_application_mode.setter
+    def cursor_application_mode(self, value: bool) -> None:
+        self.modes.cursor_application_mode = value
+
+    @property
+    def cursor_visible(self) -> bool:
+        return self.modes.cursor_visible
+
+    @cursor_visible.setter
+    def cursor_visible(self, value: bool) -> None:
+        self.modes.cursor_visible = value
+
+    @property
+    def cursor_blinking(self) -> bool:
+        return self.modes.cursor_blinking
+
+    @cursor_blinking.setter
+    def cursor_blinking(self, value: bool) -> None:
+        self.modes.cursor_blinking = value
+
+    @property
+    def scroll_mode(self) -> bool:
+        return self.modes.scroll_mode
+
+    @scroll_mode.setter
+    def scroll_mode(self, value: bool) -> None:
+        self.modes.scroll_mode = value
+
+    @property
+    def mouse_tracking(self) -> bool:
+        return self.modes.mouse_tracking
+
+    @mouse_tracking.setter
+    def mouse_tracking(self, value: bool) -> None:
+        self.modes.mouse_tracking = value
+
+    @property
+    def mouse_button_tracking(self) -> bool:
+        return self.modes.mouse_button_tracking
+
+    @mouse_button_tracking.setter
+    def mouse_button_tracking(self, value: bool) -> None:
+        self.modes.mouse_button_tracking = value
+
+    @property
+    def mouse_any_tracking(self) -> bool:
+        return self.modes.mouse_any_tracking
+
+    @mouse_any_tracking.setter
+    def mouse_any_tracking(self, value: bool) -> None:
+        self.modes.mouse_any_tracking = value
+
+    @property
+    def mouse_sgr_mode(self) -> bool:
+        return self.modes.mouse_sgr_mode
+
+    @mouse_sgr_mode.setter
+    def mouse_sgr_mode(self, value: bool) -> None:
+        self.modes.mouse_sgr_mode = value
+
+    @property
+    def mouse_extended_mode(self) -> bool:
+        return self.modes.mouse_extended_mode
+
+    @mouse_extended_mode.setter
+    def mouse_extended_mode(self, value: bool) -> None:
+        self.modes.mouse_extended_mode = value
+
+    @property
+    def urxvt_mouse(self) -> bool:
+        return self.modes.urxvt_mouse
+
+    @urxvt_mouse.setter
+    def urxvt_mouse(self, value: bool) -> None:
+        self.modes.urxvt_mouse = value
+
+    @property
+    def backarrow_key_sends_bs(self) -> bool:
+        return self.modes.backarrow_key_sends_bs
+
+    @backarrow_key_sends_bs.setter
+    def backarrow_key_sends_bs(self, value: bool) -> None:
+        self.modes.backarrow_key_sends_bs = value
+
+    @property
+    def auto_repeat(self) -> bool:
+        return self.modes.auto_repeat
+
+    @auto_repeat.setter
+    def auto_repeat(self, value: bool) -> None:
+        self.modes.auto_repeat = value
+
+    @property
+    def numeric_keypad(self) -> bool:
+        return self.modes.numeric_keypad
+
+    @numeric_keypad.setter
+    def numeric_keypad(self, value: bool) -> None:
+        self.modes.numeric_keypad = value
+
+    @property
+    def local_echo(self) -> bool:
+        return self.modes.local_echo
+
+    @local_echo.setter
+    def local_echo(self, value: bool) -> None:
+        self.modes.local_echo = value
+
+    @property
+    def reverse_screen(self) -> bool:
+        return self.modes.reverse_screen
+
+    @reverse_screen.setter
+    def reverse_screen(self, value: bool) -> None:
+        self.modes.reverse_screen = value
+
+    @property
+    def linefeed_newline_mode(self) -> bool:
+        return self.modes.linefeed_newline_mode
+
+    @linefeed_newline_mode.setter
+    def linefeed_newline_mode(self, value: bool) -> None:
+        self.modes.linefeed_newline_mode = value
+
+    @property
+    def origin_mode(self) -> bool:
+        return self.modes.origin_mode
+
+    @origin_mode.setter
+    def origin_mode(self, value: bool) -> None:
+        self.modes.origin_mode = value
+
+    @property
+    def auto_resize_mode(self) -> bool:
+        return self.modes.auto_resize_mode
+
+    @auto_resize_mode.setter
+    def auto_resize_mode(self, value: bool) -> None:
+        self.modes.auto_resize_mode = value
+
+    @property
+    def keyboard_usage_mode(self) -> bool:
+        return self.modes.keyboard_usage_mode
+
+    @keyboard_usage_mode.setter
+    def keyboard_usage_mode(self, value: bool) -> None:
+        self.modes.keyboard_usage_mode = value
+
+    @property
+    def bracketed_paste(self) -> bool:
+        return self.modes.bracketed_paste
+
+    @bracketed_paste.setter
+    def bracketed_paste(self, value: bool) -> None:
+        self.modes.bracketed_paste = value
+
     def set_pty_data_callback(self, callback: Callable[[str], None]) -> None:
         """Set callback for handling PTY data asynchronously."""
         self._pty_data_callback = callback
@@ -203,19 +537,7 @@ class Terminal:
 
     def resize(self, width: int, height: int) -> None:
         """Resize terminal to new dimensions."""
-        self.width = width
-        self.height = height
-        self.tab_stops = {stop for stop in self.tab_stops if stop < width}
-
-        # Resize both buffers
-        self.primary_buffer.resize(width, height)
-        self.alt_buffer.resize(width, height)
-
-        # Adjust scroll region
-        self.scroll_bottom = height - 1
-
-        # Clamp cursor position
-        self.cursor.clamp_to_terminal()
+        self.screen.resize(width, height)
 
         # Resize PTY if running
         if self.pty is not None:
@@ -246,33 +568,7 @@ class Terminal:
     # Methods called by parser
     def write_text(self, text: str, ansi_code: str = "") -> None:
         """Write text at cursor position."""
-        # Handle line wrapping or clipping
-        if self.cursor_x >= self.width:
-            if self.auto_wrap:
-                self.line_feed(is_wrapped=True)
-                self.cursor_x = 0
-            else:
-                self.cursor_x = self.width - 1
-
-        # Use provided ANSI code or current one
-        code_to_use = ansi_code if ansi_code else self.current_ansi_code
-
-        # Translate characters if using DEC Special Graphics
-        translated_text = self._translate_charset(text)
-
-        # Insert or overwrite based on mode
-        if self.insert_mode:
-            self.current_buffer.insert(self.cursor_x, self.cursor_y, translated_text, code_to_use)
-        else:
-            self.current_buffer.set(self.cursor_x, self.cursor_y, translated_text, code_to_use)
-
-        # Move cursor forward by character count
-        if self.auto_wrap or self.cursor_x < self.width - 1:
-            self.cursor_x += len(translated_text)
-
-        # Remember last character for REP command
-        if translated_text:
-            self.last_printed_char = translated_text[-1]
+        self.screen.write_text(text, ansi_code)
 
     def _translate_charset(self, text: str) -> str:
         """BLAZING FAST character set translation with caching! 🚀
@@ -284,95 +580,39 @@ class Terminal:
         4. **Pre-computed arrays**: Avoid list allocation on every call
         5. **Single-shift optimization**: Handle rare case efficiently
         """
-        # ⚡ FAST PATH 1: Handle single shift (rare case) first
-        if self.single_shift is not None:
-            # Single character translation for SS2/SS3
-            if not text:
-                return text
-
-            first_char = text[0]
-            remaining = text[1:] if len(text) > 1 else ""
-
-            # Get charset for single shift
-            charset_designator = self._charset_array[self.single_shift]
-            self.single_shift = None  # Reset after one character
-
-            # Translate first character
-            if charset_designator in self._charset_cache:
-                charset_map = self._charset_cache[charset_designator]
-            else:
-                charset_map = get_charset(charset_designator)
-                self._charset_cache[charset_designator] = charset_map
-
-            translated_first = charset_map.get(first_char, first_char)
-
-            # Recursively translate remaining text (if any) with current charset
-            if remaining:
-                translated_remaining = self._translate_charset(remaining)
-                return translated_first + translated_remaining
-            else:
-                return translated_first
-
-        # ⚡ FAST PATH 2: ASCII charset needs no translation
-        current_charset_designator = self._charset_array[self.current_charset]
-        if current_charset_designator == "B":  # US ASCII
-            return text
-
-        # ⚡ FAST PATH 3: Empty text
-        if not text:
-            return text
-
-        # Get cached charset map
-        if current_charset_designator in self._charset_cache:
-            charset_map = self._charset_cache[current_charset_designator]
-        else:
-            charset_map = get_charset(current_charset_designator)
-            self._charset_cache[current_charset_designator] = charset_map
-
-        # ⚡ FAST PATH 4: No mappings needed (empty charset)
-        if not charset_map:
-            return text
-
-        # ⚡ OPTIMIZED BULK TRANSLATION
-        # Use list comprehension for maximum speed (faster than str.translate for small maps)
-        result = [charset_map.get(char, char) for char in text]
-        return "".join(result)
+        return self.charset.translate(text)
 
     def set_g0_charset(self, charset: str) -> None:
         """Set the G0 character set."""
-        self.g0_charset = charset
-        self._charset_array[0] = charset
+        self.charset.set_g0_charset(charset)
 
     def set_g1_charset(self, charset: str) -> None:
         """Set the G1 character set."""
-        self.g1_charset = charset
-        self._charset_array[1] = charset
+        self.charset.set_g1_charset(charset)
 
     def set_g2_charset(self, charset: str) -> None:
         """Set the G2 character set."""
-        self.g2_charset = charset
-        self._charset_array[2] = charset
+        self.charset.set_g2_charset(charset)
 
     def set_g3_charset(self, charset: str) -> None:
         """Set the G3 character set."""
-        self.g3_charset = charset
-        self._charset_array[3] = charset
+        self.charset.set_g3_charset(charset)
 
     def shift_in(self) -> None:
         """Shift In (SI) - switch to G0."""
-        self.current_charset = 0
+        self.charset.shift_in()
 
     def shift_out(self) -> None:
         """Shift Out (SO) - switch to G1."""
-        self.current_charset = 1
+        self.charset.shift_out()
 
     def single_shift_2(self) -> None:
         """Single Shift 2 (SS2) - use G2 for next character only."""
-        self.single_shift = 2
+        self.charset.single_shift_2()
 
     def single_shift_3(self) -> None:
         """Single Shift 3 (SS3) - use G3 for next character only."""
-        self.single_shift = 3
+        self.charset.single_shift_3()
 
     def move_cursor(self, x: Optional[int], y: Optional[int]) -> None:
         """Move cursor to position."""
@@ -380,76 +620,35 @@ class Terminal:
 
     def line_feed(self, is_wrapped: bool = False) -> None:
         """Perform line feed, with optional carriage return if DECNLM is enabled."""
-        if self.cursor_y == self.scroll_bottom:
-            # At bottom of scroll region - scroll up
-            self.scroll(1)
-        elif self.cursor_y < self.scroll_bottom:
-            # Not at bottom yet - move cursor down
-            self.cursor_y += 1
-        # If cursor is somehow beyond scroll_bottom, don't move it further
-
-        # DECNLM: When enabled, line feed also performs carriage return
-        if self.linefeed_newline_mode:
-            self.cursor_x = 0
+        self.cursor.line_feed(is_wrapped)
 
     def carriage_return(self) -> None:
         """Move cursor to beginning of line."""
-        self.cursor_x = 0
+        self.cursor.carriage_return()
 
     def set_tab_stop(self, x: Optional[int] = None) -> None:
         """Set a horizontal tab stop at the given column."""
-        if x is None:
-            x = self.cursor_x
-        if 0 <= x < self.width:
-            self.tab_stops.add(x)
+        self.cursor.set_tab_stop(x)
 
     def next_tab_stop(self) -> int:
         """Return the next horizontal tab stop, clamped to the last column."""
-        for stop in sorted(self.tab_stops):
-            if stop > self.cursor_x:
-                return min(stop, self.width - 1)
-        return self.width - 1
+        return self.cursor.next_tab_stop()
 
     def backspace(self) -> None:
         """Move cursor back one position."""
-        if self.cursor_x > 0:
-            self.cursor_x -= 1
-        elif self.cursor_y > 0:
-            # Wrap to end of previous line
-            self.cursor_y -= 1
-            self.cursor_x = self.width - 1
+        self.cursor.backspace()
 
     def clear_screen(self, mode: int = constants.ERASE_FROM_CURSOR_TO_END) -> None:
         """Clear screen."""
-        # Get just the background color from current style
-        bg_ansi = get_background(self.current_ansi_code)
-
-        if mode == constants.ERASE_FROM_CURSOR_TO_END:
-            # Clear current line from cursor to end
-            self.current_buffer.clear_line(self.cursor_y, constants.ERASE_FROM_CURSOR_TO_END, self.cursor_x, bg_ansi)
-            # Clear all lines below cursor
-            for y in range(self.cursor_y + 1, self.height):
-                self.current_buffer.clear_line(y, constants.ERASE_ALL, 0, bg_ansi)
-        elif mode == constants.ERASE_FROM_START_TO_CURSOR:
-            # Clear all lines above cursor
-            for y in range(self.cursor_y):
-                self.current_buffer.clear_line(y, constants.ERASE_ALL, 0, bg_ansi)
-            self.clear_line(constants.ERASE_FROM_START_TO_CURSOR)
-        elif mode == constants.ERASE_ALL:
-            for y in range(self.height):
-                self.current_buffer.clear_line(y, constants.ERASE_ALL, 0, bg_ansi)
-            self.cursor_x = 0
-            self.cursor_y = 0
+        self.screen.clear_screen(mode)
 
     def clear_line(self, mode: int = constants.ERASE_FROM_CURSOR_TO_END) -> None:
         """Clear line."""
-        # Get just the background color from current style
-        bg_ansi = get_background(self.current_ansi_code)
-        self.current_buffer.clear_line(self.cursor_y, mode, self.cursor_x, bg_ansi)
+        self.screen.clear_line(mode)
 
     def clear_rect(self, x1: int, y1: int, x2: int, y2: int, ansi_code: str = "") -> None:
         """Clear a rectangular region."""
-        self.current_buffer.clear_region(x1, y1, x2, y2, ansi_code)
+        self.screen.clear_rect(x1, y1, x2, y2, ansi_code)
 
     def alternate_screen_on(self) -> None:
         """Switch to alternate screen."""
@@ -461,26 +660,7 @@ class Terminal:
 
     def set_mode(self, mode: int, value: bool = True, private: bool = False) -> None:
         """Set terminal mode."""
-        if private:
-            if mode == constants.DECAWM_AUTOWRAP:
-                self.auto_wrap = value
-            elif mode == constants.DECTCEM_SHOW_CURSOR:
-                self.cursor_visible = value
-            elif mode == constants.MOUSE_TRACKING_BASIC:
-                self.mouse_tracking = value
-            elif mode == constants.MOUSE_TRACKING_BUTTON_EVENT:
-                self.mouse_button_tracking = value
-            elif mode == constants.MOUSE_TRACKING_ANY_EVENT:
-                self.mouse_any_tracking = value
-            elif mode == constants.MOUSE_SGR_MODE:
-                self.mouse_sgr_mode = value
-            elif mode == constants.MOUSE_EXTENDED_MODE:
-                self.mouse_extended_mode = value
-        else:
-            if mode == constants.IRM_INSERT_REPLACE:
-                self.insert_mode = value
-            elif mode == constants.DECKPAM_APPLICATION_KEYPAD:
-                self.application_keypad = value
+        self.modes.set_mode(mode, value, private)
 
     def clear_mode(self, mode, private: bool = False) -> None:
         """Clear terminal mode."""
@@ -488,22 +668,15 @@ class Terminal:
 
     def switch_screen(self, alt: bool) -> None:
         """Switch between primary and alternate screen."""
-        if alt and not self.in_alt_screen:
-            # Switch to alt screen
-            self.current_buffer = self.alt_buffer
-            self.in_alt_screen = True
-        elif not alt and self.in_alt_screen:
-            # Switch to primary screen
-            self.current_buffer = self.primary_buffer
-            self.in_alt_screen = False
+        self.screen.switch_screen(alt)
 
     def set_title(self, title: str) -> None:
         """Set terminal title."""
-        self.title = title
+        self.title_device.set_title(title)
 
     def set_icon_title(self, icon_title: str) -> None:
         """Set terminal icon title."""
-        self.icon_title = icon_title
+        self.title_device.set_icon_title(icon_title)
 
     def bell(self) -> None:
         """Terminal bell."""
@@ -511,9 +684,7 @@ class Terminal:
 
     def alignment_test(self) -> None:
         """Fill the screen with 'E' characters for alignment testing."""
-        test_text = "E" * self.width
-        for y in range(self.height):
-            self.current_buffer.set(0, y, test_text)
+        self.screen.alignment_test()
 
     def save_cursor(self) -> None:
         """Save cursor position and attributes."""
@@ -525,53 +696,27 @@ class Terminal:
 
     def set_scroll_region(self, top: int, bottom: int) -> None:
         """Set scroll region."""
-        self.scroll_top = max(0, min(top, self.height - 1))
-        self.scroll_bottom = max(self.scroll_top, min(bottom, self.height - 1))
+        self.screen.set_scroll_region(top, bottom)
 
     def insert_lines(self, count: int) -> None:
         """Insert blank lines at cursor position."""
-        if count <= 0 or not (self.scroll_top <= self.cursor_y <= self.scroll_bottom):
-            return
-
-        self.current_buffer.scroll_region_down(self.cursor_y, self.scroll_bottom, count)
+        self.screen.insert_lines(count)
 
     def delete_lines(self, count: int) -> None:
         """Delete lines at cursor position."""
-        if count <= 0 or not (self.scroll_top <= self.cursor_y <= self.scroll_bottom):
-            return
-
-        self.current_buffer.scroll_region_up(self.cursor_y, self.scroll_bottom, count)
+        self.screen.delete_lines(count)
 
     def insert_characters(self, count: int, ansi_code: str = "") -> None:
         """Insert blank characters at cursor position."""
-        if not (0 <= self.cursor_y < self.height):
-            return
-        spaces = " " * count
-        self.current_buffer.insert(self.cursor_x, self.cursor_y, spaces, ansi_code)
+        self.screen.insert_characters(count, ansi_code)
 
     def delete_characters(self, count: int) -> None:
         """Delete characters at cursor position."""
-        if not (0 <= self.cursor_y < self.height):
-            return
-        self.current_buffer.delete(self.cursor_x, self.cursor_y, count)
+        self.screen.delete_characters(count)
 
     def scroll(self, lines: int) -> None:
-        """BLAZING FAST centralized scrolling with bulk operations! 🚀
-
-        Args:
-            lines: Number of lines to scroll. Positive = up, negative = down.
-        """
-        if lines == 0 or self.scroll_top > self.scroll_bottom:
-            return
-
-        abs_lines = abs(lines)
-
-        if lines > 0:
-            # Scroll up - use optimized bulk region scroll
-            self.current_buffer.scroll_region_up(self.scroll_top, self.scroll_bottom, abs_lines)
-        else:
-            # Scroll down - use optimized bulk region scroll
-            self.current_buffer.scroll_region_down(self.scroll_top, self.scroll_bottom, abs_lines)
+        """Scroll content within the active scroll region."""
+        self.screen.scroll(lines)
 
     def scroll_up(self, count: int) -> None:
         """Scroll content up within scroll region."""
@@ -598,169 +743,32 @@ class Terminal:
         if self.width == columns:
             return
 
-        # Update terminal width
-        self.width = columns
-
-        # Resize buffers to new width
-        self.primary_buffer.resize(columns, self.height)
-        self.alt_buffer.resize(columns, self.height)
-
-        # Move cursor to home position (required by DECCOLM spec)
-        self.cursor_x = 0
-        self.cursor_y = 0
+        self.screen.set_column_mode(columns)
 
     def repeat_last_character(self, count: int) -> None:
         """Repeat the last printed character count times (REP command)."""
-        if count > 0 and self.last_printed_char:
-            repeated_text = self.last_printed_char * count
-            self.write_text(repeated_text)
+        self.screen.repeat_last_character(count)
 
     # Input handling methods
     def input_key(self, char: str, modifier: int = constants.KEY_MOD_NONE) -> None:
         """Convert key + modifier to standard control codes, then send to input()."""
-        # Handle cursor keys (up, down, left, right)
-        if char in constants.CURSOR_KEYS:
-            if modifier == constants.KEY_MOD_NONE:
-                # Simple cursor keys - send standard sequences
-                sequence = f"{constants.ESC}[{constants.CURSOR_KEYS[char]}"
-            else:
-                # Modified cursor keys - CSI format with modifier
-                sequence = f"{constants.ESC}[1;{modifier}{constants.CURSOR_KEYS[char]}"
-            self.input(sequence)
-            return
-
-        # Handle navigation keys (home, end)
-        if char in constants.NAV_KEYS:
-            if modifier == constants.KEY_MOD_NONE:
-                sequence = f"{constants.ESC}[{constants.NAV_KEYS[char]}"
-            else:
-                sequence = f"{constants.ESC}[1;{modifier}{constants.NAV_KEYS[char]}"
-            self.input(sequence)
-            return
-
-        # Handle backspace key (DECBKM mode)
-        if char == constants.BS:
-            if self.backarrow_key_sends_bs:
-                self.input(constants.BS)  # Send BS (0x08)
-            else:
-                self.input(constants.DEL)  # Send DEL (0x7F) - default
-            return
-
-        # Handle control characters (Ctrl+A = \x01, etc.)
-        if modifier == constants.KEY_MOD_CTRL and len(char) == 1:
-            upper_char = char.upper()
-            if "A" <= upper_char <= "Z":
-                control_char = chr(ord(upper_char) - ord("A") + 1)
-                self.input(control_char)
-                return
-
-        # Handle regular printable characters
-        if len(char) == 1 and char.isprintable():
-            self.input(char)
-            return
-
-        # Fallback: send any unhandled character directly to input()
-        self.input(char)
+        self.keyboard.input_key(char, modifier)
 
     def input_fkey(self, num: int, modifier: int = constants.KEY_MOD_NONE) -> None:
         """Convert function key + modifier to standard control codes, then send to input()."""
-        # Function key escape sequences (standard codes)
-        if 1 <= num <= 4:
-            # F1-F4 use ESC O P/Q/R/S format
-            base_chars = {1: "P", 2: "Q", 3: "R", 4: "S"}
-            if modifier == constants.KEY_MOD_NONE:
-                sequence = f"{constants.ESC}O{base_chars[num]}"
-            else:
-                sequence = f"{constants.ESC}[1;{modifier}{base_chars[num]}"
-        elif 5 <= num <= 12:
-            # F5-F12 use ESC [ n ~ format
-            codes = {5: 15, 6: 17, 7: 18, 8: 19, 9: 20, 10: 21, 11: 23, 12: 24}
-            if modifier == constants.KEY_MOD_NONE:
-                sequence = f"{constants.ESC}[{codes[num]}~"
-            else:
-                sequence = f"{constants.ESC}[{codes[num]};{modifier}~"
-        else:
-            # Unsupported function key
-            return
-
-        self.input(sequence)
+        self.keyboard.input_fkey(num, modifier)
 
     def input_numpad_key(self, key: str) -> None:
         """Convert numpad key to appropriate sequence based on DECNKM mode."""
-        if self.numeric_keypad:
-            # Numeric mode - send literal characters
-            numeric_map = {
-                "0": "0",
-                "1": "1",
-                "2": "2",
-                "3": "3",
-                "4": "4",
-                "5": "5",
-                "6": "6",
-                "7": "7",
-                "8": "8",
-                "9": "9",
-                ".": ".",
-                "+": "+",
-                "-": "-",
-                "*": "*",
-                "/": "/",
-                "Enter": "\r",
-            }
-            sequence = numeric_map.get(key, key)
-        else:
-            # Application mode - send escape sequences
-            application_map = {
-                "0": "\x1bOp",
-                "1": "\x1bOq",
-                "2": "\x1bOr",
-                "3": "\x1bOs",
-                "4": "\x1bOt",
-                "5": "\x1bOu",
-                "6": "\x1bOv",
-                "7": "\x1bOw",
-                "8": "\x1bOx",
-                "9": "\x1bOy",
-                ".": "\x1bOn",
-                "+": "\x1bOk",
-                "-": "\x1bOm",
-                "*": "\x1bOj",
-                "/": "\x1bOo",
-                "Enter": "\x1bOM",
-            }
-            sequence = application_map.get(key, key)
-
-        self.input(sequence)
+        self.keyboard.input_numpad_key(key)
 
     def input(self, data: str) -> None:
         """Translate control codes based on terminal modes and send to PTY."""
-        if self.cursor_application_mode and f"{constants.ESC}[" in data:
-            data = self._translate_application_cursor_keys(data)
-
-        # Check if this is a function key that needs keypad mode translation
-        # F1-F4 in application keypad mode might behave differently
-        # For now, most function keys are the same in both modes
-
-        # No special translation needed, send as-is
-        self.send(data)
+        self.keyboard.input(data)
 
     def _translate_application_cursor_keys(self, data: str) -> str:
         """Translate embedded normal cursor-key CSI sequences to application mode."""
-        result = []
-        index = 0
-        while index < len(data):
-            if (
-                data[index] == constants.ESC
-                and index + 2 < len(data)
-                and data[index + 1] == "["
-                and data[index + 2] in "ABCD"
-            ):
-                result.append(f"{constants.ESC}O{data[index + 2]}")
-                index += 3
-            else:
-                result.append(data[index])
-                index += 1
-        return "".join(result)
+        return self.keyboard.translate_application_cursor_keys(data)
 
     def input_mouse(self, x: int, y: int, button: int, event_type: str, modifiers: set[str]) -> None:
         """
@@ -773,38 +781,7 @@ class Terminal:
             event_type: "press", "release", or "move".
             modifiers: A set of active modifiers ("shift", "meta", "ctrl").
         """
-        # Cache mouse position
-        self.mouse_x = x
-        self.mouse_y = y
-
-        # Determine if we should send an event based on tracking modes
-        is_move = event_type == "move"
-        is_press_release = event_type in ("press", "release")
-
-        if is_move and not self.mouse_any_tracking:
-            return
-        if is_press_release and not self.mouse_tracking:
-            return
-
-        # SGR mode is the most common and detailed
-        if self.mouse_sgr_mode:
-            # Add modifier flags to the button code
-            if "shift" in modifiers:
-                button |= constants.MOUSE_MOD_SHIFT
-            if "meta" in modifiers:
-                button |= constants.MOUSE_MOD_META
-            if "ctrl" in modifiers:
-                button |= constants.MOUSE_MOD_CTRL
-
-            # Determine final character ('M' for press/move, 'm' for release)
-            final_char = "m" if event_type == "release" else "M"
-
-            # For movement, the button code is special
-            if is_move:
-                button = constants.MOUSE_BUTTON_MOVEMENT
-
-            mouse_seq = f"{constants.ESC}[<{button};{x};{y}{final_char}"
-            self.send(mouse_seq)
+        self.mouse.input_mouse(x, y, button, event_type, modifiers)
 
     def send(self, data: str) -> None:
         """Send data to PTY without flushing (for regular input/unsolicited messages)."""

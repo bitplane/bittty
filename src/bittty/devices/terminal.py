@@ -27,17 +27,17 @@ class TerminalOperationSink:
     def __init__(self, terminal: Terminal) -> None:
         self.terminal = terminal
         self.control = ControlDevice(terminal)
-        self.charset = CharsetDevice(terminal)
-        self.cursor = getattr(terminal, "cursor", CursorDevice(terminal))
-        self.modes = ModeDevice(terminal)
+        self.charset = terminal.charset if hasattr(terminal, "charset") else CharsetDevice(terminal)
+        self.cursor = terminal.cursor if hasattr(terminal, "cursor") else CursorDevice(terminal)
+        self.modes = terminal.modes if hasattr(terminal, "modes") else ModeDevice(terminal)
         self.query = QueryDevice(terminal, self.modes)
-        self.screen = ScreenDevice(terminal)
-        self.style = StyleDevice(terminal)
-        self.title = TitleDevice(terminal)
+        self.screen = terminal.screen if hasattr(terminal, "screen") else ScreenDevice(terminal)
+        self.style = terminal.style if hasattr(terminal, "style") else StyleDevice(terminal)
+        self.title = terminal.title_device if hasattr(terminal, "title_device") else TitleDevice(terminal)
 
     def handle_operation(self, operation: Operation) -> None:
         if operation.kind == "text" and operation.name == "PRINT":
-            self.terminal.write_text(operation.args[0], self.terminal.current_ansi_code)
+            self.screen.write_text(operation.args[0], self.style.current_ansi_code)
             return
 
         if operation.kind == "control":

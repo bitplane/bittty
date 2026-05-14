@@ -19,38 +19,37 @@ class ControlDevice:
 
     def __init__(self, terminal: Terminal) -> None:
         self.terminal = terminal
+        self.cursor = terminal.cursor
+        self.charset = terminal.charset
 
     def handle_operation(self, operation: Operation) -> None:
         ch = operation.raw
         if ch == constants.BEL:
             self.terminal.bell()
         elif ch == constants.BS:
-            self.terminal.backspace()
+            self.cursor.backspace()
         elif ch == constants.HT:
-            self.terminal.cursor_x = self.terminal.next_tab_stop()
+            self.cursor.horizontal_tab()
         elif ch in (constants.LF, constants.VT, constants.FF):
-            self.terminal.line_feed()
+            self.cursor.line_feed()
         elif ch == constants.CR:
-            self.terminal.cursor_x = 0
+            self.cursor.carriage_return()
         elif ch == constants.SO:
-            self.terminal.current_charset = 1
+            self.charset.shift_out()
         elif ch == constants.SI:
-            self.terminal.current_charset = 0
+            self.charset.shift_in()
         elif ch == constants.DEL:
             pass
         elif operation.name == "IND":
-            self.terminal.line_feed()
+            self.cursor.line_feed()
         elif operation.name == "RI":
-            if self.terminal.cursor_y <= self.terminal.scroll_top:
-                self.terminal.scroll(-1)
-            else:
-                self.terminal.cursor_y -= 1
+            self.cursor.reverse_index()
         elif operation.name == "ST":
             pass
         elif operation.name == "NEL":
-            self.terminal.cursor_x = 0
-            self.terminal.line_feed()
+            self.cursor.carriage_return()
+            self.cursor.line_feed()
         elif operation.name == "HTS":
-            self.terminal.set_tab_stop(self.terminal.cursor_x)
+            self.cursor.set_tab_stop()
         else:
             logger.debug("Unknown control operation: %s", operation)
