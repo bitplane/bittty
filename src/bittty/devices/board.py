@@ -41,6 +41,8 @@ class TerminalBoard:
         self.palette_overrides = palette_overrides or {}
         self.clipboard: dict[str, str] = {}  # OSC 52 selections; frontends sync this
         self.cwd: str = ""  # OSC 7 reported working directory
+        self.pointer_shape: str = ""  # OSC 22 mouse-pointer shape
+        self.font: str = ""  # OSC 50 font selection
         self.notifications: list[str] = []  # OSC 9 / 777 messages
         self.prompt_marks: list[tuple[str, int]] = []  # OSC 133 (mark, row)
         self.conformance_level: int = 62  # DECSCL

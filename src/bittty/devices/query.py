@@ -34,6 +34,8 @@ class QueryDevice(Device):
             "OSC_CWD": lambda op: setattr(self.board, "cwd", op.args[0]),
             "OSC_NOTIFY": lambda op: self.board.notifications.append(op.args[0]),
             "OSC_SHELL_MARK": lambda op: self.board.prompt_marks.append((op.args[0], self.board.cursor.y)),
+            "OSC_POINTER_SHAPE": lambda op: setattr(self.board, "pointer_shape", op.args[0]),
+            "OSC_FONT": self.handle_font,
             "LINUX_SETTERM": self.handle_setterm,
             "DECSWBV": lambda op: setattr(self.board, "warning_bell_volume", op.args[0]),
             "DECSMBV": lambda op: setattr(self.board, "margin_bell_volume", op.args[0]),
@@ -41,6 +43,14 @@ class QueryDevice(Device):
             "XTGETTCAP": self.request_termcap,
             "XTVERSION": self.report_version,
         }
+
+    def handle_font(self, operation: Operation) -> None:
+        """OSC 50 — set the font, or answer a query (data == '?') with the current one."""
+        data = operation.args[0]
+        if data == "?":
+            self.board.host.write(f"\x1b]50;{self.board.font}\x07", flush=True)
+        else:
+            self.board.font = data
 
     def report_version(self, operation: Operation) -> None:
         """XTVERSION (CSI > q) — reply DCS > | name version ST."""

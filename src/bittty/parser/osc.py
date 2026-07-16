@@ -50,6 +50,21 @@ def parse_osc_operation(string_buffer: str, raw: str = "") -> Operation | None:
         return Operation("OSC_BACKGROUND", (data,), raw)
     if cmd == 12:
         return Operation("OSC_CURSOR", (data,), raw)
+    if cmd == 13:  # mouse pointer foreground
+        return Operation("OSC_MOUSE_FOREGROUND", (data,), raw)
+    if cmd == 14:  # mouse pointer background
+        return Operation("OSC_MOUSE_BACKGROUND", (data,), raw)
+    if cmd == 17:  # highlight (selection) background
+        return Operation("OSC_HIGHLIGHT_BACKGROUND", (data,), raw)
+    if cmd == 19:  # highlight (selection) foreground
+        return Operation("OSC_HIGHLIGHT_FOREGROUND", (data,), raw)
+    if cmd == 22:  # set mouse-pointer shape
+        return Operation("OSC_POINTER_SHAPE", (data,), raw)
+    if cmd == 50:  # set or query font
+        return Operation("OSC_FONT", (data,), raw)
+    if cmd == 99:  # kitty desktop notification: OSC 99 ; metadata ; payload
+        _, _, body = data.partition(";")
+        return Operation("OSC_NOTIFY", (body or data,), raw)
     if cmd == 104:
         return Operation("OSC_RESET_PALETTE", (data,), raw)
     if cmd == 110:
@@ -58,6 +73,14 @@ def parse_osc_operation(string_buffer: str, raw: str = "") -> Operation | None:
         return Operation("OSC_RESET_BACKGROUND", (), raw)
     if cmd == 112:
         return Operation("OSC_RESET_CURSOR", (), raw)
+    if cmd == 113:
+        return Operation("OSC_RESET_MOUSE_FOREGROUND", (), raw)
+    if cmd == 114:
+        return Operation("OSC_RESET_MOUSE_BACKGROUND", (), raw)
+    if cmd == 117:
+        return Operation("OSC_RESET_HIGHLIGHT_BACKGROUND", (), raw)
+    if cmd == 119:
+        return Operation("OSC_RESET_HIGHLIGHT_FOREGROUND", (), raw)
 
     return Operation("OSC_UNHANDLED", (cmd, data), raw)
 

@@ -35,6 +35,14 @@ class PaletteDevice(Device):
             "LINUX_PALETTE_RESET": lambda op: self.reset(),
             "XTPUSHCOLORS": lambda op: self.push_colors(),
             "XTPOPCOLORS": lambda op: self.pop_colors(),
+            "OSC_MOUSE_FOREGROUND": lambda op: self.dynamic_color(op, "mouse_foreground", 13, "foreground"),
+            "OSC_MOUSE_BACKGROUND": lambda op: self.dynamic_color(op, "mouse_background", 14, "background"),
+            "OSC_HIGHLIGHT_BACKGROUND": lambda op: self.dynamic_color(op, "highlight_background", 17, "foreground"),
+            "OSC_HIGHLIGHT_FOREGROUND": lambda op: self.dynamic_color(op, "highlight_foreground", 19, "background"),
+            "OSC_RESET_MOUSE_FOREGROUND": lambda op: setattr(self, "mouse_foreground", None),
+            "OSC_RESET_MOUSE_BACKGROUND": lambda op: setattr(self, "mouse_background", None),
+            "OSC_RESET_HIGHLIGHT_BACKGROUND": lambda op: setattr(self, "highlight_background", None),
+            "OSC_RESET_HIGHLIGHT_FOREGROUND": lambda op: setattr(self, "highlight_foreground", None),
         }
 
     def reset(self) -> None:
@@ -43,9 +51,25 @@ class PaletteDevice(Device):
         self.foreground = self._defaults.foreground
         self.background = self._defaults.background
         self.cursor = self._defaults.cursor
+        # Dynamic colours (OSC 13/14/17/19); None means "use the fg/bg fallback".
+        self.mouse_foreground: RGB | None = None
+        self.mouse_background: RGB | None = None
+        self.highlight_foreground: RGB | None = None
+        self.highlight_background: RGB | None = None
         self.stack: list[tuple] = []  # XTPUSHCOLORS / XTPOPCOLORS
         for slot, rgb in self.board.palette_overrides.items():
             self._set_slot(slot, rgb)
+
+    def dynamic_color(self, operation: Operation, slot: str, cmd: int, fallback: str) -> None:
+        """OSC 13/14/17/19 — set, or (data == '?') query a dynamic colour with a fg/bg fallback."""
+        data = operation.args[0]
+        if data == "?":
+            rgb = getattr(self, slot) or getattr(self, fallback)
+            self._respond(f"{cmd};{format_rgb(rgb)}")
+            return
+        rgb = parse_color_spec(data)
+        if rgb is not None:
+            setattr(self, slot, rgb)
 
     def push_colors(self) -> None:
         """XTPUSHCOLORS — save the whole palette (256 entries plus fg/bg/cursor)."""
