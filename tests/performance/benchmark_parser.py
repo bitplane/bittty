@@ -171,7 +171,8 @@ def generate_visualizations(perf_base_dir: Path):
         branches = []
         times = []
         for row in test_data:
-            time_val = float(row["time_mean"])
+            # Plot the min: it measures the code; the mean measures machine load.
+            time_val = float(row["time_min"])
             # Skip zero or negative values
             if time_val <= 0:
                 continue
@@ -259,7 +260,7 @@ def generate_combined_chart(test_cases: dict, perf_base_dir: Path):
     # Sort test cases to ensure consistent order
     for test_name, test_data in sorted(test_cases.items()):
         test_names.append(test_name)
-        test_times = {row["branch"]: float(row["time_mean"]) for row in test_data if float(row["time_mean"]) > 0}
+        test_times = {row["branch"]: float(row["time_min"]) for row in test_data if float(row["time_min"]) > 0}
         times_for_test = [test_times.get(branch, 0) for branch in sorted_branches]
         all_times.append(times_for_test)
 
