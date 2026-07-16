@@ -56,7 +56,15 @@ class ScreenDevice:
             "RIS": lambda op: self.board.reset(hard=True),
             "DECSTR": lambda op: self.board.reset(hard=False),
             "DECALN": lambda op: self.alignment_test(),
+            "DECDHL_TOP": lambda op: self.set_line_attribute(constants.LINE_DOUBLE_TOP),
+            "DECDHL_BOTTOM": lambda op: self.set_line_attribute(constants.LINE_DOUBLE_BOTTOM),
+            "DECDWL": lambda op: self.set_line_attribute(constants.LINE_DOUBLE_WIDTH),
+            "DECSWL": lambda op: self.set_line_attribute(constants.LINE_SINGLE),
         }
+
+    def set_line_attribute(self, attribute: str) -> None:
+        """DECDHL/DECDWL/DECSWL — set the cursor line's width/height attribute."""
+        self.current_buffer.set_line_attribute(self.board.cursor.y, attribute)
 
     def write_text(self, text: str, ansi_code: str = "") -> None:
         """Write printable text at the cursor position."""
@@ -359,6 +367,7 @@ class ScreenDevice:
         self.in_alt_screen = False
         self.current_buffer = self.primary_buffer
         for buf in (self.primary_buffer, self.alt_buffer):
+            buf.reset_line_attributes()
             for y in range(self.board.height):
                 buf.clear_line(y, constants.ERASE_ALL, 0, "")
         self.last_printed_char = " "

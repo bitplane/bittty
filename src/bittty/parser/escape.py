@@ -41,13 +41,21 @@ def parse_escape_operation(data: str) -> Operation | None:
     return Operation(name, args, data)
 
 
+_HASH_OPERATION_NAMES = {
+    "3": "DECDHL_TOP",  # double-height line, top half
+    "4": "DECDHL_BOTTOM",  # double-height line, bottom half
+    "5": "DECSWL",  # single-width line (the reset)
+    "6": "DECDWL",  # double-width line
+    "8": "DECALN",  # screen alignment test
+}
+
+
 def parse_hash_operation(data: str) -> Operation | None:
-    """Return a semantic operation for an ESC # n sequence (DECALN is ESC # 8)."""
+    """Return a semantic operation for an ESC # n line-size / alignment sequence."""
     if len(data) < 3:
         return None
-    if data[2] == "8":
-        return Operation("DECALN", (), data)
-    return None
+    name = _HASH_OPERATION_NAMES.get(data[2])
+    return Operation(name, (), data) if name is not None else None
 
 
 CHARSET_OPERATION_NAMES = {

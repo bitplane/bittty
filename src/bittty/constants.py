@@ -34,6 +34,12 @@ SI = "\x0f"  # Shift In (activate G0)
 ESC = "\x1b"  # Escape
 DEL = "\x7f"  # Delete
 
+# --- Line attributes (DECDHL / DECDWL / DECSWL) ---
+LINE_SINGLE = "single"  # DECSWL — normal single-width, single-height
+LINE_DOUBLE_WIDTH = "double_width"  # DECDWL
+LINE_DOUBLE_TOP = "double_top"  # DECDHL top half
+LINE_DOUBLE_BOTTOM = "double_bottom"  # DECDHL bottom half
+
 # --- Erase Modes (for ED and EL) ---
 ERASE_FROM_CURSOR_TO_END = 0
 ERASE_FROM_START_TO_CURSOR = 1

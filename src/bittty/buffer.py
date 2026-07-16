@@ -28,9 +28,27 @@ class Buffer:
         for _ in range(height):
             self.grid.append(self._create_empty_row())
 
+        # Per-line DECDHL/DECDWL/DECSWL attribute, kept parallel to grid rows.
+        self.line_attributes: List[str] = [constants.LINE_SINGLE] * height
+
     def _create_empty_row(self) -> List[Cell]:
         """Create a row filled with empty cells, reusing the cached empty style."""
         return [(self._empty_style, " ") for _ in range(self.width)]
+
+    def set_line_attribute(self, y: int, attribute: str) -> None:
+        """Set a line's DECDHL/DECDWL/DECSWL attribute."""
+        if 0 <= y < self.height:
+            self.line_attributes[y] = attribute
+
+    def get_line_attribute(self, y: int) -> str:
+        """Return a line's width/height attribute (single by default)."""
+        if 0 <= y < self.height:
+            return self.line_attributes[y]
+        return constants.LINE_SINGLE
+
+    def reset_line_attributes(self) -> None:
+        """Return every line to single-width, single-height (RIS)."""
+        self.line_attributes = [constants.LINE_SINGLE] * self.height
 
     def get_content(self) -> List[List[Cell]]:
         """Get buffer content as a 2D grid."""
@@ -195,6 +213,9 @@ class Buffer:
         empty_rows = [self._create_empty_row() for _ in range(count)]
         self.grid.extend(empty_rows)
 
+        del self.line_attributes[:count]
+        self.line_attributes.extend([constants.LINE_SINGLE] * count)
+
     def scroll_down(self, count: int) -> None:
         """Scroll content down, removing bottom lines and adding blank lines at top."""
         count = min(count, len(self.grid))  # Clamp to available rows
@@ -207,6 +228,9 @@ class Buffer:
         empty_rows = [self._create_empty_row() for _ in range(count)]
         self.grid[:0] = empty_rows
 
+        del self.line_attributes[-count:]
+        self.line_attributes[:0] = [constants.LINE_SINGLE] * count
+
     def scroll_region_up(self, top: int, bottom: int, count: int) -> None:
         """Scroll a specific region up by count lines. BLAZING FAST bulk operation!"""
         if count <= 0 or top > bottom or bottom >= self.height:
@@ -218,10 +242,12 @@ class Buffer:
 
         # Bulk slice operations - move rows up within region
         self.grid[top : bottom + 1 - count] = self.grid[top + count : bottom + 1]
+        self.line_attributes[top : bottom + 1 - count] = self.line_attributes[top + count : bottom + 1]
 
         # Fill bottom of region with empty rows
         for i in range(bottom + 1 - count, bottom + 1):
             self.grid[i] = self._create_empty_row()
+            self.line_attributes[i] = constants.LINE_SINGLE
 
     def scroll_region_down(self, top: int, bottom: int, count: int) -> None:
         """Scroll a specific region down by count lines. BLAZING FAST bulk operation!"""
@@ -234,10 +260,12 @@ class Buffer:
 
         # Bulk slice operations - move rows down within region
         self.grid[top + count : bottom + 1] = self.grid[top : bottom + 1 - count]
+        self.line_attributes[top + count : bottom + 1] = self.line_attributes[top : bottom + 1 - count]
 
         # Fill top of region with empty rows
         for i in range(top, top + count):
             self.grid[i] = self._create_empty_row()
+            self.line_attributes[i] = constants.LINE_SINGLE
 
     def resize(self, width: int, height: int) -> None:
         """Resize buffer to new dimensions."""
@@ -246,9 +274,11 @@ class Buffer:
             # Add new rows
             for _ in range(height - len(self.grid)):
                 self.grid.append([(Style(), " ") for _ in range(width)])
+            self.line_attributes.extend([constants.LINE_SINGLE] * (height - len(self.line_attributes)))
         elif len(self.grid) > height:
             # Remove excess rows
             self.grid = self.grid[:height]
+            self.line_attributes = self.line_attributes[:height]
 
         # Adjust width of each row
         for y in range(len(self.grid)):
