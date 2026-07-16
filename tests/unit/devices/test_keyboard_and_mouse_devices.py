@@ -233,3 +233,47 @@ def test_input_key_backspace():
     terminal.input_key("\x08")  # BS character
 
     # Should complete without errors
+
+
+def test_mouse_device_legacy_encoding_without_sgr():
+    """Mode 1000 without 1006 reports in the X10 byte encoding, not silence."""
+    terminal = terminal_with_pty()
+    terminal.board.modes.mouse_tracking = True
+
+    terminal.board.mouse.input_mouse(10, 5, 0, "press", set())
+    assert terminal.pty.data == ["\x1b[M" + chr(32 + 0) + chr(32 + 10) + chr(32 + 5)]
+
+    terminal.pty.data.clear()
+    terminal.board.mouse.input_mouse(10, 5, 0, "release", set())
+    # A legacy release cannot name its button: low bits are 3.
+    assert terminal.pty.data == ["\x1b[M" + chr(32 + 3) + chr(32 + 10) + chr(32 + 5)]
+
+
+def test_mouse_device_button_tracking_reports_drag_motion():
+    """Mode 1002 reports motion while a button is held (and only then)."""
+    terminal = terminal_with_pty()
+    terminal.board.modes.set_private_modes((1002, 1006), True)
+
+    terminal.board.mouse.input_mouse(3, 3, 0, "move", set())
+    assert terminal.pty.data == []  # no button held: no report
+
+    terminal.board.mouse.input_mouse(3, 3, 0, "press", set())
+    terminal.pty.data.clear()
+    terminal.board.mouse.input_mouse(4, 3, 0, "move", set())
+    assert terminal.pty.data == ["\x1b[<32;4;3M"]  # motion flag + dragged button 0
+
+    terminal.board.mouse.input_mouse(4, 3, 0, "release", set())
+    terminal.pty.data.clear()
+    terminal.board.mouse.input_mouse(5, 3, 0, "move", set())
+    assert terminal.pty.data == []  # button up again: silence
+
+
+def test_input_key_modified_tilde_nav_keys():
+    """Ctrl+PageUp must encode as ESC[5;5~, not ESC[1;55~."""
+    terminal = terminal_with_pty()
+    terminal.input_key("pageup", constants.KEY_MOD_CTRL)
+    assert terminal.pty.data == ["\x1b[5;5~"]
+
+    terminal.pty.data.clear()
+    terminal.input_key("up", constants.KEY_MOD_CTRL)
+    assert terminal.pty.data == ["\x1b[1;5A"]  # letter-final keys keep the 1;mod form

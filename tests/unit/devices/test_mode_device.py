@@ -1,4 +1,3 @@
-from bittty import constants
 from bittty.operations import Operation
 from bittty.terminal import Terminal
 
@@ -46,8 +45,10 @@ def test_mode_device_keypad_operations_and_side_effects():
     assert modes.application_keypad is False
     assert modes.numeric_keypad is True
 
-    modes.set_mode(constants.DECKPAM_APPLICATION_KEYPAD, True)
-    assert modes.application_keypad is True
+    # ANSI mode 1 is GATM, not a keypad switch — it must not be recognised.
+    modes.set_mode(1, True)
+    assert modes.application_keypad is False
+    assert modes.get_ansi_mode_status(1) == 0
 
 
 def test_mode_device_alt_screen_and_save_restore_side_effects():

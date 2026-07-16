@@ -30,6 +30,7 @@ class MouseDevice(Device):
         self.locator_report_up = False
         self.locator_filter: tuple[int, int, int, int] | None = None  # top, left, bottom, right
         self._button_mask = 0
+        self._pressed: set[int] = set()  # buttons currently held (drives 1002 drag motion)
         self.handlers = {
             "DECELR": self.enable_locator,
             "DECSLE": self.select_locator_events,
@@ -118,24 +119,40 @@ class MouseDevice(Device):
         if self.locator_enabled:
             self._report_locator_event(button, event_type)
 
+        modes = self.board.modes
         is_move = event_type == "move"
-        is_press_release = event_type in ("press", "release")
+        if event_type == "press":
+            self._pressed.add(button)
+        elif event_type == "release":
+            self._pressed.discard(button)
 
-        if is_move and not self.board.modes.mouse_any_tracking:
+        # Motion reports need any-motion tracking (1003), or button tracking (1002)
+        # with a button held (a drag). Press/release need any tracking mode at all.
+        if is_move and not (modes.mouse_any_tracking or (modes.mouse_button_tracking and self._pressed)):
             return
-        if is_press_release and not self.board.modes.mouse_tracking:
+        if not is_move and not modes.mouse_tracking:
             return
 
-        if self.board.modes.mouse_sgr_mode:
-            if "shift" in modifiers:
-                button |= constants.MOUSE_MOD_SHIFT
-            if "meta" in modifiers:
-                button |= constants.MOUSE_MOD_META
-            if "ctrl" in modifiers:
-                button |= constants.MOUSE_MOD_CTRL
+        mods = 0
+        if "shift" in modifiers:
+            mods |= constants.MOUSE_MOD_SHIFT
+        if "meta" in modifiers:
+            mods |= constants.MOUSE_MOD_META
+        if "ctrl" in modifiers:
+            mods |= constants.MOUSE_MOD_CTRL
 
+        if is_move:  # motion flag + the dragged button (3 = none)
+            bits = 32 | (min(self._pressed) if self._pressed else 3) | mods
+        else:
+            bits = button | mods
+
+        if modes.mouse_sgr_mode:
             final_char = "m" if event_type == "release" else "M"
-            if is_move:
-                button = constants.MOUSE_BUTTON_MOVEMENT
+            self.board.host.write(f"{constants.ESC}[<{bits};{x};{y}{final_char}")
+            return
 
-            self.board.host.write(f"{constants.ESC}[<{button};{x};{y}{final_char}")
+        # Legacy X10 byte encoding: CSI M Cb Cx Cy, each value + 32. A release
+        # cannot name its button here, so its low bits are 3.
+        if event_type == "release":
+            bits = (bits & ~3) | 3
+        self.board.host.write(f"{constants.ESC}[M{chr(32 + bits)}{chr(32 + min(x, 223))}{chr(32 + min(y, 223))}")

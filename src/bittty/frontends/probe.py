@@ -70,7 +70,7 @@ def parse_probe_replies(buf: str, env) -> DisplayCaps:
     )
 
 
-def probe_display_caps(stdin_fd, write, env=None, timeout: float = 0.2) -> DisplayCaps:
+def probe_display_caps(stdin_fd, write, env=None, timeout: float = 0.5) -> DisplayCaps:
     """Query the real terminal and return DisplayCaps; env-only on a non-tty/timeout.
 
     `write` is a callable that writes a str to the outer terminal (and flushes).

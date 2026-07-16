@@ -223,7 +223,12 @@ def test_csi_sm_rm_deccolm_column_mode(terminal):
     """Test CSI ? 3 h (132 Column Mode) and CSI ? 3 l (80 Column Mode)."""
     parser = Parser(terminal.board)
 
-    # Set 132 column mode
+    # Without mode 40 (allowC132), DECCOLM is ignored — reset strings carry ?3l
+    # and must not shrink the terminal.
+    parser.feed(f"{ESC}[?{DECCOLM_COLUMN_MODE}h")
+    assert terminal.width == 80
+
+    parser.feed(f"{ESC}[?40h")  # permit 80<->132 switching
     parser.feed(f"{ESC}[?{DECCOLM_COLUMN_MODE}h")
     assert terminal.width == 132
     assert terminal.board.cursor.x == 0  # Cursor should move to home position
@@ -290,3 +295,18 @@ def test_csi_sm_rm_deckbum_keyboard_usage_mode(terminal):
     # Reset to normal keyboard mode
     parser.feed(f"{ESC}[?{DECKBUM_KEYBOARD_USAGE}l")
     assert terminal.board.modes.keyboard_usage_mode is False
+
+
+def test_deccolm_clears_the_screen_and_resets_the_region(terminal):
+    """DECCOLM always erases the display and restores the full scroll region."""
+    parser = Parser(terminal.board)
+    parser.feed(f"{ESC}[?40h")  # permit column switching
+    parser.feed("some text")
+    parser.feed(f"{ESC}[5;15r")  # shrink the scroll region
+
+    parser.feed(f"{ESC}[?{DECCOLM_COLUMN_MODE}h")
+
+    assert terminal.width == 132
+    assert terminal.board.screen.current_buffer.get_line_text(0).strip() == ""
+    assert terminal.board.screen.scroll_top == 0
+    assert terminal.board.screen.scroll_bottom == terminal.height - 1

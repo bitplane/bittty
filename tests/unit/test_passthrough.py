@@ -69,3 +69,33 @@ def test_handle_sgr_mouse_sequence_reinjects(monkeypatch):
 def test_shell_detection_returns_something():
     display = PassthroughDisplay()
     assert isinstance(display.get_default_shell(), str)
+
+
+def test_lone_escape_keypress_is_flushed_next_tick():
+    """A bare ESC held back by the mouse-prefix buffer must reach the child."""
+    display = PassthroughDisplay()
+    sent = []
+    display.terminal.input = sent.append
+
+    display.handle_input("\033")  # could be the start of a mouse report: buffered
+    assert sent == []
+    assert display.input_sequence_buffer == "\033"
+
+    display.flush_pending_input()  # input loop found nothing more: it was a keypress
+    assert sent == ["\033"]
+    assert display.input_sequence_buffer == ""
+
+    display.flush_pending_input()  # idempotent when empty
+    assert sent == ["\033"]
+
+
+def test_split_mouse_report_still_reassembles():
+    """A mouse report split across reads is held and re-injected whole."""
+    display = PassthroughDisplay()
+    seen = []
+    display.terminal.input_mouse = lambda x, y, b, e, m: seen.append((x, y, b, e))
+
+    display.handle_input("\033[<0;3;")
+    assert seen == []
+    display.handle_input("4M")
+    assert seen == [(3, 4, 0, "press")]

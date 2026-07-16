@@ -229,6 +229,17 @@ class PassthroughDisplay(Display):
         if plain_input:
             self.terminal.input("".join(plain_input))
 
+    def flush_pending_input(self) -> None:
+        """Release a held partial prefix that never became a mouse report.
+
+        A lone ESC keypress matches the start of the mouse-report prefix, so
+        handle_input buffers it; when no follow-up arrives within an input-loop
+        tick it was a real ESC and must reach the child.
+        """
+        if self.input_sequence_buffer:
+            pending, self.input_sequence_buffer = self.input_sequence_buffer, ""
+            self.terminal.input(pending)
+
     def handle_resize(self) -> None:
         """Re-read the host size and resize the emulator (called from a SIGWINCH handler)."""
         size = shutil.get_terminal_size()
@@ -265,6 +276,8 @@ class PassthroughDisplay(Display):
                     break
                 if data:
                     self.handle_input(data)
+                else:
+                    self.flush_pending_input()
                 await asyncio.sleep(0.01)
             except Exception:
                 logger.exception("Error in input loop")

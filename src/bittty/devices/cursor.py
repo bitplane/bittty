@@ -60,15 +60,15 @@ class CursorDevice(Device):
     def move_to(self, x: int | None, y: int | None) -> None:
         """Apply a CUP/HVP/VPA move, honouring origin mode (DECOM).
 
-        Under origin mode the row is relative to the scroll region's top and is
-        clamped within the region; the column stays absolute (bittty has no
-        left/right margins).
+        Under origin mode the row is relative to the scroll region's top and the
+        column to the left margin, each clamped within its margins.
         """
-        if y is not None and self.board.modes.origin_mode:
-            top = self.board.screen.scroll_top
-            bottom = self.board.screen.scroll_bottom
-            self.set_position(x, None)
-            self.y = max(top, min(top + y, bottom))
+        if self.board.modes.origin_mode:
+            screen = self.board.screen
+            if y is not None:
+                self.y = max(screen.scroll_top, min(screen.scroll_top + y, screen.scroll_bottom))
+            if x is not None:
+                self.x = max(screen.left_margin, min(screen.left_margin + x, screen.right_margin))
             return
         self.set_position(x, y)
 

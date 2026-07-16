@@ -129,6 +129,44 @@ def parse_sgr_sequence(ansi: str) -> Style:
     return interpret(tokens)
 
 
+_RESET_TOKENS = ("", "0", "00")
+
+
+def _last_reset_index(tokens: Tuple[str, ...]) -> int:
+    """Index of the last SGR reset token, skipping 38/48/58 colour arguments.
+
+    A bare "0" can also be a colour channel (38;2;0;0;0), so the walk consumes
+    extended-colour arguments exactly like interpret() does.
+    """
+    last = -1
+    i = 0
+    while i < len(tokens):
+        token = tokens[i]
+        if token in _RESET_TOKENS:
+            last = i
+        elif token in ("38", "48", "58") and i + 1 < len(tokens):
+            i += 2 if tokens[i + 1] == "5" else 4 if tokens[i + 1] == "2" else 0
+        i += 1
+    return last
+
+
+@lru_cache(maxsize=10000)
+def parse_sgr_with_reset(ansi: str) -> Tuple[Style, bool]:
+    """Parse an SGR sequence into (style, reset): reset means "clear, then apply style".
+
+    A reset token (0, 00, or an empty parameter) anywhere in the sequence discards
+    everything before it, so ESC[0;31m is "reset, then red" — not a red merge into
+    the current attributes.
+    """
+    if not ansi.startswith("\x1b[") or not ansi.endswith("m"):
+        return Style(), False
+    tokens = tuple(ansi[2:-1].split(";"))
+    last = _last_reset_index(tokens)
+    if last < 0:
+        return interpret(tokens), False
+    return interpret(tokens[last + 1 :]), True
+
+
 _UNDERLINE_STYLES = {"0": "none", "1": "single", "2": "double", "3": "curly", "4": "dotted", "5": "dashed"}
 
 
@@ -189,7 +227,7 @@ def interpret(tokens: Tuple[str, ...]) -> Style:
             style = replace(style, italic=True)
         elif token == "4":
             style = replace(style, underline=True)
-        elif token == "5":
+        elif token == "5" or token == "6":  # 6 = rapid blink; rendered the same
             style = replace(style, blink=True)
         elif token == "7":
             style = replace(style, reverse=True)

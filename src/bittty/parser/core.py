@@ -42,6 +42,11 @@ GROUND_PATTERNS = {
     "esc_percent": r"\x1b%[@G]",
     # ESC SP F/G — C1 transmission (S7C1T/S8C1T); ESC SP L/M/N — ANSI conformance level.
     "esc_space": r"\x1b\x20[FGLMN]",
+    # End-of-buffer guard: bare ESC, an incomplete paired starter, or an incomplete
+    # two-char prefix ( ) * + # % SP at buffer end. MUST precede the generic 'esc'
+    # alternative, or a chunk split after e.g. ESC ( is consumed as an ESC mini and
+    # the designator that arrives next chunk prints as text.
+    "trail": r"(?:\x1b(?:[\[\]P_^X()*+#%\x20])?|\x90|\x9B|\x9D|\x9E|\x9F|\x98)\Z",
     # Generic simple ESC minis (not starters for paired strings)
     # excludes [, ], P, _, ^, X, and ST (\)
     "esc": r"\x1b[^][P_^XO\\]",
@@ -52,8 +57,6 @@ GROUND_PATTERNS = {
     # Specials
     "bel": r"\x07",
     "cancel": r"[\x18\x1A]",  # CAN / SUB (abort current sequence if in one)
-    # End-of-buffer guard: bare ESC or incomplete starter at buffer end
-    "trail": r"(?:\x1b(?:[\[\]P_^X])?|\x90|\x9B|\x9D|\x9E|\x9F|\x98)\Z",
 }
 
 

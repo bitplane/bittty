@@ -73,28 +73,25 @@ class ScreenDevice(Device):
         self.current_buffer.set_line_attribute(self.board.cursor.y, attribute)
 
     def write_text(self, text: str, ansi_code: str = "") -> None:
-        """Write printable text at the cursor position."""
-        self.board.cursor.prepare_for_text_write()
+        """Write printable text at the cursor position, wrapping runs longer than the line.
 
+        A single PRINT run can be arbitrarily long (a shell line wider than the
+        screen arrives as one chunk), so write it line-sized piece by line-sized
+        piece; prepare_for_text_write supplies the wrap (or the clip, with
+        autowrap off) between pieces.
+        """
         code_to_use = ansi_code if ansi_code else self.board.style.current
         translated_text = self.board.charset.translate(text)
+        cursor = self.board.cursor
+        write = self.current_buffer.insert if self.board.modes.insert_mode else self.current_buffer.set
 
-        if self.board.modes.insert_mode:
-            self.current_buffer.insert(
-                self.board.cursor.x,
-                self.board.cursor.y,
-                translated_text,
-                code_to_use,
-            )
-        else:
-            self.current_buffer.set(
-                self.board.cursor.x,
-                self.board.cursor.y,
-                translated_text,
-                code_to_use,
-            )
-
-        self.board.cursor.advance_after_text_write(len(translated_text))
+        remaining = translated_text
+        while remaining:
+            cursor.prepare_for_text_write()
+            space = self.board.width - cursor.x
+            chunk, remaining = remaining[:space], remaining[space:]
+            write(cursor.x, cursor.y, chunk, code_to_use)
+            cursor.advance_after_text_write(len(chunk))
 
         if translated_text:
             self.last_printed_char = translated_text[-1]
@@ -136,7 +133,6 @@ class ScreenDevice(Device):
         elif mode == constants.ERASE_ALL:
             for y in range(self.board.height):
                 self.current_buffer.clear_line(y, constants.ERASE_ALL, 0, bg_ansi)
-            self.board.cursor.set_position(0, 0)
 
     def clear_line(self, mode: int = constants.ERASE_FROM_CURSOR_TO_END) -> None:
         """Clear line."""
@@ -425,23 +421,19 @@ class ScreenDevice(Device):
         self.last_printed_char = " "
 
     def set_column_mode(self, columns: int) -> None:
-        """Set terminal width for DECCOLM."""
+        """DECCOLM — switch 80/132 columns; always clears the screen and homes the cursor."""
         if columns not in (80, 132):
             return
-        if self.board.width == columns:
-            return
-
-        self.resize(columns, self.board.height)
+        if self.board.width != columns:
+            self.resize(columns, self.board.height)
+        self.set_scroll_region(0, self.board.height - 1)
+        self.reset_left_right_margins()
+        self.clear_screen(constants.ERASE_ALL)
         self.board.cursor.set_position(0, 0)
 
     def erase_characters(self, count: int) -> None:
-        """Erase `count` characters from the cursor with the current style (ECH)."""
-        for _ in range(count):
-            self.current_buffer.set(
-                self.board.cursor.x,
-                self.board.cursor.y,
-                " ",
-                self.board.style.current,
-            )
-            if self.board.cursor.x < self.board.width - 1:
-                self.board.cursor.x += 1
+        """Erase `count` characters from the cursor with the current style; the cursor stays (ECH)."""
+        y = self.board.cursor.y
+        style = self.board.style.current
+        for x in range(self.board.cursor.x, min(self.board.cursor.x + count, self.board.width)):
+            self.current_buffer.set_cell(x, y, " ", style)

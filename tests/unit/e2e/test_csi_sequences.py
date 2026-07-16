@@ -66,7 +66,8 @@ def test_csi_ed_erase_in_display(standard_terminal: Terminal):
     parser.feed("\x1b[2J")  # ESC[2J -> clear entire screen
     content = "".join("".join(char for _, char in line) for line in standard_terminal.get_content())
     assert content.strip() == ""
-    assert standard_terminal.board.cursor.x == 0
+    # ED 2 erases without moving the cursor (xterm behaviour).
+    assert standard_terminal.board.cursor.x == 4
     assert standard_terminal.board.cursor.y == 0
 
 
@@ -233,3 +234,13 @@ def test_csi_truly_unhandled_sequences(standard_terminal: Terminal):
         line = "".join(char for _, char in standard_terminal.board.screen.current_buffer.get_content()[0])
         assert "beforeafter" in line.strip()
         standard_terminal.board.screen.clear_screen(2)  # Clear screen for next test
+
+
+def test_csi_ech_does_not_move_the_cursor(standard_terminal: Terminal):
+    """ECH erases in place; the cursor must not advance."""
+    parser = Parser(standard_terminal.board)
+    standard_terminal.board.screen.write_text("abcdefgh")
+    standard_terminal.board.cursor.x = 2
+    parser.feed("\x1b[3X")
+    assert standard_terminal.board.screen.current_buffer.get_line_text(0).startswith("ab   fgh")
+    assert standard_terminal.board.cursor.x == 2

@@ -14,7 +14,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable, Optional
 
-from .. import constants
 from ..operations import Operation
 from ..present import CursorVisibilityChanged, MouseModeChanged, SyncOutputChanged
 from .base import Device
@@ -60,7 +59,10 @@ class Mode:
 
 
 def _deccolm(device: ModeDevice, value: bool) -> None:
-    device.board.resize(132 if value else 80, device.board.height)
+    # xterm ignores DECCOLM unless mode 40 permits it — reset strings carry ?3l,
+    # and honouring it ungated shrinks any wider terminal to 80 columns.
+    if device.allow_column_mode:
+        device.board.screen.set_column_mode(132 if value else 80)
 
 
 def _alt_screen(device: ModeDevice, value: bool) -> None:
@@ -122,7 +124,6 @@ MODE_SPECS: list[Mode] = [
     Mode(4, False, "insert_mode", queryable=True),
     Mode(12, False, "local_echo", invert=True, queryable=True),
     Mode(20, False, "linefeed_newline_mode", queryable=True),
-    Mode(constants.DECKPAM_APPLICATION_KEYPAD, False, "application_keypad", queryable=True),
     # DEC private modes
     Mode(1, True, "cursor_application_mode", queryable=True),
     Mode(2, True, "ansi_mode", queryable=True),
@@ -288,11 +289,11 @@ class ModeDevice(Device):
         modes(params, set_mode)
 
     def enter_application_keypad(self, operation: Operation) -> None:
-        self.set_mode(constants.DECKPAM_APPLICATION_KEYPAD, True)
+        self.application_keypad = True
         self.numeric_keypad = False
 
     def enter_numeric_keypad(self, operation: Operation) -> None:
-        self.set_mode(constants.DECKPAM_APPLICATION_KEYPAD, False)
+        self.application_keypad = False
         self.numeric_keypad = True
 
     # --- applying modes --- #

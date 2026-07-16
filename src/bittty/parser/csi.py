@@ -5,7 +5,7 @@ from __future__ import annotations
 import logging
 from functools import lru_cache
 from ..operations import Operation
-from ..style import parse_sgr_sequence
+from ..style import parse_sgr_with_reset
 
 
 logger = logging.getLogger(__name__)
@@ -91,8 +91,8 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
     params, intermediates, final_char = parse_csi_params(raw_csi_data)
 
     if final_char == "m" and ">" not in raw_csi_data:  # SGR - Select Graphic Rendition
-        reset = raw_csi_data in ("\x1b[m", "\x1b[0m", "\x1b[00m")
-        return Operation("SGR", (parse_sgr_sequence(raw_csi_data), reset), raw_csi_data)
+        style, reset = parse_sgr_with_reset(raw_csi_data)
+        return Operation("SGR", (style, reset), raw_csi_data)
 
     # Hot path: the common cursor moves are params-only (no intermediates), and dominate
     # real CSI traffic after SGR. Dispatch them here — with inline param extraction —

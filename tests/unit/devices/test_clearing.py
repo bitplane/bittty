@@ -27,7 +27,7 @@ def test_clear_rect_with_style():
     terminal = Terminal(width=10, height=5)
     for y in range(5):
         for x in range(10):
-            terminal.board.screen.current_buffer.set_cell(x, y, "X", f"\x1b[{31+y}m")
+            terminal.board.screen.current_buffer.set_cell(x, y, "X", f"\x1b[{31 + y}m")
 
     terminal.board.screen.clear_rect(2, 1, 5, 3, "\x1b[33m")
     from bittty.style import parse_sgr_sequence
@@ -38,7 +38,7 @@ def test_clear_rect_with_style():
             if 1 <= y <= 3 and 2 <= x <= 5:
                 assert terminal.board.screen.current_buffer.get_cell(x, y) == (yellow_style, " ")
             else:
-                expected_style = parse_sgr_sequence(f"\x1b[{31+y}m")
+                expected_style = parse_sgr_sequence(f"\x1b[{31 + y}m")
                 assert terminal.board.screen.current_buffer.get_cell(x, y) == (expected_style, "X")
 
 

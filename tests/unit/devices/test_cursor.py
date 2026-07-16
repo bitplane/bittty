@@ -142,3 +142,16 @@ def test_cursor_device_text_write_wrap_preparation():
     cursor.prepare_for_text_write()
 
     assert (cursor.x, cursor.y) == (0, 1)
+
+
+def test_origin_mode_column_is_relative_to_left_margin():
+    terminal = Terminal(width=20, height=10)
+    terminal.parser.feed("\x1b[?69h")  # DECLRMM
+    terminal.parser.feed("\x1b[5;15s")  # DECSLRM: margins at columns 5-15
+    terminal.parser.feed("\x1b[?6h")  # DECOM
+
+    terminal.parser.feed("\x1b[1;1H")  # home is the margin corner under origin mode
+    assert terminal.board.cursor.x == 4
+
+    terminal.parser.feed("\x1b[1;99H")  # clamped inside the right margin
+    assert terminal.board.cursor.x == 14

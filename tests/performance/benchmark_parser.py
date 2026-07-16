@@ -346,7 +346,7 @@ def main():
         times, profile_filename = benchmark_parser(ansi_content, runs=num_runs)
 
         for i, elapsed in enumerate(times):
-            report_lines.append(f"Run {i+1}: {elapsed:.6f} seconds")
+            report_lines.append(f"Run {i + 1}: {elapsed:.6f} seconds")
 
         report_lines.extend(
             [

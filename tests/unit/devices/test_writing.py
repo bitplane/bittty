@@ -197,3 +197,40 @@ def test_write_cell_invalid_cursor():
     terminal.board.cursor.y = 10  # Invalid cursor position
     terminal.board.screen.write_text("a")
     # Should not raise an error and do nothing
+
+
+def test_long_print_run_wraps_across_lines():
+    """A single PRINT run longer than the width wraps instead of truncating."""
+    terminal = Terminal(width=10, height=5)
+    terminal.parser.feed("A" * 25)
+
+    buffer = terminal.board.screen.current_buffer
+    assert buffer.get_line_text(0) == "A" * 10
+    assert buffer.get_line_text(1) == "A" * 10
+    assert buffer.get_line_text(2) == "A" * 5 + " " * 5
+    assert terminal.board.cursor.y == 2
+    assert terminal.board.cursor.x == 5
+
+
+def test_long_print_run_scrolls_at_the_bottom():
+    """Wrapping a long run on the last line scrolls the screen."""
+    terminal = Terminal(width=10, height=3)
+    terminal.board.cursor.y = 2
+    terminal.parser.feed("B" * 15)
+
+    buffer = terminal.board.screen.current_buffer
+    assert buffer.get_line_text(1) == "B" * 10
+    assert buffer.get_line_text(2) == "B" * 5 + " " * 5
+    assert terminal.board.cursor.y == 2
+
+
+def test_long_print_run_without_autowrap_clips_to_last_column():
+    """With autowrap off, overflow collapses into the last column (last char wins)."""
+    terminal = Terminal(width=5, height=3)
+    terminal.board.modes.auto_wrap = False
+    terminal.parser.feed("abcdefgh")
+
+    buffer = terminal.board.screen.current_buffer
+    assert buffer.get_line_text(0) == "abcdh"
+    assert buffer.get_line_text(1).strip() == ""
+    assert terminal.board.cursor.x == 4

@@ -2,7 +2,7 @@
 
 from bittty.parser import Parser
 from bittty.terminal import Terminal
-from bittty.constants import ESC, DECKPAM_APPLICATION_KEYPAD, DEFAULT_TERMINAL_WIDTH, DEFAULT_TERMINAL_HEIGHT
+from bittty.constants import ESC, DEFAULT_TERMINAL_WIDTH, DEFAULT_TERMINAL_HEIGHT
 
 
 def render_terminal_to_string(terminal: Terminal) -> str:
@@ -40,7 +40,7 @@ def test_keypad_normal_mode():
     parser = Parser(terminal.board)
 
     # Start in application mode
-    terminal.board.modes.set_mode(DECKPAM_APPLICATION_KEYPAD, True)  # Application keypad mode
+    parser.feed(f"{ESC}=")  # DECKPAM
     assert terminal.board.modes.application_keypad
 
     # Send DECKPNM sequence

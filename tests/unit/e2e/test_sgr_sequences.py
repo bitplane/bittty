@@ -136,3 +136,49 @@ def test_sgr_selective_reset(parser, terminal):
     # Should still have bold, underline, red (but not italic)
     expected = "\x1b[1;4;31m"  # Bold, underline, red (no italic)
     assert terminal.board.style.current_ansi_code == expected
+
+
+def test_sgr_reset_mid_sequence_clears_prior_attributes(parser, terminal):
+    """ESC[0;31m means "reset, then red" — the 0 must not be lost in a merge."""
+    parser.feed(f"{ESC}[1;4m")  # bold + underline
+    parser.feed(f"{ESC}[0;31m")
+
+    style = terminal.board.style.current
+    assert style.bold is None
+    assert style.underline is None
+    assert style.fg is not None and style.fg.value == 1  # red
+
+
+def test_sgr_empty_leading_parameter_is_a_reset(parser, terminal):
+    """ESC[;31m — an empty parameter defaults to 0, which is a reset."""
+    parser.feed(f"{ESC}[1m")
+    parser.feed(f"{ESC}[;31m")
+
+    style = terminal.board.style.current
+    assert style.bold is None
+    assert style.fg is not None and style.fg.value == 1
+
+
+def test_sgr_trailing_empty_parameter_resets(parser, terminal):
+    """ESC[31;m applies red then reset — the net effect is a full reset."""
+    parser.feed(f"{ESC}[1;31;m")
+
+    style = terminal.board.style.current
+    assert style.bold is None
+    assert style.fg is None
+
+
+def test_sgr_zero_colour_channels_are_not_resets(parser, terminal):
+    """The 0s inside 38;2;0;0;0 are colour channels, not reset tokens."""
+    parser.feed(f"{ESC}[1m")
+    parser.feed(f"{ESC}[38;2;0;0;0m")
+
+    style = terminal.board.style.current
+    assert style.bold is True  # survived: no reset happened
+    assert style.fg is not None and style.fg.value == (0, 0, 0)
+
+
+def test_sgr_rapid_blink_maps_to_blink(parser, terminal):
+    """SGR 6 (rapid blink) renders as blink."""
+    parser.feed(f"{ESC}[6m")
+    assert terminal.board.style.current.blink is True

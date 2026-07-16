@@ -11,6 +11,8 @@ from ..style import Style, get_background, parse_sgr_sequence, style_to_ansi
 if TYPE_CHECKING:
     from .board import TerminalBoard
 
+_EMPTY = Style()
+
 
 class StyleDevice(Device):
     """Owns current style state and applies style operations."""
@@ -46,7 +48,10 @@ class StyleDevice(Device):
         self.current = parse_sgr_sequence(value) if value else Style()
 
     def apply_sgr(self, style: Style, reset: bool = False) -> None:
-        """Apply an SGR style update; a monochrome terminal drops colour attributes."""
+        """Apply an SGR style update; a monochrome terminal drops colour attributes.
+
+        reset means "clear, then apply style" — ESC[0;31m arrives as (red, reset=True).
+        """
         if reset:
             # SGR 0 resets to the default attributes but keeps the active hyperlink/protection.
             # No active link/protection (the common case) -> reuse the shared default, no rebuild.
@@ -54,6 +59,8 @@ class StyleDevice(Device):
                 merged = self.default
             else:
                 merged = replace(self.default, hyperlink=self.current.hyperlink, protected=self.current.protected)
+            if style != _EMPTY:  # attributes following the reset token
+                merged = merged.merge(style)
         else:
             # merge() already preserves hyperlink/protected — SGR never sets them — so no
             # extra rebuild is needed on the hot per-cell path.

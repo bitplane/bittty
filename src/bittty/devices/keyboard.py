@@ -124,6 +124,8 @@ class KeyboardDevice(Device):
         """Build a CSI cursor/nav sequence, folding in a modifier if the terminal supports it."""
         keymap = self.board.personality.keymap
         if modifier != constants.KEY_MOD_NONE and keymap.modifiers:
+            if body.endswith("~"):  # editing-keypad keys carry the modifier as ESC[n;mod~
+                return f"{constants.ESC}[{body[:-1]};{modifier}~"
             return f"{constants.ESC}[1;{modifier}{body}"
         return f"{constants.ESC}[{body}"
 
