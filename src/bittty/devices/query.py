@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..operations import Operation
+from ..style import style_to_ansi
 
 if TYPE_CHECKING:
     from .board import TerminalBoard
@@ -22,6 +23,7 @@ class QueryDevice:
             "DA1": self.report_primary_device_attributes,
             "DA2": self.report_secondary_device_attributes,
             "DECRQM": self.report_mode_status,
+            "DECRQSS": self.report_status_string,
         }
 
     def report_cursor_position(self, operation: Operation) -> None:
@@ -45,6 +47,28 @@ class QueryDevice:
         status = self.modes.get_private_mode_status(mode) if private else self.modes.get_ansi_mode_status(mode)
         prefix = "?" if private else ""
         self.board.host.write(f"\033[{prefix}{mode};{status}$y", flush=True)
+
+    def report_status_string(self, operation: Operation) -> None:
+        """DECRQSS — answer a request for the current value of a setting."""
+        request = operation.args[0]
+        setting = self._status_string(request)
+        if setting is not None:
+            self.board.host.write(f"\x1bP1$r{setting}\x1b\\", flush=True)  # 1 = valid request
+        else:
+            self.board.host.write(f"\x1bP0$r{request}\x1b\\", flush=True)  # 0 = unsupported
+
+    def _status_string(self, request: str) -> str | None:
+        if request == "m":  # SGR
+            ansi = style_to_ansi(self.board.style.current)
+            params = ansi[2:-1] if ansi else "0"
+            return f"{params}m"
+        if request == "r":  # DECSTBM - top/bottom margins
+            return f"{self.board.screen.scroll_top + 1};{self.board.screen.scroll_bottom + 1}r"
+        if request == " q":  # DECSCUSR - cursor style
+            base = {"block": 1, "underline": 3, "bar": 5}.get(self.board.cursor.shape, 1)
+            style = base if self.board.modes.cursor_blinking else base + 1
+            return f"{style} q"
+        return None
 
     def handle_operation(self, operation: Operation) -> None:
         handler = self.handlers.get(operation.name)
