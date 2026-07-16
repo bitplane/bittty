@@ -115,6 +115,9 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
         style = params[0] if params and params[0] is not None else 0
         return Operation("DECSCUSR", (style,), raw_csi_data)
 
+    if final_char == "p" and '"' in intermediates:  # DECSCL - Set Conformance Level
+        return Operation("DECSCL", (tuple(params),), raw_csi_data)
+
     if final_char in ("h", "l"):  # SM/RM - Set/Reset Mode
         set_mode = final_char == "h"
         private = "?" in intermediates
@@ -185,6 +188,9 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
     if final_char == "g":  # TBC - Tab Clear
         mode = params[0] if params and params[0] is not None else 0
         return Operation("TBC", (mode,), raw_csi_data)
+
+    if final_char == "t":  # XTWINOPS - Window manipulation / reports
+        return Operation("XTWINOPS", (tuple(params),), raw_csi_data)
 
     if final_char == "J":  # ED - Erase in Display
         mode = params[0] if params and params[0] is not None else 0

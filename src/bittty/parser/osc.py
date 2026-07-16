@@ -26,9 +26,19 @@ def parse_osc_operation(string_buffer: str, raw: str = "") -> Operation | None:
         return Operation("SET_ICON_TITLE", (data,), raw)
     if cmd == 2:
         return Operation("SET_WINDOW_TITLE", (data,), raw)
+    if cmd == 7:  # Report working directory (file:// URI)
+        return Operation("OSC_CWD", (data,), raw)
     if cmd == 8:  # Hyperlink: OSC 8 ; params ; URI  (empty URI closes)
         _, _, uri = data.partition(";")
         return Operation("OSC_HYPERLINK", (uri,), raw)
+    if cmd == 9:  # Desktop notification (iTerm)
+        return Operation("OSC_NOTIFY", (data,), raw)
+    if cmd == 133:  # Shell integration prompt/command marks (FinalTerm/iTerm)
+        return Operation("OSC_SHELL_MARK", (data,), raw)
+    if cmd == 777:  # rxvt: OSC 777 ; notify ; title ; body
+        parts = data.split(";")
+        message = "; ".join(parts[1:]) if len(parts) >= 3 and parts[0] == "notify" else data
+        return Operation("OSC_NOTIFY", (message,), raw)
     if cmd == 52:  # Clipboard: OSC 52 ; selection ; base64-data | ?
         selection, _, payload = data.partition(";")
         return Operation("OSC_CLIPBOARD", (selection, payload), raw)

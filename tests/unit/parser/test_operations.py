@@ -41,7 +41,7 @@ def test_parser_emits_escape_and_csi_operations(terminal):
 
     assert sink.operations == [
         Operation("SAVE", raw="\x1b7"),
-        Operation("CSI", raw="\x1b[2t"),
+        Operation("XTWINOPS", ((2,),), raw="\x1b[2t"),
     ]
 
 

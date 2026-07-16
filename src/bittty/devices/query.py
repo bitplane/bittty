@@ -27,6 +27,11 @@ class QueryDevice:
             "DECRQM": self.report_mode_status,
             "DECRQSS": self.report_status_string,
             "OSC_CLIPBOARD": self.handle_clipboard,
+            "XTWINOPS": self.handle_window_op,
+            "DECSCL": self.set_conformance_level,
+            "OSC_CWD": lambda op: setattr(self.board, "cwd", op.args[0]),
+            "OSC_NOTIFY": lambda op: self.board.notifications.append(op.args[0]),
+            "OSC_SHELL_MARK": lambda op: self.board.prompt_marks.append((op.args[0], self.board.cursor.y)),
         }
 
     def report_cursor_position(self, operation: Operation) -> None:
@@ -85,6 +90,28 @@ class QueryDevice:
             self.board.clipboard[sel] = base64.b64decode(payload).decode("utf-8", errors="replace")
         except ValueError:
             pass  # ignore malformed base64
+
+    def handle_window_op(self, operation: Operation) -> None:
+        """XTWINOPS — report the terminal size, resize it, or push/pop the title stack."""
+        params = operation.args[0]
+        op = params[0] if params and params[0] is not None else 0
+        if op in (18, 19):  # report text-area / screen size in characters
+            code = 8 if op == 18 else 9
+            self.board.host.write(f"\x1b[{code};{self.board.height};{self.board.width}t", flush=True)
+        elif op == 8 and len(params) >= 3:  # resize text area to rows;cols
+            rows = params[1] or self.board.height
+            cols = params[2] or self.board.width
+            self.board.resize(cols, rows)
+        elif op == 22:  # save title to the stack
+            self.board.title.push()
+        elif op == 23:  # restore title from the stack
+            self.board.title.pop()
+
+    def set_conformance_level(self, operation: Operation) -> None:
+        """DECSCL — record the requested conformance level (behaviourally a no-op)."""
+        params = operation.args[0]
+        if params and params[0] is not None:
+            self.board.conformance_level = params[0]
 
     def handle_operation(self, operation: Operation) -> None:
         handler = self.handlers.get(operation.name)
