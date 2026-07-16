@@ -192,6 +192,12 @@ class QueryDevice(Device):
         elif op == 13:  # report window position
             x, y = board.window_position
             board.host.write(f"\x1b[3;{x};{y}t", flush=True)
+        elif op in (14, 15):  # report window / screen size in pixels (from DisplayCaps)
+            w, h = board.display_caps.window_px or (0, 0)
+            board.host.write(f"\x1b[{4 if op == 14 else 5};{h};{w}t", flush=True)
+        elif op == 16:  # report cell size in pixels (from DisplayCaps)
+            w, h = board.display_caps.cell_px or (0, 0)
+            board.host.write(f"\x1b[6;{h};{w}t", flush=True)
         elif op in (18, 19):  # report text-area / screen size in characters
             board.host.write(f"\x1b[{8 if op == 18 else 9};{board.height};{board.width}t", flush=True)
         elif op == 20:  # report icon label

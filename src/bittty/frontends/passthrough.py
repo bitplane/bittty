@@ -18,6 +18,7 @@ import sys
 
 from ..terminal import Terminal
 from .display import Display
+from .probe import probe_display_caps
 
 try:
     import termios
@@ -129,6 +130,21 @@ class PassthroughDisplay(Display):
         print("\033[?25h\033[2J\033[H", end="", flush=True)
 
     # --- rendering --- #
+
+    def probe_capabilities(self) -> None:
+        """Ask the outer terminal what it can do and push DisplayCaps to the backend."""
+
+        def write(data: str) -> None:
+            sys.stdout.write(data)
+            sys.stdout.flush()
+
+        try:
+            fd = sys.stdin.fileno()
+        except (OSError, ValueError):
+            fd = None
+        caps = probe_display_caps(fd, write, os.environ)
+        self.set_caps(caps)
+        logger.info("Display caps: %s", caps)
 
     def render_screen(self) -> None:
         """Render the current terminal state to stdout."""
@@ -259,6 +275,7 @@ class PassthroughDisplay(Display):
         logger.info("Starting main loop")
         try:
             self.setup_terminal()
+            self.probe_capabilities()
             self.terminal.set_pty_data_callback(self.handle_pty_data)
             await self.terminal.start_process()
             self.render_screen()

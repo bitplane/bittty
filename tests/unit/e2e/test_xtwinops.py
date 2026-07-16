@@ -1,5 +1,6 @@
 """XTWINOPS window manipulation: state stored as board registers, plus reports."""
 
+from bittty.caps import DisplayCaps
 from bittty.parser import Parser
 from bittty.terminal import Terminal
 
@@ -73,3 +74,20 @@ def test_resize_to_lines():
     terminal, parser, _ = _term()
     parser.feed("\x1b[40t")  # Ps >= 24 -> resize to 40 lines
     assert terminal.board.height == 40
+
+
+def test_pixel_reports_from_display_caps():
+    terminal, parser, transport = _term()
+    terminal.board.set_display_caps(DisplayCaps(cell_px=(8, 16), window_px=(640, 480)))
+    parser.feed("\x1b[14t")  # window size in pixels
+    assert transport.data[-1] == "\x1b[4;480;640t"
+    parser.feed("\x1b[16t")  # cell size in pixels
+    assert transport.data[-1] == "\x1b[6;16;8t"
+    parser.feed("\x1b[15t")  # screen size in pixels (uses window_px)
+    assert transport.data[-1] == "\x1b[5;480;640t"
+
+
+def test_pixel_reports_zero_without_caps():
+    terminal, parser, transport = _term()
+    parser.feed("\x1b[16t")  # no caps pushed -> 0;0
+    assert transport.data[-1] == "\x1b[6;0;0t"
