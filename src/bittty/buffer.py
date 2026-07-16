@@ -12,6 +12,15 @@ from .style import Style, parse_sgr_sequence, CURSOR_CODE, RESET_CODE
 Cell = Tuple[Style, str]
 
 
+def _coerce_style(style_or_ansi) -> Style:
+    """Normalise a Style | ANSI-string | None argument to a Style."""
+    if isinstance(style_or_ansi, Style):
+        return style_or_ansi
+    if isinstance(style_or_ansi, str) and style_or_ansi:
+        return parse_sgr_sequence(style_or_ansi)
+    return Style()
+
+
 class Buffer:
     """A 2D grid that stores terminal content."""
 
@@ -69,32 +78,14 @@ class Buffer:
             style_or_ansi: Either a Style object or ANSI string (for backward compatibility)
         """
         if 0 <= y < self.height and 0 <= x < self.width:
-            if style_or_ansi is None:
-                style = Style()
-            elif isinstance(style_or_ansi, Style):
-                style = style_or_ansi
-            elif isinstance(style_or_ansi, str):
-                # Parse ANSI code to Style for backward compatibility
-                style = parse_sgr_sequence(style_or_ansi) if style_or_ansi else Style()
-            else:
-                style = Style()
-
-            self.grid[y][x] = (style, char)
+            self.grid[y][x] = (_coerce_style(style_or_ansi), char)
 
     def set(self, x: int, y: int, text: str, style_or_ansi=None) -> None:
         """Set text at position, overwriting existing content."""
         if not (0 <= y < self.height):
             return
 
-        # Convert style_or_ansi to Style once
-        if style_or_ansi is None:
-            style = Style()
-        elif isinstance(style_or_ansi, Style):
-            style = style_or_ansi
-        elif isinstance(style_or_ansi, str):
-            style = parse_sgr_sequence(style_or_ansi) if style_or_ansi else Style()
-        else:
-            style = Style()
+        style = _coerce_style(style_or_ansi)
 
         for i, char in enumerate(text):
             if x + i >= self.width:
@@ -106,15 +97,7 @@ class Buffer:
         if not (0 <= y < self.height) or x >= self.width:
             return
 
-        # Convert style_or_ansi to Style once
-        if style_or_ansi is None:
-            style = Style()
-        elif isinstance(style_or_ansi, Style):
-            style = style_or_ansi
-        elif isinstance(style_or_ansi, str):
-            style = parse_sgr_sequence(style_or_ansi) if style_or_ansi else Style()
-        else:
-            style = Style()
+        style = _coerce_style(style_or_ansi)
 
         # Get the current row
         row = self.grid[y]
@@ -155,15 +138,7 @@ class Buffer:
 
     def clear_region(self, x1: int, y1: int, x2: int, y2: int, style_or_ansi=None) -> None:
         """Clear a rectangular region."""
-        # Convert to Style
-        if style_or_ansi is None:
-            style = Style()
-        elif isinstance(style_or_ansi, Style):
-            style = style_or_ansi
-        elif isinstance(style_or_ansi, str):
-            style = parse_sgr_sequence(style_or_ansi) if style_or_ansi else Style()
-        else:
-            style = Style()
+        style = _coerce_style(style_or_ansi)
 
         for y in range(max(0, y1), min(self.height, y2 + 1)):
             for x in range(max(0, x1), min(self.width, x2 + 1)):
@@ -176,15 +151,7 @@ class Buffer:
         if not (0 <= y < self.height):
             return
 
-        # Convert to Style
-        if style_or_ansi is None:
-            style = Style()
-        elif isinstance(style_or_ansi, Style):
-            style = style_or_ansi
-        elif isinstance(style_or_ansi, str):
-            style = parse_sgr_sequence(style_or_ansi) if style_or_ansi else Style()
-        else:
-            style = Style()
+        style = _coerce_style(style_or_ansi)
 
         if mode == constants.ERASE_FROM_CURSOR_TO_END:
             # Clear from cursor to end of line
