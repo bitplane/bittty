@@ -93,6 +93,8 @@ class CursorDevice:
 
     def line_feed(self, is_wrapped: bool = False) -> None:
         """Move down one line, scrolling the active scroll region if needed."""
+        if self.board.printer.auto_print:  # MC auto-print: paper gets the line as we leave it
+            self.board.printer.print_line(self.y)
         if self.y == self.board.screen.scroll_bottom:
             self.board.screen.scroll(1)
         elif self.y < self.board.height - 1:

@@ -15,6 +15,7 @@ from .keyboard import KeyboardDevice
 from .modes import ModeDevice
 from .mouse import MouseDevice
 from .palette import PaletteDevice
+from .printer import PrinterDevice
 from .query import QueryDevice
 from .screen import ScreenDevice
 from .style import StyleDevice
@@ -64,6 +65,7 @@ class TerminalBoard:
         self.modes = ModeDevice(self)
         self.mouse = MouseDevice(self)
         self.palette = PaletteDevice(self)
+        self.printer = PrinterDevice(self)
         self.screen = ScreenDevice(self)
         self.style = StyleDevice(self)
         self.title = TitleDevice(self)
@@ -80,6 +82,7 @@ class TerminalBoard:
             "modes": self.modes,
             "mouse": self.mouse,
             "palette": self.palette,
+            "printer": self.printer,
             "query": self.query,
             "screen": self.screen,
             "style": self.style,
@@ -99,6 +102,7 @@ class TerminalBoard:
             self.modes,
             self.mouse,
             self.palette,
+            self.printer,
             self.screen,
             self.style,
             self.query,
@@ -111,6 +115,9 @@ class TerminalBoard:
         return registry
 
     def _print(self, operation: Operation) -> None:
+        if self.printer.controller_mode:  # MC printer-controller: text goes to paper, not the screen
+            self.printer.emit(operation.args[0])
+            return
         self.screen.write_text(operation.args[0], self.style.current)
 
     def resize(self, width: int, height: int) -> None:
@@ -127,6 +134,7 @@ class TerminalBoard:
         self.modes.reset(hard=hard)
         self.cursor.reset(hard=hard)
         self.screen.reset(hard=hard)
+        self.printer.reset(hard=hard)
         if hard:
             self.charset.reset()
             self.palette.reset()

@@ -303,6 +303,10 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
         count = params[0] if params and params[0] is not None else 1
         return Operation("VPB", (count,), raw_csi_data)
 
+    if final_char == "i":  # MC - Media Copy (printer control), DEC private with ?
+        ps = params[0] if params and params[0] is not None else 0
+        return Operation("DECMC" if "?" in intermediates else "MC", (ps,), raw_csi_data)
+
     if final_char == "W":  # CTC / DECST8C - Cursor Tabulation Control
         if "?" in intermediates:  # DECST8C - reset to a tab stop every 8 columns
             return Operation("DECST8C", (), raw_csi_data)
