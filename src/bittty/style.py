@@ -58,6 +58,9 @@ class Style:
     reverse: Optional[bool] = None
     conceal: Optional[bool] = None
     strike: Optional[bool] = None
+    underline_style: Optional[str] = None  # None=single / "double" / "curly" / "dotted" / "dashed"
+    overline: Optional[bool] = None
+    underline_color: Optional[Color] = None
 
     def merge(self, other: Style) -> Style:
         """Merge another style into this one. The other style takes precedence."""
@@ -80,6 +83,9 @@ class Style:
             reverse=merge_attr(self.reverse, other.reverse),
             conceal=merge_attr(self.conceal, other.conceal),
             strike=merge_attr(self.strike, other.strike),
+            underline_style=merge_attr(self.underline_style, other.underline_style),
+            overline=merge_attr(self.overline, other.overline),
+            underline_color=other.underline_color if other.underline_color is not None else self.underline_color,
         )
 
     @lru_cache(maxsize=10000)
@@ -111,12 +117,52 @@ def parse_sgr_sequence(ansi: str) -> Style:
     return interpret(tokens)
 
 
+_UNDERLINE_STYLES = {"0": "none", "1": "single", "2": "double", "3": "curly", "4": "dotted", "5": "dashed"}
+
+
+def _colon_color(parts: list[str]) -> Optional[Color]:
+    """Parse an ITU colon-form colour: 38:5:n or 38:2[:id]:r:g:b."""
+    if len(parts) < 3:
+        return None
+    if parts[1] == "5":
+        try:
+            return Color("indexed", int(parts[2]))
+        except ValueError:
+            return None
+    if parts[1] == "2":
+        nums = [p for p in parts[2:] if p != ""]
+        if len(nums) >= 3:
+            try:
+                return Color("rgb", (int(nums[-3]), int(nums[-2]), int(nums[-1])))
+            except ValueError:
+                return None
+    return None
+
+
 @lru_cache(maxsize=10000)
 def interpret(tokens: Tuple[str, ...]) -> Style:
     style = Style()
     i = 0
     while i < len(tokens):
         token = tokens[i]
+
+        # Colon-subparameter forms: underline styles (4:n) and ITU colours (38:/48:/58:)
+        if ":" in token:
+            parts = token.split(":")
+            head = parts[0]
+            if head == "4":
+                ul = _UNDERLINE_STYLES.get(parts[1] if len(parts) > 1 else "1", "single")
+                if ul == "none":
+                    style = replace(style, underline=False, underline_style=None)
+                else:
+                    style = replace(style, underline=True, underline_style=None if ul == "single" else ul)
+            elif head in {"38", "48", "58"}:
+                color = _colon_color(parts)
+                if color is not None:
+                    attr = {"38": "fg", "48": "bg", "58": "underline_color"}[head]
+                    style = replace(style, **{attr: color})
+            i += 1
+            continue
 
         # Reset
         if token == "0" or token == "00":
@@ -144,8 +190,10 @@ def interpret(tokens: Tuple[str, ...]) -> Style:
             style = replace(style, bold=False, dim=False)
         elif token == "23":
             style = replace(style, italic=False)
+        elif token == "21":
+            style = replace(style, underline=True, underline_style="double")
         elif token == "24":
-            style = replace(style, underline=False)
+            style = replace(style, underline=False, underline_style=None)
         elif token == "25":
             style = replace(style, blink=False)
         elif token == "27":
@@ -154,6 +202,12 @@ def interpret(tokens: Tuple[str, ...]) -> Style:
             style = replace(style, conceal=False)
         elif token == "29":
             style = replace(style, strike=False)
+        elif token == "53":
+            style = replace(style, overline=True)
+        elif token == "55":
+            style = replace(style, overline=False)
+        elif token == "59":
+            style = replace(style, underline_color=Color("default"))
 
         # Basic indexed colors
         elif token.isdigit() and 30 <= int(token) <= 37:
@@ -173,25 +227,16 @@ def interpret(tokens: Tuple[str, ...]) -> Style:
             style = replace(style, bg=Color("indexed", int(token) - 100 + 8))
 
         # Extended color (indexed or rgb)
-        elif token in {"38", "48"}:
-            is_fg = token == "38"
+        elif token in {"38", "48", "58"}:
+            attr = {"38": "fg", "48": "bg", "58": "underline_color"}[token]
             if i + 1 < len(tokens):
                 mode = tokens[i + 1]
                 if mode == "5" and i + 2 < len(tokens):
-                    val = int(tokens[i + 2])
-                    if is_fg:
-                        style = replace(style, fg=Color("indexed", val))
-                    else:
-                        style = replace(style, bg=Color("indexed", val))
+                    style = replace(style, **{attr: Color("indexed", int(tokens[i + 2]))})
                     i += 2
                 elif mode == "2" and i + 4 < len(tokens):
-                    r = int(tokens[i + 2])
-                    g = int(tokens[i + 3])
-                    b = int(tokens[i + 4])
-                    if is_fg:
-                        style = replace(style, fg=Color("rgb", (r, g, b)))
-                    else:
-                        style = replace(style, bg=Color("rgb", (r, g, b)))
+                    r, g, b = int(tokens[i + 2]), int(tokens[i + 3]), int(tokens[i + 4])
+                    style = replace(style, **{attr: Color("rgb", (r, g, b))})
                     i += 4
         i += 1
 
@@ -277,7 +322,9 @@ def style_to_ansi(style: Style) -> str:
     if style.italic is True:
         params.append("3")
     if style.underline is True:
-        params.append("4")
+        params.append(
+            {"double": "21", "curly": "4:3", "dotted": "4:4", "dashed": "4:5"}.get(style.underline_style, "4")
+        )
     if style.blink is True:
         params.append("5")
     if style.reverse is True:
@@ -286,6 +333,8 @@ def style_to_ansi(style: Style) -> str:
         params.append("8")
     if style.strike is True:
         params.append("9")
+    if style.overline is True:
+        params.append("53")
 
     # Foreground color
     if style.fg is not None:
@@ -312,6 +361,17 @@ def style_to_ansi(style: Style) -> str:
         elif style.bg.mode == "rgb":
             r, g, b = style.bg.value
             params.append(f"48;2;{r};{g};{b}")
+
+    # Underline color
+    if style.underline_color is not None:
+        uc = style.underline_color
+        if uc.mode == "indexed":
+            params.append(f"58;5;{uc.value}")
+        elif uc.mode == "rgb":
+            r, g, b = uc.value
+            params.append(f"58;2;{r};{g};{b}")
+        elif uc.mode == "default":
+            params.append("59")
 
     if not params:
         return ""
