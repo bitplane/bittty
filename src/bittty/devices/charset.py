@@ -20,13 +20,19 @@ class CharsetDevice:
         self.g1_charset = "B"
         self.g2_charset = "B"
         self.g3_charset = "B"
-        self.current_charset = 0
+        self.current_charset = 0  # G-set invoked into GL (0x20-0x7F); SI/SO/LS2/LS3 move it
+        self.gr = 1  # G-set invoked into GR (0xA0-0xFF); LS1R/LS2R/LS3R move it
         self.single_shift: int | None = None
         self.cache = {}
         self.charset_array = ["B", "B", "B", "B"]
         self.handlers = {
             "SS2": lambda op: self.single_shift_2(),
             "SS3": lambda op: self.single_shift_3(),
+            "LS2": lambda op: self.locking_shift(2),
+            "LS3": lambda op: self.locking_shift(3),
+            "LS1R": lambda op: self.locking_shift(1, right=True),
+            "LS2R": lambda op: self.locking_shift(2, right=True),
+            "LS3R": lambda op: self.locking_shift(3, right=True),
             "SCS_G0": lambda op: self.designate(0, op.args[0]),
             "SCS_G1": lambda op: self.designate(1, op.args[0]),
             "SCS_G2": lambda op: self.designate(2, op.args[0]),
@@ -46,32 +52,33 @@ class CharsetDevice:
         setters[index](designator)
 
     def translate(self, text: str) -> str:
-        """Translate text through the active character set."""
-        if self.single_shift is not None:
-            if not text:
-                return text
+        """Translate text through the invoked G-sets: GL for 0x20-0x7F, GR for 0xA0-0xFF."""
+        if not text:
+            return text
+        # Fast path: nothing pending and both halves are ASCII -> passthrough.
+        if (
+            self.single_shift is None
+            and self.charset_array[self.current_charset] == "B"
+            and self.charset_array[self.gr] == "B"
+        ):
+            return text
+        return "".join(self._translate_char(char) for char in text)
 
-            first_char = text[0]
-            remaining = text[1:] if len(text) > 1 else ""
-            charset_designator = self.charset_array[self.single_shift]
+    def _translate_char(self, char: str) -> str:
+        """Translate one character through the G-set currently invoked for its half."""
+        if self.single_shift is not None:  # SS2/SS3 designate the next single character
+            designator = self.charset_array[self.single_shift]
             self.single_shift = None
-
-            charset_map = self._get_charset_map(charset_designator)
-            translated_first = charset_map.get(first_char, first_char)
-
-            if remaining:
-                return translated_first + self.translate(remaining)
-            return translated_first
-
-        current_charset_designator = self.charset_array[self.current_charset]
-        if current_charset_designator == "B" or not text:
-            return text
-
-        charset_map = self._get_charset_map(current_charset_designator)
-        if not charset_map:
-            return text
-
-        return "".join(charset_map.get(char, char) for char in text)
+            key = char
+        elif 0xA0 <= ord(char) <= 0xFF:  # GR: right half maps through the GR-invoked set
+            designator = self.charset_array[self.gr]
+            key = chr(ord(char) - 0x80)
+        else:  # GL: left half maps through the GL-invoked set
+            designator = self.charset_array[self.current_charset]
+            key = char
+        if designator == "B":
+            return char
+        return self._get_charset_map(designator).get(key, char)
 
     def _get_charset_map(self, charset_designator: str):
         if charset_designator not in self.cache:
@@ -99,12 +106,19 @@ class CharsetDevice:
         self.charset_array[3] = charset
 
     def shift_in(self) -> None:
-        """Shift In (SI) - switch to G0."""
+        """Shift In (SI / LS0) - invoke G0 into GL."""
         self.current_charset = 0
 
     def shift_out(self) -> None:
-        """Shift Out (SO) - switch to G1."""
+        """Shift Out (SO / LS1) - invoke G1 into GL."""
         self.current_charset = 1
+
+    def locking_shift(self, gset: int, right: bool = False) -> None:
+        """Persistently invoke a G-set: LS2/LS3 into GL, LS1R/LS2R/LS3R into GR."""
+        if right:
+            self.gr = gset
+        else:
+            self.current_charset = gset
 
     def single_shift_2(self) -> None:
         """Single Shift 2 (SS2) - use G2 for next character only."""
@@ -121,6 +135,7 @@ class CharsetDevice:
         self.set_g2_charset("B")
         self.set_g3_charset("B")
         self.current_charset = 0
+        self.gr = 1
         self.single_shift = None
 
     def handle_operation(self, operation: Operation) -> None:

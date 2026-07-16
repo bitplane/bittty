@@ -19,6 +19,12 @@ ESCAPE_OPERATION_NAMES = {
     "E": ("NEL", ()),
     "H": ("HTS", ()),
     "Z": ("DA1", ()),  # DECID — obsolete "identify", answered like primary DA
+    # Locking shifts (ISO 2022): invoke a G-set into GL (n/o) or GR (~/}/|) persistently.
+    "n": ("LS2", ()),  # G2 -> GL
+    "o": ("LS3", ()),  # G3 -> GL
+    "~": ("LS1R", ()),  # G1 -> GR
+    "}": ("LS2R", ()),  # G2 -> GR
+    "|": ("LS3R", ()),  # G3 -> GR
 }
 
 

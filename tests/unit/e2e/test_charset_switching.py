@@ -114,6 +114,76 @@ def test_multiple_single_shifts():
     assert terminal.board.screen.current_buffer.get_line_text(0).rstrip() == "A┌£┐B"
 
 
+def test_locking_shift_2_invokes_g2_into_gl():
+    """LS2 (ESC n) persistently invokes G2 into GL, unlike the one-shot SS2."""
+    terminal = Terminal(width=20, height=5)
+    parser = Parser(terminal.board)
+
+    parser.feed("\x1b*0")  # ESC * 0 — designate G2 = DEC Special Graphics
+    parser.feed("\x1bn")  # ESC n — LS2: invoke G2 into GL, persistently
+    parser.feed("lqk")  # all three translate, not just the first
+    parser.feed("\x0f")  # SI (LS0): back to G0 (ASCII)
+    parser.feed("AB")
+
+    assert terminal.board.screen.current_buffer.get_line_text(0).rstrip() == "┌─┐AB"
+
+
+def test_locking_shift_3_invokes_g3_into_gl():
+    """LS3 (ESC o) persistently invokes G3 into GL."""
+    terminal = Terminal(width=20, height=5)
+    parser = Parser(terminal.board)
+
+    parser.feed("\x1b+0")  # ESC + 0 — designate G3 = DEC Special Graphics
+    parser.feed("\x1bo")  # ESC o — LS3
+    parser.feed("lqk")
+    parser.feed("\x0f")  # SI back to G0
+    parser.feed("X")
+
+    assert terminal.board.screen.current_buffer.get_line_text(0).rstrip() == "┌─┐X"
+
+
+def test_locking_shift_1_right_translates_gr_half():
+    """LS1R (ESC ~) invokes G1 into GR; 0xA0-0xFF map through it while GL stays ASCII."""
+    terminal = Terminal(width=20, height=5)
+    parser = Parser(terminal.board)
+
+    parser.feed("\x1b)0")  # ESC ) 0 — designate G1 = DEC Special Graphics
+    parser.feed("\x1b~")  # ESC ~ — LS1R: invoke G1 into GR
+    parser.feed("A")  # GL still ASCII
+    parser.feed("\xec\xe1")  # 'l'+0x80, 'a'+0x80 -> box + checkerboard via GR
+
+    assert terminal.board.screen.current_buffer.get_line_text(0).rstrip() == "A┌▒"
+
+
+def test_locking_shift_2_right_translates_gr_half():
+    """LS2R (ESC }) invokes G2 into GR."""
+    terminal = Terminal(width=20, height=5)
+    parser = Parser(terminal.board)
+
+    parser.feed("\x1b*0")  # ESC * 0 — designate G2 = DEC Special Graphics
+    parser.feed("\x1b}")  # ESC } — LS2R
+    parser.feed("\xec")  # 'l'+0x80 -> ┌
+
+    assert terminal.board.screen.current_buffer.get_line_text(0).rstrip() == "┌"
+
+
+def test_reset_clears_locking_shifts():
+    """RIS restores GL to G0 and GR to G1 (both ASCII)."""
+    terminal = Terminal(width=20, height=5)
+    parser = Parser(terminal.board)
+
+    parser.feed("\x1b*0\x1bn")  # G2 = graphics, LS2 -> GL = G2
+    parser.feed("\x1b)0\x1b~")  # G1 = graphics, LS1R -> GR = G1
+    assert terminal.board.charset.current_charset == 2
+    assert terminal.board.charset.gr == 1
+
+    parser.feed("\x1bc")  # RIS
+    assert terminal.board.charset.current_charset == 0
+    assert terminal.board.charset.gr == 1
+    parser.feed("\xec")  # GR now ASCII -> passthrough, no translation
+    assert terminal.board.screen.current_buffer.get_line_text(0).rstrip() == "\xec"
+
+
 def test_si_so_switching():
     """Test Shift In/Shift Out switching between G0 and G1."""
     terminal = Terminal(width=20, height=5)
