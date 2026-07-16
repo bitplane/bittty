@@ -50,6 +50,8 @@ class TerminalBoard:
         self.conformance_level: int = 62  # DECSCL
         self.c1_eightbit: bool = False  # S7C1T/S8C1T: transmit C1 controls as 8-bit
         self.ansi_conformance_level: int = 1  # ESC SP L/M/N
+        # Physical facts about the box the display lives in; a frontend reports these.
+        self.focused: bool = True
         # XTWINOPS window state; a windowing frontend actuates these.
         self.window_iconified: bool = False
         self.window_maximized: bool = False
@@ -154,6 +156,11 @@ class TerminalBoard:
     def set_display_caps(self, caps: DisplayCaps) -> None:
         """Record what the real display can do (a frontend pushes this after probing)."""
         self.display_caps = caps
+
+    def set_focus(self, focused: bool) -> None:
+        """Record the box's focus state and report it to the child (DECSET 1004)."""
+        self.focused = focused
+        self.keyboard.report_focus(focused)
 
     def reset(self, hard: bool = True) -> None:
         """Reset the terminal. hard is RIS (full power-on); soft is DECSTR."""

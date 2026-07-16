@@ -131,7 +131,13 @@ class Terminal:
         return self.board.screen.current_buffer.get_content()
 
     def capture_pane(self) -> str:
-        """Capture terminal content."""
+        """Capture terminal content.
+
+        The cursor cell renders only when the child wants it visible (DECTCEM)
+        and the box has focus — an unfocused terminal drops its block the way a
+        real one hollows it.
+        """
+        show_cursor = self.board.modes.cursor_visible and self.board.focused
         lines = []
         for y in range(self.height):
             lines.append(
@@ -140,7 +146,7 @@ class Terminal:
                     width=self.width,
                     cursor_x=self.board.cursor.x,
                     cursor_y=self.board.cursor.y,
-                    show_cursor=self.board.modes.cursor_visible,
+                    show_cursor=show_cursor,
                     mouse_x=self.board.mouse.x,
                     mouse_y=self.board.mouse.y,
                     show_mouse=self.board.mouse.show,
@@ -170,12 +176,12 @@ class Terminal:
         self.board.keyboard.input(data)
 
     def focus_in(self) -> None:
-        """Notify the terminal the window gained focus (reported if DECSET 1004 is on)."""
-        self.board.keyboard.report_focus(True)
+        """The box gained focus: record it and report to the child if DECSET 1004 is on."""
+        self.board.set_focus(True)
 
     def focus_out(self) -> None:
-        """Notify the terminal the window lost focus (reported if DECSET 1004 is on)."""
-        self.board.keyboard.report_focus(False)
+        """The box lost focus: record it and report to the child if DECSET 1004 is on."""
+        self.board.set_focus(False)
 
     def input_mouse(self, x: int, y: int, button: int, event_type: str, modifiers: set[str]) -> None:
         """

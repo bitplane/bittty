@@ -99,3 +99,36 @@ def test_split_mouse_report_still_reassembles():
     assert seen == []
     display.handle_input("4M")
     assert seen == [(3, 4, 0, "press")]
+
+
+def test_host_focus_events_reach_the_board_and_child():
+    """CSI I / CSI O from the host set the board's focus register."""
+    display = PassthroughDisplay()
+    typed = []
+    display.terminal.input = typed.append
+
+    display.handle_input("ab\033[Ocd")
+    assert display.terminal.board.focused is False
+    assert display.dirty is True
+    assert typed == ["ab", "cd"]  # surrounding keystrokes still delivered
+
+    display.handle_input("\033[I")
+    assert display.terminal.board.focused is True
+
+
+def test_render_hides_software_cursor_when_unfocused(capsys):
+    display = PassthroughDisplay()
+    display.terminal.parser.feed("hello")
+
+    def pane_area():
+        # Everything before the status line (which uses reverse video itself).
+        out = capsys.readouterr().out
+        return out.split(f"\033[{display.height + 1}H")[0]
+
+    display.terminal.board.focused = True
+    display.render_screen()
+    assert "\033[7m" in pane_area()  # reverse-video cursor cell
+
+    display.terminal.board.focused = False
+    display.render_screen()
+    assert "\033[7m" not in pane_area()

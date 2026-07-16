@@ -122,7 +122,8 @@ class MouseDevice(Device):
         modes = self.board.modes
         is_move = event_type == "move"
         if event_type == "press":
-            self._pressed.add(button)
+            if button < 3:  # wheel "presses" (64/65) have no release and are not drags
+                self._pressed.add(button)
         elif event_type == "release":
             self._pressed.discard(button)
 

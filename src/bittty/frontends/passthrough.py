@@ -111,7 +111,7 @@ class PassthroughDisplay(Display):
     # --- terminal setup / teardown --- #
 
     def setup_terminal(self) -> None:
-        """Put the host terminal into raw mode and clear it."""
+        """Put the host terminal into raw mode, clear it, and ask for focus events."""
         logger.info("Setting up terminal: %sx%s", self.width, self.height)
         if HAS_UNIX_TERMIOS:
             try:
@@ -120,7 +120,9 @@ class PassthroughDisplay(Display):
             except (termios.error, OSError):
                 logger.info("Raw terminal mode unavailable; continuing without it", exc_info=True)
                 self.old_termios = None
-        print("\033[?25l\033[2J\033[H", end="", flush=True)
+        # ?1004: the host reports focus in/out (CSI I / CSI O) — drives our own
+        # software cursor and is forwarded to a child that enabled 1004 itself.
+        print("\033[?25l\033[?1004h\033[2J\033[H", end="", flush=True)
 
     def restore_terminal(self) -> None:
         """Restore the host terminal to its original state."""
@@ -128,7 +130,7 @@ class PassthroughDisplay(Display):
         self.disable_host_mouse()
         if HAS_UNIX_TERMIOS and self.old_termios:
             termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, self.old_termios)
-        print("\033[?25h\033[2J\033[H", end="", flush=True)
+        print("\033[?1004l\033[?25h\033[2J\033[H", end="", flush=True)
 
     # --- rendering --- #
 
@@ -199,8 +201,16 @@ class PassthroughDisplay(Display):
         self.terminal.input_mouse(x, y, base_button, event_type, modifiers)
         return True
 
+    def handle_focus(self, focused: bool) -> None:
+        """A host focus event: the backend owns the state; we just repaint."""
+        if focused:
+            self.terminal.focus_in()
+        else:
+            self.terminal.focus_out()
+        self.dirty = True
+
     def handle_input(self, data: str) -> None:
-        """Forward host input to bittty, intercepting only SGR mouse reports."""
+        """Forward host input to bittty, intercepting SGR mouse reports and focus events."""
         stream = self.input_sequence_buffer + data
         self.input_sequence_buffer = ""
         plain_input: list[str] = []
@@ -208,6 +218,14 @@ class PassthroughDisplay(Display):
         mouse_prefix = "\033[<"
 
         while index < len(stream):
+            if stream.startswith("\033[I", index) or stream.startswith("\033[O", index):
+                if plain_input:
+                    self.terminal.input("".join(plain_input))
+                    plain_input = []
+                self.handle_focus(stream[index + 2] == "I")
+                index += 3
+                continue
+
             if stream.startswith(mouse_prefix, index):
                 if plain_input:
                     self.terminal.input("".join(plain_input))

@@ -277,3 +277,14 @@ def test_input_key_modified_tilde_nav_keys():
     terminal.pty.data.clear()
     terminal.input_key("up", constants.KEY_MOD_CTRL)
     assert terminal.pty.data == ["\x1b[1;5A"]  # letter-final keys keep the 1;mod form
+
+
+def test_wheel_events_do_not_stick_as_held_buttons():
+    """Wheel presses (64/65) have no release; they must not fake a drag."""
+    terminal = terminal_with_pty()
+    terminal.board.modes.set_private_modes((1002, 1006), True)
+
+    terminal.board.mouse.input_mouse(5, 5, 64, "press", set())  # wheel up
+    terminal.pty.data.clear()
+    terminal.board.mouse.input_mouse(6, 5, 0, "move", set())
+    assert terminal.pty.data == []  # no button held: still no motion report
