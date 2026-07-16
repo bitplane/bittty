@@ -43,6 +43,16 @@ class TerminalBoard:
         self.notifications: list[str] = []  # OSC 9 / 777 messages
         self.prompt_marks: list[tuple[str, int]] = []  # OSC 133 (mark, row)
         self.conformance_level: int = 62  # DECSCL
+        # linux console setterm hardware registers; a display/audio backend actuates these.
+        self.screen_blanked: bool = False
+        self.blank_timeout: int = 0  # minutes; 0 = never
+        self.bell_hz: int = 750
+        self.bell_ms: int = 125
+        self.vesa_powerdown: int = 0
+        self.cursor_blink_ms: int = 0
+        self.default_underline_color: int | None = None
+        self.default_dim_color: int | None = None
+        self.console_requests: list[tuple[str, int]] = []  # ("switch", n) / ("previous", 0)
         self.host = HostPort()
 
         self.charset = CharsetDevice(self)

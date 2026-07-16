@@ -33,6 +33,7 @@ class QueryDevice:
             "OSC_CWD": lambda op: setattr(self.board, "cwd", op.args[0]),
             "OSC_NOTIFY": lambda op: self.board.notifications.append(op.args[0]),
             "OSC_SHELL_MARK": lambda op: self.board.prompt_marks.append((op.args[0], self.board.cursor.y)),
+            "LINUX_SETTERM": self.handle_setterm,
         }
 
     def report_cursor_position(self, operation: Operation) -> None:
@@ -118,6 +119,35 @@ class QueryDevice:
         params = operation.args[0]
         if params and params[0] is not None:
             self.board.conformance_level = params[0]
+
+    def handle_setterm(self, operation: Operation) -> None:
+        """linux `setterm` CSI...] — update the board's hardware registers."""
+        params = operation.args[0]
+        op = params[0] if params and params[0] is not None else 0
+        arg = params[1] if len(params) > 1 and params[1] is not None else 0
+        board = self.board
+        if op == 1:
+            board.default_underline_color = arg
+        elif op == 2:
+            board.default_dim_color = arg
+        elif op == 8:
+            board.style.set_default()  # make current attributes the default
+        elif op == 9:
+            board.blank_timeout = arg
+        elif op == 10:
+            board.bell_hz = arg
+        elif op == 11:
+            board.bell_ms = arg
+        elif op == 12:
+            board.console_requests.append(("switch", arg))
+        elif op == 13:
+            board.screen_blanked = False
+        elif op == 14:
+            board.vesa_powerdown = arg
+        elif op == 15:
+            board.console_requests.append(("previous", 0))
+        elif op == 16:
+            board.cursor_blink_ms = arg
 
     def handle_operation(self, operation: Operation) -> None:
         handler = self.handlers.get(operation.name)

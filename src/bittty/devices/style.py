@@ -18,6 +18,7 @@ class StyleDevice:
     def __init__(self, board: TerminalBoard) -> None:
         self.board = board
         self.current = Style()
+        self.default = Style()  # ESC[8]: the attributes SGR 0 resets to
         self._monochrome = board.personality.color_depth == "monochrome"
         self.handlers = {
             "SGR": lambda op: self.apply_sgr(*op.args),
@@ -36,12 +37,16 @@ class StyleDevice:
 
     def apply_sgr(self, style: Style, reset: bool = False) -> None:
         """Apply an SGR style update; a monochrome terminal drops colour attributes."""
-        merged = style if reset else self.current.merge(style)
+        merged = self.default if reset else self.current.merge(style)
         # SGR (including reset) never affects the active hyperlink or protection.
         merged = replace(merged, hyperlink=self.current.hyperlink, protected=self.current.protected)
         if self._monochrome:
             merged = replace(merged, fg=None, bg=None)
         self.current = merged
+
+    def set_default(self) -> None:
+        """ESC [ 8 ] — make the current attributes the default (the SGR 0 target)."""
+        self.default = self.current
 
     def set_hyperlink(self, uri: str) -> None:
         """OSC 8 — start (non-empty URI) or end (empty) the active hyperlink."""
@@ -52,8 +57,9 @@ class StyleDevice:
         self.current = replace(self.current, protected=True if mode == 1 else None)
 
     def reset(self) -> None:
-        """Reset to the default style."""
+        """Reset to the default style (and clear the ESC[8] default register)."""
         self.current = Style()
+        self.default = Style()
 
     def background_ansi(self) -> str:
         """Return the active background style as ANSI."""

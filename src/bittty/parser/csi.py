@@ -222,6 +222,9 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
     if final_char == "t":  # XTWINOPS - Window manipulation / reports
         return Operation("XTWINOPS", (tuple(params),), raw_csi_data)
 
+    if final_char == "]":  # linux console setterm hardware directives
+        return Operation("LINUX_SETTERM", (tuple(params),), raw_csi_data)
+
     if final_char == "J":  # ED / DECSED - Erase in Display (selective with ?)
         mode = params[0] if params and params[0] is not None else 0
         return Operation("DECSED" if "?" in intermediates else "ED", (mode,), raw_csi_data)
