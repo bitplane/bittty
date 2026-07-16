@@ -6,6 +6,7 @@ with platform-specific subclasses overriding only the byte-level I/O methods.
 """
 
 import asyncio
+import os
 from typing import Optional, BinaryIO
 import subprocess
 import codecs
@@ -13,7 +14,10 @@ from io import BytesIO
 
 from .. import constants
 
-ENV = {"TERM": "xterm-256color"}
+# Inherit the caller's environment (HOME, PATH, USER, SHELL, ...) and override
+# only what the terminal owns. subprocess env= replaces wholesale, so a bare
+# {"TERM": ...} would launch the child with *nothing else* — no HOME, no PATH.
+ENV = os.environ | {"TERM": "xterm-256color"}
 
 
 class PTY:
