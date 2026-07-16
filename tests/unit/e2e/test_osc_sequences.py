@@ -1,7 +1,5 @@
 """Tests for OSC (Operating System Command) sequences."""
 
-from unittest.mock import Mock
-
 from bittty.parser import Parser
 from bittty.terminal import Terminal
 from bittty.constants import (
@@ -21,6 +19,17 @@ def render_lines_to_string(lines: list[list[tuple[str, str]]]) -> list[str]:
     for line in lines:
         output.append("".join(char for _, char in line))
     return output
+
+
+class RecordingTransport:
+    def __init__(self):
+        self.data = []
+
+    def write(self, data):
+        self.data.append(data)
+
+    def flush(self):
+        pass
 
 
 def test_osc_set_both_window_and_icon_title():
@@ -239,13 +248,16 @@ def test_osc_repeated_query_runs_each_time():
     """Repeated OSC queries must not be skipped by function-level caching."""
     terminal = Terminal(width=80, height=24)
     parser = Parser(terminal)
-    terminal.respond = Mock()
+    transport = RecordingTransport()
+    terminal.board.host.attach(transport)
 
     parser.feed("\x1b]10;?\x07")
     parser.feed("\x1b]10;?\x07")
 
-    assert terminal.respond.call_count == 2
-    terminal.respond.assert_called_with("\033]10;rgb:ffff/ffff/ffff\007")
+    assert transport.data == [
+        "\033]10;rgb:ffff/ffff/ffff\007",
+        "\033]10;rgb:ffff/ffff/ffff\007",
+    ]
 
 
 def test_osc_same_sequence_applies_to_different_terminals():

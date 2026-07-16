@@ -1,8 +1,18 @@
-from unittest.mock import Mock
-
 from bittty import constants
 from bittty.operations import Operation
 from bittty.terminal import Terminal
+
+
+class RecordingTransport:
+    def __init__(self):
+        self.data = []
+        self.flush_count = 0
+
+    def write(self, data):
+        self.data.append(data)
+
+    def flush(self):
+        self.flush_count += 1
 
 
 def test_control_device_routes_c0_controls_to_devices():
@@ -43,22 +53,27 @@ def test_control_device_shift_and_tab_stop_controls():
 def test_query_device_reports_cursor_and_device_status():
     terminal = Terminal(width=80, height=24)
     query = terminal.parser.sink.query
-    terminal.respond = Mock()
+    transport = RecordingTransport()
+    terminal.board.host.attach(transport)
 
     terminal.cursor.set_position(10, 5)
     query.handle_operation(Operation("query", "CPR", (6,), "\x1b[6n"))
     query.handle_operation(Operation("query", "DSR", (5,), "\x1b[5n"))
     query.handle_operation(Operation("query", "DA1", (0,), "\x1b[c"))
 
-    assert terminal.respond.call_args_list[0].args == ("\x1b[6;11R",)
-    assert terminal.respond.call_args_list[1].args == ("\x1b[0n",)
-    assert terminal.respond.call_args_list[2].args == ("\x1b[?62;1;6;8;9;15;18;21;22;23c",)
+    assert transport.data == [
+        "\x1b[6;11R",
+        "\x1b[0n",
+        "\x1b[?62;1;6;8;9;15;18;21;22;23c",
+    ]
+    assert transport.flush_count == 3
 
 
 def test_query_device_reports_mode_status_from_mode_device():
     terminal = Terminal(width=80, height=24)
     query = terminal.parser.sink.query
-    terminal.respond = Mock()
+    transport = RecordingTransport()
+    terminal.board.host.attach(transport)
 
     terminal.modes.cursor_application_mode = True
     terminal.modes.insert_mode = False
@@ -67,22 +82,25 @@ def test_query_device_reports_mode_status_from_mode_device():
     query.handle_operation(Operation("query", "DECRQM", (4, False), "\x1b[4$p"))
     query.handle_operation(Operation("query", "DECRQM", (9999, True), "\x1b[?9999$p"))
 
-    assert [call.args[0] for call in terminal.respond.call_args_list] == [
+    assert transport.data == [
         "\x1b[?1;1$y",
         "\x1b[4;2$y",
         "\x1b[?9999;0$y",
     ]
+    assert transport.flush_count == 3
 
 
 def test_query_device_reports_osc_colors():
     terminal = Terminal(width=80, height=24)
     query = terminal.parser.sink.query
-    terminal.respond = Mock()
+    transport = RecordingTransport()
+    terminal.board.host.attach(transport)
 
     query.handle_operation(Operation("query", "OSC_FOREGROUND_COLOR", raw="\x1b]10;?\x07"))
     query.handle_operation(Operation("query", "OSC_BACKGROUND_COLOR", raw="\x1b]11;?\x07"))
 
-    assert [call.args[0] for call in terminal.respond.call_args_list] == [
+    assert transport.data == [
         "\x1b]10;rgb:ffff/ffff/ffff\x07",
         "\x1b]11;rgb:0000/0000/0000\x07",
     ]
+    assert transport.flush_count == 2

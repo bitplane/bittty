@@ -11,6 +11,7 @@ from .parser import Parser
 from .devices.board import TerminalBoard
 from .devices.terminal import TerminalOperationSink
 from .operations import Operation, OperationSink
+from .transports import HostPort, WritableTransport
 from .style import (
     CURSOR_CODE,
     RESET_CODE,
@@ -29,8 +30,10 @@ __all__ = [
     "Parser",
     "Operation",
     "OperationSink",
+    "HostPort",
     "TerminalBoard",
     "TerminalOperationSink",
+    "WritableTransport",
     "CURSOR_CODE",
     "RESET_CODE",
 ]

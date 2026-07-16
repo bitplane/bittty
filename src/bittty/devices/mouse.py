@@ -21,7 +21,7 @@ class MouseDevice:
 
     def input_mouse(self, x: int, y: int, button: int, event_type: str, modifiers: set[str]) -> None:
         """
-        Handle mouse input, cache position, and send appropriate sequence to PTY.
+        Handle mouse input, cache position, and send appropriate sequence to the host.
 
         Args:
             x: 1-based mouse column.
@@ -53,4 +53,4 @@ class MouseDevice:
             if is_move:
                 button = constants.MOUSE_BUTTON_MOVEMENT
 
-            self.terminal.send(f"{constants.ESC}[<{button};{x};{y}{final_char}")
+            self.terminal.host.write(f"{constants.ESC}[<{button};{x};{y}{final_char}")

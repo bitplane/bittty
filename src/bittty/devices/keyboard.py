@@ -118,10 +118,10 @@ class KeyboardDevice:
         self.input(sequence)
 
     def input(self, data: str) -> None:
-        """Translate control codes based on terminal modes and send to PTY."""
+        """Translate control codes based on terminal modes and send to the host."""
         if self.terminal.cursor_application_mode and f"{constants.ESC}[" in data:
             data = self.translate_application_cursor_keys(data)
-        self.terminal.send(data)
+        self.terminal.host.write(data)
 
     def translate_application_cursor_keys(self, data: str) -> str:
         """Translate embedded normal cursor-key CSI sequences to application mode."""

@@ -9,6 +9,7 @@ def test_terminal_builds_board_and_exposes_device_slots():
     assert isinstance(terminal.board, TerminalBoard)
     assert terminal.parser.sink is terminal.board
     assert terminal.board.devices["cursor"] is terminal.cursor
+    assert terminal.board.devices["host"] is terminal.host
     assert terminal.board.devices["screen"] is terminal.screen
     assert terminal.board.devices["style"] is terminal.style
     assert terminal.board.devices["title"] is terminal.title_device

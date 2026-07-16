@@ -25,16 +25,16 @@ class QueryDevice:
         if operation.name == "CPR":
             row = self.terminal.cursor_y + 1
             col = self.terminal.cursor_x + 1
-            self.terminal.respond(f"\033[{row};{col}R")
+            self.terminal.host.write(f"\033[{row};{col}R", flush=True)
             return
         if operation.name == "DSR":
-            self.terminal.respond("\033[0n")
+            self.terminal.host.write("\033[0n", flush=True)
             return
         if operation.name == "DA1":
-            self.terminal.respond("\033[?62;1;6;8;9;15;18;21;22;23c")
+            self.terminal.host.write("\033[?62;1;6;8;9;15;18;21;22;23c", flush=True)
             return
         if operation.name == "DA2":
-            self.terminal.respond("\033[>1;10;0c")
+            self.terminal.host.write("\033[>1;10;0c", flush=True)
             return
         if operation.name == "DECRQM":
             mode, private = operation.args
@@ -43,13 +43,13 @@ class QueryDevice:
             else:
                 status = self.modes.get_ansi_mode_status(mode)
             prefix = "?" if private else ""
-            self.terminal.respond(f"\033[{prefix}{mode};{status}$y")
+            self.terminal.host.write(f"\033[{prefix}{mode};{status}$y", flush=True)
             return
         if operation.name == "OSC_FOREGROUND_COLOR":
-            self.terminal.respond("\033]10;rgb:ffff/ffff/ffff\007")
+            self.terminal.host.write("\033]10;rgb:ffff/ffff/ffff\007", flush=True)
             return
         if operation.name == "OSC_BACKGROUND_COLOR":
-            self.terminal.respond("\033]11;rgb:0000/0000/0000\007")
+            self.terminal.host.write("\033]11;rgb:0000/0000/0000\007", flush=True)
             return
 
         logger.debug("Unknown query operation: %s", operation)

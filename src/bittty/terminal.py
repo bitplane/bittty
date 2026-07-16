@@ -62,6 +62,7 @@ class Terminal:
         self.height = height
         self.stdin = stdin
         self.stdout = stdout
+        self._pty: Optional[Any] = None
 
         from .devices.board import TerminalBoard
 
@@ -69,7 +70,6 @@ class Terminal:
 
         # Process management
         self.process: Optional[subprocess.Popen] = None
-        self.pty: Optional[Any] = None
         self._pty_reader_task: Optional[asyncio.Task] = None
 
         # PTY data callback for async handling
@@ -77,6 +77,21 @@ class Terminal:
 
         # Parser
         self.parser = Parser(self, sink=self.board)
+
+    @property
+    def pty(self) -> Optional[Any]:
+        """Attached PTY transport."""
+        return self._pty
+
+    @pty.setter
+    def pty(self, value: Optional[Any]) -> None:
+        self._pty = value
+        if not hasattr(self, "board"):
+            return
+        if value is None:
+            self.board.host.detach()
+        else:
+            self.board.host.attach(value)
 
     @property
     def cursor_x(self) -> int:
@@ -770,19 +785,16 @@ class Terminal:
         self.mouse.input_mouse(x, y, button, event_type, modifiers)
 
     def send(self, data: str) -> None:
-        """Send data to PTY without flushing (for regular input/unsolicited messages)."""
-        self._send_to_pty(data, flush=False)
+        """Send data to the host without flushing."""
+        self._send_to_host(data, flush=False)
 
     def respond(self, data: str) -> None:
-        """Send response to PTY with immediate flush (for query responses)."""
-        self._send_to_pty(data, flush=True)
+        """Send response to the host with immediate flush."""
+        self._send_to_host(data, flush=True)
 
-    def _send_to_pty(self, data: str, flush: bool = False) -> None:
-        """Send data to PTY with optional flush."""
-        if self.pty:
-            self.pty.write(data)
-            if flush:
-                self.pty.flush()
+    def _send_to_host(self, data: str, flush: bool = False) -> None:
+        """Send data to the attached host transport."""
+        self.host.write(data, flush=flush)
 
     # Process management
     async def start_process(self) -> None:

@@ -6,6 +6,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from ..operations import Operation
+from ..transports import HostPort
 from .charset import CharsetDevice
 from .control import ControlDevice
 from .cursor import CursorDevice
@@ -28,6 +29,7 @@ class TerminalBoard:
 
     def __init__(self, terminal: Terminal) -> None:
         self.terminal = terminal
+        self.host = HostPort()
 
         self.charset = CharsetDevice(terminal)
         self.cursor = CursorDevice(terminal)
@@ -47,6 +49,7 @@ class TerminalBoard:
             "charset": self.charset,
             "control": self.control,
             "cursor": self.cursor,
+            "host": self.host,
             "keyboard": self.keyboard,
             "modes": self.modes,
             "mouse": self.mouse,
@@ -60,6 +63,7 @@ class TerminalBoard:
         """Expose current device slots through the legacy Terminal facade."""
         self.terminal.charset = self.charset
         self.terminal.cursor = self.cursor
+        self.terminal.host = self.host
         self.terminal.keyboard = self.keyboard
         self.terminal.modes = self.modes
         self.terminal.mouse = self.mouse
