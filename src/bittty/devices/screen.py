@@ -10,7 +10,7 @@ from ..buffer import Buffer
 from ..operations import Operation
 
 if TYPE_CHECKING:
-    from ..terminal import Terminal
+    from .board import TerminalBoard
 
 logger = logging.getLogger(__name__)
 
@@ -18,14 +18,15 @@ logger = logging.getLogger(__name__)
 class ScreenDevice:
     """Owns screen buffers and applies screen/editing operations."""
 
-    def __init__(self, terminal: Terminal) -> None:
-        self.terminal = terminal
-        self.primary_buffer = Buffer(terminal.width, terminal.height)
-        self.alt_buffer = Buffer(terminal.width, terminal.height)
+    def __init__(self, board: TerminalBoard) -> None:
+        self.board = board
+        self.terminal = board.terminal
+        self.primary_buffer = Buffer(board.width, board.height)
+        self.alt_buffer = Buffer(board.width, board.height)
         self.current_buffer = self.primary_buffer
         self.in_alt_screen = False
         self.scroll_top = 0
-        self.scroll_bottom = terminal.height - 1
+        self.scroll_bottom = board.height - 1
         self.last_printed_char = " "
 
     def write_text(self, text: str, ansi_code: str = "") -> None:

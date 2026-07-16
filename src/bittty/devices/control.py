@@ -9,7 +9,7 @@ from .. import constants
 from ..operations import Operation
 
 if TYPE_CHECKING:
-    from ..terminal import Terminal
+    from .board import TerminalBoard
 
 logger = logging.getLogger(__name__)
 
@@ -17,10 +17,11 @@ logger = logging.getLogger(__name__)
 class ControlDevice:
     """Applies C0 and simple control operations to the current Terminal implementation."""
 
-    def __init__(self, terminal: Terminal) -> None:
-        self.terminal = terminal
-        self.cursor = terminal.cursor
-        self.charset = terminal.charset
+    def __init__(self, board: TerminalBoard) -> None:
+        self.board = board
+        self.terminal = board.terminal
+        self.cursor = board.cursor
+        self.charset = board.charset
 
     def handle_operation(self, operation: Operation) -> None:
         ch = operation.raw

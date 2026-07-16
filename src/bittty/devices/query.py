@@ -6,10 +6,9 @@ import logging
 from typing import TYPE_CHECKING
 
 from ..operations import Operation
-from .modes import ModeDevice
 
 if TYPE_CHECKING:
-    from ..terminal import Terminal
+    from .board import TerminalBoard
 
 logger = logging.getLogger(__name__)
 
@@ -17,9 +16,10 @@ logger = logging.getLogger(__name__)
 class QueryDevice:
     """Applies terminal query operations to the current Terminal implementation."""
 
-    def __init__(self, terminal: Terminal, modes: ModeDevice) -> None:
-        self.terminal = terminal
-        self.modes = modes
+    def __init__(self, board: TerminalBoard) -> None:
+        self.board = board
+        self.terminal = board.terminal
+        self.modes = board.modes
 
     def handle_operation(self, operation: Operation) -> None:
         if operation.name == "CPR":

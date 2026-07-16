@@ -9,7 +9,7 @@ from .. import constants
 from ..operations import Operation
 
 if TYPE_CHECKING:
-    from ..terminal import Terminal
+    from .board import TerminalBoard
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +17,9 @@ logger = logging.getLogger(__name__)
 class ModeDevice:
     """Owns terminal mode state and applies mode operations."""
 
-    def __init__(self, terminal: Terminal) -> None:
-        self.terminal = terminal
+    def __init__(self, board: TerminalBoard) -> None:
+        self.board = board
+        self.terminal = board.terminal
         self.auto_wrap = True
         self.insert_mode = False
         self.application_keypad = False

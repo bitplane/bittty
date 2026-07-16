@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from ..operations import Operation
 
 if TYPE_CHECKING:
-    from ..terminal import Terminal
+    from .board import TerminalBoard
 
 logger = logging.getLogger(__name__)
 
@@ -16,14 +16,15 @@ logger = logging.getLogger(__name__)
 class CursorDevice:
     """Owns cursor state and applies cursor operations."""
 
-    def __init__(self, terminal: Terminal) -> None:
-        self.terminal = terminal
+    def __init__(self, board: TerminalBoard) -> None:
+        self.board = board
+        self.terminal = board.terminal
         self.x = 0
         self.y = 0
         self.saved_x = 0
         self.saved_y = 0
         self.saved_ansi_code = ""
-        self.tab_stops = set(range(8, terminal.width, 8))
+        self.tab_stops = set(range(8, board.width, 8))
 
     def set_position(self, x: int | None, y: int | None) -> None:
         """Move cursor to a clamped terminal position."""

@@ -7,14 +7,15 @@ from typing import TYPE_CHECKING
 from .. import constants
 
 if TYPE_CHECKING:
-    from ..terminal import Terminal
+    from .board import TerminalBoard
 
 
 class MouseDevice:
     """Owns mouse presentation state and emits mouse input reports."""
 
-    def __init__(self, terminal: Terminal) -> None:
-        self.terminal = terminal
+    def __init__(self, board: TerminalBoard) -> None:
+        self.board = board
+        self.terminal = board.terminal
         self.x = 0
         self.y = 0
         self.show = False

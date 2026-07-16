@@ -31,19 +31,19 @@ class TerminalBoard:
         self.terminal = terminal
         self.host = HostPort()
 
-        self.charset = CharsetDevice(terminal)
-        self.cursor = CursorDevice(terminal)
-        self.keyboard = KeyboardDevice(terminal)
-        self.modes = ModeDevice(terminal)
-        self.mouse = MouseDevice(terminal)
-        self.screen = ScreenDevice(terminal)
-        self.style = StyleDevice(terminal)
-        self.title = TitleDevice(terminal)
+        self.charset = CharsetDevice(self)
+        self.cursor = CursorDevice(self)
+        self.keyboard = KeyboardDevice(self)
+        self.modes = ModeDevice(self)
+        self.mouse = MouseDevice(self)
+        self.screen = ScreenDevice(self)
+        self.style = StyleDevice(self)
+        self.title = TitleDevice(self)
 
         self._attach_terminal_aliases()
 
-        self.control = ControlDevice(terminal)
-        self.query = QueryDevice(terminal, self.modes)
+        self.control = ControlDevice(self)
+        self.query = QueryDevice(self)
 
         self.devices = {
             "charset": self.charset,
@@ -58,6 +58,24 @@ class TerminalBoard:
             "style": self.style,
             "title": self.title,
         }
+
+    @property
+    def width(self) -> int:
+        """Terminal width in columns."""
+        return self.terminal.width
+
+    @width.setter
+    def width(self, value: int) -> None:
+        self.terminal.width = value
+
+    @property
+    def height(self) -> int:
+        """Terminal height in rows."""
+        return self.terminal.height
+
+    @height.setter
+    def height(self, value: int) -> None:
+        self.terminal.height = value
 
     def _attach_terminal_aliases(self) -> None:
         """Expose current device slots through the legacy Terminal facade."""

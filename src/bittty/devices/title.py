@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from ..operations import Operation
 
 if TYPE_CHECKING:
-    from ..terminal import Terminal
+    from .board import TerminalBoard
 
 logger = logging.getLogger(__name__)
 
@@ -16,8 +16,8 @@ logger = logging.getLogger(__name__)
 class TitleDevice:
     """Owns terminal title state and applies title operations."""
 
-    def __init__(self, terminal: Terminal) -> None:
-        self.terminal = terminal
+    def __init__(self, board: TerminalBoard) -> None:
+        self.board = board
         self.title = "Terminal"
         self.icon_title = "Terminal"
 

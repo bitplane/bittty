@@ -7,14 +7,15 @@ from typing import TYPE_CHECKING
 from .. import constants
 
 if TYPE_CHECKING:
-    from ..terminal import Terminal
+    from .board import TerminalBoard
 
 
 class KeyboardDevice:
     """Encodes keyboard input into terminal control sequences."""
 
-    def __init__(self, terminal: Terminal) -> None:
-        self.terminal = terminal
+    def __init__(self, board: TerminalBoard) -> None:
+        self.board = board
+        self.terminal = board.terminal
 
     def input_key(self, char: str, modifier: int = constants.KEY_MOD_NONE) -> None:
         """Convert key + modifier to standard control codes, then send to input()."""

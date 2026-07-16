@@ -9,7 +9,7 @@ from ..charsets import get_charset
 from ..operations import Operation
 
 if TYPE_CHECKING:
-    from ..terminal import Terminal
+    from .board import TerminalBoard
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 class CharsetDevice:
     """Owns charset state and applies charset operations."""
 
-    def __init__(self, terminal: Terminal) -> None:
-        self.terminal = terminal
+    def __init__(self, board: TerminalBoard) -> None:
+        self.board = board
         self.g0_charset = "B"
         self.g1_charset = "B"
         self.g2_charset = "B"

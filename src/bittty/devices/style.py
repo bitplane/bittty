@@ -9,7 +9,7 @@ from ..operations import Operation
 from ..style import Style, get_background, parse_sgr_sequence, style_to_ansi
 
 if TYPE_CHECKING:
-    from ..terminal import Terminal
+    from .board import TerminalBoard
 
 logger = logging.getLogger(__name__)
 
@@ -17,8 +17,8 @@ logger = logging.getLogger(__name__)
 class StyleDevice:
     """Owns current style state and applies style operations."""
 
-    def __init__(self, terminal: Terminal) -> None:
-        self.terminal = terminal
+    def __init__(self, board: TerminalBoard) -> None:
+        self.board = board
         self.current_ansi_code = ""
 
     def apply_sgr(self, style: Style, reset: bool = False) -> None:
