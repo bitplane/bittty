@@ -124,6 +124,18 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
         mode = params[0] if params and params[0] is not None else 0
         return Operation("DECSCA", (mode,), raw_csi_data)
 
+    if "$" in intermediates:  # DEC rectangular-area functions
+        rect = {
+            "x": "DECFRA",  # Fill Rectangular Area
+            "z": "DECERA",  # Erase Rectangular Area
+            "{": "DECSERA",  # Selective Erase Rectangular Area
+            "v": "DECCRA",  # Copy Rectangular Area
+            "r": "DECCARA",  # Change Attributes in Rectangular Area
+            "t": "DECRARA",  # Reverse Attributes in Rectangular Area
+        }.get(final_char)
+        if rect is not None:
+            return Operation(rect, (tuple(params),), raw_csi_data)
+
     if "'" in intermediates:  # DEC locator (pointing device) family
         if final_char == "z":  # DECELR - Enable Locator Reporting
             ps1 = params[0] if params and params[0] is not None else 0

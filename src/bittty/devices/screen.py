@@ -4,9 +4,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from dataclasses import replace
+
 from .. import constants
 from ..buffer import Buffer
 from ..operations import Operation
+from ..style import Style, parse_sgr_sequence
+
+_REVERSE_ATTRS = {1: "bold", 4: "underline", 5: "blink", 7: "reverse"}
 
 if TYPE_CHECKING:
     from .board import TerminalBoard
@@ -29,6 +34,12 @@ class ScreenDevice:
             "EL": lambda op: self.clear_line(op.args[0]),
             "DECSED": lambda op: self.selective_erase_display(op.args[0]),
             "DECSEL": lambda op: self.selective_erase_line(op.args[0]),
+            "DECFRA": lambda op: self.fill_rectangle(op.args[0]),
+            "DECERA": lambda op: self.erase_rectangle(op.args[0]),
+            "DECSERA": lambda op: self.selective_erase_rectangle(op.args[0]),
+            "DECCRA": lambda op: self.copy_rectangle(op.args[0]),
+            "DECCARA": lambda op: self.change_attributes_rectangle(op.args[0]),
+            "DECRARA": lambda op: self.reverse_attributes_rectangle(op.args[0]),
             "IL": lambda op: self.insert_lines(op.args[0]),
             "DL": lambda op: self.delete_lines(op.args[0]),
             "ICH": lambda op: self.insert_characters(op.args[0], self.board.style.current),
@@ -146,6 +157,84 @@ class ScreenDevice:
             span = range(w)
         for x in span:
             self._selective_clear(x, cy)
+
+    # --- rectangular-area functions --- #
+
+    def _rectangle(self, top, left, bottom, right) -> tuple[int, int, int, int]:
+        """Clamp 1-based top/left/bottom/right (None/0 = extremes) to 0-based inclusive bounds."""
+        t = (top - 1) if top else 0
+        left0 = (left - 1) if left else 0
+        b = (bottom - 1) if bottom else (self.board.height - 1)
+        r = (right - 1) if right else (self.board.width - 1)
+        t = max(0, min(t, self.board.height - 1))
+        b = max(t, min(b, self.board.height - 1))
+        left0 = max(0, min(left0, self.board.width - 1))
+        r = max(left0, min(r, self.board.width - 1))
+        return t, left0, b, r
+
+    @staticmethod
+    def _four(params, start=0):
+        p = list(params) + [None] * (start + 4)
+        return p[start], p[start + 1], p[start + 2], p[start + 3]
+
+    def fill_rectangle(self, params) -> None:
+        """DECFRA — fill a rectangle with a character (Pch;Pt;Pl;Pb;Pr)."""
+        char = chr(params[0]) if params and params[0] else " "
+        t, left, b, r = self._rectangle(*self._four(params, 1))
+        for y in range(t, b + 1):
+            for x in range(left, r + 1):
+                self.current_buffer.set_cell(x, y, char, self.board.style.current)
+
+    def erase_rectangle(self, params) -> None:
+        """DECERA — erase a rectangle (Pt;Pl;Pb;Pr)."""
+        t, left, b, r = self._rectangle(*self._four(params))
+        bg = self.board.style.background_ansi()
+        for y in range(t, b + 1):
+            for x in range(left, r + 1):
+                self.current_buffer.set_cell(x, y, " ", bg)
+
+    def selective_erase_rectangle(self, params) -> None:
+        """DECSERA — erase a rectangle, leaving DECSCA-protected characters."""
+        t, left, b, r = self._rectangle(*self._four(params))
+        for y in range(t, b + 1):
+            for x in range(left, r + 1):
+                self._selective_clear(x, y)
+
+    def copy_rectangle(self, params) -> None:
+        """DECCRA — copy a rectangle to another origin (Pts;Pls;Pbs;Prs;Pps;Ptd;Pld;Ppd)."""
+        t, left, b, r = self._rectangle(*self._four(params))
+        p = list(params) + [None] * 8
+        dt = (p[5] - 1) if p[5] else 0
+        dl = (p[6] - 1) if p[6] else 0
+        cells = [[self.current_buffer.get_cell(x, y) for x in range(left, r + 1)] for y in range(t, b + 1)]
+        for dy, row in enumerate(cells):
+            for dx, cell in enumerate(row):
+                ty, tx = dt + dy, dl + dx
+                if 0 <= ty < self.board.height and 0 <= tx < self.board.width:
+                    self.current_buffer.set_cell(tx, ty, cell[1], cell[0])
+
+    def change_attributes_rectangle(self, params) -> None:
+        """DECCARA — merge SGR attributes into every cell of a rectangle."""
+        t, left, b, r = self._rectangle(*self._four(params))
+        sgr = [str(x) for x in params[4:] if x is not None]
+        delta = parse_sgr_sequence("\x1b[" + ";".join(sgr) + "m") if sgr else Style()
+        for y in range(t, b + 1):
+            for x in range(left, r + 1):
+                cell = self.current_buffer.get_cell(x, y)
+                self.current_buffer.set_cell(x, y, cell[1], cell[0].merge(delta))
+
+    def reverse_attributes_rectangle(self, params) -> None:
+        """DECRARA — toggle the given attributes (1/4/5/7) across a rectangle."""
+        t, left, b, r = self._rectangle(*self._four(params))
+        requested = [p for p in params[4:] if p in _REVERSE_ATTRS] or list(_REVERSE_ATTRS)
+        attrs = [_REVERSE_ATTRS[p] for p in requested]
+        for y in range(t, b + 1):
+            for x in range(left, r + 1):
+                cell = self.current_buffer.get_cell(x, y)
+                style = cell[0]
+                for attr in attrs:
+                    style = replace(style, **{attr: not getattr(style, attr)})
+                self.current_buffer.set_cell(x, y, cell[1], style)
 
     def switch_screen(self, alt: bool) -> None:
         """Switch between primary and alternate screen."""
