@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Callable, Optional
 
 from .. import constants
 from ..operations import Operation
+from ..present import CursorVisibilityChanged, MouseModeChanged, SyncOutputChanged
 from .base import Device
 
 if TYPE_CHECKING:
@@ -33,6 +34,7 @@ class Mode:
     queryable: bool = False  # DECRQM reports this mode's state
     apply_fn: Optional[Callable[["ModeDevice", bool], None]] = None  # side effect
     status_fn: Optional[Callable[["ModeDevice"], int]] = None  # custom DECRQM status
+    peripheral: Optional[str] = None  # "mouse"/"cursor"/"sync": emit a present event on change
 
     @property
     def key(self) -> tuple[bool, int]:
@@ -130,20 +132,20 @@ MODE_SPECS: list[Mode] = [
     Mode(6, True, "origin_mode", queryable=True),
     Mode(7, True, "auto_wrap", queryable=True),
     Mode(8, True, "auto_repeat", queryable=True),
-    Mode(9, True, "mouse_tracking", queryable=True),
+    Mode(9, True, "mouse_tracking", queryable=True, peripheral="mouse"),
     Mode(12, True, "cursor_blinking", queryable=True),
     Mode(20, True, "linefeed_newline_mode", queryable=True),
-    Mode(25, True, "cursor_visible", queryable=True),
+    Mode(25, True, "cursor_visible", queryable=True, peripheral="cursor"),
     Mode(47, True, apply_fn=_alt_screen, status_fn=_alt_screen_status),
     Mode(66, True, "numeric_keypad", invert=True, queryable=True),
     Mode(67, True, "backarrow_key_sends_bs", queryable=True),
     Mode(68, True, "keyboard_usage_mode", queryable=True),  # DECKBUM
     Mode(69, True, "left_right_margin_mode", queryable=True, apply_fn=_declrmm),  # DECLRMM
-    Mode(1000, True, "mouse_tracking", queryable=True),
+    Mode(1000, True, "mouse_tracking", queryable=True, peripheral="mouse"),
     Mode(1004, True, "focus_reporting", queryable=True),
-    Mode(1002, True, apply_fn=_mouse_button_tracking, status_fn=_mouse_button_status),
-    Mode(1003, True, apply_fn=_mouse_any_tracking, status_fn=_mouse_any_status),
-    Mode(1006, True, "mouse_sgr_mode", queryable=True),
+    Mode(1002, True, apply_fn=_mouse_button_tracking, status_fn=_mouse_button_status, peripheral="mouse"),
+    Mode(1003, True, apply_fn=_mouse_any_tracking, status_fn=_mouse_any_status, peripheral="mouse"),
+    Mode(1006, True, "mouse_sgr_mode", queryable=True, peripheral="mouse"),
     Mode(1015, True, "urxvt_mouse", queryable=True),
     Mode(1047, True, apply_fn=_alt_screen, status_fn=_alt_screen_status),
     Mode(1048, True, apply_fn=_save_restore_cursor),
@@ -164,7 +166,7 @@ MODE_SPECS: list[Mode] = [
     Mode(1043, True, "bell_raise", queryable=True),  # raise window on bell
     Mode(1046, True, "allow_alt_screen", queryable=True),  # permit 1047/1049 switching
     Mode(2004, True, "bracketed_paste", queryable=True),
-    Mode(2026, True, "synchronized_output", queryable=True),
+    Mode(2026, True, "synchronized_output", queryable=True, peripheral="sync"),
     Mode(2027, True, "grapheme_clustering", queryable=True),
     Mode(2028, True, "auto_resize_mode", queryable=True),
     Mode(2031, True, "color_scheme_updates", queryable=True),  # report light/dark changes
@@ -190,6 +192,10 @@ class ModeDevice(Device):
     def __init__(self, board: TerminalBoard) -> None:
         self.board = board
         self._set_defaults()
+        # Edge-trigger caches for peripheral present events (None = not yet emitted).
+        self._last_mouse_mode: Optional[tuple[str, bool]] = None
+        self._last_cursor_visible: Optional[bool] = None
+        self._last_sync: Optional[bool] = None
         unsupported = board.personality.unsupported_modes
         self._modes = {mode.key: mode for mode in MODE_SPECS if mode.key not in unsupported}
         self.handlers = {
@@ -294,6 +300,36 @@ class ModeDevice(Device):
         mode = self._modes.get((private, param))
         if mode is not None:
             mode.apply(self, value)
+            if mode.peripheral is not None:
+                self._emit_peripheral(mode.peripheral)
+
+    def _mouse_mode(self) -> tuple[str, bool]:
+        """Derive the requested mouse-tracking mode from the flags (any > button > basic > off)."""
+        if self.mouse_any_tracking:
+            mode = "any"
+        elif self.mouse_button_tracking:
+            mode = "button"
+        elif self.mouse_tracking:
+            mode = "basic"
+        else:
+            mode = "off"
+        return mode, self.mouse_sgr_mode
+
+    def _emit_peripheral(self, peripheral: str) -> None:
+        """Present a peripheral event, edge-triggered on the derived state changing."""
+        if peripheral == "mouse":
+            state = self._mouse_mode()
+            if state != self._last_mouse_mode:
+                self._last_mouse_mode = state
+                self.board.present(MouseModeChanged(*state))
+        elif peripheral == "cursor":
+            if self.cursor_visible != self._last_cursor_visible:
+                self._last_cursor_visible = self.cursor_visible
+                self.board.present(CursorVisibilityChanged(self.cursor_visible))
+        elif peripheral == "sync":
+            if self.synchronized_output != self._last_sync:
+                self._last_sync = self.synchronized_output
+                self.board.present(SyncOutputChanged(self.synchronized_output))
 
     def set_ansi_modes(self, params: tuple[int | None, ...], set_mode: bool) -> None:
         for param in params:

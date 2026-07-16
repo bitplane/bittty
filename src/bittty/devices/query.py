@@ -7,6 +7,17 @@ import base64
 from typing import TYPE_CHECKING
 
 from ..operations import Operation
+from ..present import (
+    ClipboardChanged,
+    ConsoleRequest,
+    CwdChanged,
+    FontChanged,
+    Notification,
+    PointerShapeChanged,
+    PromptMark,
+    WindowRequest,
+    WindowStateChanged,
+)
 from .base import Device
 from ..style import style_to_ansi
 
@@ -31,10 +42,10 @@ class QueryDevice(Device):
             "OSC_CLIPBOARD": self.handle_clipboard,
             "XTWINOPS": self.handle_window_op,
             "DECSCL": self.set_conformance_level,
-            "OSC_CWD": lambda op: setattr(self.board, "cwd", op.args[0]),
-            "OSC_NOTIFY": lambda op: self.board.notifications.append(op.args[0]),
-            "OSC_SHELL_MARK": lambda op: self.board.prompt_marks.append((op.args[0], self.board.cursor.y)),
-            "OSC_POINTER_SHAPE": lambda op: setattr(self.board, "pointer_shape", op.args[0]),
+            "OSC_CWD": self.handle_cwd,
+            "OSC_NOTIFY": self.handle_notify,
+            "OSC_SHELL_MARK": self.handle_shell_mark,
+            "OSC_POINTER_SHAPE": self.handle_pointer_shape,
             "OSC_FONT": self.handle_font,
             "LINUX_SETTERM": self.handle_setterm,
             "DECSWBV": lambda op: setattr(self.board, "warning_bell_volume", op.args[0]),
@@ -44,6 +55,26 @@ class QueryDevice(Device):
             "XTVERSION": self.report_version,
         }
 
+    def handle_cwd(self, operation: Operation) -> None:
+        """OSC 7 — record the reported working directory."""
+        self.board.cwd = operation.args[0]
+        self.board.present(CwdChanged(self.board.cwd))
+
+    def handle_notify(self, operation: Operation) -> None:
+        """OSC 9 / 777 / 99 — a desktop notification."""
+        self.board.notifications.append(operation.args[0])
+        self.board.present(Notification(operation.args[0]))
+
+    def handle_shell_mark(self, operation: Operation) -> None:
+        """OSC 133 — a shell-integration prompt/command mark."""
+        self.board.prompt_marks.append((operation.args[0], self.board.cursor.y))
+        self.board.present(PromptMark(operation.args[0], self.board.cursor.y))
+
+    def handle_pointer_shape(self, operation: Operation) -> None:
+        """OSC 22 — the requested mouse-pointer shape."""
+        self.board.pointer_shape = operation.args[0]
+        self.board.present(PointerShapeChanged(self.board.pointer_shape))
+
     def handle_font(self, operation: Operation) -> None:
         """OSC 50 — set the font, or answer a query (data == '?') with the current one."""
         data = operation.args[0]
@@ -51,6 +82,7 @@ class QueryDevice(Device):
             self.board.host.write(f"\x1b]50;{self.board.font}\x07", flush=True)
         else:
             self.board.font = data
+            self.board.present(FontChanged(data))
 
     def report_version(self, operation: Operation) -> None:
         """XTVERSION (CSI > q) — reply DCS > | name version ST."""
@@ -122,7 +154,8 @@ class QueryDevice(Device):
         try:
             self.board.clipboard[sel] = base64.b64decode(payload).decode("utf-8", errors="replace")
         except ValueError:
-            pass  # ignore malformed base64
+            return  # ignore malformed base64
+        self.board.present(ClipboardChanged(sel, self.board.clipboard[sel]))
 
     def handle_window_op(self, operation: Operation) -> None:
         """XTWINOPS — window manipulation requests and reports; a frontend actuates them."""
@@ -135,18 +168,25 @@ class QueryDevice(Device):
         board = self.board
         if op == 1:  # de-iconify
             board.window_iconified = False
+            self._present_window_state()
         elif op == 2:  # iconify
             board.window_iconified = True
+            self._present_window_state()
         elif op == 3:  # move window to (x, y)
             board.window_position = (at(1), at(2))
+            self._present_window_state()
         elif op in (5, 6, 7):  # raise / lower / refresh
-            board.window_requests.append({5: "raise", 6: "lower", 7: "refresh"}[op])
+            kind = {5: "raise", 6: "lower", 7: "refresh"}[op]
+            board.window_requests.append(kind)
+            board.present(WindowRequest(kind))
         elif op == 8 and len(params) >= 3:  # resize text area to rows;cols
             board.resize(params[2] or board.width, params[1] or board.height)
         elif op == 9:  # maximize (0 restore, 1 maximize)
             board.window_maximized = at(1) == 1
+            self._present_window_state()
         elif op == 10:  # fullscreen (0 off, 1 on, 2 toggle)
             board.window_fullscreen = (not board.window_fullscreen) if at(1) == 2 else at(1) == 1
+            self._present_window_state()
         elif op == 11:  # report iconify state
             board.host.write(f"\x1b[{2 if board.window_iconified else 1}t", flush=True)
         elif op == 13:  # report window position
@@ -164,6 +204,14 @@ class QueryDevice(Device):
             board.title.pop()
         elif op >= 24:  # DECSLPP — resize to Ps (>= 24) lines
             board.resize(board.width, op)
+
+    def _present_window_state(self) -> None:
+        board = self.board
+        self.board.present(
+            WindowStateChanged(
+                board.window_iconified, board.window_maximized, board.window_fullscreen, board.window_position
+            )
+        )
 
     def set_conformance_level(self, operation: Operation) -> None:
         """DECSCL — record the requested conformance level (behaviourally a no-op)."""
@@ -191,12 +239,14 @@ class QueryDevice(Device):
             board.bell_ms = arg
         elif op == 12:
             board.console_requests.append(("switch", arg))
+            board.present(ConsoleRequest("switch", arg))
         elif op == 13:
             board.screen_blanked = False
         elif op == 14:
             board.vesa_powerdown = arg
         elif op == 15:
             board.console_requests.append(("previous", 0))
+            board.present(ConsoleRequest("previous", 0))
         elif op == 16:
             board.cursor_blink_ms = arg
 

@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 from ..caps import DisplayCaps
 from ..operations import Operation
 from ..personality import DEFAULT, Personality
-from ..present import PresentEvent
+from ..present import Bell, PresentEvent
 from ..transports import DisplayPort, HostPort
 from .charset import CharsetDevice
 from .control import ControlDevice
@@ -139,8 +139,9 @@ class TerminalBoard:
         self.terminal.resize(width, height)
 
     def bell(self) -> None:
-        """Ring the terminal bell (UI hook, overridable on the Terminal)."""
+        """Ring the terminal bell: the legacy Terminal hook and a present event."""
         self.terminal.bell()
+        self.present(Bell())
 
     def present(self, event: PresentEvent) -> None:
         """Push a discrete side-effect to the attached frontend (no-op if none)."""
