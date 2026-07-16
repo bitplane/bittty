@@ -37,7 +37,17 @@ class KeyboardDevice:
     def __init__(self, board: TerminalBoard) -> None:
         self.board = board
         self.user_defined_keys: dict[int, str] = {}  # DECUDK: F-number -> sequence
-        self.handlers = {"DECUDK": self.set_user_keys}
+        self.modify_other_keys = 0  # xterm modifyOtherKeys level (0/1/2)
+        self.kitty_flags = 0  # Kitty keyboard progressive-enhancement flags
+        self.kitty_stack: list[int] = []  # Kitty flag stack (push/pop)
+        self.handlers = {
+            "DECUDK": self.set_user_keys,
+            "XTMODKEYS": self.set_modify_keys,
+            "KITTY_PUSH": self.kitty_push,
+            "KITTY_POP": self.kitty_pop,
+            "KITTY_SET": self.kitty_set,
+            "KITTY_QUERY": self.kitty_query,
+        }
 
     def set_user_keys(self, operation: Operation) -> None:
         """DECUDK — install user-defined strings for function keys."""
@@ -45,6 +55,64 @@ class KeyboardDevice:
             fkey = _DECUDK_CODE_TO_FKEY.get(code)
             if fkey is not None:
                 self.user_defined_keys[fkey] = value
+
+    # --- modern keyboard negotiation (xterm modifyOtherKeys, Kitty protocol) --- #
+
+    def set_modify_keys(self, operation: Operation) -> None:
+        """XTMODKEYS (CSI > Pp ; Pv m) — set a key-modifier resource; Pp 4 is modifyOtherKeys."""
+        params = operation.args[0]
+        resource = params[0] if params and params[0] is not None else 0
+        value = params[1] if len(params) > 1 and params[1] is not None else 0
+        if resource == 4:
+            self.modify_other_keys = value
+
+    def kitty_push(self, operation: Operation) -> None:
+        """CSI > flags u — save the current flags and adopt new ones."""
+        self.kitty_stack.append(self.kitty_flags)
+        self.kitty_flags = operation.args[0] & 0b11111
+
+    def kitty_pop(self, operation: Operation) -> None:
+        """CSI < n u — pop n saved flag-states off the stack."""
+        for _ in range(operation.args[0]):
+            self.kitty_flags = self.kitty_stack.pop() if self.kitty_stack else 0
+
+    def kitty_set(self, operation: Operation) -> None:
+        """CSI = flags ; mode u — set (1), add (2) or remove (3) flag bits."""
+        flags, mode = operation.args
+        flags &= 0b11111
+        if mode == 2:
+            self.kitty_flags |= flags
+        elif mode == 3:
+            self.kitty_flags &= ~flags
+        else:  # mode 1 (or default): replace
+            self.kitty_flags = flags
+
+    def kitty_query(self, operation: Operation) -> None:
+        """CSI ? u — report the current Kitty flags as CSI ? flags u."""
+        self.board.host.write(f"{constants.ESC}[?{self.kitty_flags}u", flush=True)
+
+    def _enhanced_key(self, char: str, modifier: int) -> str | None:
+        """Encode a modified character key via the active modern protocol, else None.
+
+        Kitty takes precedence and uses the CSI-u form (CSI code ; mod u); xterm
+        modifyOtherKeys uses CSI 27 ; mod ; code ~. The key code is the base
+        (unshifted) codepoint. Only fires when a modifier is actually present.
+        """
+        if len(char) != 1 or modifier == constants.KEY_MOD_NONE:
+            return None
+        code = ord(char.lower())
+        if self.kitty_flags:
+            return f"{constants.ESC}[{code};{modifier}u"
+        if self.modify_other_keys >= 1:
+            return f"{constants.ESC}[27;{modifier};{code}~"
+        return None
+
+    def reset(self, hard: bool = True) -> None:
+        """RIS clears the modern-keyboard negotiation state."""
+        if hard:
+            self.modify_other_keys = 0
+            self.kitty_flags = 0
+            self.kitty_stack = []
 
     def _csi_key(self, body: str, modifier: int) -> str:
         """Build a CSI cursor/nav sequence, folding in a modifier if the terminal supports it."""
@@ -70,6 +138,11 @@ class KeyboardDevice:
                 self.input(constants.BS)
             else:
                 self.input(constants.DEL)
+            return
+
+        enhanced = self._enhanced_key(char, modifier)
+        if enhanced is not None:  # modifyOtherKeys / Kitty encode modified keys explicitly
+            self.input(enhanced)
             return
 
         if modifier == constants.KEY_MOD_CTRL and len(char) == 1:

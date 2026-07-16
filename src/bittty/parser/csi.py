@@ -167,6 +167,23 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
         if final_char == "u":  # DECSMBV - Set Margin Bell Volume
             return Operation("DECSMBV", (volume,), raw_csi_data)
 
+    if final_char == "m" and ">" in intermediates:  # XTMODKEYS - set key-modifier options
+        return Operation("XTMODKEYS", (tuple(params),), raw_csi_data)
+
+    if final_char == "u":  # Kitty keyboard protocol (private markers) or SCORC restore-cursor
+        if ">" in intermediates:  # push flags onto the stack
+            return Operation("KITTY_PUSH", (params[0] if params and params[0] is not None else 0,), raw_csi_data)
+        if "<" in intermediates:  # pop n entries off the stack
+            return Operation("KITTY_POP", (params[0] if params and params[0] is not None else 1,), raw_csi_data)
+        if "=" in intermediates:  # set flags with a mode (1 set / 2 add / 3 remove)
+            flags = params[0] if params and params[0] is not None else 0
+            mode = params[1] if len(params) > 1 and params[1] is not None else 1
+            return Operation("KITTY_SET", (flags, mode), raw_csi_data)
+        if "?" in intermediates:  # query current flags
+            return Operation("KITTY_QUERY", (), raw_csi_data)
+        if not intermediates:
+            return Operation("RESTORE", raw=raw_csi_data)
+
     if final_char in ("h", "l"):  # SM/RM - Set/Reset Mode
         set_mode = final_char == "h"
         private = "?" in intermediates
@@ -287,9 +304,6 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
 
     if final_char == "s":  # Save Cursor
         return Operation("SAVE", raw=raw_csi_data)
-
-    if final_char == "u":  # Restore Cursor
-        return Operation("RESTORE", raw=raw_csi_data)
 
     if final_char == "b":  # REP - Repeat
         count = params[0] if params and params[0] is not None else 1

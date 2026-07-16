@@ -135,6 +135,7 @@ class TerminalBoard:
         self.cursor.reset(hard=hard)
         self.screen.reset(hard=hard)
         self.printer.reset(hard=hard)
+        self.keyboard.reset(hard=hard)
         if hard:
             self.charset.reset()
             self.palette.reset()
