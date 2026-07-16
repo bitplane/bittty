@@ -63,6 +63,19 @@ def test_vt220_reports_xterm_era_modes_as_unrecognised():
     assert terminal.board.modes.grapheme_clustering is False
 
 
+def test_decrqm_now_reports_mouse_and_paste_modes():
+    # These modes were previously supported but silently answered DECRQM 0.
+    terminal, parser, transport = _term()
+    parser.feed("\x1b[?1000h\x1b[?1000$p")  # mouse tracking on
+    assert transport.data[-1] == "\x1b[?1000;1$y"
+    parser.feed("\x1b[?1006h\x1b[?1006$p")  # SGR mouse encoding on
+    assert transport.data[-1] == "\x1b[?1006;1$y"
+    parser.feed("\x1b[?1002h\x1b[?1002$p")  # button-event tracking on (apply_fn-only mode)
+    assert transport.data[-1] == "\x1b[?1002;1$y"
+    parser.feed("\x1b[?2004$p")  # bracketed paste, currently reset
+    assert transport.data[-1] == "\x1b[?2004;2$y"
+
+
 def test_ansi_keyboard_action_mode():
     terminal, parser, _ = _term()
     parser.feed("\x1b[2h")  # KAM (non-private ANSI mode 2)

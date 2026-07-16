@@ -105,6 +105,14 @@ def _alt_screen_status(device: ModeDevice) -> int:
     return 1 if device.board.screen.in_alt_screen else 2
 
 
+def _mouse_button_status(device: ModeDevice) -> int:
+    return 1 if device.mouse_button_tracking else 2
+
+
+def _mouse_any_status(device: ModeDevice) -> int:
+    return 1 if device.mouse_any_tracking else 2
+
+
 # The full mode repertoire. A personality may omit any of these.
 MODE_SPECS: list[Mode] = [
     # ANSI modes (autowrap and cursor visibility are DEC *private* 7/25, not ANSI)
@@ -112,31 +120,31 @@ MODE_SPECS: list[Mode] = [
     Mode(4, False, "insert_mode", queryable=True),
     Mode(12, False, "local_echo", invert=True, queryable=True),
     Mode(20, False, "linefeed_newline_mode", queryable=True),
-    Mode(constants.DECKPAM_APPLICATION_KEYPAD, False, "application_keypad"),
+    Mode(constants.DECKPAM_APPLICATION_KEYPAD, False, "application_keypad", queryable=True),
     # DEC private modes
     Mode(1, True, "cursor_application_mode", queryable=True),
     Mode(2, True, "ansi_mode", queryable=True),
     Mode(3, True, apply_fn=_deccolm, status_fn=_column_status),
-    Mode(4, True, "scroll_mode"),
-    Mode(5, True, "reverse_screen"),
+    Mode(4, True, "scroll_mode", queryable=True),
+    Mode(5, True, "reverse_screen", queryable=True),
     Mode(6, True, "origin_mode", queryable=True),
     Mode(7, True, "auto_wrap", queryable=True),
-    Mode(8, True, "auto_repeat"),
-    Mode(9, True, "mouse_tracking"),
-    Mode(12, True, "cursor_blinking"),
-    Mode(20, True, "linefeed_newline_mode"),
+    Mode(8, True, "auto_repeat", queryable=True),
+    Mode(9, True, "mouse_tracking", queryable=True),
+    Mode(12, True, "cursor_blinking", queryable=True),
+    Mode(20, True, "linefeed_newline_mode", queryable=True),
     Mode(25, True, "cursor_visible", queryable=True),
     Mode(47, True, apply_fn=_alt_screen, status_fn=_alt_screen_status),
-    Mode(66, True, "numeric_keypad", invert=True),
-    Mode(67, True, "backarrow_key_sends_bs"),
+    Mode(66, True, "numeric_keypad", invert=True, queryable=True),
+    Mode(67, True, "backarrow_key_sends_bs", queryable=True),
     Mode(68, True, "keyboard_usage_mode", queryable=True),  # DECKBUM
     Mode(69, True, "left_right_margin_mode", queryable=True, apply_fn=_declrmm),  # DECLRMM
-    Mode(1000, True, "mouse_tracking"),
+    Mode(1000, True, "mouse_tracking", queryable=True),
     Mode(1004, True, "focus_reporting", queryable=True),
-    Mode(1002, True, apply_fn=_mouse_button_tracking),
-    Mode(1003, True, apply_fn=_mouse_any_tracking),
-    Mode(1006, True, "mouse_sgr_mode"),
-    Mode(1015, True, "urxvt_mouse"),
+    Mode(1002, True, apply_fn=_mouse_button_tracking, status_fn=_mouse_button_status),
+    Mode(1003, True, apply_fn=_mouse_any_tracking, status_fn=_mouse_any_status),
+    Mode(1006, True, "mouse_sgr_mode", queryable=True),
+    Mode(1015, True, "urxvt_mouse", queryable=True),
     Mode(1047, True, apply_fn=_alt_screen, status_fn=_alt_screen_status),
     Mode(1048, True, apply_fn=_save_restore_cursor),
     Mode(1049, True, apply_fn=_alt_screen_and_cursor, status_fn=_alt_screen_status),
@@ -155,7 +163,7 @@ MODE_SPECS: list[Mode] = [
     Mode(1042, True, "bell_urgency", queryable=True),  # urgency hint on bell
     Mode(1043, True, "bell_raise", queryable=True),  # raise window on bell
     Mode(1046, True, "allow_alt_screen", queryable=True),  # permit 1047/1049 switching
-    Mode(2004, True, "bracketed_paste"),
+    Mode(2004, True, "bracketed_paste", queryable=True),
     Mode(2026, True, "synchronized_output", queryable=True),
     Mode(2027, True, "grapheme_clustering", queryable=True),
     Mode(2028, True, "auto_resize_mode", queryable=True),
