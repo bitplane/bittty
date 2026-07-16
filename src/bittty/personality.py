@@ -42,6 +42,28 @@ class Personality:
     keymap: KeyMap = field(default=XTERM_KEYMAP)
 
 
+# xterm-era private modes that postdate the DEC hardware terminals modelled here, so a
+# VT100/VT220 must report them as unrecognised (DECRQM status 0).
+_XTERM_ERA_MODES = frozenset(
+    {
+        (True, 40),
+        (True, 45),
+        (True, 80),
+        (True, 1001),
+        (True, 1005),
+        (True, 1007),
+        (True, 1016),
+        (True, 1036),
+        (True, 1039),
+        (True, 1042),
+        (True, 1043),
+        (True, 1046),
+        (True, 2027),
+        (True, 2031),
+    }
+)
+
+
 # Primary DA responses per vt100.net / xterm ctlseqs.
 XTERM = Personality(
     name="xterm",
@@ -57,7 +79,7 @@ VT100 = Personality(
     # A VT100 predates xterm-era private modes such as bracketed paste (2004)
     # and SGR mouse reporting (1006), and has no notion of bittty's auto-resize
     # (2028); it does not recognise any of them.
-    unsupported_modes=frozenset({(True, 2004), (True, 1006), (True, 2028)}),
+    unsupported_modes=frozenset({(True, 2004), (True, 1006), (True, 2028)}) | _XTERM_ERA_MODES,
     # VT100 knows ASCII, UK, DEC Special Graphics and the alternate ROM sets;
     # DEC Supplemental and the national replacement sets arrived with the VT220.
     charsets=frozenset({"B", "A", "0", "1", "2"}),
@@ -87,7 +109,8 @@ VT220 = Personality(
             (True, 2004),
             (True, 2028),
         }
-    ),
+    )
+    | _XTERM_ERA_MODES,
     # VT220 adds DEC Supplemental ("<") and the national replacement sets over
     # the VT100, but DEC Technical (">") is a later (VT240/VT330) charset.
     charsets=frozenset(

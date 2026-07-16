@@ -1,0 +1,71 @@
+"""Extended xterm private modes: storage, DECRQM self-reporting, and personality gating."""
+
+from bittty.parser import Parser
+from bittty.personality import VT220
+from bittty.terminal import Terminal
+
+
+class RecordingTransport:
+    def __init__(self):
+        self.data = []
+
+    def write(self, data):
+        self.data.append(data)
+
+    def flush(self):
+        pass
+
+
+def _term(personality=None):
+    kwargs = {"width": 20, "height": 5}
+    if personality is not None:
+        kwargs["personality"] = personality
+    terminal = Terminal(**kwargs)
+    transport = RecordingTransport()
+    terminal.board.host.attach(transport)
+    return terminal, Parser(terminal.board), transport
+
+
+def test_extended_modes_are_stored():
+    terminal, parser, _ = _term()
+    modes = terminal.board.modes
+    parser.feed("\x1b[?45h")  # reverse wraparound on
+    parser.feed("\x1b[?2027h")  # grapheme clustering on
+    parser.feed("\x1b[?1042h")  # bell urgency on
+    assert modes.reverse_wraparound is True
+    assert modes.grapheme_clustering is True
+    assert modes.bell_urgency is True
+    parser.feed("\x1b[?45l")
+    assert modes.reverse_wraparound is False
+
+
+def test_allow_alt_screen_defaults_on():
+    terminal, _, _ = _term()
+    assert terminal.board.modes.allow_alt_screen is True
+
+
+def test_decrqm_reports_extended_modes_on_xterm():
+    terminal, parser, transport = _term()
+    parser.feed("\x1b[?2031h")  # colour-scheme-change reporting on
+    parser.feed("\x1b[?2031$p")  # DECRQM
+    assert transport.data[-1] == "\x1b[?2031;1$y"  # 1 = set
+    parser.feed("\x1b[?2031l")
+    parser.feed("\x1b[?2031$p")
+    assert transport.data[-1] == "\x1b[?2031;2$y"  # 2 = reset
+
+
+def test_vt220_reports_xterm_era_modes_as_unrecognised():
+    terminal, parser, transport = _term(VT220)
+    parser.feed("\x1b[?2027$p")  # DECRQM for grapheme clustering
+    assert transport.data[-1] == "\x1b[?2027;0$y"  # 0 = not recognised
+    # and setting it on a VT220 is a no-op (mode not in its repertoire)
+    parser.feed("\x1b[?2027h")
+    assert terminal.board.modes.grapheme_clustering is False
+
+
+def test_ansi_keyboard_action_mode():
+    terminal, parser, _ = _term()
+    parser.feed("\x1b[2h")  # KAM (non-private ANSI mode 2)
+    assert terminal.board.modes.keyboard_action_mode is True
+    parser.feed("\x1b[2l")
+    assert terminal.board.modes.keyboard_action_mode is False

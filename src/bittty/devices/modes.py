@@ -108,6 +108,7 @@ def _alt_screen_status(device: ModeDevice) -> int:
 # The full mode repertoire. A personality may omit any of these.
 MODE_SPECS: list[Mode] = [
     # ANSI modes (autowrap and cursor visibility are DEC *private* 7/25, not ANSI)
+    Mode(2, False, "keyboard_action_mode", queryable=True),  # KAM
     Mode(4, False, "insert_mode", queryable=True),
     Mode(12, False, "local_echo", invert=True, queryable=True),
     Mode(20, False, "linefeed_newline_mode", queryable=True),
@@ -139,9 +140,26 @@ MODE_SPECS: list[Mode] = [
     Mode(1047, True, apply_fn=_alt_screen, status_fn=_alt_screen_status),
     Mode(1048, True, apply_fn=_save_restore_cursor),
     Mode(1049, True, apply_fn=_alt_screen_and_cursor, status_fn=_alt_screen_status),
+    # Extended xterm private modes — mostly stored state a frontend actuates.
+    Mode(40, True, "allow_column_mode", queryable=True),  # permit DECCOLM 80<->132
+    Mode(42, True, "national_charset_mode", queryable=True),  # DECNRCM
+    Mode(44, True, "margin_bell", queryable=True),
+    Mode(45, True, "reverse_wraparound", queryable=True),  # xterm reverse-wraparound
+    Mode(80, True, "sixel_display_mode", queryable=True),  # DECSDM
+    Mode(1001, True, "mouse_highlight_tracking", queryable=True),  # VT200 hilite tracking
+    Mode(1005, True, "mouse_utf8_mode", queryable=True),
+    Mode(1007, True, "alternate_scroll_mode", queryable=True),
+    Mode(1016, True, "mouse_pixel_mode", queryable=True),  # SGR-pixels
+    Mode(1036, True, "meta_sends_escape", queryable=True),
+    Mode(1039, True, "alt_sends_escape", queryable=True),
+    Mode(1042, True, "bell_urgency", queryable=True),  # urgency hint on bell
+    Mode(1043, True, "bell_raise", queryable=True),  # raise window on bell
+    Mode(1046, True, "allow_alt_screen", queryable=True),  # permit 1047/1049 switching
     Mode(2004, True, "bracketed_paste"),
     Mode(2026, True, "synchronized_output", queryable=True),
+    Mode(2027, True, "grapheme_clustering", queryable=True),
     Mode(2028, True, "auto_resize_mode", queryable=True),
+    Mode(2031, True, "color_scheme_updates", queryable=True),  # report light/dark changes
 ]
 
 
@@ -191,6 +209,24 @@ class ModeDevice(Device):
         self.focus_reporting = False
         self.synchronized_output = False
         self.bracketed_paste = False
+        # Extended xterm private modes (stored state; frontend actuates most).
+        self.keyboard_action_mode = False
+        self.allow_column_mode = False
+        self.national_charset_mode = False
+        self.margin_bell = False
+        self.reverse_wraparound = False
+        self.sixel_display_mode = False
+        self.mouse_highlight_tracking = False
+        self.mouse_utf8_mode = False
+        self.alternate_scroll_mode = False
+        self.mouse_pixel_mode = False
+        self.meta_sends_escape = False
+        self.alt_sends_escape = False
+        self.bell_urgency = False
+        self.bell_raise = False
+        self.allow_alt_screen = True  # alt-screen switching permitted by default
+        self.grapheme_clustering = False
+        self.color_scheme_updates = False
 
     def reset(self, hard: bool = True) -> None:
         """Reset modes. hard restores every flag (RIS); soft is the DECSTR subset."""
