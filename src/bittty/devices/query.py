@@ -125,20 +125,45 @@ class QueryDevice(Device):
             pass  # ignore malformed base64
 
     def handle_window_op(self, operation: Operation) -> None:
-        """XTWINOPS — report the terminal size, resize it, or push/pop the title stack."""
+        """XTWINOPS — window manipulation requests and reports; a frontend actuates them."""
         params = operation.args[0]
-        op = params[0] if params and params[0] is not None else 0
-        if op in (18, 19):  # report text-area / screen size in characters
-            code = 8 if op == 18 else 9
-            self.board.host.write(f"\x1b[{code};{self.board.height};{self.board.width}t", flush=True)
+
+        def at(i: int) -> int:
+            return params[i] if len(params) > i and params[i] is not None else 0
+
+        op = at(0)
+        board = self.board
+        if op == 1:  # de-iconify
+            board.window_iconified = False
+        elif op == 2:  # iconify
+            board.window_iconified = True
+        elif op == 3:  # move window to (x, y)
+            board.window_position = (at(1), at(2))
+        elif op in (5, 6, 7):  # raise / lower / refresh
+            board.window_requests.append({5: "raise", 6: "lower", 7: "refresh"}[op])
         elif op == 8 and len(params) >= 3:  # resize text area to rows;cols
-            rows = params[1] or self.board.height
-            cols = params[2] or self.board.width
-            self.board.resize(cols, rows)
+            board.resize(params[2] or board.width, params[1] or board.height)
+        elif op == 9:  # maximize (0 restore, 1 maximize)
+            board.window_maximized = at(1) == 1
+        elif op == 10:  # fullscreen (0 off, 1 on, 2 toggle)
+            board.window_fullscreen = (not board.window_fullscreen) if at(1) == 2 else at(1) == 1
+        elif op == 11:  # report iconify state
+            board.host.write(f"\x1b[{2 if board.window_iconified else 1}t", flush=True)
+        elif op == 13:  # report window position
+            x, y = board.window_position
+            board.host.write(f"\x1b[3;{x};{y}t", flush=True)
+        elif op in (18, 19):  # report text-area / screen size in characters
+            board.host.write(f"\x1b[{8 if op == 18 else 9};{board.height};{board.width}t", flush=True)
+        elif op == 20:  # report icon label
+            board.host.write(f"\x1b]L{board.title.icon_title}\x1b\\", flush=True)
+        elif op == 21:  # report window title
+            board.host.write(f"\x1b]l{board.title.title}\x1b\\", flush=True)
         elif op == 22:  # save title to the stack
-            self.board.title.push()
+            board.title.push()
         elif op == 23:  # restore title from the stack
-            self.board.title.pop()
+            board.title.pop()
+        elif op >= 24:  # DECSLPP — resize to Ps (>= 24) lines
+            board.resize(board.width, op)
 
     def set_conformance_level(self, operation: Operation) -> None:
         """DECSCL — record the requested conformance level (behaviourally a no-op)."""
