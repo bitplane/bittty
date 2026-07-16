@@ -2,7 +2,7 @@
 
 from bittty import constants
 from bittty.parser import Parser
-from bittty.personality import GNOME, SCREEN, TMUX, URXVT, XTERM, get_personality
+from bittty.personality import GNOME, KITTY, SCREEN, TMUX, URXVT, XTERM, get_personality
 from bittty.terminal import Terminal
 
 
@@ -36,6 +36,13 @@ def test_gnome_reports_its_live_device_attributes():
     parser.feed("\x1b[c")  # DA1 — verified against gnome-terminal (VTE 0.84)
     parser.feed("\x1b[>c")  # DA2 — type 61, firmware 8400 = VTE version
     assert transport.data == ["\x1b[?61;1;21;22;28c", "\x1b[>61;8400;1c"]
+
+
+def test_kitty_reports_its_live_device_attributes():
+    _, parser, transport = _term(KITTY)
+    parser.feed("\x1b[c")  # DA1 — captured from kitty
+    parser.feed("\x1b[>c")  # DA2 — firmware 4000 = kitty 0.40
+    assert transport.data == ["\x1b[?62;52;c", "\x1b[>1;4000;45c"]
 
 
 def test_screen_and_urxvt_secondary_da_types():
@@ -83,10 +90,11 @@ def test_get_personality_resolves_term_names():
     assert get_personality("rxvt-unicode-256color") is URXVT
     assert get_personality("xterm-256color") is XTERM
     assert get_personality("gnome-256color") is GNOME
+    assert get_personality("xterm-kitty") is KITTY  # kitty sets a distinctive TERM
 
 
 def test_get_personality_falls_back_through_prefixes():
-    assert get_personality("xterm-kitty") is XTERM  # unknown suffix -> nearest family
+    assert get_personality("xterm-ghostty") is XTERM  # unknown suffix -> nearest family
     assert get_personality("totally-unknown") is XTERM  # -> default
     assert get_personality("") is XTERM
     assert get_personality(None) is XTERM

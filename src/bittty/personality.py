@@ -166,6 +166,18 @@ GNOME = Personality(
     keymap=XTERM_KEYMAP,
 )
 
+# kitty — live-verified (TERM=xterm-kitty). DA2 firmware field 4000 is the kitty version
+# (0.40). DA1 as captured. Truecolour; xterm-family base keymap, plus the Kitty keyboard
+# protocol handled by the keyboard device.
+KITTY = Personality(
+    name="kitty",
+    da1_response="\033[?62;52;c",
+    da2_response="\033[>1;4000;45c",
+    da3_response=None,
+    color_depth="truecolor",
+    keymap=XTERM_KEYMAP,
+)
+
 DEFAULT = XTERM
 
 # Resolve a $TERM name to a personality (see get_personality).
@@ -187,6 +199,8 @@ PERSONALITIES: dict[str, Personality] = {
     "gnome-256color": GNOME,
     "vte": GNOME,
     "vte-256color": GNOME,
+    "kitty": KITTY,
+    "xterm-kitty": KITTY,
 }
 
 
