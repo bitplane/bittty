@@ -271,11 +271,14 @@ class ModeDevice(Device):
         """Reset modes. hard restores every flag (RIS); soft is the DECSTR subset."""
         if hard:
             self._set_defaults()
-            return
-        # DECSTR soft reset — the widely-agreed subset (SGR is reset by the style device).
-        self.insert_mode = False
-        self.origin_mode = False
-        self.cursor_visible = True
+        else:
+            # DECSTR soft reset — the widely-agreed subset (SGR is reset by the style device).
+            self.insert_mode = False
+            self.origin_mode = False
+            self.cursor_visible = True
+        # A reset can turn peripheral state off (e.g. RIS with mouse on); tell the frontend.
+        for peripheral in ("mouse", "cursor", "sync"):
+            self._emit_peripheral(peripheral)
 
     # --- dispatch --- #
 

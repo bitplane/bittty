@@ -1,13 +1,6 @@
-import importlib.util
-from pathlib import Path
+"""The passthrough frontend's input demux: SGR mouse interception vs. raw passthrough."""
 
-
-def load_demo_module():
-    demo_path = Path(__file__).parents[2] / "demo" / "terminal.py"
-    spec = importlib.util.spec_from_file_location("bittty_demo_terminal", demo_path)
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+from bittty.frontends.passthrough import PassthroughDisplay
 
 
 class FakeTerminal:
@@ -23,8 +16,8 @@ class FakeTerminal:
 
 
 def make_frontend():
-    module = load_demo_module()
-    frontend = module.StdoutFrontend.__new__(module.StdoutFrontend)
+    # Bypass __init__ (no real Terminal/tty needed to test the input demux).
+    frontend = PassthroughDisplay.__new__(PassthroughDisplay)
     frontend.terminal = FakeTerminal()
     frontend.input_sequence_buffer = ""
     return frontend
