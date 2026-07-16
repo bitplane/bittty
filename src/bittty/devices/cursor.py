@@ -20,6 +20,7 @@ class CursorDevice:
         self.saved_x = 0
         self.saved_y = 0
         self.saved_ansi_code = ""
+        self.shape = "block"  # block | underline | bar (DECSCUSR)
         self.tab_stops = set(range(8, board.width, 8))
         self.handlers = {
             "CUP": lambda op: self.move_to(*op.args),
@@ -29,7 +30,16 @@ class CursorDevice:
             "CUF": lambda op: self.move_forward(op.args[0]),
             "CUB": lambda op: self.move_back(op.args[0]),
             "CHA": lambda op: self.set_position(op.args[0], None),
+            "HPA": lambda op: self.set_position(op.args[0], None),
+            "HPR": lambda op: self.move_forward(op.args[0]),
             "VPA": lambda op: self.move_to(None, op.args[0]),
+            "VPR": lambda op: self.move_down(op.args[0]),
+            "CNL": lambda op: self.next_line(op.args[0]),
+            "CPL": lambda op: self.previous_line(op.args[0]),
+            "CHT": lambda op: self.forward_tab(op.args[0]),
+            "CBT": lambda op: self.backward_tab(op.args[0]),
+            "TBC": lambda op: self.clear_tab_stop(op.args[0]),
+            "DECSCUSR": lambda op: self.set_cursor_style(op.args[0]),
             "SAVE": lambda op: self.save(),
             "RESTORE": lambda op: self.restore(),
         }
@@ -121,6 +131,46 @@ class CursorDevice:
     def horizontal_tab(self) -> None:
         """Advance to the next horizontal tab stop."""
         self.x = self.next_tab_stop()
+
+    def previous_tab_stop(self) -> int:
+        """Return the nearest tab stop left of the cursor, or column 0."""
+        for stop in sorted(self.tab_stops, reverse=True):
+            if stop < self.x:
+                return stop
+        return 0
+
+    def forward_tab(self, count: int) -> None:
+        """CHT — advance `count` tab stops."""
+        for _ in range(count):
+            self.horizontal_tab()
+
+    def backward_tab(self, count: int) -> None:
+        """CBT — retreat `count` tab stops."""
+        for _ in range(count):
+            self.x = self.previous_tab_stop()
+
+    def clear_tab_stop(self, mode: int) -> None:
+        """TBC — clear the tab stop at the cursor (0) or all tab stops (3)."""
+        if mode == 3:
+            self.tab_stops.clear()
+        else:
+            self.tab_stops.discard(self.x)
+
+    def next_line(self, count: int) -> None:
+        """CNL — move to the first column, `count` lines down (no scroll)."""
+        self.move_down(count)
+        self.carriage_return()
+
+    def previous_line(self, count: int) -> None:
+        """CPL — move to the first column, `count` lines up (no scroll)."""
+        self.move_up(count)
+        self.carriage_return()
+
+    def set_cursor_style(self, style: int) -> None:
+        """DECSCUSR — set cursor shape and blink from the style parameter."""
+        shapes = {0: "block", 1: "block", 2: "block", 3: "underline", 4: "underline", 5: "bar", 6: "bar"}
+        self.shape = shapes.get(style, "block")
+        self.board.modes.cursor_blinking = style in (0, 1, 3, 5)
 
     def prepare_for_text_write(self) -> None:
         """Apply wrapping or clipping before writing at the cursor."""

@@ -111,6 +111,10 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
     if final_char == "p" and "!" in intermediates:  # DECSTR - Soft Terminal Reset
         return Operation("DECSTR", (), raw_csi_data)
 
+    if final_char == "q" and " " in intermediates:  # DECSCUSR - Set Cursor Style
+        style = params[0] if params and params[0] is not None else 0
+        return Operation("DECSCUSR", (style,), raw_csi_data)
+
     if final_char in ("h", "l"):  # SM/RM - Set/Reset Mode
         set_mode = final_char == "h"
         private = "?" in intermediates
@@ -149,6 +153,38 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
     if final_char == "d":  # VPA - Vertical Position Absolute
         row = (params[0] if params and params[0] is not None else 1) - 1
         return Operation("VPA", (row,), raw_csi_data)
+
+    if final_char == "`":  # HPA - Horizontal Position Absolute
+        col = (params[0] if params and params[0] is not None else 1) - 1
+        return Operation("HPA", (col,), raw_csi_data)
+
+    if final_char == "E":  # CNL - Cursor Next Line
+        count = params[0] if params and params[0] is not None else 1
+        return Operation("CNL", (count,), raw_csi_data)
+
+    if final_char == "F":  # CPL - Cursor Previous Line
+        count = params[0] if params and params[0] is not None else 1
+        return Operation("CPL", (count,), raw_csi_data)
+
+    if final_char == "a":  # HPR - Horizontal Position Relative
+        count = params[0] if params and params[0] is not None else 1
+        return Operation("HPR", (count,), raw_csi_data)
+
+    if final_char == "e":  # VPR - Vertical Position Relative
+        count = params[0] if params and params[0] is not None else 1
+        return Operation("VPR", (count,), raw_csi_data)
+
+    if final_char == "I":  # CHT - Cursor Horizontal (Forward) Tab
+        count = params[0] if params and params[0] is not None else 1
+        return Operation("CHT", (count,), raw_csi_data)
+
+    if final_char == "Z":  # CBT - Cursor Backward Tab
+        count = params[0] if params and params[0] is not None else 1
+        return Operation("CBT", (count,), raw_csi_data)
+
+    if final_char == "g":  # TBC - Tab Clear
+        mode = params[0] if params and params[0] is not None else 0
+        return Operation("TBC", (mode,), raw_csi_data)
 
     if final_char == "J":  # ED - Erase in Display
         mode = params[0] if params and params[0] is not None else 0

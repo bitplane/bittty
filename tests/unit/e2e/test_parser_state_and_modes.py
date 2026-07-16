@@ -107,8 +107,8 @@ def test_malformed_csi_recovery(terminal):
     """Test that parser recovers from malformed CSI sequences."""
     parser = Parser(terminal.board)
 
-    # Feed malformed CSI followed by normal text
-    parser.feed("Start\x1b[999;999;999ZEnd")  # Unknown CSI sequence
+    # Feed an unhandled CSI (final byte W) followed by normal text
+    parser.feed("Start\x1b[999;999;999WEnd")  # Unknown CSI sequence
 
     # Should still write the text parts
     text_content = terminal.board.screen.current_buffer.get_line_text(0).strip()
