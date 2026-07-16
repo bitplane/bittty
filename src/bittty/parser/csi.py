@@ -100,6 +100,8 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
         param = params[0] if params and params[0] is not None else 0
         if ">" in intermediates:
             return Operation("DA2", (param,), raw_csi_data)
+        if "=" in intermediates:
+            return Operation("DA3", (param,), raw_csi_data)
         if not intermediates and param == 0:
             return Operation("DA1", (param,), raw_csi_data)
 
@@ -117,6 +119,10 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
 
     if final_char == "p" and '"' in intermediates:  # DECSCL - Set Conformance Level
         return Operation("DECSCL", (tuple(params),), raw_csi_data)
+
+    if final_char == "q" and '"' in intermediates:  # DECSCA - Select Character Protection
+        mode = params[0] if params and params[0] is not None else 0
+        return Operation("DECSCA", (mode,), raw_csi_data)
 
     if final_char in ("h", "l"):  # SM/RM - Set/Reset Mode
         set_mode = final_char == "h"
@@ -192,13 +198,13 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
     if final_char == "t":  # XTWINOPS - Window manipulation / reports
         return Operation("XTWINOPS", (tuple(params),), raw_csi_data)
 
-    if final_char == "J":  # ED - Erase in Display
+    if final_char == "J":  # ED / DECSED - Erase in Display (selective with ?)
         mode = params[0] if params and params[0] is not None else 0
-        return Operation("ED", (mode,), raw_csi_data)
+        return Operation("DECSED" if "?" in intermediates else "ED", (mode,), raw_csi_data)
 
-    if final_char == "K":  # EL - Erase in Line
+    if final_char == "K":  # EL / DECSEL - Erase in Line (selective with ?)
         mode = params[0] if params and params[0] is not None else 0
-        return Operation("EL", (mode,), raw_csi_data)
+        return Operation("DECSEL" if "?" in intermediates else "EL", (mode,), raw_csi_data)
 
     if final_char == "L":  # IL - Insert Lines
         count = params[0] if params and params[0] is not None else 1

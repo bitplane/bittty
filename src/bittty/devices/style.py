@@ -22,6 +22,7 @@ class StyleDevice:
         self.handlers = {
             "SGR": lambda op: self.apply_sgr(*op.args),
             "OSC_HYPERLINK": lambda op: self.set_hyperlink(op.args[0]),
+            "DECSCA": lambda op: self.set_protected(op.args[0]),
         }
 
     @property
@@ -36,8 +37,8 @@ class StyleDevice:
     def apply_sgr(self, style: Style, reset: bool = False) -> None:
         """Apply an SGR style update; a monochrome terminal drops colour attributes."""
         merged = style if reset else self.current.merge(style)
-        # SGR (including reset) never affects the active hyperlink.
-        merged = replace(merged, hyperlink=self.current.hyperlink)
+        # SGR (including reset) never affects the active hyperlink or protection.
+        merged = replace(merged, hyperlink=self.current.hyperlink, protected=self.current.protected)
         if self._monochrome:
             merged = replace(merged, fg=None, bg=None)
         self.current = merged
@@ -45,6 +46,10 @@ class StyleDevice:
     def set_hyperlink(self, uri: str) -> None:
         """OSC 8 — start (non-empty URI) or end (empty) the active hyperlink."""
         self.current = replace(self.current, hyperlink=uri or None)
+
+    def set_protected(self, mode: int) -> None:
+        """DECSCA — 1 protects subsequent characters from selective erase; 0/2 clears it."""
+        self.current = replace(self.current, protected=True if mode == 1 else None)
 
     def reset(self) -> None:
         """Reset to the default style."""

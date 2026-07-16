@@ -82,6 +82,7 @@ class TerminalBoard:
             self.charset,
             self.control,
             self.cursor,
+            self.keyboard,
             self.modes,
             self.palette,
             self.screen,

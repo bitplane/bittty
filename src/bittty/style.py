@@ -62,6 +62,7 @@ class Style:
     overline: Optional[bool] = None
     underline_color: Optional[Color] = None
     hyperlink: Optional[str] = None  # OSC 8 target URI (not an SGR attribute)
+    protected: Optional[bool] = None  # DECSCA: shielded from selective erase
 
     def merge(self, other: Style) -> Style:
         """Merge another style into this one. The other style takes precedence."""
@@ -88,6 +89,7 @@ class Style:
             overline=merge_attr(self.overline, other.overline),
             underline_color=other.underline_color if other.underline_color is not None else self.underline_color,
             hyperlink=merge_attr(self.hyperlink, other.hyperlink),
+            protected=merge_attr(self.protected, other.protected),
         )
 
     @lru_cache(maxsize=10000)

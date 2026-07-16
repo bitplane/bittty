@@ -27,6 +27,8 @@ class ScreenDevice:
         self.handlers = {
             "ED": lambda op: self.clear_screen(op.args[0]),
             "EL": lambda op: self.clear_line(op.args[0]),
+            "DECSED": lambda op: self.selective_erase_display(op.args[0]),
+            "DECSEL": lambda op: self.selective_erase_line(op.args[0]),
             "IL": lambda op: self.insert_lines(op.args[0]),
             "DL": lambda op: self.delete_lines(op.args[0]),
             "ICH": lambda op: self.insert_characters(op.args[0], self.board.style.current),
@@ -114,6 +116,36 @@ class ScreenDevice:
     def clear_rect(self, x1: int, y1: int, x2: int, y2: int, ansi_code: str = "") -> None:
         """Clear a rectangular region."""
         self.current_buffer.clear_region(x1, y1, x2, y2, ansi_code)
+
+    def _selective_clear(self, x: int, y: int) -> None:
+        """Clear a cell only if it is not DECSCA-protected."""
+        if not self.current_buffer.get_cell(x, y)[0].protected:
+            self.current_buffer.set_cell(x, y, " ", self.board.style.background_ansi())
+
+    def selective_erase_display(self, mode: int) -> None:
+        """DECSED — erase in display, leaving DECSCA-protected characters."""
+        cx, cy, w, h = self.board.cursor.x, self.board.cursor.y, self.board.width, self.board.height
+        if mode == constants.ERASE_FROM_CURSOR_TO_END:
+            rows = [(cx, w, cy)] + [(0, w, y) for y in range(cy + 1, h)]
+        elif mode == constants.ERASE_FROM_START_TO_CURSOR:
+            rows = [(0, w, y) for y in range(cy)] + [(0, cx + 1, cy)]
+        else:  # ERASE_ALL
+            rows = [(0, w, y) for y in range(h)]
+        for x0, x1, y in rows:
+            for x in range(x0, x1):
+                self._selective_clear(x, y)
+
+    def selective_erase_line(self, mode: int) -> None:
+        """DECSEL — erase in line, leaving DECSCA-protected characters."""
+        cx, cy, w = self.board.cursor.x, self.board.cursor.y, self.board.width
+        if mode == constants.ERASE_FROM_CURSOR_TO_END:
+            span = range(cx, w)
+        elif mode == constants.ERASE_FROM_START_TO_CURSOR:
+            span = range(cx + 1)
+        else:  # ERASE_ALL
+            span = range(w)
+        for x in span:
+            self._selective_clear(x, cy)
 
     def switch_screen(self, alt: bool) -> None:
         """Switch between primary and alternate screen."""

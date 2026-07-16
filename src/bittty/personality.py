@@ -21,6 +21,7 @@ class Personality:
     name: str
     da1_response: str  # Primary Device Attributes (answer to CSI c)
     da2_response: str | None = None  # Secondary DA (CSI > c); None if unsupported
+    da3_response: str | None = "\033P!|00000000\033\\"  # Tertiary DA (CSI = c); None if unsupported
     # Modes this terminal does not recognise, as (private, number) keys.
     unsupported_modes: frozenset[tuple[bool, int]] = frozenset()
     # Default colours (16 ANSI + fg/bg/cursor) this terminal presents.
@@ -44,6 +45,7 @@ VT100 = Personality(
     name="vt100",
     da1_response="\033[?1;2c",  # VT100 with Advanced Video Option
     da2_response=None,  # secondary DA was introduced with the VT220
+    da3_response=None,
     # A VT100 predates xterm-era private modes such as bracketed paste (2004)
     # and SGR mouse reporting (1006), and has no notion of bittty's auto-resize
     # (2028); it does not recognise any of them.
@@ -59,6 +61,7 @@ VT220 = Personality(
     name="vt220",
     da1_response="\033[?62;1;2;6;8;9c",
     da2_response="\033[>1;10;0c",
+    da3_response=None,
     # The VT220 predates mouse tracking, the alternate screen buffer, bracketed
     # paste, and bittty's auto-resize; none of those private modes exist for it.
     unsupported_modes=frozenset(
@@ -90,6 +93,7 @@ LINUX = Personality(
     name="linux",
     da1_response="\033[?6c",  # the linux console identifies as a VT102
     da2_response=None,
+    da3_response=None,
     # No mouse tracking or bracketed paste on the bare console.
     unsupported_modes=frozenset(
         {

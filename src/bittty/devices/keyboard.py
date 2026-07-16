@@ -9,6 +9,26 @@ from ..keymap import apply_modifier
 
 if TYPE_CHECKING:
     from .board import TerminalBoard
+    from ..operations import Operation
+
+# DECUDK numbers the definable keys F6-F20; map them to bittty's function-key numbers.
+_DECUDK_CODE_TO_FKEY = {
+    17: 6,
+    18: 7,
+    19: 8,
+    20: 9,
+    21: 10,
+    23: 11,
+    24: 12,
+    25: 13,
+    26: 14,
+    28: 15,
+    29: 16,
+    31: 17,
+    32: 18,
+    33: 19,
+    34: 20,
+}
 
 
 class KeyboardDevice:
@@ -16,6 +36,15 @@ class KeyboardDevice:
 
     def __init__(self, board: TerminalBoard) -> None:
         self.board = board
+        self.user_defined_keys: dict[int, str] = {}  # DECUDK: F-number -> sequence
+        self.handlers = {"DECUDK": self.set_user_keys}
+
+    def set_user_keys(self, operation: Operation) -> None:
+        """DECUDK — install user-defined strings for function keys."""
+        for code, value in operation.args[0]:
+            fkey = _DECUDK_CODE_TO_FKEY.get(code)
+            if fkey is not None:
+                self.user_defined_keys[fkey] = value
 
     def _csi_key(self, body: str, modifier: int) -> str:
         """Build a CSI cursor/nav sequence, folding in a modifier if the terminal supports it."""
@@ -55,7 +84,10 @@ class KeyboardDevice:
         # A multi-character key name this terminal's keymap does not define is ignored.
 
     def input_fkey(self, num: int, modifier: int = constants.KEY_MOD_NONE) -> None:
-        """Encode a function key using the personality's keymap, then send it."""
+        """Encode a function key using any user-defined string, else the keymap."""
+        if num in self.user_defined_keys:
+            self.input(self.user_defined_keys[num])
+            return
         keymap = self.board.personality.keymap
         sequence = keymap.function_keys.get(num)
         if sequence is None:

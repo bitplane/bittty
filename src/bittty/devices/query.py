@@ -24,6 +24,7 @@ class QueryDevice:
             "DSR": self.report_device_status,
             "DA1": self.report_primary_device_attributes,
             "DA2": self.report_secondary_device_attributes,
+            "DA3": self.report_tertiary_device_attributes,
             "DECRQM": self.report_mode_status,
             "DECRQSS": self.report_status_string,
             "OSC_CLIPBOARD": self.handle_clipboard,
@@ -47,6 +48,11 @@ class QueryDevice:
 
     def report_secondary_device_attributes(self, operation: Operation) -> None:
         response = self.board.personality.da2_response
+        if response is not None:
+            self.board.host.write(response, flush=True)
+
+    def report_tertiary_device_attributes(self, operation: Operation) -> None:
+        response = self.board.personality.da3_response
         if response is not None:
             self.board.host.write(response, flush=True)
 
