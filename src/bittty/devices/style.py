@@ -19,7 +19,10 @@ class StyleDevice:
         self.board = board
         self.current = Style()
         self._monochrome = board.personality.color_depth == "monochrome"
-        self.handlers = {"SGR": lambda op: self.apply_sgr(*op.args)}
+        self.handlers = {
+            "SGR": lambda op: self.apply_sgr(*op.args),
+            "OSC_HYPERLINK": lambda op: self.set_hyperlink(op.args[0]),
+        }
 
     @property
     def current_ansi_code(self) -> str:
@@ -33,7 +36,15 @@ class StyleDevice:
     def apply_sgr(self, style: Style, reset: bool = False) -> None:
         """Apply an SGR style update; a monochrome terminal drops colour attributes."""
         merged = style if reset else self.current.merge(style)
-        self.current = replace(merged, fg=None, bg=None) if self._monochrome else merged
+        # SGR (including reset) never affects the active hyperlink.
+        merged = replace(merged, hyperlink=self.current.hyperlink)
+        if self._monochrome:
+            merged = replace(merged, fg=None, bg=None)
+        self.current = merged
+
+    def set_hyperlink(self, uri: str) -> None:
+        """OSC 8 — start (non-empty URI) or end (empty) the active hyperlink."""
+        self.current = replace(self.current, hyperlink=uri or None)
 
     def reset(self) -> None:
         """Reset to the default style."""

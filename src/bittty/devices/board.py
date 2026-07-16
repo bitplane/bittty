@@ -38,6 +38,7 @@ class TerminalBoard:
         self.terminal = terminal
         self.personality = personality or DEFAULT
         self.palette_overrides = palette_overrides or {}
+        self.clipboard: dict[str, str] = {}  # OSC 52 selections; frontends sync this
         self.host = HostPort()
 
         self.charset = CharsetDevice(self)

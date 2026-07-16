@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+
 from typing import TYPE_CHECKING
 
 from ..operations import Operation
@@ -24,6 +26,7 @@ class QueryDevice:
             "DA2": self.report_secondary_device_attributes,
             "DECRQM": self.report_mode_status,
             "DECRQSS": self.report_status_string,
+            "OSC_CLIPBOARD": self.handle_clipboard,
         }
 
     def report_cursor_position(self, operation: Operation) -> None:
@@ -69,6 +72,19 @@ class QueryDevice:
             style = base if self.board.modes.cursor_blinking else base + 1
             return f"{style} q"
         return None
+
+    def handle_clipboard(self, operation: Operation) -> None:
+        """OSC 52 — set the clipboard, or answer a query with its current contents."""
+        selection, payload = operation.args
+        sel = selection or "c"
+        if payload == "?":
+            encoded = base64.b64encode(self.board.clipboard.get(sel, "").encode()).decode("ascii")
+            self.board.host.write(f"\x1b]52;{sel};{encoded}\x07", flush=True)
+            return
+        try:
+            self.board.clipboard[sel] = base64.b64decode(payload).decode("utf-8", errors="replace")
+        except ValueError:
+            pass  # ignore malformed base64
 
     def handle_operation(self, operation: Operation) -> None:
         handler = self.handlers.get(operation.name)

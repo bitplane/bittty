@@ -26,6 +26,12 @@ def parse_osc_operation(string_buffer: str, raw: str = "") -> Operation | None:
         return Operation("SET_ICON_TITLE", (data,), raw)
     if cmd == 2:
         return Operation("SET_WINDOW_TITLE", (data,), raw)
+    if cmd == 8:  # Hyperlink: OSC 8 ; params ; URI  (empty URI closes)
+        _, _, uri = data.partition(";")
+        return Operation("OSC_HYPERLINK", (uri,), raw)
+    if cmd == 52:  # Clipboard: OSC 52 ; selection ; base64-data | ?
+        selection, _, payload = data.partition(";")
+        return Operation("OSC_CLIPBOARD", (selection, payload), raw)
     if cmd == 4:
         return Operation("OSC_SET_PALETTE", (data,), raw)
     if cmd == 10:
