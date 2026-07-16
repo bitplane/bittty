@@ -147,6 +147,10 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
             return Operation("DECRQLP", (params[0] if params and params[0] is not None else 0,), raw_csi_data)
         if final_char == "w":  # DECEFR - Enable Filter Rectangle
             return Operation("DECEFR", (tuple(params),), raw_csi_data)
+        if final_char == "}":  # DECIC - Insert Column(s)
+            return Operation("DECIC", (params[0] if params and params[0] is not None else 1,), raw_csi_data)
+        if final_char == "~":  # DECDC - Delete Column(s)
+            return Operation("DECDC", (params[0] if params and params[0] is not None else 1,), raw_csi_data)
 
     if " " in intermediates:  # SPACE-intermediate functions (DECSCUSR handled above)
         count = params[0] if params and params[0] is not None else 1
@@ -287,5 +291,19 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
     if final_char == "b":  # REP - Repeat
         count = params[0] if params and params[0] is not None else 1
         return Operation("REP", (count,), raw_csi_data)
+
+    if final_char == "j":  # HPB - Horizontal Position Backward
+        count = params[0] if params and params[0] is not None else 1
+        return Operation("HPB", (count,), raw_csi_data)
+
+    if final_char == "k":  # VPB - Vertical Position Backward
+        count = params[0] if params and params[0] is not None else 1
+        return Operation("VPB", (count,), raw_csi_data)
+
+    if final_char == "W":  # CTC / DECST8C - Cursor Tabulation Control
+        if "?" in intermediates:  # DECST8C - reset to a tab stop every 8 columns
+            return Operation("DECST8C", (), raw_csi_data)
+        mode = params[0] if params and params[0] is not None else 0
+        return Operation("CTC", (mode,), raw_csi_data)
 
     return None

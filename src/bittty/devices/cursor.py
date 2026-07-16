@@ -36,9 +36,13 @@ class CursorDevice:
             "VPR": lambda op: self.move_down(op.args[0]),
             "CNL": lambda op: self.next_line(op.args[0]),
             "CPL": lambda op: self.previous_line(op.args[0]),
+            "HPB": lambda op: self.move_back(op.args[0]),
+            "VPB": lambda op: self.move_up(op.args[0]),
             "CHT": lambda op: self.forward_tab(op.args[0]),
             "CBT": lambda op: self.backward_tab(op.args[0]),
             "TBC": lambda op: self.clear_tab_stop(op.args[0]),
+            "CTC": lambda op: self.tab_control(op.args[0]),
+            "DECST8C": lambda op: self.reset_tab_stops(),
             "DECSCUSR": lambda op: self.set_cursor_style(op.args[0]),
             "SAVE": lambda op: self.save(),
             "RESTORE": lambda op: self.restore(),
@@ -155,6 +159,19 @@ class CursorDevice:
             self.tab_stops.clear()
         else:
             self.tab_stops.discard(self.x)
+
+    def tab_control(self, mode: int) -> None:
+        """CTC — set (0) or clear (2) a tab stop at the cursor, or clear all (5)."""
+        if mode == 0:
+            self.set_tab_stop()
+        elif mode == 2:
+            self.tab_stops.discard(self.x)
+        elif mode == 5:
+            self.tab_stops.clear()
+
+    def reset_tab_stops(self) -> None:
+        """DECST8C — reset to a tab stop every 8 columns."""
+        self.tab_stops = set(range(8, self.board.width, 8))
 
     def next_line(self, count: int) -> None:
         """CNL — move to the first column, `count` lines down (no scroll)."""

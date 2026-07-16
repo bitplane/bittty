@@ -49,6 +49,8 @@ class ScreenDevice:
             "SD": lambda op: self.scroll(-op.args[0]),
             "SL": lambda op: self.pan(op.args[0]),
             "SR": lambda op: self.pan(-op.args[0]),
+            "DECIC": lambda op: self.shift_columns(op.args[0]),
+            "DECDC": lambda op: self.shift_columns(-op.args[0]),
             "REP": lambda op: self.repeat_last_character(op.args[0]),
             "DECSTBM": lambda op: self.set_top_and_bottom_margins(*op.args),
             "RIS": lambda op: self.board.reset(hard=True),
@@ -316,6 +318,30 @@ class ScreenDevice:
                     self.current_buffer.set_cell(x, y, " ", bg)
                 else:
                     self.current_buffer.set_cell(x, y, cell[1], cell[0])
+
+    def shift_columns(self, count: int) -> None:
+        """Insert (count > 0, DECIC) or delete (count < 0, DECDC) columns at the cursor.
+
+        Operates on every row within the vertical scroll region; cells shift within
+        the line and the vacated columns are blanked with the current background.
+        """
+        if count == 0 or self.scroll_top > self.scroll_bottom:
+            return
+        x0 = self.board.cursor.x
+        width = self.board.width
+        n = min(abs(count), width - x0)
+        bg = self.board.style.background_ansi()
+        for y in range(self.scroll_top, self.scroll_bottom + 1):
+            row = [self.current_buffer.get_cell(x, y) for x in range(width)]
+            if count > 0:  # insert blanks at x0, pushing the tail right
+                tail = [None] * n + row[x0 : width - n]
+            else:  # delete at x0, pulling the tail left, blanks at the right edge
+                tail = row[x0 + n :] + [None] * n
+            for i, cell in enumerate(tail):
+                if cell is None:
+                    self.current_buffer.set_cell(x0 + i, y, " ", bg)
+                else:
+                    self.current_buffer.set_cell(x0 + i, y, cell[1], cell[0])
 
     def scroll_up(self, count: int) -> None:
         """Scroll content up within scroll region."""
