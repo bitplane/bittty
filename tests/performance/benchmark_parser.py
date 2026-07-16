@@ -22,7 +22,6 @@ try:
 except ImportError:
     HAS_PLOTEXT = False
 
-from bittty.parser import Parser
 from bittty.terminal import Terminal
 
 
@@ -73,9 +72,14 @@ def benchmark_parser(ansi_content: str, runs: int = 5, temp_profile_path: str = 
     else:
         profile_filename = temp_profile_path
 
+    # Every bittty version wires up terminal.parser, so use it rather than
+    # constructing a Parser by hand — compare-versions.sh runs this harness
+    # against old tags whose Parser signature differs.
+    def fresh_parser():
+        return Terminal().parser
+
     # Run with profiling for profile data (don't include timing)
-    terminal = Terminal()
-    parser = Parser(terminal.board)
+    parser = fresh_parser()
 
     profiler = cProfile.Profile()
     profiler.enable()
@@ -87,8 +91,7 @@ def benchmark_parser(ansi_content: str, runs: int = 5, temp_profile_path: str = 
 
     # Now run without profiling for clean timing data
     for _ in range(runs):
-        terminal = Terminal()
-        parser = Parser(terminal.board)
+        parser = fresh_parser()
 
         start_time = time.perf_counter()
         parser.feed(ansi_content)
