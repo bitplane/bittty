@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, replace
+from dataclasses import dataclass
 from functools import lru_cache
 from typing import Literal, Tuple, Union, Optional
 
@@ -43,64 +43,199 @@ class Color:
 
 
 # --- Style Model --- #
+#
+# The tri-state attributes (None = inherit / True / False, plus the small enums)
+# live packed in two ints: _set is the coverage mask saying which bits carry an
+# explicit value, _val holds the values in the same bit positions. Multi-bit
+# fields set their whole span in _set, so merge() needs no per-field branching:
+#     set = a._set | b._set
+#     val = (b._val & b._set) | (a._val & ~b._set)
+
+_BOLD = 1 << 0
+_DIM = 1 << 1
+_ITALIC = 1 << 2
+_UNDERLINE = 1 << 3
+_BLINK = 1 << 4
+_REVERSE = 1 << 5
+_CONCEAL = 1 << 6
+_STRIKE = 1 << 7
+_OVERLINE = 1 << 8
+_FRAKTUR = 1 << 9
+_FRAMED = 1 << 10
+_ENCIRCLED = 1 << 11
+_PROTECTED = 1 << 12
+_FONT_SHIFT, _FONT_MASK = 13, 0xF << 13
+_ULSTYLE_SHIFT, _ULSTYLE_MASK = 17, 0x7 << 17
+_IDEO_SHIFT, _IDEO_MASK = 20, 0x7 << 20
+
+_ULSTYLES = (None, "double", "curly", "dotted", "dashed")  # index = packed value
+_IDEOGRAMS = (None, "underline", "double_underline", "overline", "double_overline", "stress", "none")
+
+_FIELD_NAMES = (
+    "fg",
+    "bg",
+    "bold",
+    "dim",
+    "italic",
+    "underline",
+    "blink",
+    "reverse",
+    "conceal",
+    "strike",
+    "underline_style",
+    "overline",
+    "underline_color",
+    "font",
+    "fraktur",
+    "framed",
+    "encircled",
+    "ideogram",
+    "hyperlink",
+    "protected",
+)
 
 
-@dataclass(frozen=True, slots=True)
+def _flag(mask):
+    """A tri-state property over the packed ints: None when unset, else the bool."""
+
+    def get(self):
+        return (self._val & mask) != 0 if self._set & mask else None
+
+    return property(get)
+
+
 class Style:
-    fg: Optional[Color] = None
-    bg: Optional[Color] = None
-    bold: Optional[bool] = None
-    dim: Optional[bool] = None
-    italic: Optional[bool] = None
-    underline: Optional[bool] = None
-    blink: Optional[bool] = None
-    reverse: Optional[bool] = None
-    conceal: Optional[bool] = None
-    strike: Optional[bool] = None
-    underline_style: Optional[str] = None  # None=single / "double" / "curly" / "dotted" / "dashed"
-    overline: Optional[bool] = None
-    underline_color: Optional[Color] = None
-    font: Optional[int] = None  # SGR 10-19: 0 = primary, 1-9 = alternate fonts
-    fraktur: Optional[bool] = None  # SGR 20 (blackletter)
-    framed: Optional[bool] = None  # SGR 51
-    encircled: Optional[bool] = None  # SGR 52
-    ideogram: Optional[str] = None  # SGR 60-65: underline/double_underline/overline/double_overline/stress/none
-    hyperlink: Optional[str] = None  # OSC 8 target URI (not an SGR attribute)
-    protected: Optional[bool] = None  # DECSCA: shielded from selective erase
+    """Immutable text style. The keyword surface matches the old dataclass field
+    per field (None = inherit); internally the tri-state attributes are packed
+    so merge/eq/hash cost a couple of int ops instead of a 20-field walk."""
+
+    __slots__ = ("_set", "_val", "fg", "bg", "underline_color", "hyperlink")
+
+    def __init__(
+        self,
+        fg: Optional[Color] = None,
+        bg: Optional[Color] = None,
+        bold: Optional[bool] = None,
+        dim: Optional[bool] = None,
+        italic: Optional[bool] = None,
+        underline: Optional[bool] = None,
+        blink: Optional[bool] = None,
+        reverse: Optional[bool] = None,
+        conceal: Optional[bool] = None,
+        strike: Optional[bool] = None,
+        underline_style: Optional[str] = None,  # None=single / "double" / "curly" / "dotted" / "dashed"
+        overline: Optional[bool] = None,
+        underline_color: Optional[Color] = None,
+        font: Optional[int] = None,  # SGR 10-19: 0 = primary, 1-9 = alternate fonts
+        fraktur: Optional[bool] = None,  # SGR 20 (blackletter)
+        framed: Optional[bool] = None,  # SGR 51
+        encircled: Optional[bool] = None,  # SGR 52
+        ideogram: Optional[str] = None,  # SGR 60-65 (see _IDEOGRAMS)
+        hyperlink: Optional[str] = None,  # OSC 8 target URI (not an SGR attribute)
+        protected: Optional[bool] = None,  # DECSCA: shielded from selective erase
+    ) -> None:
+        self.fg = fg
+        self.bg = bg
+        self.underline_color = underline_color
+        self.hyperlink = hyperlink
+        s = v = 0
+        for value, mask in (
+            (bold, _BOLD),
+            (dim, _DIM),
+            (italic, _ITALIC),
+            (underline, _UNDERLINE),
+            (blink, _BLINK),
+            (reverse, _REVERSE),
+            (conceal, _CONCEAL),
+            (strike, _STRIKE),
+            (overline, _OVERLINE),
+            (fraktur, _FRAKTUR),
+            (framed, _FRAMED),
+            (encircled, _ENCIRCLED),
+            (protected, _PROTECTED),
+        ):
+            if value is not None:
+                s |= mask
+                if value:
+                    v |= mask
+        if font is not None:
+            s |= _FONT_MASK
+            v |= font << _FONT_SHIFT
+        if underline_style is not None:
+            s |= _ULSTYLE_MASK
+            v |= _ULSTYLES.index(underline_style) << _ULSTYLE_SHIFT
+        if ideogram is not None:
+            s |= _IDEO_MASK
+            v |= _IDEOGRAMS.index(ideogram) << _IDEO_SHIFT
+        self._set = s
+        self._val = v
+
+    bold = _flag(_BOLD)
+    dim = _flag(_DIM)
+    italic = _flag(_ITALIC)
+    underline = _flag(_UNDERLINE)
+    blink = _flag(_BLINK)
+    reverse = _flag(_REVERSE)
+    conceal = _flag(_CONCEAL)
+    strike = _flag(_STRIKE)
+    overline = _flag(_OVERLINE)
+    fraktur = _flag(_FRAKTUR)
+    framed = _flag(_FRAMED)
+    encircled = _flag(_ENCIRCLED)
+    protected = _flag(_PROTECTED)
+
+    @property
+    def font(self) -> Optional[int]:
+        return (self._val & _FONT_MASK) >> _FONT_SHIFT if self._set & _FONT_MASK else None
+
+    @property
+    def underline_style(self) -> Optional[str]:
+        return _ULSTYLES[(self._val & _ULSTYLE_MASK) >> _ULSTYLE_SHIFT] if self._set & _ULSTYLE_MASK else None
+
+    @property
+    def ideogram(self) -> Optional[str]:
+        return _IDEOGRAMS[(self._val & _IDEO_MASK) >> _IDEO_SHIFT] if self._set & _IDEO_MASK else None
 
     def merge(self, other: Style) -> Style:
-        """Merge another style into this one; the other's non-None attributes win.
+        """Merge another style into this one; the other's set attributes win."""
+        new = Style.__new__(Style)
+        o_set = other._set
+        new._set = self._set | o_set
+        new._val = (other._val & o_set) | (self._val & ~o_set)
+        new.fg = other.fg if other.fg is not None else self.fg
+        new.bg = other.bg if other.bg is not None else self.bg
+        new.underline_color = other.underline_color if other.underline_color is not None else self.underline_color
+        new.hyperlink = other.hyperlink if other.hyperlink is not None else self.hyperlink
+        return new
 
-        The per-field ``x if x is not None else y`` is inlined (no helper closure):
-        this is the hottest path in the emulator — one call per printed cell that
-        changes style — so the ~17 closure calls per merge are worth removing.
-        """
-        return Style(
-            fg=other.fg if other.fg is not None else self.fg,
-            bg=other.bg if other.bg is not None else self.bg,
-            bold=other.bold if other.bold is not None else self.bold,
-            dim=other.dim if other.dim is not None else self.dim,
-            italic=other.italic if other.italic is not None else self.italic,
-            underline=other.underline if other.underline is not None else self.underline,
-            blink=other.blink if other.blink is not None else self.blink,
-            reverse=other.reverse if other.reverse is not None else self.reverse,
-            conceal=other.conceal if other.conceal is not None else self.conceal,
-            strike=other.strike if other.strike is not None else self.strike,
-            underline_style=other.underline_style if other.underline_style is not None else self.underline_style,
-            overline=other.overline if other.overline is not None else self.overline,
-            underline_color=other.underline_color if other.underline_color is not None else self.underline_color,
-            font=other.font if other.font is not None else self.font,
-            fraktur=other.fraktur if other.fraktur is not None else self.fraktur,
-            framed=other.framed if other.framed is not None else self.framed,
-            encircled=other.encircled if other.encircled is not None else self.encircled,
-            ideogram=other.ideogram if other.ideogram is not None else self.ideogram,
-            hyperlink=other.hyperlink if other.hyperlink is not None else self.hyperlink,
-            protected=other.protected if other.protected is not None else self.protected,
-        )
+    def replace(self, **kwargs) -> Style:
+        """A new Style with the given fields replaced (None = back to inherit)."""
+        fields = {name: getattr(self, name) for name in _FIELD_NAMES}
+        fields.update(kwargs)
+        return Style(**fields)
 
     def diff(self, other: "Style") -> str:
         """Generate minimal ANSI sequence to transition to another style."""
         return _style_diff(self, other)
+
+    def __eq__(self, other: object) -> bool:
+        if type(other) is not Style:
+            return NotImplemented
+        return (
+            self._set == other._set
+            and self._val == other._val
+            and self.fg == other.fg
+            and self.bg == other.bg
+            and self.underline_color == other.underline_color
+            and self.hyperlink == other.hyperlink
+        )
+
+    def __hash__(self) -> int:
+        return hash((self._set, self._val, self.fg, self.bg, self.underline_color, self.hyperlink))
+
+    def __repr__(self) -> str:
+        parts = [f"{name}={getattr(self, name)!r}" for name in _FIELD_NAMES if getattr(self, name) is not None]
+        return f"Style({', '.join(parts)})"
 
 
 @lru_cache(maxsize=10000)
@@ -191,9 +326,42 @@ def _colon_color(parts: list[str]) -> Optional[Color]:
     return None
 
 
+# Plain flag tokens: turn a mask on / explicitly off.
+_TOKEN_ON = {
+    "1": _BOLD,
+    "01": _BOLD,
+    "2": _DIM,
+    "3": _ITALIC,
+    "4": _UNDERLINE,
+    "5": _BLINK,
+    "6": _BLINK,  # rapid blink; rendered the same
+    "7": _REVERSE,
+    "8": _CONCEAL,
+    "9": _STRIKE,
+    "20": _FRAKTUR,
+    "51": _FRAMED,
+    "52": _ENCIRCLED,
+    "53": _OVERLINE,
+}
+_TOKEN_OFF = {
+    "22": _BOLD | _DIM,
+    "23": _ITALIC | _FRAKTUR,
+    "25": _BLINK,
+    "27": _REVERSE,
+    "28": _CONCEAL,
+    "29": _STRIKE,
+    "54": _FRAMED | _ENCIRCLED,
+    "55": _OVERLINE,
+}
+_IDEOGRAM_TOKENS = {"60": 1, "61": 2, "62": 3, "63": 4, "64": 5, "65": 6}  # -> _IDEOGRAMS index
+_COLOR_SLOTS = {"38": "fg", "48": "bg", "58": "underline_color"}
+
+
 @lru_cache(maxsize=10000)
 def interpret(tokens: Tuple[str, ...]) -> Style:
-    style = Style()
+    """Interpret SGR tokens into a Style, accumulating the packed masks directly."""
+    s = v = 0
+    colors = {"fg": None, "bg": None, "underline_color": None}
     i = 0
     while i < len(tokens):
         token = tokens[i]
@@ -204,117 +372,77 @@ def interpret(tokens: Tuple[str, ...]) -> Style:
             head = parts[0]
             if head == "4":
                 ul = _UNDERLINE_STYLES.get(parts[1] if len(parts) > 1 else "1", "single")
-                if ul == "none":
-                    style = replace(style, underline=False, underline_style=None)
-                else:
-                    style = replace(style, underline=True, underline_style=None if ul == "single" else ul)
-            elif head in {"38", "48", "58"}:
+                s |= _UNDERLINE
+                s &= ~_ULSTYLE_MASK
+                v &= ~(_UNDERLINE | _ULSTYLE_MASK)
+                if ul != "none":
+                    v |= _UNDERLINE
+                    if ul != "single":
+                        s |= _ULSTYLE_MASK
+                        v |= _ULSTYLES.index(ul) << _ULSTYLE_SHIFT
+            elif head in _COLOR_SLOTS:
                 color = _colon_color(parts)
                 if color is not None:
-                    attr = {"38": "fg", "48": "bg", "58": "underline_color"}[head]
-                    style = replace(style, **{attr: color})
+                    colors[_COLOR_SLOTS[head]] = color
             i += 1
             continue
 
-        # Reset
-        if token == "0" or token == "00":
-            style = Style()
-
-        # Simple attributes
-        elif token == "1" or token == "01":
-            style = replace(style, bold=True)
-        elif token == "2":
-            style = replace(style, dim=True)
-        elif token == "3":
-            style = replace(style, italic=True)
-        elif token == "4":
-            style = replace(style, underline=True)
-        elif token == "5" or token == "6":  # 6 = rapid blink; rendered the same
-            style = replace(style, blink=True)
-        elif token == "7":
-            style = replace(style, reverse=True)
-        elif token == "8":
-            style = replace(style, conceal=True)
-        elif token == "9":
-            style = replace(style, strike=True)
-
-        elif token in ("10", "11", "12", "13", "14", "15", "16", "17", "18", "19"):
-            style = replace(style, font=int(token) - 10)
-        elif token == "20":
-            style = replace(style, fraktur=True)
-        elif token == "22":
-            style = replace(style, bold=False, dim=False)
-        elif token == "23":
-            style = replace(style, italic=False, fraktur=False)
-        elif token == "21":
-            style = replace(style, underline=True, underline_style="double")
-        elif token == "24":
-            style = replace(style, underline=False, underline_style=None)
-        elif token == "25":
-            style = replace(style, blink=False)
-        elif token == "27":
-            style = replace(style, reverse=False)
-        elif token == "28":
-            style = replace(style, conceal=False)
-        elif token == "29":
-            style = replace(style, strike=False)
-        elif token == "51":
-            style = replace(style, framed=True)
-        elif token == "52":
-            style = replace(style, encircled=True)
-        elif token == "53":
-            style = replace(style, overline=True)
-        elif token == "54":
-            style = replace(style, framed=False, encircled=False)
-        elif token == "55":
-            style = replace(style, overline=False)
+        if (mask := _TOKEN_ON.get(token)) is not None:
+            s |= mask
+            v |= mask
+        elif (mask := _TOKEN_OFF.get(token)) is not None:
+            s |= mask
+            v &= ~mask
+        elif token == "0" or token == "00":  # reset
+            s = v = 0
+            colors = {"fg": None, "bg": None, "underline_color": None}
+        elif token == "21":  # double underline
+            s |= _UNDERLINE | _ULSTYLE_MASK
+            v = (v & ~_ULSTYLE_MASK) | _UNDERLINE | (_ULSTYLES.index("double") << _ULSTYLE_SHIFT)
+        elif token == "24":  # underline off (and drop any underline style)
+            s = (s | _UNDERLINE) & ~_ULSTYLE_MASK
+            v &= ~(_UNDERLINE | _ULSTYLE_MASK)
+        elif len(token) == 2 and token[0] == "1" and token.isdigit():  # 10-19: font select
+            s |= _FONT_MASK
+            v = (v & ~_FONT_MASK) | ((int(token) - 10) << _FONT_SHIFT)
         elif token == "59":
-            style = replace(style, underline_color=Color("default"))
-        elif token in ("60", "61", "62", "63", "64"):
-            style = replace(
-                style,
-                ideogram={
-                    "60": "underline",
-                    "61": "double_underline",
-                    "62": "overline",
-                    "63": "double_overline",
-                    "64": "stress",
-                }[token],
-            )
-        elif token == "65":
-            style = replace(style, ideogram="none")
-
-        # Basic indexed colors
-        elif token.isdigit() and 30 <= int(token) <= 37:
-            style = replace(style, fg=Color("indexed", int(token) - 30))
+            colors["underline_color"] = Color("default")
+        elif (ideo := _IDEOGRAM_TOKENS.get(token)) is not None:
+            s |= _IDEO_MASK
+            v = (v & ~_IDEO_MASK) | (ideo << _IDEO_SHIFT)
         elif token == "39":
-            style = replace(style, fg=Color("default"))
-
-        elif token.isdigit() and 40 <= int(token) <= 47:
-            style = replace(style, bg=Color("indexed", int(token) - 40))
+            colors["fg"] = Color("default")
         elif token == "49":
-            style = replace(style, bg=Color("default"))
-
-        # Bright colors
-        elif token.isdigit() and 90 <= int(token) <= 97:
-            style = replace(style, fg=Color("indexed", int(token) - 90 + 8))
-        elif token.isdigit() and 100 <= int(token) <= 107:
-            style = replace(style, bg=Color("indexed", int(token) - 100 + 8))
-
-        # Extended color (indexed or rgb)
-        elif token in {"38", "48", "58"}:
-            attr = {"38": "fg", "48": "bg", "58": "underline_color"}[token]
+            colors["bg"] = Color("default")
+        elif (slot := _COLOR_SLOTS.get(token)) is not None:  # extended colour (indexed or rgb)
             if i + 1 < len(tokens):
                 mode = tokens[i + 1]
                 if mode == "5" and i + 2 < len(tokens):
-                    style = replace(style, **{attr: Color("indexed", int(tokens[i + 2]))})
+                    colors[slot] = Color("indexed", int(tokens[i + 2]))
                     i += 2
                 elif mode == "2" and i + 4 < len(tokens):
                     r, g, b = int(tokens[i + 2]), int(tokens[i + 3]), int(tokens[i + 4])
-                    style = replace(style, **{attr: Color("rgb", (r, g, b))})
+                    colors[slot] = Color("rgb", (r, g, b))
                     i += 4
+        elif token.isdigit():
+            n = int(token)
+            if 30 <= n <= 37:
+                colors["fg"] = Color("indexed", n - 30)
+            elif 40 <= n <= 47:
+                colors["bg"] = Color("indexed", n - 40)
+            elif 90 <= n <= 97:
+                colors["fg"] = Color("indexed", n - 90 + 8)
+            elif 100 <= n <= 107:
+                colors["bg"] = Color("indexed", n - 100 + 8)
         i += 1
 
+    style = Style.__new__(Style)
+    style._set = s
+    style._val = v
+    style.fg = colors["fg"]
+    style.bg = colors["bg"]
+    style.underline_color = colors["underline_color"]
+    style.hyperlink = None
     return style
 
 

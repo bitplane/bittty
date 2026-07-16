@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from .base import Device
@@ -57,7 +56,7 @@ class StyleDevice(Device):
             if self.current.hyperlink is None and self.current.protected is None:
                 merged = self.default
             else:
-                merged = replace(self.default, hyperlink=self.current.hyperlink, protected=self.current.protected)
+                merged = self.default.replace(hyperlink=self.current.hyperlink, protected=self.current.protected)
             if style is not None:  # attributes following the reset token
                 merged = merged.merge(style)
         else:
@@ -65,7 +64,7 @@ class StyleDevice(Device):
             # extra rebuild is needed on the hot per-cell path.
             merged = self.current.merge(style)
         if self._monochrome:
-            merged = replace(merged, fg=None, bg=None)
+            merged = merged.replace(fg=None, bg=None)
         self.current = merged
 
     def set_default(self) -> None:
@@ -74,11 +73,11 @@ class StyleDevice(Device):
 
     def set_hyperlink(self, uri: str) -> None:
         """OSC 8 — start (non-empty URI) or end (empty) the active hyperlink."""
-        self.current = replace(self.current, hyperlink=uri or None)
+        self.current = self.current.replace(hyperlink=uri or None)
 
     def set_protected(self, mode: int) -> None:
         """DECSCA — 1 protects subsequent characters from selective erase; 0/2 clears it."""
-        self.current = replace(self.current, protected=True if mode == 1 else None)
+        self.current = self.current.replace(protected=True if mode == 1 else None)
 
     def reset(self) -> None:
         """Reset to the default style (and clear the ESC[8] default register and SGR stack)."""

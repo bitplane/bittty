@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from dataclasses import replace
-
 from .. import constants
 from ..buffer import Buffer
 from ..operations import Operation
@@ -270,7 +268,7 @@ class ScreenDevice(Device):
             cell = self.current_buffer.get_cell(x, y)
             style = cell[0]
             for attr in attrs:
-                style = replace(style, **{attr: not getattr(style, attr)})
+                style = style.replace(**{attr: not getattr(style, attr)})
             self.current_buffer.set_cell(x, y, cell[1], style)
 
     def switch_screen(self, alt: bool) -> None:
