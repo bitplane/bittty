@@ -78,6 +78,10 @@ STANDALONES = {"ss2", "ss3", "esc", "esc_charset", "esc_charset2", "ctrl", "bel"
 
 # Raw 8-bit C1 format/area controls -> their operation names (same as the 7-bit ESC forms).
 _C1_CTRL_NAMES = {"\x84": "IND", "\x85": "NEL", "\x88": "HTS", "\x8d": "RI", "\x96": "SPA", "\x97": "EPA"}
+
+# One shared frozen Operation per C0 control (a scroll flood is mostly CR/LF).
+_BEL_OP = Operation("C0_BEL", raw="\x07")
+_CTRL_OPS: dict[str, Operation] = {}
 # ESC SP F/G = 7/8-bit C1 transmission; ESC SP L/M/N = ANSI conformance level 1/2/3.
 _ESC_SPACE_OPS = {
     "F": ("S7C1T", ()),
@@ -270,10 +274,13 @@ class Parser:
 
         # Standalones
         if kind == "bel":
-            self.emit(Operation("C0_BEL", raw=data))
+            self.emit(_BEL_OP)
             return
         if kind == "ctrl":
-            self.emit(Operation(control_name(data), raw=data))
+            op = _CTRL_OPS.get(data)
+            if op is None:
+                op = _CTRL_OPS[data] = Operation(control_name(data), raw=data)
+            self.emit(op)
             return
         if kind == "ss2":
             self.emit(Operation("SS2", raw=data))

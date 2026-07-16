@@ -83,8 +83,14 @@ def parse_csi_params(data):
     return params, private_markers + intermediates, final_char
 
 
+@lru_cache(maxsize=4096)
 def parse_csi_operation(raw_csi_data: str) -> Operation | None:
-    """Return a semantic operation for CSI sequences migrated to the operation layer."""
+    """Return a semantic operation for CSI sequences migrated to the operation layer.
+
+    Cached: real terminal traffic repeats a small CSI vocabulary (a full-screen
+    TUI session uses a few hundred distinct sequences), and Operation is frozen
+    with immutable args, so one instance per distinct sequence is safe to share.
+    """
     if len(raw_csi_data) < 3:
         return None
 
