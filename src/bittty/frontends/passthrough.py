@@ -62,6 +62,7 @@ class PassthroughDisplay(Display):
         self.old_termios = None
         self.host_mouse_mode: str | None = None
         self.input_sequence_buffer = ""
+        self.dirty = False  # PTY data arrived; the run loop repaints on its tick
 
     def get_default_shell(self) -> str:
         """Get the default shell command for the current platform."""
@@ -156,10 +157,15 @@ class PassthroughDisplay(Display):
         print(f"\033[{self.height + 1}H\033[7m{status:<{self.width}}\033[0m", end="", flush=True)
 
     def handle_pty_data(self, data: str) -> None:
-        """Feed child output into the emulator and repaint. Called back by the PTY reader."""
+        """Feed child output into the emulator and mark the screen dirty.
+
+        Rendering happens on the run loop's tick, not per PTY chunk — a repaint
+        per chunk backpressures a flooding child (it blocks writing to the PTY
+        while we paint), turning a 66ms `find` into a 750ms one.
+        """
         try:
             self.terminal.parser.feed(data)
-            self.render_screen()
+            self.dirty = True
         except Exception:
             logger.exception("Error handling PTY data: %r", data[-200:])
             raise
@@ -296,12 +302,18 @@ class PassthroughDisplay(Display):
             input_task = asyncio.create_task(self.input_loop())
             while self.running:
                 await asyncio.sleep(0.01)
+                if self.dirty:
+                    self.dirty = False
+                    self.render_screen()
                 if self.terminal.process and self.terminal.process.poll() is not None:
                     self.running = False
                     break
                 if not self.terminal.process:
                     self.running = False
                     break
+
+            if self.dirty:  # paint whatever arrived after the last tick
+                self.render_screen()
 
             input_task.cancel()
             try:

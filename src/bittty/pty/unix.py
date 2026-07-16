@@ -144,19 +144,27 @@ class UnixPTY(PTY):
             future = loop.create_future()
 
             def read_ready():
+                loop.remove_reader(self.master_fd)
+                # Drain everything available (up to size) in this one wakeup:
+                # one add_reader round-trip per burst, not per 4KB chunk, keeps
+                # a flooding child from blocking on a slowly-drained PTY.
+                parts = []
+                total = 0
                 try:
-                    data = os.read(self.master_fd, size)
-                    loop.remove_reader(self.master_fd)
-                    future.set_result(data.decode("utf-8", errors="replace"))
+                    while total < size:
+                        data = os.read(self.master_fd, size - total)
+                        if not data:
+                            break
+                        parts.append(data)
+                        total += len(data)
                 except BlockingIOError:
-                    loop.remove_reader(self.master_fd)
-                    future.set_result("")
+                    pass
                 except OSError as e:
-                    loop.remove_reader(self.master_fd)
                     if e.errno in (constants.EBADF, constants.EINVAL):
                         # Mark as closed by closing the file
                         self.master_file.close()
-                    future.set_result("")
+                # The incremental decoder holds split UTF-8 sequences across reads.
+                future.set_result(self._dec.decode(b"".join(parts), final=False))
 
             loop.add_reader(self.master_fd, read_ready)
             return await future

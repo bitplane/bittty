@@ -234,8 +234,9 @@ class Terminal:
 
         while self.pty is not None and not self.pty.closed:
             try:
-                # Use the PTY's async read method
-                data = await self.pty.read_async(4096)
+                # Use the PTY's async read method (a big buffer so a flooding
+                # child drains in few wakeups instead of blocking on the PTY)
+                data = await self.pty.read_async(65536)
 
                 if not data:
                     # No data available, check if process has exited
