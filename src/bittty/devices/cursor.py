@@ -81,7 +81,9 @@ class CursorDevice:
         """Move down one line, scrolling the active scroll region if needed."""
         if self.y == self.board.screen.scroll_bottom:
             self.board.screen.scroll(1)
-        elif self.y < self.board.screen.scroll_bottom:
+        elif self.y < self.board.height - 1:
+            # Below the bottom margin the cursor still advances (bounded by the
+            # screen); it only scrolls when sitting on the margin itself.
             self.y += 1
 
         if self.board.modes.linefeed_newline_mode:

@@ -35,9 +35,7 @@ class ScreenDevice:
             "SU": lambda op: self.scroll(op.args[0]),
             "SD": lambda op: self.scroll(-op.args[0]),
             "REP": lambda op: self.repeat_last_character(op.args[0]),
-            "DECSTBM": lambda op: self.set_scroll_region(
-                op.args[0], self.board.height - 1 if op.args[1] is None else op.args[1]
-            ),
+            "DECSTBM": lambda op: self.set_top_and_bottom_margins(*op.args),
             "RIS": lambda op: self.board.reset(hard=True),
             "DECSTR": lambda op: self.board.reset(hard=False),
             "DECALN": lambda op: self.alignment_test(),
@@ -136,6 +134,11 @@ class ScreenDevice:
         """Set scroll region."""
         self.scroll_top = max(0, min(top, self.board.height - 1))
         self.scroll_bottom = max(self.scroll_top, min(bottom, self.board.height - 1))
+
+    def set_top_and_bottom_margins(self, top: int, bottom: int | None) -> None:
+        """DECSTBM — set the scroll region and home the cursor (origin-aware)."""
+        self.set_scroll_region(top, self.board.height - 1 if bottom is None else bottom)
+        self.board.cursor.move_to(0, 0)
 
     def insert_lines(self, count: int) -> None:
         """Insert blank lines at cursor position."""
