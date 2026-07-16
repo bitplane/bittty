@@ -48,8 +48,18 @@ def parse_osc_operation(string_buffer: str, raw: str = "") -> Operation | None:
         return Operation("OSC_FOREGROUND", (data,), raw)
     if cmd == 11:
         return Operation("OSC_BACKGROUND", (data,), raw)
+    if cmd == 5:  # set/query a special colour (bold/underline/... roles)
+        return Operation("OSC_SPECIAL_COLOR", (data,), raw)
+    if cmd == 6:  # enable/disable a special colour
+        return Operation("OSC_SPECIAL_COLOR_ENABLE", (data,), raw)
     if cmd == 12:
         return Operation("OSC_CURSOR", (data,), raw)
+    if cmd == 15:  # Tektronix foreground
+        return Operation("OSC_TEK_FOREGROUND", (data,), raw)
+    if cmd == 16:  # Tektronix background
+        return Operation("OSC_TEK_BACKGROUND", (data,), raw)
+    if cmd == 18:  # Tektronix cursor
+        return Operation("OSC_TEK_CURSOR", (data,), raw)
     if cmd == 13:  # mouse pointer foreground
         return Operation("OSC_MOUSE_FOREGROUND", (data,), raw)
     if cmd == 14:  # mouse pointer background
@@ -71,8 +81,16 @@ def parse_osc_operation(string_buffer: str, raw: str = "") -> Operation | None:
         return Operation("OSC_RESET_FOREGROUND", (), raw)
     if cmd == 111:
         return Operation("OSC_RESET_BACKGROUND", (), raw)
+    if cmd == 105:
+        return Operation("OSC_RESET_SPECIAL_COLOR", (data,), raw)
     if cmd == 112:
         return Operation("OSC_RESET_CURSOR", (), raw)
+    if cmd == 115:
+        return Operation("OSC_RESET_TEK_FOREGROUND", (), raw)
+    if cmd == 116:
+        return Operation("OSC_RESET_TEK_BACKGROUND", (), raw)
+    if cmd == 118:
+        return Operation("OSC_RESET_TEK_CURSOR", (), raw)
     if cmd == 113:
         return Operation("OSC_RESET_MOUSE_FOREGROUND", (), raw)
     if cmd == 114:

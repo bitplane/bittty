@@ -31,6 +31,7 @@ class ScreenDevice(Device):
         self.scroll_bottom = board.height - 1
         self.left_margin = 0
         self.right_margin = board.width - 1
+        self.attr_change_extent = "rectangle"  # DECSACE: "rectangle" or "stream"
         self.last_printed_char = " "
         self.handlers = {
             "DECSLRM": self.apply_left_right_margins,
@@ -44,6 +45,7 @@ class ScreenDevice(Device):
             "DECCRA": lambda op: self.copy_rectangle(op.args[0]),
             "DECCARA": lambda op: self.change_attributes_rectangle(op.args[0]),
             "DECRARA": lambda op: self.reverse_attributes_rectangle(op.args[0]),
+            "DECSACE": lambda op: self.set_attr_change_extent(op.args[0]),
             "IL": lambda op: self.insert_lines(op.args[0]),
             "DL": lambda op: self.delete_lines(op.args[0]),
             "ICH": lambda op: self.insert_characters(op.args[0], self.board.style.current),
@@ -230,28 +232,48 @@ class ScreenDevice(Device):
                 if 0 <= ty < self.board.height and 0 <= tx < self.board.width:
                     self.current_buffer.set_cell(tx, ty, cell[1], cell[0])
 
+    def set_attr_change_extent(self, ps: int) -> None:
+        """DECSACE — 1 = stream (wrapping run), else rectangle (default)."""
+        self.attr_change_extent = "stream" if ps == 1 else "rectangle"
+
+    def _extent_cells(self, params):
+        """Yield (x, y) cells for DECCARA/DECRARA per DECSACE: a rectangle, or a wrapping stream."""
+        top, left, bottom, right = self._four(params)
+        if self.attr_change_extent == "stream":
+            # Raw corners, clamped to the screen but not normalised (the end may precede the start).
+            h, w = self.board.height, self.board.width
+            t = max(0, min((top - 1) if top else 0, h - 1))
+            left0 = max(0, min((left - 1) if left else 0, w - 1))
+            b = max(0, min((bottom - 1) if bottom else h - 1, h - 1))
+            r = max(0, min((right - 1) if right else w - 1, w - 1))
+            for pos in range(t * w + left0, b * w + r + 1):
+                y, x = divmod(pos, w)
+                if 0 <= y < h:
+                    yield x, y
+        else:
+            t, left0, b, r = self._rectangle(top, left, bottom, right)
+            for y in range(t, b + 1):
+                for x in range(left0, r + 1):
+                    yield x, y
+
     def change_attributes_rectangle(self, params) -> None:
-        """DECCARA — merge SGR attributes into every cell of a rectangle."""
-        t, left, b, r = self._rectangle(*self._four(params))
+        """DECCARA — merge SGR attributes into every cell of the area (rectangle or stream)."""
         sgr = [str(x) for x in params[4:] if x is not None]
         delta = parse_sgr_sequence("\x1b[" + ";".join(sgr) + "m") if sgr else Style()
-        for y in range(t, b + 1):
-            for x in range(left, r + 1):
-                cell = self.current_buffer.get_cell(x, y)
-                self.current_buffer.set_cell(x, y, cell[1], cell[0].merge(delta))
+        for x, y in self._extent_cells(params):
+            cell = self.current_buffer.get_cell(x, y)
+            self.current_buffer.set_cell(x, y, cell[1], cell[0].merge(delta))
 
     def reverse_attributes_rectangle(self, params) -> None:
-        """DECRARA — toggle the given attributes (1/4/5/7) across a rectangle."""
-        t, left, b, r = self._rectangle(*self._four(params))
+        """DECRARA — toggle the given attributes (1/4/5/7) across the area (rectangle or stream)."""
         requested = [p for p in params[4:] if p in _REVERSE_ATTRS] or list(_REVERSE_ATTRS)
         attrs = [_REVERSE_ATTRS[p] for p in requested]
-        for y in range(t, b + 1):
-            for x in range(left, r + 1):
-                cell = self.current_buffer.get_cell(x, y)
-                style = cell[0]
-                for attr in attrs:
-                    style = replace(style, **{attr: not getattr(style, attr)})
-                self.current_buffer.set_cell(x, y, cell[1], style)
+        for x, y in self._extent_cells(params):
+            cell = self.current_buffer.get_cell(x, y)
+            style = cell[0]
+            for attr in attrs:
+                style = replace(style, **{attr: not getattr(style, attr)})
+            self.current_buffer.set_cell(x, y, cell[1], style)
 
     def switch_screen(self, alt: bool) -> None:
         """Switch between primary and alternate screen."""

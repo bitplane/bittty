@@ -43,7 +43,40 @@ class PaletteDevice(Device):
             "OSC_RESET_MOUSE_BACKGROUND": lambda op: setattr(self, "mouse_background", None),
             "OSC_RESET_HIGHLIGHT_BACKGROUND": lambda op: setattr(self, "highlight_background", None),
             "OSC_RESET_HIGHLIGHT_FOREGROUND": lambda op: setattr(self, "highlight_foreground", None),
+            "OSC_TEK_FOREGROUND": lambda op: self.dynamic_color(op, "tek_foreground", 15, "foreground"),
+            "OSC_TEK_BACKGROUND": lambda op: self.dynamic_color(op, "tek_background", 16, "background"),
+            "OSC_TEK_CURSOR": lambda op: self.dynamic_color(op, "tek_cursor", 18, "cursor"),
+            "OSC_RESET_TEK_FOREGROUND": lambda op: setattr(self, "tek_foreground", None),
+            "OSC_RESET_TEK_BACKGROUND": lambda op: setattr(self, "tek_background", None),
+            "OSC_RESET_TEK_CURSOR": lambda op: setattr(self, "tek_cursor", None),
+            "OSC_SPECIAL_COLOR": self.special_color,
+            "OSC_SPECIAL_COLOR_ENABLE": self.special_color_enable,
+            "OSC_RESET_SPECIAL_COLOR": lambda op: self.special_colors.clear(),
         }
+
+    def special_color(self, operation: Operation) -> None:
+        """OSC 5 — set or (spec == '?') query a special colour (0=bold, 1=underline, …)."""
+        index, _, spec = operation.args[0].partition(";")
+        try:
+            idx = int(index)
+        except ValueError:
+            return
+        if spec == "?":
+            rgb = self.special_colors.get(idx)
+            if rgb is not None:
+                self._respond(f"5;{idx};{format_rgb(rgb)}")
+            return
+        rgb = parse_color_spec(spec)
+        if rgb is not None:
+            self.special_colors[idx] = rgb
+
+    def special_color_enable(self, operation: Operation) -> None:
+        """OSC 6 — enable or disable a special colour."""
+        index, _, value = operation.args[0].partition(";")
+        try:
+            self.special_color_enabled[int(index)] = value not in ("0", "")
+        except ValueError:
+            pass
 
     def reset(self) -> None:
         """Restore the personality's default colours plus construction overrides (RIS)."""
@@ -56,6 +89,11 @@ class PaletteDevice(Device):
         self.mouse_background: RGB | None = None
         self.highlight_foreground: RGB | None = None
         self.highlight_background: RGB | None = None
+        self.tek_foreground: RGB | None = None  # OSC 15/16/18 Tektronix colours
+        self.tek_background: RGB | None = None
+        self.tek_cursor: RGB | None = None
+        self.special_colors: dict[int, RGB] = {}  # OSC 5 special-role colours
+        self.special_color_enabled: dict[int, bool] = {}  # OSC 6
         self.stack: list[tuple] = []  # XTPUSHCOLORS / XTPOPCOLORS
         for slot, rgb in self.board.palette_overrides.items():
             self._set_slot(slot, rgb)
