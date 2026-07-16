@@ -8,6 +8,7 @@ from dataclasses import replace
 
 from .. import constants
 from ..buffer import Buffer
+from ..operations import Operation
 from .base import Device
 from ..style import Style, parse_sgr_sequence
 
@@ -28,8 +29,11 @@ class ScreenDevice(Device):
         self.in_alt_screen = False
         self.scroll_top = 0
         self.scroll_bottom = board.height - 1
+        self.left_margin = 0
+        self.right_margin = board.width - 1
         self.last_printed_char = " "
         self.handlers = {
+            "DECSLRM": self.apply_left_right_margins,
             "ED": lambda op: self.clear_screen(op.args[0]),
             "EL": lambda op: self.clear_line(op.args[0]),
             "DECSED": lambda op: self.selective_erase_display(op.args[0]),
@@ -106,6 +110,7 @@ class ScreenDevice(Device):
         self.primary_buffer.resize(width, height)
         self.alt_buffer.resize(width, height)
         self.scroll_bottom = height - 1
+        self.reset_left_right_margins()
 
         self.board.cursor.clamp_to_terminal()
 
@@ -311,45 +316,69 @@ class ScreenDevice(Device):
         else:
             self.current_buffer.scroll_region_down(self.scroll_top, self.scroll_bottom, abs_lines)
 
-    def pan(self, columns: int) -> None:
-        """Pan the scroll-region rows horizontally: SL (columns > 0) left, SR (< 0) right."""
+    def _shift_row_segment(self, x0: int, columns: int) -> None:
+        """Shift the [x0, right_margin] cells of every scroll-region row by columns.
+
+        columns > 0 pushes content left (blanks appear on the right of the segment);
+        columns < 0 pushes it right. Vacated cells take the current background.
+        """
         if columns == 0 or self.scroll_top > self.scroll_bottom:
             return
-        width = self.board.width
-        n = min(abs(columns), width)
-        bg = self.board.style.background_ansi()
-        for y in range(self.scroll_top, self.scroll_bottom + 1):
-            row = [self.current_buffer.get_cell(x, y) for x in range(width)]
-            shifted = row[n:] + [None] * n if columns > 0 else [None] * n + row[: width - n]
-            for x, cell in enumerate(shifted):
-                if cell is None:
-                    self.current_buffer.set_cell(x, y, " ", bg)
-                else:
-                    self.current_buffer.set_cell(x, y, cell[1], cell[0])
-
-    def shift_columns(self, count: int) -> None:
-        """Insert (count > 0, DECIC) or delete (count < 0, DECDC) columns at the cursor.
-
-        Operates on every row within the vertical scroll region; cells shift within
-        the line and the vacated columns are blanked with the current background.
-        """
-        if count == 0 or self.scroll_top > self.scroll_bottom:
+        right = self.right_margin
+        span = right - x0 + 1
+        if span <= 0:
             return
-        x0 = self.board.cursor.x
-        width = self.board.width
-        n = min(abs(count), width - x0)
+        n = min(abs(columns), span)
         bg = self.board.style.background_ansi()
         for y in range(self.scroll_top, self.scroll_bottom + 1):
-            row = [self.current_buffer.get_cell(x, y) for x in range(width)]
-            if count > 0:  # insert blanks at x0, pushing the tail right
-                tail = [None] * n + row[x0 : width - n]
-            else:  # delete at x0, pulling the tail left, blanks at the right edge
-                tail = row[x0 + n :] + [None] * n
-            for i, cell in enumerate(tail):
+            seg = [self.current_buffer.get_cell(x, y) for x in range(x0, right + 1)]
+            seg = seg[n:] + [None] * n if columns > 0 else [None] * n + seg[: span - n]
+            for i, cell in enumerate(seg):
                 if cell is None:
                     self.current_buffer.set_cell(x0 + i, y, " ", bg)
                 else:
                     self.current_buffer.set_cell(x0 + i, y, cell[1], cell[0])
+
+    def pan(self, columns: int) -> None:
+        """SL/SR — pan the scroll-region rows horizontally within the left/right margins."""
+        self._shift_row_segment(self.left_margin, columns)
+
+    def shift_columns(self, count: int) -> None:
+        """DECIC (count > 0) / DECDC (count < 0) — insert/delete columns at the cursor.
+
+        Confined to the left/right margin box; a cursor outside it is a no-op.
+        """
+        x0 = self.board.cursor.x
+        if not (self.left_margin <= x0 <= self.right_margin):
+            return
+        # DECIC inserts blanks at x0 (content pushed right = negative shift); DECDC deletes (left).
+        self._shift_row_segment(x0, -count)
+
+    def set_left_right_margins(self, left: int | None, right: int | None) -> None:
+        """DECSLRM — set the left/right margins (1-based; None/0 = extremes) and home the cursor."""
+        width = self.board.width
+        left0 = (left - 1) if left else 0
+        right0 = (right - 1) if right else (width - 1)
+        left0 = max(0, min(left0, width - 1))
+        right0 = max(left0, min(right0, width - 1))
+        self.left_margin = left0
+        self.right_margin = right0
+        self.board.cursor.move_to(0, 0)
+
+    def reset_left_right_margins(self) -> None:
+        """Restore the margins to the full screen width."""
+        self.left_margin = 0
+        self.right_margin = self.board.width - 1
+
+    def apply_left_right_margins(self, operation: Operation) -> None:
+        """CSI Pl ; Pr s — DECSLRM when margin mode is on, else SCOSC (save cursor)."""
+        if not self.board.modes.left_right_margin_mode:
+            self.board.cursor.save()
+            return
+        params = operation.args[0]
+        left = params[0] if params and params[0] is not None else None
+        right = params[1] if len(params) > 1 and params[1] is not None else None
+        self.set_left_right_margins(left, right)
 
     def scroll_up(self, count: int) -> None:
         """Scroll content up within scroll region."""
@@ -362,6 +391,7 @@ class ScreenDevice(Device):
     def reset(self, hard: bool = True) -> None:
         """Restore the full scroll region; a hard reset also clears both buffers to primary."""
         self.set_scroll_region(0, self.board.height - 1)
+        self.reset_left_right_margins()
         if not hard:
             return
         self.in_alt_screen = False

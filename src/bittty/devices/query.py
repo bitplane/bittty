@@ -39,7 +39,18 @@ class QueryDevice(Device):
             "DECSMBV": lambda op: setattr(self.board, "margin_bell_volume", op.args[0]),
             "DECRQCRA": self.request_checksum,
             "XTGETTCAP": self.request_termcap,
+            "XTVERSION": self.report_version,
         }
+
+    def report_version(self, operation: Operation) -> None:
+        """XTVERSION (CSI > q) — reply DCS > | name version ST."""
+        try:
+            from importlib.metadata import version
+
+            rev = version("bittty")
+        except Exception:
+            rev = "0"
+        self.board.host.write(f"\x1bP>|bittty({rev})\x1b\\", flush=True)
 
     def report_cursor_position(self, operation: Operation) -> None:
         row = self.board.cursor.y + 1

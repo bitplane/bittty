@@ -108,6 +108,11 @@ class KeyboardDevice(Device):
             return f"{constants.ESC}[27;{modifier};{code}~"
         return None
 
+    def report_focus(self, focused: bool) -> None:
+        """Focus reporting (DECSET 1004) — send CSI I on focus in, CSI O on focus out."""
+        if self.board.modes.focus_reporting:
+            self.board.host.write(f"{constants.ESC}[I" if focused else f"{constants.ESC}[O", flush=True)
+
     def reset(self, hard: bool = True) -> None:
         """RIS clears the modern-keyboard negotiation state."""
         if hard:

@@ -19,12 +19,20 @@ class StyleDevice(Device):
         self.board = board
         self.current = Style()
         self.default = Style()  # ESC[8]: the attributes SGR 0 resets to
+        self.stack: list[Style] = []  # XTPUSHSGR / XTPOPSGR
         self._monochrome = board.personality.color_depth == "monochrome"
         self.handlers = {
             "SGR": lambda op: self.apply_sgr(*op.args),
             "OSC_HYPERLINK": lambda op: self.set_hyperlink(op.args[0]),
             "DECSCA": lambda op: self.set_protected(op.args[0]),
+            "XTPUSHSGR": lambda op: self.stack.append(self.current),
+            "XTPOPSGR": lambda op: self.pop_sgr(),
         }
+
+    def pop_sgr(self) -> None:
+        """XTPOPSGR — restore the SGR attributes saved by the matching XTPUSHSGR."""
+        if self.stack:
+            self.current = self.stack.pop()
 
     @property
     def current_ansi_code(self) -> str:
@@ -57,9 +65,10 @@ class StyleDevice(Device):
         self.current = replace(self.current, protected=True if mode == 1 else None)
 
     def reset(self) -> None:
-        """Reset to the default style (and clear the ESC[8] default register)."""
+        """Reset to the default style (and clear the ESC[8] default register and SGR stack)."""
         self.current = Style()
         self.default = Style()
+        self.stack = []
 
     def background_ansi(self) -> str:
         """Return the active background style as ANSI."""

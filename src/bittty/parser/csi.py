@@ -122,6 +122,9 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
         style = param(params, 0, 0)
         return Operation("DECSCUSR", (style,), raw_csi_data)
 
+    if final_char == "q" and ">" in intermediates:  # XTVERSION - report terminal name/version
+        return Operation("XTVERSION", (param(params, 0, 0),), raw_csi_data)
+
     if final_char == "p" and '"' in intermediates:  # DECSCL - Set Conformance Level
         return Operation("DECSCL", (tuple(params),), raw_csi_data)
 
@@ -131,6 +134,16 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
 
     if final_char == "y" and "*" in intermediates:  # DECRQCRA - Request Checksum of Rectangular Area
         return Operation("DECRQCRA", (tuple(params),), raw_csi_data)
+
+    if "#" in intermediates:  # xterm SGR / colour attribute stacks
+        stack_op = {
+            "{": "XTPUSHSGR",  # push SGR attributes
+            "}": "XTPOPSGR",  # pop SGR attributes
+            "P": "XTPUSHCOLORS",  # push the colour palette
+            "Q": "XTPOPCOLORS",  # pop the colour palette
+        }.get(final_char)
+        if stack_op is not None:
+            return Operation(stack_op, (tuple(params),), raw_csi_data)
 
     if "$" in intermediates:  # DEC rectangular-area functions
         rect = {
@@ -307,7 +320,9 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
         bottom = (params[1] - 1) if len(params) > 1 and params[1] is not None else None
         return Operation("DECSTBM", (top, bottom), raw_csi_data)
 
-    if final_char == "s":  # Save Cursor
+    if final_char == "s":  # DECSLRM (Pl;Pr) when margin mode is on, else Save Cursor (SCOSC)
+        if params:
+            return Operation("DECSLRM", (tuple(params),), raw_csi_data)
         return Operation("SAVE", raw=raw_csi_data)
 
     if final_char == "b":  # REP - Repeat

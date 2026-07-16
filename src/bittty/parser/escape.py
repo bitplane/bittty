@@ -9,8 +9,10 @@ ESCAPE_OPERATION_NAMES = {
     "c": ("RIS", ()),
     "D": ("IND", ()),
     "M": ("RI", ()),
+    "6": ("DECBI", ()),  # Back Index
     "7": ("SAVE", ()),
     "8": ("RESTORE", ()),
+    "9": ("DECFI", ()),  # Forward Index
     "=": ("DECKPAM", ()),
     ">": ("DECKPNM", ()),
     "\\": ("ST", ()),

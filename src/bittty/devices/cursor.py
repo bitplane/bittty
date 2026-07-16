@@ -44,6 +44,8 @@ class CursorDevice(Device):
             "CTC": lambda op: self.tab_control(op.args[0]),
             "DECST8C": lambda op: self.reset_tab_stops(),
             "DECSCUSR": lambda op: self.set_cursor_style(op.args[0]),
+            "DECBI": lambda op: self.back_index(),
+            "DECFI": lambda op: self.forward_index(),
             "SAVE": lambda op: self.save(),
             "RESTORE": lambda op: self.restore(),
         }
@@ -104,6 +106,20 @@ class CursorDevice(Device):
 
         if self.board.modes.linefeed_newline_mode:
             self.carriage_return()
+
+    def forward_index(self) -> None:
+        """DECFI — move right; at the right margin, pan the margin box one column left."""
+        if self.x >= self.board.screen.right_margin:
+            self.board.screen.pan(1)
+        else:
+            self.x += 1
+
+    def back_index(self) -> None:
+        """DECBI — move left; at the left margin, pan the margin box one column right."""
+        if self.x <= self.board.screen.left_margin:
+            self.board.screen.pan(-1)
+        else:
+            self.x -= 1
 
     def reverse_index(self) -> None:
         """Move up one line, scrolling down at the top of the scroll region."""

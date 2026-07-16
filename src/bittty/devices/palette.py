@@ -33,6 +33,8 @@ class PaletteDevice(Device):
             "OSC_RESET_CURSOR": lambda op: self.reset_special("cursor"),
             "LINUX_PALETTE_SET": self.set_linux_palette,
             "LINUX_PALETTE_RESET": lambda op: self.reset(),
+            "XTPUSHCOLORS": lambda op: self.push_colors(),
+            "XTPOPCOLORS": lambda op: self.pop_colors(),
         }
 
     def reset(self) -> None:
@@ -41,8 +43,19 @@ class PaletteDevice(Device):
         self.foreground = self._defaults.foreground
         self.background = self._defaults.background
         self.cursor = self._defaults.cursor
+        self.stack: list[tuple] = []  # XTPUSHCOLORS / XTPOPCOLORS
         for slot, rgb in self.board.palette_overrides.items():
             self._set_slot(slot, rgb)
+
+    def push_colors(self) -> None:
+        """XTPUSHCOLORS — save the whole palette (256 entries plus fg/bg/cursor)."""
+        self.stack.append((list(self.colors), self.foreground, self.background, self.cursor))
+
+    def pop_colors(self) -> None:
+        """XTPOPCOLORS — restore the palette saved by the matching XTPUSHCOLORS."""
+        if self.stack:
+            colors, self.foreground, self.background, self.cursor = self.stack.pop()
+            self.colors = list(colors)
 
     def _set_slot(self, slot, rgb: RGB) -> None:
         if slot in _SPECIALS:

@@ -161,6 +161,14 @@ class Terminal:
         """Translate control codes based on terminal modes and send to the host."""
         self.board.keyboard.input(data)
 
+    def focus_in(self) -> None:
+        """Notify the terminal the window gained focus (reported if DECSET 1004 is on)."""
+        self.board.keyboard.report_focus(True)
+
+    def focus_out(self) -> None:
+        """Notify the terminal the window lost focus (reported if DECSET 1004 is on)."""
+        self.board.keyboard.report_focus(False)
+
     def input_mouse(self, x: int, y: int, button: int, event_type: str, modifiers: set[str]) -> None:
         """
         Handle mouse input, cache position, and send appropriate sequence to the host.

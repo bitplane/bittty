@@ -91,6 +91,12 @@ def _mouse_any_tracking(device: ModeDevice, value: bool) -> None:
     device.mouse_any_tracking = value
 
 
+def _declrmm(device: ModeDevice, value: bool) -> None:
+    # Disabling left/right margin mode resets the margins to the full width.
+    if not value:
+        device.board.screen.reset_left_right_margins()
+
+
 def _column_status(device: ModeDevice) -> int:
     return 1 if device.board.width == 132 else 2
 
@@ -122,8 +128,10 @@ MODE_SPECS: list[Mode] = [
     Mode(47, True, apply_fn=_alt_screen, status_fn=_alt_screen_status),
     Mode(66, True, "numeric_keypad", invert=True),
     Mode(67, True, "backarrow_key_sends_bs"),
-    Mode(69, True, "keyboard_usage_mode", queryable=True),
+    Mode(68, True, "keyboard_usage_mode", queryable=True),  # DECKBUM
+    Mode(69, True, "left_right_margin_mode", queryable=True, apply_fn=_declrmm),  # DECLRMM
     Mode(1000, True, "mouse_tracking"),
+    Mode(1004, True, "focus_reporting", queryable=True),
     Mode(1002, True, apply_fn=_mouse_button_tracking),
     Mode(1003, True, apply_fn=_mouse_any_tracking),
     Mode(1006, True, "mouse_sgr_mode"),
@@ -132,6 +140,7 @@ MODE_SPECS: list[Mode] = [
     Mode(1048, True, apply_fn=_save_restore_cursor),
     Mode(1049, True, apply_fn=_alt_screen_and_cursor, status_fn=_alt_screen_status),
     Mode(2004, True, "bracketed_paste"),
+    Mode(2026, True, "synchronized_output", queryable=True),
     Mode(2028, True, "auto_resize_mode", queryable=True),
 ]
 
@@ -178,6 +187,9 @@ class ModeDevice(Device):
         self.origin_mode = False
         self.auto_resize_mode = False
         self.keyboard_usage_mode = False
+        self.left_right_margin_mode = False
+        self.focus_reporting = False
+        self.synchronized_output = False
         self.bracketed_paste = False
 
     def reset(self, hard: bool = True) -> None:
