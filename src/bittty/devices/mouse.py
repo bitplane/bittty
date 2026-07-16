@@ -9,12 +9,13 @@ from .. import constants
 if TYPE_CHECKING:
     from .board import TerminalBoard
     from ..operations import Operation
+from .base import Device
 
 # DEC locator button bits for the Pb field (VT330/VT340).
 _LOCATOR_BUTTON_BIT = {0: 4, 1: 2, 2: 1}
 
 
-class MouseDevice:
+class MouseDevice(Device):
     """Owns mouse presentation state and emits mouse input reports."""
 
     def __init__(self, board: TerminalBoard) -> None:

@@ -7,13 +7,14 @@ import base64
 from typing import TYPE_CHECKING
 
 from ..operations import Operation
+from .base import Device
 from ..style import style_to_ansi
 
 if TYPE_CHECKING:
     from .board import TerminalBoard
 
 
-class QueryDevice:
+class QueryDevice(Device):
     """Applies terminal query operations to the current Terminal implementation."""
 
     def __init__(self, board: TerminalBoard) -> None:
@@ -204,8 +205,3 @@ class QueryDevice:
         if personality.color_depth == "truecolor":
             caps["RGB"] = "8/8/8"
         return caps
-
-    def handle_operation(self, operation: Operation) -> None:
-        handler = self.handlers.get(operation.name)
-        if handler is not None:
-            handler(operation)

@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..operations import Operation
+from .base import Device
 from ..palette import RGB, build_256, format_rgb, parse_color_spec
 
 if TYPE_CHECKING:
@@ -13,7 +14,7 @@ if TYPE_CHECKING:
 _SPECIALS = ("foreground", "background", "cursor")
 
 
-class PaletteDevice:
+class PaletteDevice(Device):
     """Holds the current 256-colour table plus fg/bg/cursor, and applies OSC colour ops."""
 
     def __init__(self, board: TerminalBoard) -> None:
@@ -120,8 +121,3 @@ class PaletteDevice:
         except ValueError:
             return
         self.colors[index] = (r, g, b)
-
-    def handle_operation(self, operation: Operation) -> None:
-        handler = self.handlers.get(operation.name)
-        if handler is not None:
-            handler(operation)

@@ -12,12 +12,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..operations import Operation
+from .base import Device
 
 if TYPE_CHECKING:
     from .board import TerminalBoard
 
 
-class PrinterDevice:
+class PrinterDevice(Device):
     """Owns printer state (controller/auto-print modes) and the output sink."""
 
     def __init__(self, board: TerminalBoard) -> None:
@@ -77,8 +78,3 @@ class PrinterDevice:
         """Leave printer controller/auto-print modes; the attached sink is config, so it stays."""
         self.controller_mode = False
         self.auto_print = False
-
-    def handle_operation(self, operation: Operation) -> None:
-        handler = self.handlers.get(operation.name)
-        if handler is not None:
-            handler(operation)

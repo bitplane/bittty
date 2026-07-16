@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..operations import Operation
+from .base import Device
 
 if TYPE_CHECKING:
     from .board import TerminalBoard
 
 
-class CursorDevice:
+class CursorDevice(Device):
     """Owns cursor state and applies cursor operations."""
 
     def __init__(self, board: TerminalBoard) -> None:
@@ -228,8 +228,3 @@ class CursorDevice:
         self.saved_ansi_code = ""
         if hard:
             self.tab_stops = set(range(8, self.board.width, 8))
-
-    def handle_operation(self, operation: Operation) -> None:
-        handler = self.handlers.get(operation.name)
-        if handler is not None:
-            handler(operation)

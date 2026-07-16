@@ -5,14 +5,14 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
-from ..operations import Operation
+from .base import Device
 from ..style import Style, get_background, parse_sgr_sequence, style_to_ansi
 
 if TYPE_CHECKING:
     from .board import TerminalBoard
 
 
-class StyleDevice:
+class StyleDevice(Device):
     """Owns current style state and applies style operations."""
 
     def __init__(self, board: TerminalBoard) -> None:
@@ -64,8 +64,3 @@ class StyleDevice:
     def background_ansi(self) -> str:
         """Return the active background style as ANSI."""
         return get_background(self.current_ansi_code)
-
-    def handle_operation(self, operation: Operation) -> None:
-        handler = self.handlers.get(operation.name)
-        if handler is not None:
-            handler(operation)

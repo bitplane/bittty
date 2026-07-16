@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Callable, Optional
 
 from .. import constants
 from ..operations import Operation
+from .base import Device
 
 if TYPE_CHECKING:
     from .board import TerminalBoard
@@ -135,7 +136,7 @@ MODE_SPECS: list[Mode] = [
 ]
 
 
-class ModeDevice:
+class ModeDevice(Device):
     """Owns terminal mode state and applies mode operations via the mode table."""
 
     def __init__(self, board: TerminalBoard) -> None:
@@ -203,11 +204,6 @@ class ModeDevice:
     def enter_numeric_keypad(self, operation: Operation) -> None:
         self.set_mode(constants.DECKPAM_APPLICATION_KEYPAD, False)
         self.numeric_keypad = True
-
-    def handle_operation(self, operation: Operation) -> None:
-        handler = self.handlers.get(operation.name)
-        if handler is not None:
-            handler(operation)
 
     # --- applying modes --- #
 

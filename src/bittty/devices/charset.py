@@ -5,13 +5,13 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..charsets import get_charset
-from ..operations import Operation
+from .base import Device
 
 if TYPE_CHECKING:
     from .board import TerminalBoard
 
 
-class CharsetDevice:
+class CharsetDevice(Device):
     """Owns charset state and applies charset operations."""
 
     def __init__(self, board: TerminalBoard) -> None:
@@ -137,8 +137,3 @@ class CharsetDevice:
         self.current_charset = 0
         self.gr = 1
         self.single_shift = None
-
-    def handle_operation(self, operation: Operation) -> None:
-        handler = self.handlers.get(operation.name)
-        if handler is not None:
-            handler(operation)

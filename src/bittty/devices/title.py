@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..operations import Operation
+from .base import Device
 
 if TYPE_CHECKING:
     from .board import TerminalBoard
 
 
-class TitleDevice:
+class TitleDevice(Device):
     """Owns terminal title state and applies title operations."""
 
     def __init__(self, board: TerminalBoard) -> None:
@@ -45,8 +45,3 @@ class TitleDevice:
         """XTWINOPS 23 — restore the most recently saved titles."""
         if self._stack:
             self.title, self.icon_title = self._stack.pop()
-
-    def handle_operation(self, operation: Operation) -> None:
-        handler = self.handlers.get(operation.name)
-        if handler is not None:
-            handler(operation)

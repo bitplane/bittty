@@ -8,7 +8,7 @@ from dataclasses import replace
 
 from .. import constants
 from ..buffer import Buffer
-from ..operations import Operation
+from .base import Device
 from ..style import Style, parse_sgr_sequence
 
 _REVERSE_ATTRS = {1: "bold", 4: "underline", 5: "blink", 7: "reverse"}
@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from .board import TerminalBoard
 
 
-class ScreenDevice:
+class ScreenDevice(Device):
     """Owns screen buffers and applies screen/editing operations."""
 
     def __init__(self, board: TerminalBoard) -> None:
@@ -393,8 +393,3 @@ class ScreenDevice:
             )
             if self.board.cursor.x < self.board.width - 1:
                 self.board.cursor.x += 1
-
-    def handle_operation(self, operation: Operation) -> None:
-        handler = self.handlers.get(operation.name)
-        if handler is not None:
-            handler(operation)

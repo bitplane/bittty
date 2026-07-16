@@ -4,13 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..operations import Operation
+from .base import Device
 
 if TYPE_CHECKING:
     from .board import TerminalBoard
 
 
-class ControlDevice:
+class ControlDevice(Device):
     """Applies C0 and simple control operations to the current Terminal implementation."""
 
     def __init__(self, board: TerminalBoard) -> None:
@@ -45,8 +45,3 @@ class ControlDevice:
         """ENQ — transmit the programmed answerback string, if any is set."""
         if self.board.answerback:
             self.board.host.write(self.board.answerback, flush=True)
-
-    def handle_operation(self, operation: Operation) -> None:
-        handler = self.handlers.get(operation.name)
-        if handler is not None:
-            handler(operation)

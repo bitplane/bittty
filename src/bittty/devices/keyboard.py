@@ -10,6 +10,7 @@ from ..keymap import apply_modifier
 if TYPE_CHECKING:
     from .board import TerminalBoard
     from ..operations import Operation
+from .base import Device
 
 # DECUDK numbers the definable keys F6-F20; map them to bittty's function-key numbers.
 _DECUDK_CODE_TO_FKEY = {
@@ -31,7 +32,7 @@ _DECUDK_CODE_TO_FKEY = {
 }
 
 
-class KeyboardDevice:
+class KeyboardDevice(Device):
     """Encodes keyboard input into terminal control sequences."""
 
     def __init__(self, board: TerminalBoard) -> None:
