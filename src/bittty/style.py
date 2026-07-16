@@ -151,12 +151,13 @@ def _last_reset_index(tokens: Tuple[str, ...]) -> int:
 
 
 @lru_cache(maxsize=10000)
-def parse_sgr_with_reset(ansi: str) -> Tuple[Style, bool]:
+def parse_sgr_with_reset(ansi: str) -> Tuple[Optional[Style], bool]:
     """Parse an SGR sequence into (style, reset): reset means "clear, then apply style".
 
     A reset token (0, 00, or an empty parameter) anywhere in the sequence discards
     everything before it, so ESC[0;31m is "reset, then red" — not a red merge into
-    the current attributes.
+    the current attributes. A pure reset returns (None, True) so the hot path can
+    skip the merge without comparing 20 Style fields.
     """
     if not ansi.startswith("\x1b[") or not ansi.endswith("m"):
         return Style(), False
@@ -164,7 +165,8 @@ def parse_sgr_with_reset(ansi: str) -> Tuple[Style, bool]:
     last = _last_reset_index(tokens)
     if last < 0:
         return interpret(tokens), False
-    return interpret(tokens[last + 1 :]), True
+    rest = tokens[last + 1 :]
+    return (interpret(rest) if rest else None), True
 
 
 _UNDERLINE_STYLES = {"0": "none", "1": "single", "2": "double", "3": "curly", "4": "dotted", "5": "dashed"}

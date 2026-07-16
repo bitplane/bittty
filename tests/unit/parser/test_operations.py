@@ -127,10 +127,11 @@ def test_parser_emits_reset_sgr_operation(terminal):
 
     parser.feed("\x1b[m\x1b[0m\x1b[00m")
 
+    # A pure reset carries None (no trailing attributes to merge after the reset).
     assert sink.operations == [
-        Operation("SGR", (parse_sgr_sequence("\x1b[m"), True), "\x1b[m"),
-        Operation("SGR", (parse_sgr_sequence("\x1b[0m"), True), "\x1b[0m"),
-        Operation("SGR", (parse_sgr_sequence("\x1b[00m"), True), "\x1b[00m"),
+        Operation("SGR", (None, True), "\x1b[m"),
+        Operation("SGR", (None, True), "\x1b[0m"),
+        Operation("SGR", (None, True), "\x1b[00m"),
     ]
 
 

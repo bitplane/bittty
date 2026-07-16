@@ -152,6 +152,17 @@ class Parser:
         self._seq_start = 0  # index where introducer starts
         self._scan_from = 0  # index just after introducer (for searching finals)
 
+        # Fast dispatch: when the sink is a device board it exposes its handler
+        # registry; hot tokens then skip the emit/handle_operation frames and a
+        # repeated CSI costs one memo hit and one call. Sinks without a registry
+        # (recording sinks in tests) take the plain handle_operation path.
+        self._handle = sink.handle_operation
+        registry = getattr(sink, "registry", None)
+        self._registry = registry
+        self._print_h = registry.get("PRINT") if registry is not None else None
+        self._crlf_h = registry.get("C0_CRLF") if registry is not None else None
+        self._csi_memo: dict = {}
+
     # ---- internal helpers ----
     def _set_seq_bounds(self, start: int) -> None:
         """Set seq_start and scan_from based on 7-bit/8-bit introducer length."""
@@ -167,13 +178,18 @@ class Parser:
     def feed(self, chunk: str) -> None:
         self.buffer += chunk
 
+        handle = self._handle
+        print_h = self._print_h or handle
+        crlf_h = self._crlf_h
+        csi_memo = self._csi_memo
+
         while True:
             if self.mode is None:
                 # ---- GROUND: scan for next token
                 trail_start: int | None = None
                 for m in GROUND_RE.finditer(self.buffer, self.pos):
                     kind = m.lastgroup
-                    start, end = m.start(), m.end()
+                    start, end = m.span()
 
                     if kind == "trail":
                         trail_start = start
@@ -181,22 +197,34 @@ class Parser:
 
                     # flush preceding printables
                     if start > self.pos:
-                        self.dispatch("print", self.buffer[self.pos : start])
+                        text = self.buffer[self.pos : start]
+                        print_h(Operation("PRINT", (text,), text))
                         self.pos = start
 
-                    # Hot one-shot tokens: emit inline and stay in this finditer
-                    # pass (no mode transition, no scanner restart).
+                    # Hot one-shot tokens: dispatch inline and stay in this
+                    # finditer pass (no mode transition, no scanner restart).
                     if kind == "text":
-                        self.emit(Operation("PRINT", (self.buffer[start:end],), self.buffer[start:end]))
+                        text = m.group()
+                        print_h(Operation("PRINT", (text,), text))
                         self.pos = end
                         continue
                     if kind == "csi_seq":
-                        raw = self.buffer[start:end]
-                        self.emit(parse_csi_operation(raw) or Operation("CSI", raw=raw))
+                        raw = m.group()
+                        entry = csi_memo.get(raw)
+                        if entry is None:
+                            op = parse_csi_operation(raw) or Operation("CSI", raw=raw)
+                            h = self._registry.get(op.name) if self._registry is not None else None
+                            entry = (h or handle, op)
+                            if len(csi_memo) < 4096:  # bounded like the parse cache
+                                csi_memo[raw] = entry
+                        entry[0](entry[1])
                         self.pos = end
                         continue
                     if kind == "crlf":
-                        self.emit(_CRLF_OP)
+                        if crlf_h is not None:
+                            crlf_h(_CRLF_OP)
+                        else:
+                            handle(_CRLF_OP)
                         self.pos = end
                         continue
 

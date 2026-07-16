@@ -80,15 +80,17 @@ class ScreenDevice(Device):
         piece; prepare_for_text_write supplies the wrap (or the clip, with
         autowrap off) between pieces.
         """
-        code_to_use = ansi_code if ansi_code else self.board.style.current
-        translated_text = self.board.charset.translate(text)
-        cursor = self.board.cursor
-        write = self.current_buffer.insert if self.board.modes.insert_mode else self.current_buffer.set
+        board = self.board
+        code_to_use = ansi_code if ansi_code else board.style.current
+        translated_text = board.charset.translate(text)
+        cursor = board.cursor
+        write = self.current_buffer.insert if board.modes.insert_mode else self.current_buffer.set
+        width = board.width
 
         remaining = translated_text
         while remaining:
             cursor.prepare_for_text_write()
-            space = self.board.width - cursor.x
+            space = width - cursor.x
             chunk, remaining = remaining[:space], remaining[space:]
             write(cursor.x, cursor.y, chunk, code_to_use)
             cursor.advance_after_text_write(len(chunk))

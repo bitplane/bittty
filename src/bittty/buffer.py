@@ -89,10 +89,13 @@ class Buffer:
 
         style = _coerce_style(style_or_ansi)
 
-        for i, char in enumerate(text):
-            if x + i >= self.width:
-                break
-            self.grid[y][x + i] = (style, char)
+        end = min(x + len(text), self.width)
+        if end <= x:
+            return
+        if end - x == 1:  # single cell (the common case for TUI repaints)
+            self.grid[y][x] = (style, text[0])
+            return
+        self.grid[y][x:end] = [(style, char) for char in text[: end - x]]
 
     def insert(self, x: int, y: int, text: str, style_or_ansi=None) -> None:
         """Insert text at position, shifting existing content right."""
@@ -142,9 +145,12 @@ class Buffer:
         """Clear a rectangular region."""
         style = _coerce_style(style_or_ansi)
 
+        left, right = max(0, x1), min(self.width, x2 + 1)
+        if right <= left:
+            return
+        blanks = [(style, " ")] * (right - left)
         for y in range(max(0, y1), min(self.height, y2 + 1)):
-            for x in range(max(0, x1), min(self.width, x2 + 1)):
-                self.grid[y][x] = (style, " ")
+            self.grid[y][left:right] = blanks
 
     def clear_line(
         self, y: int, mode: int = constants.ERASE_FROM_CURSOR_TO_END, cursor_x: int = 0, style_or_ansi=None
@@ -157,12 +163,12 @@ class Buffer:
 
         if mode == constants.ERASE_FROM_CURSOR_TO_END:
             # Clear from cursor to end of line
-            for x in range(cursor_x, self.width):
-                self.grid[y][x] = (style, " ")
+            if cursor_x < self.width:
+                self.grid[y][cursor_x : self.width] = [(style, " ")] * (self.width - cursor_x)
         elif mode == constants.ERASE_FROM_START_TO_CURSOR:
             # Clear from start to cursor
-            for x in range(0, min(cursor_x + 1, self.width)):
-                self.grid[y][x] = (style, " ")
+            n = min(cursor_x + 1, self.width)
+            self.grid[y][:n] = [(style, " ")] * n
         elif mode == constants.ERASE_ALL:
             # Clear entire line - use cached style if it's the default empty style
             if style is self._empty_style:
