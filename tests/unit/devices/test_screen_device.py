@@ -82,9 +82,9 @@ def test_screen_device_edit_operations_are_operation_driven():
     screen.current_buffer.set(0, 0, "abcdef")
     terminal.board.cursor.set_position(2, 0)
 
-    screen.handle_edit_operation(Operation("edit", "DCH", (2,), "\x1b[2P"))
+    screen.handle_operation(Operation("DCH", (2,), "\x1b[2P"))
     assert screen.current_buffer.get_line_text(0).startswith("abef")
 
     screen.last_printed_char = "X"
-    screen.handle_edit_operation(Operation("edit", "REP", (3,), "\x1b[3b"))
+    screen.handle_operation(Operation("REP", (3,), "\x1b[3b"))
     assert screen.current_buffer.get_line_text(0).startswith("abXXX")

@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING
 
 from ..operations import Operation
 
 if TYPE_CHECKING:
     from .board import TerminalBoard
-
-logger = logging.getLogger(__name__)
 
 
 class CursorDevice:
@@ -24,13 +21,40 @@ class CursorDevice:
         self.saved_y = 0
         self.saved_ansi_code = ""
         self.tab_stops = set(range(8, board.width, 8))
+        self.handlers = {
+            "CUP": lambda op: self.move_to(*op.args),
+            "HVP": lambda op: self.move_to(*op.args),
+            "CUU": lambda op: self.move_up(op.args[0]),
+            "CUD": lambda op: self.move_down(op.args[0]),
+            "CUF": lambda op: self.move_forward(op.args[0]),
+            "CUB": lambda op: self.move_back(op.args[0]),
+            "CHA": lambda op: self.set_position(op.args[0], None),
+            "VPA": lambda op: self.move_to(None, op.args[0]),
+            "SAVE": lambda op: self.save(),
+            "RESTORE": lambda op: self.restore(),
+        }
 
     def set_position(self, x: int | None, y: int | None) -> None:
-        """Move cursor to a clamped terminal position."""
+        """Move cursor to an absolute, clamped terminal position."""
         if x is not None:
             self.x = max(0, min(x, self.board.width - 1))
         if y is not None:
             self.y = max(0, min(y, self.board.height - 1))
+
+    def move_to(self, x: int | None, y: int | None) -> None:
+        """Apply a CUP/HVP/VPA move, honouring origin mode (DECOM).
+
+        Under origin mode the row is relative to the scroll region's top and is
+        clamped within the region; the column stays absolute (bittty has no
+        left/right margins).
+        """
+        if y is not None and self.board.modes.origin_mode:
+            top = self.board.screen.scroll_top
+            bottom = self.board.screen.scroll_bottom
+            self.set_position(x, None)
+            self.y = max(top, min(top + y, bottom))
+            return
+        self.set_position(x, y)
 
     def clamp_to_terminal(self) -> None:
         """Clamp the current position after terminal dimensions change."""
@@ -135,39 +159,6 @@ class CursorDevice:
             self.tab_stops = set(range(8, self.board.width, 8))
 
     def handle_operation(self, operation: Operation) -> None:
-        if operation.name in ("CUP", "HVP"):
-            col, row = operation.args
-            self.set_position(col, row)
-            return
-        if operation.name == "CUU":
-            (count,) = operation.args
-            self.move_up(count)
-            return
-        if operation.name == "CUD":
-            (count,) = operation.args
-            self.move_down(count)
-            return
-        if operation.name == "CUF":
-            (count,) = operation.args
-            self.move_forward(count)
-            return
-        if operation.name == "CUB":
-            (count,) = operation.args
-            self.move_back(count)
-            return
-        if operation.name == "CHA":
-            (col,) = operation.args
-            self.set_position(col, None)
-            return
-        if operation.name == "VPA":
-            (row,) = operation.args
-            self.set_position(None, row)
-            return
-        if operation.name == "SAVE":
-            self.save()
-            return
-        if operation.name == "RESTORE":
-            self.restore()
-            return
-
-        logger.debug("Unknown cursor operation: %s", operation)
+        handler = self.handlers.get(operation.name)
+        if handler is not None:
+            handler(operation)

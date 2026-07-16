@@ -57,6 +57,8 @@ class Terminal:
         height: int = 24,
         stdin=None,
         stdout=None,
+        personality=None,
+        palette_overrides=None,
     ) -> None:
         """Initialize terminal."""
         self.command = command
@@ -68,7 +70,7 @@ class Terminal:
 
         from .devices.board import TerminalBoard
 
-        self.board = TerminalBoard(self)
+        self.board = TerminalBoard(self, personality, palette_overrides)
 
         # Process management
         self.process: Optional[subprocess.Popen] = None
@@ -79,6 +81,11 @@ class Terminal:
 
         # Parser
         self.parser = Parser(self.board)
+
+    @property
+    def personality(self):
+        """The terminal personality this emulator presents to the host."""
+        return self.board.personality
 
     @property
     def pty(self) -> Optional[Any]:

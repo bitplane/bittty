@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING
 
 from .. import constants
@@ -11,8 +10,6 @@ from ..operations import Operation
 
 if TYPE_CHECKING:
     from .board import TerminalBoard
-
-logger = logging.getLogger(__name__)
 
 
 class ScreenDevice:
@@ -27,6 +24,24 @@ class ScreenDevice:
         self.scroll_top = 0
         self.scroll_bottom = board.height - 1
         self.last_printed_char = " "
+        self.handlers = {
+            "ED": lambda op: self.clear_screen(op.args[0]),
+            "EL": lambda op: self.clear_line(op.args[0]),
+            "IL": lambda op: self.insert_lines(op.args[0]),
+            "DL": lambda op: self.delete_lines(op.args[0]),
+            "ICH": lambda op: self.insert_characters(op.args[0], self.board.style.current),
+            "DCH": lambda op: self.delete_characters(op.args[0]),
+            "ECH": lambda op: self.erase_characters(op.args[0]),
+            "SU": lambda op: self.scroll(op.args[0]),
+            "SD": lambda op: self.scroll(-op.args[0]),
+            "REP": lambda op: self.repeat_last_character(op.args[0]),
+            "DECSTBM": lambda op: self.set_scroll_region(
+                op.args[0], self.board.height - 1 if op.args[1] is None else op.args[1]
+            ),
+            "RIS": lambda op: self.board.reset(hard=True),
+            "DECSTR": lambda op: self.board.reset(hard=False),
+            "DECALN": lambda op: self.alignment_test(),
+        }
 
     def write_text(self, text: str, ansi_code: str = "") -> None:
         """Write printable text at the cursor position."""
@@ -190,68 +205,19 @@ class ScreenDevice:
         self.resize(columns, self.board.height)
         self.board.cursor.set_position(0, 0)
 
-    def handle_edit_operation(self, operation: Operation) -> None:
-        if operation.name == "ED":
-            (mode,) = operation.args
-            self.clear_screen(mode)
-            return
-        if operation.name == "EL":
-            (mode,) = operation.args
-            self.clear_line(mode)
-            return
-        if operation.name == "IL":
-            (count,) = operation.args
-            self.insert_lines(count)
-            return
-        if operation.name == "DL":
-            (count,) = operation.args
-            self.delete_lines(count)
-            return
-        if operation.name == "ICH":
-            (count,) = operation.args
-            self.insert_characters(count, self.board.style.current)
-            return
-        if operation.name == "DCH":
-            (count,) = operation.args
-            self.delete_characters(count)
-            return
-        if operation.name == "ECH":
-            (count,) = operation.args
-            for _ in range(count):
-                self.current_buffer.set(
-                    self.board.cursor.x,
-                    self.board.cursor.y,
-                    " ",
-                    self.board.style.current,
-                )
-                if self.board.cursor.x < self.board.width - 1:
-                    self.board.cursor.x += 1
-            return
-        if operation.name == "SU":
-            (count,) = operation.args
-            self.scroll(count)
-            return
-        if operation.name == "SD":
-            (count,) = operation.args
-            self.scroll(-count)
-            return
-        if operation.name == "REP":
-            (count,) = operation.args
-            self.repeat_last_character(count)
-            return
+    def erase_characters(self, count: int) -> None:
+        """Erase `count` characters from the cursor with the current style (ECH)."""
+        for _ in range(count):
+            self.current_buffer.set(
+                self.board.cursor.x,
+                self.board.cursor.y,
+                " ",
+                self.board.style.current,
+            )
+            if self.board.cursor.x < self.board.width - 1:
+                self.board.cursor.x += 1
 
-        logger.debug("Unknown edit operation: %s", operation)
-
-    def handle_screen_operation(self, operation: Operation) -> None:
-        if operation.name == "DECSTBM":
-            top, bottom = operation.args
-            self.set_scroll_region(top, self.board.height - 1 if bottom is None else bottom)
-            return
-        if operation.name == "RIS":
-            self.board.reset(hard=True)
-            return
-        if operation.name == "DECSTR":
-            self.board.reset(hard=False)
-            return
-
-        logger.debug("Unknown screen operation: %s", operation)
+    def handle_operation(self, operation: Operation) -> None:
+        handler = self.handlers.get(operation.name)
+        if handler is not None:
+            handler(operation)

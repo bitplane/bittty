@@ -22,8 +22,8 @@ def test_charset_device_handles_operations_and_reset():
     terminal = Terminal(width=10, height=3)
     charset = terminal.board.charset
 
-    charset.handle_charset_operation(Operation("charset", "SCS_G1", ("0",), "\x1b)0"))
-    charset.handle_escape_operation(Operation("escape", "SS3", raw="\x1bO"))
+    charset.handle_operation(Operation("SCS_G1", ("0",), "\x1b)0"))
+    charset.handle_operation(Operation("SS3", raw="\x1bO"))
 
     assert charset.g1_charset == "0"
     assert charset.single_shift == 3

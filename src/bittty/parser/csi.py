@@ -87,35 +87,35 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
 
     if final_char == "m" and ">" not in raw_csi_data:  # SGR - Select Graphic Rendition
         reset = raw_csi_data in ("\x1b[m", "\x1b[0m", "\x1b[00m")
-        return Operation("style", "SGR", (parse_sgr_sequence(raw_csi_data), reset), raw_csi_data)
+        return Operation("SGR", (parse_sgr_sequence(raw_csi_data), reset), raw_csi_data)
 
     if final_char == "n":  # DSR/CPR - Device Status Report / Cursor Position Report
         param = params[0] if params and params[0] is not None else 0
         if param == 5:
-            return Operation("query", "DSR", (param,), raw_csi_data)
+            return Operation("DSR", (param,), raw_csi_data)
         if param == 6:
-            return Operation("query", "CPR", (param,), raw_csi_data)
+            return Operation("CPR", (param,), raw_csi_data)
 
     if final_char == "c":  # DA - Device Attributes
         param = params[0] if params and params[0] is not None else 0
         if ">" in intermediates:
-            return Operation("query", "DA2", (param,), raw_csi_data)
+            return Operation("DA2", (param,), raw_csi_data)
         if not intermediates and param == 0:
-            return Operation("query", "DA1", (param,), raw_csi_data)
+            return Operation("DA1", (param,), raw_csi_data)
 
     if final_char == "p" and "$" in intermediates:  # DECRQM - Request Mode Status
         mode = params[0] if params and params[0] is not None else 0
         private = "?" in intermediates
-        return Operation("query", "DECRQM", (mode, private), raw_csi_data)
+        return Operation("DECRQM", (mode, private), raw_csi_data)
 
     if final_char == "p" and "!" in intermediates:  # DECSTR - Soft Terminal Reset
-        return Operation("screen", "DECSTR", (), raw_csi_data)
+        return Operation("DECSTR", (), raw_csi_data)
 
     if final_char in ("h", "l"):  # SM/RM - Set/Reset Mode
         set_mode = final_char == "h"
         private = "?" in intermediates
         name = ("DECSET" if set_mode else "DECRST") if private else ("SM" if set_mode else "RM")
-        return Operation("mode", name, (tuple(params), set_mode, private), raw_csi_data)
+        return Operation(name, (tuple(params), set_mode, private), raw_csi_data)
 
     if any(intermediate != "?" for intermediate in intermediates):
         return None
@@ -124,81 +124,81 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
         row = (params[0] if params and params[0] is not None else 1) - 1
         col = (params[1] if len(params) > 1 and params[1] is not None else 1) - 1
         name = "CUP" if final_char == "H" else "HVP"
-        return Operation("cursor", name, (col, row), raw_csi_data)
+        return Operation(name, (col, row), raw_csi_data)
 
     if final_char == "A":  # CUU - Cursor Up
         count = params[0] if params and params[0] is not None else 1
-        return Operation("cursor", "CUU", (count,), raw_csi_data)
+        return Operation("CUU", (count,), raw_csi_data)
 
     if final_char == "B":  # CUD - Cursor Down
         count = params[0] if params and params[0] is not None else 1
-        return Operation("cursor", "CUD", (count,), raw_csi_data)
+        return Operation("CUD", (count,), raw_csi_data)
 
     if final_char == "C":  # CUF - Cursor Forward
         count = params[0] if params and params[0] is not None else 1
-        return Operation("cursor", "CUF", (count,), raw_csi_data)
+        return Operation("CUF", (count,), raw_csi_data)
 
     if final_char == "D":  # CUB - Cursor Backward
         count = params[0] if params and params[0] is not None else 1
-        return Operation("cursor", "CUB", (count,), raw_csi_data)
+        return Operation("CUB", (count,), raw_csi_data)
 
     if final_char == "G":  # CHA - Cursor Horizontal Absolute
         col = (params[0] if params and params[0] is not None else 1) - 1
-        return Operation("cursor", "CHA", (col,), raw_csi_data)
+        return Operation("CHA", (col,), raw_csi_data)
 
     if final_char == "d":  # VPA - Vertical Position Absolute
         row = (params[0] if params and params[0] is not None else 1) - 1
-        return Operation("cursor", "VPA", (row,), raw_csi_data)
+        return Operation("VPA", (row,), raw_csi_data)
 
     if final_char == "J":  # ED - Erase in Display
         mode = params[0] if params and params[0] is not None else 0
-        return Operation("edit", "ED", (mode,), raw_csi_data)
+        return Operation("ED", (mode,), raw_csi_data)
 
     if final_char == "K":  # EL - Erase in Line
         mode = params[0] if params and params[0] is not None else 0
-        return Operation("edit", "EL", (mode,), raw_csi_data)
+        return Operation("EL", (mode,), raw_csi_data)
 
     if final_char == "L":  # IL - Insert Lines
         count = params[0] if params and params[0] is not None else 1
-        return Operation("edit", "IL", (count,), raw_csi_data)
+        return Operation("IL", (count,), raw_csi_data)
 
     if final_char == "M":  # DL - Delete Lines
         count = params[0] if params and params[0] is not None else 1
-        return Operation("edit", "DL", (count,), raw_csi_data)
+        return Operation("DL", (count,), raw_csi_data)
 
     if final_char == "@":  # ICH - Insert Characters
         count = params[0] if params and params[0] is not None else 1
-        return Operation("edit", "ICH", (count,), raw_csi_data)
+        return Operation("ICH", (count,), raw_csi_data)
 
     if final_char == "P":  # DCH - Delete Characters
         count = params[0] if params and params[0] is not None else 1
-        return Operation("edit", "DCH", (count,), raw_csi_data)
+        return Operation("DCH", (count,), raw_csi_data)
 
     if final_char == "X":  # ECH - Erase Character
         count = params[0] if params and params[0] is not None else 1
-        return Operation("edit", "ECH", (count,), raw_csi_data)
+        return Operation("ECH", (count,), raw_csi_data)
 
     if final_char == "S":  # SU - Scroll Up
         count = params[0] if params and params[0] is not None else 1
-        return Operation("edit", "SU", (count,), raw_csi_data)
+        return Operation("SU", (count,), raw_csi_data)
 
     if final_char == "T":  # SD - Scroll Down
         count = params[0] if params and params[0] is not None else 1
-        return Operation("edit", "SD", (count,), raw_csi_data)
+        return Operation("SD", (count,), raw_csi_data)
 
     if final_char == "r":  # DECSTBM - Set Top and Bottom Margins
         top = (params[0] if params and params[0] is not None else 1) - 1
         bottom = (params[1] - 1) if len(params) > 1 and params[1] is not None else None
-        return Operation("screen", "DECSTBM", (top, bottom), raw_csi_data)
+        return Operation("DECSTBM", (top, bottom), raw_csi_data)
 
     if final_char == "s":  # Save Cursor
-        return Operation("cursor", "SAVE", raw=raw_csi_data)
+        return Operation("SAVE", raw=raw_csi_data)
 
     if final_char == "u":  # Restore Cursor
-        return Operation("cursor", "RESTORE", raw=raw_csi_data)
+        return Operation("RESTORE", raw=raw_csi_data)
 
     if final_char == "b":  # REP - Repeat
         count = params[0] if params and params[0] is not None else 1
-        return Operation("edit", "REP", (count,), raw_csi_data)
+        return Operation("REP", (count,), raw_csi_data)
 
     return None

@@ -7,9 +7,8 @@ def test_mode_device_owns_ansi_and_private_mode_state():
     terminal = Terminal(width=80, height=24)
     modes = terminal.board.modes
 
-    modes.set_ansi_modes((4, 7, 12, 20), True)
+    modes.set_ansi_modes((4, 12, 20), True)
     assert modes.insert_mode is True
-    assert modes.auto_wrap is True
     assert modes.local_echo is False
     assert modes.linefeed_newline_mode is True
 
@@ -31,7 +30,7 @@ def test_mode_device_reports_query_status_from_its_state():
     modes.cursor_visible = False
 
     assert modes.get_ansi_mode_status(4) == 1
-    assert modes.get_ansi_mode_status(7) == 2
+    assert modes.get_ansi_mode_status(7) == 0  # ANSI mode 7 is not a real mode
     assert modes.get_private_mode_status(25) == 2
 
 
@@ -39,11 +38,11 @@ def test_mode_device_keypad_operations_and_side_effects():
     terminal = Terminal(width=80, height=24)
     modes = terminal.board.modes
 
-    modes.handle_operation(Operation("mode", "DECKPAM", raw="\x1b="))
+    modes.handle_operation(Operation("DECKPAM", raw="\x1b="))
     assert modes.application_keypad is True
     assert modes.numeric_keypad is False
 
-    modes.handle_operation(Operation("mode", "DECKPNM", raw="\x1b>"))
+    modes.handle_operation(Operation("DECKPNM", raw="\x1b>"))
     assert modes.application_keypad is False
     assert modes.numeric_keypad is True
 

@@ -13,25 +13,37 @@ logger = logging.getLogger(__name__)
 def parse_osc_operation(string_buffer: str, raw: str = "") -> Operation | None:
     """Return a semantic operation for an OSC sequence."""
     if not string_buffer:
-        return Operation("osc", "OSC_EMPTY", raw=raw)
+        return Operation("OSC_EMPTY", raw=raw)
 
     parsed = _parse_osc(string_buffer)
     if parsed is None:
-        return Operation("osc", "OSC_INVALID", (string_buffer,), raw)
+        return Operation("OSC_INVALID", (string_buffer,), raw)
 
     cmd, data = parsed
     if cmd == 0:
-        return Operation("title", "SET_ICON_AND_WINDOW_TITLE", (data,), raw)
+        return Operation("SET_ICON_AND_WINDOW_TITLE", (data,), raw)
     if cmd == 1:
-        return Operation("title", "SET_ICON_TITLE", (data,), raw)
+        return Operation("SET_ICON_TITLE", (data,), raw)
     if cmd == 2:
-        return Operation("title", "SET_WINDOW_TITLE", (data,), raw)
-    if cmd == 10 and data == "?":
-        return Operation("query", "OSC_FOREGROUND_COLOR", raw=raw)
-    if cmd == 11 and data == "?":
-        return Operation("query", "OSC_BACKGROUND_COLOR", raw=raw)
+        return Operation("SET_WINDOW_TITLE", (data,), raw)
+    if cmd == 4:
+        return Operation("OSC_SET_PALETTE", (data,), raw)
+    if cmd == 10:
+        return Operation("OSC_FOREGROUND", (data,), raw)
+    if cmd == 11:
+        return Operation("OSC_BACKGROUND", (data,), raw)
+    if cmd == 12:
+        return Operation("OSC_CURSOR", (data,), raw)
+    if cmd == 104:
+        return Operation("OSC_RESET_PALETTE", (data,), raw)
+    if cmd == 110:
+        return Operation("OSC_RESET_FOREGROUND", (), raw)
+    if cmd == 111:
+        return Operation("OSC_RESET_BACKGROUND", (), raw)
+    if cmd == 112:
+        return Operation("OSC_RESET_CURSOR", (), raw)
 
-    return Operation("osc", "OSC_UNHANDLED", (cmd, data), raw)
+    return Operation("OSC_UNHANDLED", (cmd, data), raw)
 
 
 def _parse_osc(string_buffer: str) -> tuple[int, str] | None:

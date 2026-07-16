@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .. import constants
+from ..keymap import apply_modifier
 
 if TYPE_CHECKING:
     from .board import TerminalBoard
@@ -16,22 +17,23 @@ class KeyboardDevice:
     def __init__(self, board: TerminalBoard) -> None:
         self.board = board
 
+    def _csi_key(self, body: str, modifier: int) -> str:
+        """Build a CSI cursor/nav sequence, folding in a modifier if the terminal supports it."""
+        keymap = self.board.personality.keymap
+        if modifier != constants.KEY_MOD_NONE and keymap.modifiers:
+            return f"{constants.ESC}[1;{modifier}{body}"
+        return f"{constants.ESC}[{body}"
+
     def input_key(self, char: str, modifier: int = constants.KEY_MOD_NONE) -> None:
         """Convert key + modifier to standard control codes, then send to input()."""
-        if char in constants.CURSOR_KEYS:
-            if modifier == constants.KEY_MOD_NONE:
-                sequence = f"{constants.ESC}[{constants.CURSOR_KEYS[char]}"
-            else:
-                sequence = f"{constants.ESC}[1;{modifier}{constants.CURSOR_KEYS[char]}"
-            self.input(sequence)
+        keymap = self.board.personality.keymap
+
+        if char in keymap.cursor_keys:
+            self.input(self._csi_key(keymap.cursor_keys[char], modifier))
             return
 
-        if char in constants.NAV_KEYS:
-            if modifier == constants.KEY_MOD_NONE:
-                sequence = f"{constants.ESC}[{constants.NAV_KEYS[char]}"
-            else:
-                sequence = f"{constants.ESC}[1;{modifier}{constants.NAV_KEYS[char]}"
-            self.input(sequence)
+        if char in keymap.nav_keys:
+            self.input(self._csi_key(keymap.nav_keys[char], modifier))
             return
 
         if char == constants.BS:
@@ -47,73 +49,26 @@ class KeyboardDevice:
                 self.input(chr(ord(upper_char) - ord("A") + 1))
                 return
 
-        if len(char) == 1 and char.isprintable():
+        if len(char) == 1:
+            # A single character (printable or control) is sent as-is.
             self.input(char)
-            return
-
-        self.input(char)
+        # A multi-character key name this terminal's keymap does not define is ignored.
 
     def input_fkey(self, num: int, modifier: int = constants.KEY_MOD_NONE) -> None:
-        """Convert function key + modifier to standard control codes, then send to input()."""
-        if 1 <= num <= 4:
-            base_chars = {1: "P", 2: "Q", 3: "R", 4: "S"}
-            if modifier == constants.KEY_MOD_NONE:
-                sequence = f"{constants.ESC}O{base_chars[num]}"
-            else:
-                sequence = f"{constants.ESC}[1;{modifier}{base_chars[num]}"
-        elif 5 <= num <= 12:
-            codes = {5: 15, 6: 17, 7: 18, 8: 19, 9: 20, 10: 21, 11: 23, 12: 24}
-            if modifier == constants.KEY_MOD_NONE:
-                sequence = f"{constants.ESC}[{codes[num]}~"
-            else:
-                sequence = f"{constants.ESC}[{codes[num]};{modifier}~"
-        else:
-            return
-
+        """Encode a function key using the personality's keymap, then send it."""
+        keymap = self.board.personality.keymap
+        sequence = keymap.function_keys.get(num)
+        if sequence is None:
+            return  # this terminal has no such function key
+        if modifier != constants.KEY_MOD_NONE and keymap.modifiers:
+            sequence = apply_modifier(sequence, modifier)
         self.input(sequence)
 
     def input_numpad_key(self, key: str) -> None:
         """Convert numpad key to the sequence for the current keypad mode."""
-        if self.board.modes.numeric_keypad:
-            numeric_map = {
-                "0": "0",
-                "1": "1",
-                "2": "2",
-                "3": "3",
-                "4": "4",
-                "5": "5",
-                "6": "6",
-                "7": "7",
-                "8": "8",
-                "9": "9",
-                ".": ".",
-                "+": "+",
-                "-": "-",
-                "*": "*",
-                "/": "/",
-                "Enter": "\r",
-            }
-            sequence = numeric_map.get(key, key)
-        else:
-            application_map = {
-                "0": "\x1bOp",
-                "1": "\x1bOq",
-                "2": "\x1bOr",
-                "3": "\x1bOs",
-                "4": "\x1bOt",
-                "5": "\x1bOu",
-                "6": "\x1bOv",
-                "7": "\x1bOw",
-                "8": "\x1bOx",
-                "9": "\x1bOy",
-                ".": "\x1bOn",
-                "+": "\x1bOk",
-                "-": "\x1bOm",
-                "*": "\x1bOj",
-                "/": "\x1bOo",
-                "Enter": "\x1bOM",
-            }
-            sequence = application_map.get(key, key)
+        keymap = self.board.personality.keymap
+        table = keymap.numpad_numeric if self.board.modes.numeric_keypad else keymap.numpad_application
+        sequence = table.get(key, key)
 
         self.input(sequence)
 

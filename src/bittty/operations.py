@@ -12,7 +12,6 @@ from . import constants
 class Operation:
     """A parsed terminal operation."""
 
-    kind: str
     name: str
     args: tuple[Any, ...] = field(default_factory=tuple)
     raw: str = ""

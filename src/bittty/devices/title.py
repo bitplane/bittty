@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING
 
 from ..operations import Operation
 
 if TYPE_CHECKING:
     from .board import TerminalBoard
-
-logger = logging.getLogger(__name__)
 
 
 class TitleDevice:
@@ -20,6 +17,11 @@ class TitleDevice:
         self.board = board
         self.title = "Terminal"
         self.icon_title = "Terminal"
+        self.handlers = {
+            "SET_ICON_AND_WINDOW_TITLE": lambda op: self.set_both(op.args[0]),
+            "SET_ICON_TITLE": lambda op: self.set_icon_title(op.args[0]),
+            "SET_WINDOW_TITLE": lambda op: self.set_title(op.args[0]),
+        }
 
     def set_title(self, title: str) -> None:
         """Set terminal title."""
@@ -29,17 +31,12 @@ class TitleDevice:
         """Set terminal icon title."""
         self.icon_title = icon_title
 
-    def handle_operation(self, operation: Operation) -> None:
-        (title,) = operation.args
-        if operation.name == "SET_ICON_AND_WINDOW_TITLE":
-            self.set_title(title)
-            self.set_icon_title(title)
-            return
-        if operation.name == "SET_ICON_TITLE":
-            self.set_icon_title(title)
-            return
-        if operation.name == "SET_WINDOW_TITLE":
-            self.set_title(title)
-            return
+    def set_both(self, title: str) -> None:
+        """Set both the window title and the icon title."""
+        self.set_title(title)
+        self.set_icon_title(title)
 
-        logger.debug("Unknown title operation: %s", operation)
+    def handle_operation(self, operation: Operation) -> None:
+        handler = self.handlers.get(operation.name)
+        if handler is not None:
+            handler(operation)

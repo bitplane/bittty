@@ -9,6 +9,7 @@ from .terminal import Terminal
 from .buffer import Buffer
 from .parser import Parser
 from .devices.board import TerminalBoard
+from .personality import Personality, XTERM, VT100, VT220, LINUX
 from .operations import Operation, OperationSink
 from .transports import HostPort, WritableTransport
 from .style import (
@@ -31,6 +32,11 @@ __all__ = [
     "OperationSink",
     "HostPort",
     "TerminalBoard",
+    "Personality",
+    "XTERM",
+    "VT100",
+    "VT220",
+    "LINUX",
     "WritableTransport",
     "CURSOR_CODE",
     "RESET_CODE",

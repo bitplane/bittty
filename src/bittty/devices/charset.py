@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING
 
 from ..charsets import get_charset
@@ -10,8 +9,6 @@ from ..operations import Operation
 
 if TYPE_CHECKING:
     from .board import TerminalBoard
-
-logger = logging.getLogger(__name__)
 
 
 class CharsetDevice:
@@ -27,6 +24,26 @@ class CharsetDevice:
         self.single_shift: int | None = None
         self.cache = {}
         self.charset_array = ["B", "B", "B", "B"]
+        self.handlers = {
+            "SS2": lambda op: self.single_shift_2(),
+            "SS3": lambda op: self.single_shift_3(),
+            "SCS_G0": lambda op: self.designate(0, op.args[0]),
+            "SCS_G1": lambda op: self.designate(1, op.args[0]),
+            "SCS_G2": lambda op: self.designate(2, op.args[0]),
+            "SCS_G3": lambda op: self.designate(3, op.args[0]),
+        }
+
+    def _recognizes(self, designator: str) -> bool:
+        """Whether the personality's charset repertoire includes this designator."""
+        charsets = self.board.personality.charsets
+        return charsets is None or designator in charsets
+
+    def designate(self, index: int, designator: str) -> None:
+        """Apply an SCS G-set designation, ignoring charsets the terminal lacks."""
+        if not self._recognizes(designator):
+            return
+        setters = (self.set_g0_charset, self.set_g1_charset, self.set_g2_charset, self.set_g3_charset)
+        setters[index](designator)
 
     def translate(self, text: str) -> str:
         """Translate text through the active character set."""
@@ -106,29 +123,7 @@ class CharsetDevice:
         self.current_charset = 0
         self.single_shift = None
 
-    def handle_escape_operation(self, operation: Operation) -> None:
-        if operation.name == "SS2":
-            self.single_shift_2()
-            return
-        if operation.name == "SS3":
-            self.single_shift_3()
-            return
-
-        logger.debug("Unknown escape operation: %s", operation)
-
-    def handle_charset_operation(self, operation: Operation) -> None:
-        (charset,) = operation.args
-        if operation.name == "SCS_G0":
-            self.set_g0_charset(charset)
-            return
-        if operation.name == "SCS_G1":
-            self.set_g1_charset(charset)
-            return
-        if operation.name == "SCS_G2":
-            self.set_g2_charset(charset)
-            return
-        if operation.name == "SCS_G3":
-            self.set_g3_charset(charset)
-            return
-
-        logger.debug("Unknown charset operation: %s", operation)
+    def handle_operation(self, operation: Operation) -> None:
+        handler = self.handlers.get(operation.name)
+        if handler is not None:
+            handler(operation)

@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 from ..operations import Operation, control_name
 from .csi import parse_csi_operation
 from .dcs import parse_dcs_operation
-from .escape import parse_charset_operation, parse_escape_operation
+from .escape import parse_charset_operation, parse_escape_operation, parse_hash_operation
 from .osc import parse_osc_operation
 
 logger = logging.getLogger(__name__)
@@ -36,6 +36,8 @@ GROUND_PATTERNS = {
     # Singles / minis
     "ss2": r"(?:\x1bN|\x8E)",
     "ss3": r"(?:\x1bO|\x8F)",
+    # ESC # n — line size / alignment (DECALN is ESC # 8). Before generic ESC minis.
+    "esc_hash": r"\x1b#[0-9]",
     # Generic simple ESC minis (not starters for paired strings)
     # excludes [, ], P, _, ^, X, and ST (\)
     "esc": r"\x1b[^][P_^XO\\]",
@@ -223,49 +225,50 @@ class Parser:
     # ---- dispatchers ----
     def dispatch(self, kind: str, data: str) -> None:
         if kind == "print":
-            self.emit(Operation("text", "PRINT", (data,), data))
+            self.emit(Operation("PRINT", (data,), data))
             return
 
         # Standalones
         if kind == "bel":
-            self.emit(Operation("control", "C0_BEL", raw=data))
+            self.emit(Operation("C0_BEL", raw=data))
             return
         if kind == "ctrl":
-            self.emit(Operation("control", control_name(data), raw=data))
+            self.emit(Operation(control_name(data), raw=data))
             return
         if kind == "ss2":
-            self.emit(Operation("escape", "SS2", raw=data))
+            self.emit(Operation("SS2", raw=data))
             return
         if kind == "ss3":
-            self.emit(Operation("escape", "SS3", raw=data))
+            self.emit(Operation("SS3", raw=data))
             return
         if kind == "esc":
-            self.emit(parse_escape_operation(data) or Operation("escape", "ESC", raw=data))
+            self.emit(parse_escape_operation(data) or Operation("ESC", raw=data))
             return
         if kind in ("esc_charset", "esc_charset2"):
-            self.emit(parse_charset_operation(data) or Operation("escape", "SCS", raw=data))
+            self.emit(parse_charset_operation(data) or Operation("SCS", raw=data))
+            return
+        if kind == "esc_hash":
+            self.emit(parse_hash_operation(data) or Operation("ESC_HASH", (data[2],), data))
             return
 
         # Paired sequences
         if kind == "csi":
-            self.emit(parse_csi_operation(data) or Operation("csi", "CSI", raw=data))
+            self.emit(parse_csi_operation(data) or Operation("CSI", raw=data))
             return
         if kind == "osc":
-            self.emit(
-                parse_osc_operation(parse_string_sequence(data, "osc"), data) or Operation("osc", "OSC", raw=data)
-            )
+            self.emit(parse_osc_operation(parse_string_sequence(data, "osc"), data) or Operation("OSC", raw=data))
             return
         if kind == "dcs":
             self.emit(parse_dcs_operation(parse_string_sequence(data, "dcs"), data))
             return
         if kind == "apc":
-            self.emit(Operation("apc", "APC", (parse_string_sequence(data, "apc"),), data))
+            self.emit(Operation("APC", (parse_string_sequence(data, "apc"),), data))
             return
         if kind == "pm":
-            self.emit(Operation("pm", "PM", (parse_string_sequence(data, "pm"),), data))
+            self.emit(Operation("PM", (parse_string_sequence(data, "pm"),), data))
             return
         if kind == "sos":
-            self.emit(Operation("sos", "SOS", (parse_string_sequence(data, "sos"),), data))
+            self.emit(Operation("SOS", (parse_string_sequence(data, "sos"),), data))
             return
 
         logger.debug("Unknown kind: %s", kind)

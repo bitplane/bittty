@@ -1,9 +1,18 @@
-"""Mode operation handler for the current Terminal state."""
+"""Terminal modes as a declarative capability table.
+
+Each mode is a small `Mode` capability that claims a number (ANSI or DEC
+private), knows how to apply itself and how to report its DECRQM status, and
+can be omitted by a personality (so, e.g., a terminal that predates bracketed
+paste simply does not recognise mode 2004). The boolean flags themselves stay
+as attributes on the device: they are read widely across the emulator, and
+several modes legitimately share one flag (mode 7 and 1000 both drive
+`mouse_tracking`).
+"""
 
 from __future__ import annotations
 
-import logging
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Callable, Optional
 
 from .. import constants
 from ..operations import Operation
@@ -11,15 +20,137 @@ from ..operations import Operation
 if TYPE_CHECKING:
     from .board import TerminalBoard
 
-logger = logging.getLogger(__name__)
+
+@dataclass(frozen=True)
+class Mode:
+    """One terminal mode: which flag it backs and how it answers DECRQM."""
+
+    number: int
+    private: bool
+    attr: Optional[str] = None  # device flag this mode drives, if any
+    invert: bool = False  # "set" stores the negation (modes 12, 66)
+    queryable: bool = False  # DECRQM reports this mode's state
+    apply_fn: Optional[Callable[["ModeDevice", bool], None]] = None  # side effect
+    status_fn: Optional[Callable[["ModeDevice"], int]] = None  # custom DECRQM status
+
+    @property
+    def key(self) -> tuple[bool, int]:
+        return (self.private, self.number)
+
+    def apply(self, device: ModeDevice, value: bool) -> None:
+        if self.attr is not None:
+            setattr(device, self.attr, (not value) if self.invert else value)
+        if self.apply_fn is not None:
+            self.apply_fn(device, value)
+
+    def status(self, device: ModeDevice) -> int:
+        """DECRQM status: 1 = set, 2 = reset, 0 = not recognised."""
+        if self.status_fn is not None:
+            return self.status_fn(device)
+        if self.queryable and self.attr is not None:
+            state = getattr(device, self.attr)
+            return 1 if ((not state) if self.invert else state) else 2
+        return 0
+
+
+# --- side effects for modes that do more than flip a flag --- #
+
+
+def _deccolm(device: ModeDevice, value: bool) -> None:
+    device.board.resize(132 if value else 80, device.board.height)
+
+
+def _alt_screen(device: ModeDevice, value: bool) -> None:
+    device.board.screen.switch_screen(value)
+
+
+def _save_restore_cursor(device: ModeDevice, value: bool) -> None:
+    if value:
+        device.board.cursor.save()
+    else:
+        device.board.cursor.restore()
+
+
+def _alt_screen_and_cursor(device: ModeDevice, value: bool) -> None:
+    if value:
+        device.board.cursor.save()
+        device.board.screen.switch_screen(True)
+    else:
+        device.board.screen.switch_screen(False)
+        device.board.cursor.restore()
+
+
+def _mouse_button_tracking(device: ModeDevice, value: bool) -> None:
+    device.mouse_tracking = value
+    device.mouse_button_tracking = value
+
+
+def _mouse_any_tracking(device: ModeDevice, value: bool) -> None:
+    device.mouse_tracking = value
+    device.mouse_any_tracking = value
+
+
+def _column_status(device: ModeDevice) -> int:
+    return 1 if device.board.width == 132 else 2
+
+
+def _alt_screen_status(device: ModeDevice) -> int:
+    return 1 if device.board.screen.in_alt_screen else 2
+
+
+# The full mode repertoire. A personality may omit any of these.
+MODE_SPECS: list[Mode] = [
+    # ANSI modes (autowrap and cursor visibility are DEC *private* 7/25, not ANSI)
+    Mode(4, False, "insert_mode", queryable=True),
+    Mode(12, False, "local_echo", invert=True, queryable=True),
+    Mode(20, False, "linefeed_newline_mode", queryable=True),
+    Mode(constants.DECKPAM_APPLICATION_KEYPAD, False, "application_keypad"),
+    # DEC private modes
+    Mode(1, True, "cursor_application_mode", queryable=True),
+    Mode(2, True, "ansi_mode", queryable=True),
+    Mode(3, True, apply_fn=_deccolm, status_fn=_column_status),
+    Mode(4, True, "scroll_mode"),
+    Mode(5, True, "reverse_screen"),
+    Mode(6, True, "origin_mode", queryable=True),
+    Mode(7, True, "auto_wrap", queryable=True),
+    Mode(8, True, "auto_repeat"),
+    Mode(9, True, "mouse_tracking"),
+    Mode(12, True, "cursor_blinking"),
+    Mode(20, True, "linefeed_newline_mode"),
+    Mode(25, True, "cursor_visible", queryable=True),
+    Mode(47, True, apply_fn=_alt_screen, status_fn=_alt_screen_status),
+    Mode(66, True, "numeric_keypad", invert=True),
+    Mode(67, True, "backarrow_key_sends_bs"),
+    Mode(69, True, "keyboard_usage_mode", queryable=True),
+    Mode(1000, True, "mouse_tracking"),
+    Mode(1002, True, apply_fn=_mouse_button_tracking),
+    Mode(1003, True, apply_fn=_mouse_any_tracking),
+    Mode(1006, True, "mouse_sgr_mode"),
+    Mode(1015, True, "urxvt_mouse"),
+    Mode(1047, True, apply_fn=_alt_screen, status_fn=_alt_screen_status),
+    Mode(1048, True, apply_fn=_save_restore_cursor),
+    Mode(1049, True, apply_fn=_alt_screen_and_cursor, status_fn=_alt_screen_status),
+    Mode(2004, True, "bracketed_paste"),
+    Mode(2028, True, "auto_resize_mode", queryable=True),
+]
 
 
 class ModeDevice:
-    """Owns terminal mode state and applies mode operations."""
+    """Owns terminal mode state and applies mode operations via the mode table."""
 
     def __init__(self, board: TerminalBoard) -> None:
         self.board = board
         self._set_defaults()
+        unsupported = board.personality.unsupported_modes
+        self._modes = {mode.key: mode for mode in MODE_SPECS if mode.key not in unsupported}
+        self.handlers = {
+            "SM": self.apply_mode_operation,
+            "RM": self.apply_mode_operation,
+            "DECSET": self.apply_mode_operation,
+            "DECRST": self.apply_mode_operation,
+            "DECKPAM": self.enter_application_keypad,
+            "DECKPNM": self.enter_numeric_keypad,
+        }
 
     def _set_defaults(self) -> None:
         """Set every mode flag to its power-on default."""
@@ -58,160 +189,57 @@ class ModeDevice:
         self.origin_mode = False
         self.cursor_visible = True
 
+    # --- dispatch --- #
+
+    def apply_mode_operation(self, operation: Operation) -> None:
+        params, set_mode, private = operation.args
+        modes = self.set_private_modes if private else self.set_ansi_modes
+        modes(params, set_mode)
+
+    def enter_application_keypad(self, operation: Operation) -> None:
+        self.set_mode(constants.DECKPAM_APPLICATION_KEYPAD, True)
+        self.numeric_keypad = False
+
+    def enter_numeric_keypad(self, operation: Operation) -> None:
+        self.set_mode(constants.DECKPAM_APPLICATION_KEYPAD, False)
+        self.numeric_keypad = True
+
     def handle_operation(self, operation: Operation) -> None:
-        if operation.name in ("SM", "RM", "DECSET", "DECRST"):
-            params, set_mode, private = operation.args
-            if private:
-                self.set_private_modes(params, set_mode)
-            else:
-                self.set_ansi_modes(params, set_mode)
-            return
-        if operation.name == "DECKPAM":
-            self.set_mode(constants.DECKPAM_APPLICATION_KEYPAD, True)
-            self.numeric_keypad = False
-            return
-        if operation.name == "DECKPNM":
-            self.set_mode(constants.DECKPAM_APPLICATION_KEYPAD, False)
-            self.numeric_keypad = True
-            return
+        handler = self.handlers.get(operation.name)
+        if handler is not None:
+            handler(operation)
 
-        logger.debug("Unknown mode operation: %s", operation)
+    # --- applying modes --- #
 
-    def set_mode(self, mode: int, value: bool = True, private: bool = False) -> None:
-        """Set a single terminal mode."""
-        if private:
-            self.set_private_modes((mode,), value)
-        else:
-            self.set_ansi_modes((mode,), value)
-
-    def clear_mode(self, mode: int, private: bool = False) -> None:
-        """Clear a single terminal mode."""
-        self.set_mode(mode, False, private)
+    def _apply(self, private: bool, param: int | None, value: bool) -> None:
+        if param is None:
+            return
+        mode = self._modes.get((private, param))
+        if mode is not None:
+            mode.apply(self, value)
 
     def set_ansi_modes(self, params: tuple[int | None, ...], set_mode: bool) -> None:
         for param in params:
-            if param is None:
-                continue
-
-            if param == 4:
-                self.insert_mode = set_mode
-            elif param == 7:
-                self.auto_wrap = set_mode
-            elif param == 12:
-                self.local_echo = not set_mode
-            elif param == 20:
-                self.linefeed_newline_mode = set_mode
-            elif param == 25:
-                self.cursor_visible = set_mode
-            elif param == constants.DECKPAM_APPLICATION_KEYPAD:
-                self.application_keypad = set_mode
+            self._apply(False, param, set_mode)
 
     def set_private_modes(self, params: tuple[int | None, ...], set_mode: bool) -> None:
         for param in params:
-            if param is None:
-                continue
+            self._apply(True, param, set_mode)
 
-            if param == 1:
-                self.cursor_application_mode = set_mode
-            elif param == 2:
-                self.ansi_mode = set_mode
-            elif param == 3:
-                self.board.resize(132 if set_mode else 80, self.board.height)
-            elif param == 4:
-                self.scroll_mode = set_mode
-            elif param == 5:
-                self.reverse_screen = set_mode
-            elif param == 6:
-                self.origin_mode = set_mode
-            elif param == 7:
-                self.auto_wrap = set_mode
-            elif param == 8:
-                self.auto_repeat = set_mode
-            elif param == 9:
-                self.mouse_tracking = set_mode
-            elif param == 12:
-                self.cursor_blinking = set_mode
-            elif param == 20:
-                self.linefeed_newline_mode = set_mode
-            elif param == 25:
-                self.cursor_visible = set_mode
-            elif param == 47:
-                if set_mode:
-                    self.board.screen.switch_screen(True)
-                else:
-                    self.board.screen.switch_screen(False)
-            elif param == 66:
-                self.numeric_keypad = not set_mode
-            elif param == 67:
-                self.backarrow_key_sends_bs = set_mode
-            elif param == 1000:
-                self.mouse_tracking = set_mode
-            elif param == 1002:
-                self.mouse_tracking = set_mode
-                self.mouse_button_tracking = set_mode
-            elif param == 1003:
-                self.mouse_tracking = set_mode
-                self.mouse_any_tracking = set_mode
-            elif param == 1006:
-                self.mouse_sgr_mode = set_mode
-            elif param == 1015:
-                self.urxvt_mouse = set_mode
-            elif param == 1047:
-                if set_mode:
-                    self.board.screen.switch_screen(True)
-                else:
-                    self.board.screen.switch_screen(False)
-            elif param == 1048:
-                if set_mode:
-                    self.board.cursor.save()
-                else:
-                    self.board.cursor.restore()
-            elif param == 1049:
-                if set_mode:
-                    self.board.cursor.save()
-                    self.board.screen.switch_screen(True)
-                else:
-                    self.board.screen.switch_screen(False)
-                    self.board.cursor.restore()
-            elif param == 2004:
-                self.bracketed_paste = set_mode
-            elif param == 69:
-                self.keyboard_usage_mode = set_mode
-            elif param == 2028:
-                self.auto_resize_mode = set_mode
+    def set_mode(self, mode: int, value: bool = True, private: bool = False) -> None:
+        """Set a single terminal mode."""
+        self._apply(private, mode, value)
+
+    def clear_mode(self, mode: int, private: bool = False) -> None:
+        """Clear a single terminal mode."""
+        self._apply(private, mode, False)
+
+    # --- DECRQM status --- #
 
     def get_private_mode_status(self, mode: int) -> int:
-        if mode == 1:
-            return 1 if self.cursor_application_mode else 2
-        if mode == 2:
-            return 1 if self.ansi_mode else 2
-        if mode == 3:
-            return 1 if self.board.width == 132 else 2
-        if mode == 6:
-            return 1 if self.origin_mode else 2
-        if mode == 7:
-            return 1 if self.auto_wrap else 2
-        if mode == 25:
-            return 1 if self.cursor_visible else 2
-        if mode in (47, 1047):
-            return 1 if self.board.screen.in_alt_screen else 2
-        if mode == 1049:
-            return 1 if self.board.screen.in_alt_screen else 2
-        if mode == 69:
-            return 1 if self.keyboard_usage_mode else 2
-        if mode == 2028:
-            return 1 if self.auto_resize_mode else 2
-        return 0
+        entry = self._modes.get((True, mode))
+        return entry.status(self) if entry is not None else 0
 
     def get_ansi_mode_status(self, mode: int) -> int:
-        if mode == 4:
-            return 1 if self.insert_mode else 2
-        if mode == 7:
-            return 1 if self.auto_wrap else 2
-        if mode == 12:
-            return 1 if not self.local_echo else 2
-        if mode == 20:
-            return 1 if self.linefeed_newline_mode else 2
-        if mode == 25:
-            return 1 if self.cursor_visible else 2
-        return 0
+        entry = self._modes.get((False, mode))
+        return entry.status(self) if entry is not None else 0

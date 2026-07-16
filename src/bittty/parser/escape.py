@@ -6,18 +6,18 @@ from ..operations import Operation
 
 
 ESCAPE_OPERATION_NAMES = {
-    "c": ("screen", "RIS", ()),
-    "D": ("control", "IND", ()),
-    "M": ("control", "RI", ()),
-    "7": ("cursor", "SAVE", ()),
-    "8": ("cursor", "RESTORE", ()),
-    "=": ("mode", "DECKPAM", ()),
-    ">": ("mode", "DECKPNM", ()),
-    "\\": ("control", "ST", ()),
-    "N": ("escape", "SS2", ()),
-    "O": ("escape", "SS3", ()),
-    "E": ("control", "NEL", ()),
-    "H": ("control", "HTS", ()),
+    "c": ("RIS", ()),
+    "D": ("IND", ()),
+    "M": ("RI", ()),
+    "7": ("SAVE", ()),
+    "8": ("RESTORE", ()),
+    "=": ("DECKPAM", ()),
+    ">": ("DECKPNM", ()),
+    "\\": ("ST", ()),
+    "N": ("SS2", ()),
+    "O": ("SS3", ()),
+    "E": ("NEL", ()),
+    "H": ("HTS", ()),
 }
 
 
@@ -30,8 +30,17 @@ def parse_escape_operation(data: str) -> Operation | None:
     if parts is None:
         return None
 
-    kind, name, args = parts
-    return Operation(kind, name, args, data)
+    name, args = parts
+    return Operation(name, args, data)
+
+
+def parse_hash_operation(data: str) -> Operation | None:
+    """Return a semantic operation for an ESC # n sequence (DECALN is ESC # 8)."""
+    if len(data) < 3:
+        return None
+    if data[2] == "8":
+        return Operation("DECALN", (), data)
+    return None
 
 
 CHARSET_OPERATION_NAMES = {
@@ -51,4 +60,4 @@ def parse_charset_operation(data: str) -> Operation | None:
     if name is None:
         return None
 
-    return Operation("charset", name, (data[2],), data)
+    return Operation(name, (data[2],), data)

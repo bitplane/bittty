@@ -30,10 +30,10 @@ def test_board_routes_operations_to_plugged_in_devices():
     terminal = Terminal(width=12, height=4)
     board = terminal.board
 
-    board.handle_operation(Operation("style", "SGR", (parse_sgr_sequence("\x1b[31m"), False), "\x1b[31m"))
-    board.handle_operation(Operation("text", "PRINT", ("red",), "red"))
-    board.handle_operation(Operation("cursor", "CUP", (4, 1), "\x1b[2;5H"))
-    board.handle_operation(Operation("title", "SET_WINDOW_TITLE", ("Board",), "\x1b]2;Board\x07"))
+    board.handle_operation(Operation("SGR", (parse_sgr_sequence("\x1b[31m"), False), "\x1b[31m"))
+    board.handle_operation(Operation("PRINT", ("red",), "red"))
+    board.handle_operation(Operation("CUP", (4, 1), "\x1b[2;5H"))
+    board.handle_operation(Operation("SET_WINDOW_TITLE", ("Board",), "\x1b]2;Board\x07"))
 
     assert terminal.board.screen.current_buffer.get_line_text(0).startswith("red")
     assert (terminal.board.cursor.x, terminal.board.cursor.y) == (4, 1)

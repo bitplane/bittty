@@ -203,19 +203,19 @@ def test_csi_params_with_invalid_main_param(terminal):
 
 
 def test_csi_dispatch_sm_rm_basic_modes(terminal):
-    """Test _csi_dispatch_sm_rm for basic public modes."""
+    """Autowrap and cursor visibility are DEC private modes (?7 / ?25)."""
     parser = Parser(terminal.board)
 
-    # Test auto-wrap mode (public mode 7)
-    parser.feed("\x1b[7h")  # Set auto-wrap
+    # Test auto-wrap mode (private mode ?7)
+    parser.feed("\x1b[?7h")  # Set auto-wrap
     assert terminal.board.modes.auto_wrap is True
-    parser.feed("\x1b[7l")  # Reset auto-wrap
+    parser.feed("\x1b[?7l")  # Reset auto-wrap
     assert terminal.board.modes.auto_wrap is False
 
-    # Test cursor visibility (public mode 25)
-    parser.feed("\x1b[25l")  # Hide cursor
+    # Test cursor visibility (private mode ?25)
+    parser.feed("\x1b[?25l")  # Hide cursor
     assert terminal.board.modes.cursor_visible is False
-    parser.feed("\x1b[25h")  # Show cursor
+    parser.feed("\x1b[?25h")  # Show cursor
     assert terminal.board.modes.cursor_visible is True
 
 
