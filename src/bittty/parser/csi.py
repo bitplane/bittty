@@ -94,6 +94,25 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
         reset = raw_csi_data in ("\x1b[m", "\x1b[0m", "\x1b[00m")
         return Operation("SGR", (parse_sgr_sequence(raw_csi_data), reset), raw_csi_data)
 
+    # Hot path: the common cursor moves are params-only (no intermediates), and dominate
+    # real CSI traffic after SGR. Dispatch them here — with inline param extraction —
+    # before the pile of rare intermediate-gated branches below. Anything with an
+    # intermediate (e.g. SR is `SP A`) skips this and falls through to its handler.
+    if not intermediates:
+        if final_char == "H" or final_char == "f":  # CUP / HVP
+            p = params
+            row = (p[0] if p and p[0] is not None else 1) - 1
+            col = (p[1] if len(p) > 1 and p[1] is not None else 1) - 1
+            return Operation("CUP" if final_char == "H" else "HVP", (col, row), raw_csi_data)
+        if final_char == "A":  # CUU
+            return Operation("CUU", (params[0] if params and params[0] is not None else 1,), raw_csi_data)
+        if final_char == "B":  # CUD
+            return Operation("CUD", (params[0] if params and params[0] is not None else 1,), raw_csi_data)
+        if final_char == "C":  # CUF
+            return Operation("CUF", (params[0] if params and params[0] is not None else 1,), raw_csi_data)
+        if final_char == "D":  # CUB
+            return Operation("CUB", (params[0] if params and params[0] is not None else 1,), raw_csi_data)
+
     if final_char == "n":  # DSR/CPR - Device Status Report / Cursor Position Report
         code = param(params, 0, 0)
         if code == 5:
@@ -214,27 +233,7 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
     if any(intermediate != "?" for intermediate in intermediates):
         return None
 
-    if final_char in ("H", "f"):  # CUP/HVP - Cursor Position
-        row = (param(params, 0, 1)) - 1
-        col = (param(params, 1, 1)) - 1
-        name = "CUP" if final_char == "H" else "HVP"
-        return Operation(name, (col, row), raw_csi_data)
-
-    if final_char == "A":  # CUU - Cursor Up
-        count = param(params, 0, 1)
-        return Operation("CUU", (count,), raw_csi_data)
-
-    if final_char == "B":  # CUD - Cursor Down
-        count = param(params, 0, 1)
-        return Operation("CUD", (count,), raw_csi_data)
-
-    if final_char == "C":  # CUF - Cursor Forward
-        count = param(params, 0, 1)
-        return Operation("CUF", (count,), raw_csi_data)
-
-    if final_char == "D":  # CUB - Cursor Backward
-        count = param(params, 0, 1)
-        return Operation("CUB", (count,), raw_csi_data)
+    # CUP/HVP and CUU/CUD/CUF/CUB (params-only) are handled by the hot path near the top.
 
     if final_char == "G":  # CHA - Cursor Horizontal Absolute
         col = (param(params, 0, 1)) - 1

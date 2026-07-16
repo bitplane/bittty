@@ -29,8 +29,10 @@ class Buffer:
         self.width = width
         self.height = height
 
-        # Cache a default empty style to avoid creating new ones
+        # Cache a default empty style + cell to avoid rebuilding them (cells are
+        # immutable tuples, always replaced never mutated, so one instance is safe to share).
         self._empty_style = Style()
+        self._empty_cell: Cell = (self._empty_style, " ")
 
         # Initialize grid with empty cells (default style, space character)
         self.grid: List[List[Cell]] = []
@@ -41,8 +43,8 @@ class Buffer:
         self.line_attributes: List[str] = [constants.LINE_SINGLE] * height
 
     def _create_empty_row(self) -> List[Cell]:
-        """Create a row filled with empty cells, reusing the cached empty style."""
-        return [(self._empty_style, " ") for _ in range(self.width)]
+        """Create a row filled with the shared empty cell (list-multiply, no per-cell build)."""
+        return [self._empty_cell] * self.width
 
     def set_line_attribute(self, y: int, attribute: str) -> None:
         """Set a line's DECDHL/DECDWL/DECSWL attribute."""
