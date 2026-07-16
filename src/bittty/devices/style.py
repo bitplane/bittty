@@ -47,9 +47,17 @@ class StyleDevice(Device):
 
     def apply_sgr(self, style: Style, reset: bool = False) -> None:
         """Apply an SGR style update; a monochrome terminal drops colour attributes."""
-        merged = self.default if reset else self.current.merge(style)
-        # SGR (including reset) never affects the active hyperlink or protection.
-        merged = replace(merged, hyperlink=self.current.hyperlink, protected=self.current.protected)
+        if reset:
+            # SGR 0 resets to the default attributes but keeps the active hyperlink/protection.
+            # No active link/protection (the common case) -> reuse the shared default, no rebuild.
+            if self.current.hyperlink is None and self.current.protected is None:
+                merged = self.default
+            else:
+                merged = replace(self.default, hyperlink=self.current.hyperlink, protected=self.current.protected)
+        else:
+            # merge() already preserves hyperlink/protected — SGR never sets them — so no
+            # extra rebuild is needed on the hot per-cell path.
+            merged = self.current.merge(style)
         if self._monochrome:
             merged = replace(merged, fg=None, bg=None)
         self.current = merged

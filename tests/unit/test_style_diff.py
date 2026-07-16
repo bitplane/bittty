@@ -145,9 +145,10 @@ def test_diff_caching_works():
     # Results should be identical (and cached)
     assert result1 == result2 == result3
 
-    # Cache info should show hits
-    cache_info = style1.diff.cache_info()
-    assert cache_info.hits >= 2
+    # Cache info should show hits (the cache lives on the module-level _style_diff now)
+    from bittty.style import _style_diff
+
+    assert _style_diff.cache_info().hits >= 2
 
 
 def test_diff_default_to_default_returns_empty():

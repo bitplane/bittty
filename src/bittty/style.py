@@ -14,13 +14,12 @@ RESET_CODE = "\033[0m"  # Reset all formatting
 # --- Color Model --- #
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Color:
     mode: Literal["default", "indexed", "rgb"]
     value: Union[int, Tuple[int, int, int], None] = None
 
     @property
-    @lru_cache
     def ansi(self) -> str:
         if self.mode == "default":
             return ""
@@ -46,7 +45,7 @@ class Color:
 # --- Style Model --- #
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Style:
     fg: Optional[Color] = None
     bg: Optional[Color] = None
@@ -70,53 +69,52 @@ class Style:
     protected: Optional[bool] = None  # DECSCA: shielded from selective erase
 
     def merge(self, other: Style) -> Style:
-        """Merge another style into this one. The other style takes precedence."""
+        """Merge another style into this one; the other's non-None attributes win.
 
-        def merge_attr(base_attr, other_attr):
-            # If other explicitly sets the attribute (True or False), use it
-            if other_attr is not None:
-                return other_attr
-            # Otherwise keep the base attribute
-            return base_attr
-
+        The per-field ``x if x is not None else y`` is inlined (no helper closure):
+        this is the hottest path in the emulator — one call per printed cell that
+        changes style — so the ~17 closure calls per merge are worth removing.
+        """
         return Style(
             fg=other.fg if other.fg is not None else self.fg,
             bg=other.bg if other.bg is not None else self.bg,
-            bold=merge_attr(self.bold, other.bold),
-            dim=merge_attr(self.dim, other.dim),
-            italic=merge_attr(self.italic, other.italic),
-            underline=merge_attr(self.underline, other.underline),
-            blink=merge_attr(self.blink, other.blink),
-            reverse=merge_attr(self.reverse, other.reverse),
-            conceal=merge_attr(self.conceal, other.conceal),
-            strike=merge_attr(self.strike, other.strike),
-            underline_style=merge_attr(self.underline_style, other.underline_style),
-            overline=merge_attr(self.overline, other.overline),
+            bold=other.bold if other.bold is not None else self.bold,
+            dim=other.dim if other.dim is not None else self.dim,
+            italic=other.italic if other.italic is not None else self.italic,
+            underline=other.underline if other.underline is not None else self.underline,
+            blink=other.blink if other.blink is not None else self.blink,
+            reverse=other.reverse if other.reverse is not None else self.reverse,
+            conceal=other.conceal if other.conceal is not None else self.conceal,
+            strike=other.strike if other.strike is not None else self.strike,
+            underline_style=other.underline_style if other.underline_style is not None else self.underline_style,
+            overline=other.overline if other.overline is not None else self.overline,
             underline_color=other.underline_color if other.underline_color is not None else self.underline_color,
-            font=merge_attr(self.font, other.font),
-            fraktur=merge_attr(self.fraktur, other.fraktur),
-            framed=merge_attr(self.framed, other.framed),
-            encircled=merge_attr(self.encircled, other.encircled),
-            ideogram=merge_attr(self.ideogram, other.ideogram),
-            hyperlink=merge_attr(self.hyperlink, other.hyperlink),
-            protected=merge_attr(self.protected, other.protected),
+            font=other.font if other.font is not None else self.font,
+            fraktur=other.fraktur if other.fraktur is not None else self.fraktur,
+            framed=other.framed if other.framed is not None else self.framed,
+            encircled=other.encircled if other.encircled is not None else self.encircled,
+            ideogram=other.ideogram if other.ideogram is not None else self.ideogram,
+            hyperlink=other.hyperlink if other.hyperlink is not None else self.hyperlink,
+            protected=other.protected if other.protected is not None else self.protected,
         )
 
-    @lru_cache(maxsize=10000)
     def diff(self, other: "Style") -> str:
         """Generate minimal ANSI sequence to transition to another style."""
-        if self == other:
-            return ""
+        return _style_diff(self, other)
 
-        if other == Style():  # Target is default
-            return "\x1b[0m"
 
-        if self == Style():  # Coming from default
-            return style_to_ansi(other)
-
-        # For now, reset + target (can optimize later for partial changes)
-        target_ansi = style_to_ansi(other)
-        return f"\x1b[0m{target_ansi}" if target_ansi else "\x1b[0m"
+@lru_cache(maxsize=10000)
+def _style_diff(a: "Style", b: "Style") -> str:
+    """Cached style transition (module-level so Style can use __slots__)."""
+    if a == b:
+        return ""
+    if b == Style():  # Target is default
+        return "\x1b[0m"
+    if a == Style():  # Coming from default
+        return style_to_ansi(b)
+    # For now, reset + target (can optimize later for partial changes)
+    target_ansi = style_to_ansi(b)
+    return f"\x1b[0m{target_ansi}" if target_ansi else "\x1b[0m"
 
 
 # --- ANSI Sequence Parser --- #
