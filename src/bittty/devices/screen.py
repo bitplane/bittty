@@ -47,6 +47,8 @@ class ScreenDevice:
             "ECH": lambda op: self.erase_characters(op.args[0]),
             "SU": lambda op: self.scroll(op.args[0]),
             "SD": lambda op: self.scroll(-op.args[0]),
+            "SL": lambda op: self.pan(op.args[0]),
+            "SR": lambda op: self.pan(-op.args[0]),
             "REP": lambda op: self.repeat_last_character(op.args[0]),
             "DECSTBM": lambda op: self.set_top_and_bottom_margins(*op.args),
             "RIS": lambda op: self.board.reset(hard=True),
@@ -298,6 +300,22 @@ class ScreenDevice:
             self.current_buffer.scroll_region_up(self.scroll_top, self.scroll_bottom, abs_lines)
         else:
             self.current_buffer.scroll_region_down(self.scroll_top, self.scroll_bottom, abs_lines)
+
+    def pan(self, columns: int) -> None:
+        """Pan the scroll-region rows horizontally: SL (columns > 0) left, SR (< 0) right."""
+        if columns == 0 or self.scroll_top > self.scroll_bottom:
+            return
+        width = self.board.width
+        n = min(abs(columns), width)
+        bg = self.board.style.background_ansi()
+        for y in range(self.scroll_top, self.scroll_bottom + 1):
+            row = [self.current_buffer.get_cell(x, y) for x in range(width)]
+            shifted = row[n:] + [None] * n if columns > 0 else [None] * n + row[: width - n]
+            for x, cell in enumerate(shifted):
+                if cell is None:
+                    self.current_buffer.set_cell(x, y, " ", bg)
+                else:
+                    self.current_buffer.set_cell(x, y, cell[1], cell[0])
 
     def scroll_up(self, count: int) -> None:
         """Scroll content up within scroll region."""

@@ -53,6 +53,9 @@ class TerminalBoard:
         self.default_underline_color: int | None = None
         self.default_dim_color: int | None = None
         self.console_requests: list[tuple[str, int]] = []  # ("switch", n) / ("previous", 0)
+        self.answerback: str = ""  # ENQ reply string; a frontend/config sets it
+        self.warning_bell_volume: int = 8  # DECSWBV (0-8)
+        self.margin_bell_volume: int = 0  # DECSMBV (0-8)
         self.host = HostPort()
 
         self.charset = CharsetDevice(self)

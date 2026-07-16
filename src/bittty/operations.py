@@ -25,6 +25,7 @@ class OperationSink(Protocol):
 
 
 CONTROL_NAMES = {
+    constants.ENQ: "C0_ENQ",
     constants.BEL: "C0_BEL",
     constants.BS: "C0_BS",
     constants.HT: "C0_HT",

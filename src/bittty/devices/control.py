@@ -18,6 +18,7 @@ class ControlDevice:
         self.cursor = board.cursor
         self.charset = board.charset
         self.handlers = {
+            "C0_ENQ": lambda op: self.answerback(),
             "C0_BEL": lambda op: self.board.bell(),
             "C0_BS": lambda op: self.cursor.backspace(),
             "C0_HT": lambda op: self.cursor.horizontal_tab(),
@@ -39,6 +40,11 @@ class ControlDevice:
         """NEL — carriage return followed by line feed."""
         self.cursor.carriage_return()
         self.cursor.line_feed()
+
+    def answerback(self) -> None:
+        """ENQ — transmit the programmed answerback string, if any is set."""
+        if self.board.answerback:
+            self.board.host.write(self.board.answerback, flush=True)
 
     def handle_operation(self, operation: Operation) -> None:
         handler = self.handlers.get(operation.name)

@@ -148,6 +148,18 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
         if final_char == "w":  # DECEFR - Enable Filter Rectangle
             return Operation("DECEFR", (tuple(params),), raw_csi_data)
 
+    if " " in intermediates:  # SPACE-intermediate functions (DECSCUSR handled above)
+        count = params[0] if params and params[0] is not None else 1
+        volume = params[0] if params and params[0] is not None else 0
+        if final_char == "@":  # SL - Scroll Left (data pans left, right edge blanks)
+            return Operation("SL", (count,), raw_csi_data)
+        if final_char == "A":  # SR - Scroll Right
+            return Operation("SR", (count,), raw_csi_data)
+        if final_char == "t":  # DECSWBV - Set Warning Bell Volume
+            return Operation("DECSWBV", (volume,), raw_csi_data)
+        if final_char == "u":  # DECSMBV - Set Margin Bell Volume
+            return Operation("DECSMBV", (volume,), raw_csi_data)
+
     if final_char in ("h", "l"):  # SM/RM - Set/Reset Mode
         set_mode = final_char == "h"
         private = "?" in intermediates

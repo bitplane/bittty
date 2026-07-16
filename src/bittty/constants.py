@@ -21,6 +21,7 @@ CHARSET_G2 = "CHARSET_G2"
 CHARSET_G3 = "CHARSET_G3"
 
 # --- C0 Control Characters ---
+ENQ = "\x05"  # Enquiry (triggers answerback)
 BEL = "\x07"  # Bell
 BS = "\x08"  # Backspace
 HT = "\x09"  # Horizontal Tab

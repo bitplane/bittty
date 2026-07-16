@@ -34,6 +34,8 @@ class QueryDevice:
             "OSC_NOTIFY": lambda op: self.board.notifications.append(op.args[0]),
             "OSC_SHELL_MARK": lambda op: self.board.prompt_marks.append((op.args[0], self.board.cursor.y)),
             "LINUX_SETTERM": self.handle_setterm,
+            "DECSWBV": lambda op: setattr(self.board, "warning_bell_volume", op.args[0]),
+            "DECSMBV": lambda op: setattr(self.board, "margin_bell_volume", op.args[0]),
         }
 
     def report_cursor_position(self, operation: Operation) -> None:
