@@ -6,7 +6,7 @@ from bittty.terminal import Terminal
 
 def test_screen_device_owns_buffers_and_switches_active_buffer():
     terminal = Terminal(width=10, height=4)
-    screen = terminal.screen
+    screen = terminal.board.screen
 
     screen.current_buffer.set(0, 0, "primary")
     screen.switch_screen(True)
@@ -23,39 +23,39 @@ def test_screen_device_owns_buffers_and_switches_active_buffer():
 
 def test_screen_device_write_text_uses_style_charset_and_insert_mode():
     terminal = Terminal(width=8, height=3)
-    terminal.style.current_ansi_code = "\x1b[31m"
-    terminal.insert_mode = True
-    terminal.current_buffer.set(0, 0, "abcd")
-    terminal.cursor.set_position(2, 0)
+    terminal.board.style.current_ansi_code = "\x1b[31m"
+    terminal.board.modes.insert_mode = True
+    terminal.board.screen.current_buffer.set(0, 0, "abcd")
+    terminal.board.cursor.set_position(2, 0)
 
-    terminal.screen.write_text("X")
+    terminal.board.screen.write_text("X")
 
-    assert terminal.current_buffer.get_line_text(0) == "abXcd   "
-    assert terminal.current_buffer.get_cell(2, 0) == (parse_sgr_sequence("\x1b[31m"), "X")
-    assert terminal.cursor.x == 3
-    assert terminal.screen.last_printed_char == "X"
+    assert terminal.board.screen.current_buffer.get_line_text(0) == "abXcd   "
+    assert terminal.board.screen.current_buffer.get_cell(2, 0) == (parse_sgr_sequence("\x1b[31m"), "X")
+    assert terminal.board.cursor.x == 3
+    assert terminal.board.screen.last_printed_char == "X"
 
 
 def test_screen_device_clear_uses_active_background_style():
     terminal = Terminal(width=6, height=2)
-    terminal.style.current_ansi_code = "\x1b[42m"
-    terminal.current_buffer.set(0, 0, "hello")
-    terminal.cursor.set_position(1, 0)
+    terminal.board.style.current_ansi_code = "\x1b[42m"
+    terminal.board.screen.current_buffer.set(0, 0, "hello")
+    terminal.board.cursor.set_position(1, 0)
 
-    terminal.screen.clear_line(constants.ERASE_FROM_CURSOR_TO_END)
+    terminal.board.screen.clear_line(constants.ERASE_FROM_CURSOR_TO_END)
 
-    assert terminal.current_buffer.get_cell(0, 0)[1] == "h"
-    assert terminal.current_buffer.get_cell(1, 0) == (parse_sgr_sequence("\x1b[42m"), " ")
+    assert terminal.board.screen.current_buffer.get_cell(0, 0)[1] == "h"
+    assert terminal.board.screen.current_buffer.get_cell(1, 0) == (parse_sgr_sequence("\x1b[42m"), " ")
 
 
 def test_screen_device_scroll_region_and_line_operations():
     terminal = Terminal(width=8, height=4)
-    screen = terminal.screen
+    screen = terminal.board.screen
     for y in range(4):
         screen.current_buffer.set(0, y, f"line{y}")
 
     screen.set_scroll_region(1, 2)
-    terminal.cursor.set_position(0, 1)
+    terminal.board.cursor.set_position(0, 1)
     screen.delete_lines(1)
 
     assert screen.current_buffer.get_line_text(1).startswith("line2")
@@ -64,23 +64,23 @@ def test_screen_device_scroll_region_and_line_operations():
 
 def test_screen_device_insert_and_delete_characters():
     terminal = Terminal(width=10, height=2)
-    screen = terminal.screen
+    screen = terminal.board.screen
 
     screen.current_buffer.set(0, 0, "ABCDEFGHIJ")
-    terminal.cursor.set_position(2, 0)
+    terminal.board.cursor.set_position(2, 0)
     screen.insert_characters(3)
     assert screen.current_buffer.get_line_text(0) == "AB   CDEFG"
 
-    terminal.cursor.set_position(2, 0)
+    terminal.board.cursor.set_position(2, 0)
     screen.delete_characters(4)
     assert screen.current_buffer.get_line_text(0) == "ABDEFG    "
 
 
 def test_screen_device_edit_operations_are_operation_driven():
     terminal = Terminal(width=8, height=3)
-    screen = terminal.screen
+    screen = terminal.board.screen
     screen.current_buffer.set(0, 0, "abcdef")
-    terminal.cursor.set_position(2, 0)
+    terminal.board.cursor.set_position(2, 0)
 
     screen.handle_edit_operation(Operation("edit", "DCH", (2,), "\x1b[2P"))
     assert screen.current_buffer.get_line_text(0).startswith("abef")

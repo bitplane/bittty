@@ -18,7 +18,6 @@ class CursorDevice:
 
     def __init__(self, board: TerminalBoard) -> None:
         self.board = board
-        self.terminal = board.terminal
         self.x = 0
         self.y = 0
         self.saved_x = 0
@@ -29,23 +28,23 @@ class CursorDevice:
     def set_position(self, x: int | None, y: int | None) -> None:
         """Move cursor to a clamped terminal position."""
         if x is not None:
-            self.x = max(0, min(x, self.terminal.width - 1))
+            self.x = max(0, min(x, self.board.width - 1))
         if y is not None:
-            self.y = max(0, min(y, self.terminal.height - 1))
+            self.y = max(0, min(y, self.board.height - 1))
 
     def clamp_to_terminal(self) -> None:
         """Clamp the current position after terminal dimensions change."""
         self.set_position(self.x, self.y)
-        self.tab_stops = {stop for stop in self.tab_stops if stop < self.terminal.width}
+        self.tab_stops = {stop for stop in self.tab_stops if stop < self.board.width}
 
     def move_up(self, count: int) -> None:
         self.y = max(0, self.y - count)
 
     def move_down(self, count: int) -> None:
-        self.y = min(self.terminal.height - 1, self.y + count)
+        self.y = min(self.board.height - 1, self.y + count)
 
     def move_forward(self, count: int) -> None:
-        self.x = min(self.terminal.width - 1, self.x + count)
+        self.x = min(self.board.width - 1, self.x + count)
 
     def move_back(self, count: int) -> None:
         self.x = max(0, self.x - count)
@@ -56,18 +55,18 @@ class CursorDevice:
 
     def line_feed(self, is_wrapped: bool = False) -> None:
         """Move down one line, scrolling the active scroll region if needed."""
-        if self.y == self.terminal.scroll_bottom:
-            self.terminal.scroll(1)
-        elif self.y < self.terminal.scroll_bottom:
+        if self.y == self.board.screen.scroll_bottom:
+            self.board.screen.scroll(1)
+        elif self.y < self.board.screen.scroll_bottom:
             self.y += 1
 
-        if self.terminal.linefeed_newline_mode:
+        if self.board.modes.linefeed_newline_mode:
             self.carriage_return()
 
     def reverse_index(self) -> None:
         """Move up one line, scrolling down at the top of the scroll region."""
-        if self.y <= self.terminal.scroll_top:
-            self.terminal.scroll(-1)
+        if self.y <= self.board.screen.scroll_top:
+            self.board.screen.scroll(-1)
         else:
             self.y -= 1
 
@@ -77,21 +76,21 @@ class CursorDevice:
             self.x -= 1
         elif self.y > 0:
             self.y -= 1
-            self.x = self.terminal.width - 1
+            self.x = self.board.width - 1
 
     def set_tab_stop(self, x: int | None = None) -> None:
         """Set a horizontal tab stop at the given column."""
         if x is None:
             x = self.x
-        if 0 <= x < self.terminal.width:
+        if 0 <= x < self.board.width:
             self.tab_stops.add(x)
 
     def next_tab_stop(self) -> int:
         """Return the next horizontal tab stop, clamped to the last column."""
         for stop in sorted(self.tab_stops):
             if stop > self.x:
-                return min(stop, self.terminal.width - 1)
-        return self.terminal.width - 1
+                return min(stop, self.board.width - 1)
+        return self.board.width - 1
 
     def horizontal_tab(self) -> None:
         """Advance to the next horizontal tab stop."""
@@ -99,32 +98,32 @@ class CursorDevice:
 
     def prepare_for_text_write(self) -> None:
         """Apply wrapping or clipping before writing at the cursor."""
-        if self.x < self.terminal.width:
+        if self.x < self.board.width:
             return
-        if self.terminal.auto_wrap:
+        if self.board.modes.auto_wrap:
             self.line_feed(is_wrapped=True)
             self.carriage_return()
         else:
-            self.x = self.terminal.width - 1
+            self.x = self.board.width - 1
 
     def advance_after_text_write(self, character_count: int) -> None:
         """Advance after printable text, preserving existing autowrap behavior."""
         if character_count <= 0:
             return
-        if self.terminal.auto_wrap or self.x < self.terminal.width - 1:
+        if self.board.modes.auto_wrap or self.x < self.board.width - 1:
             self.x += character_count
 
     def save(self) -> None:
         """Save cursor position and attributes."""
         self.saved_x = self.x
         self.saved_y = self.y
-        self.saved_ansi_code = self.terminal.current_ansi_code
+        self.saved_ansi_code = self.board.style.current_ansi_code
 
     def restore(self) -> None:
         """Restore cursor position and attributes."""
         self.x = self.saved_x
         self.y = self.saved_y
-        self.terminal.current_ansi_code = self.saved_ansi_code
+        self.board.style.current_ansi_code = self.saved_ansi_code
 
     def handle_operation(self, operation: Operation) -> None:
         if operation.name in ("CUP", "HVP"):

@@ -43,7 +43,7 @@ def test_parser_feed_interrupted_osc(parser, terminal):
     parser.feed("more text\x07world")
 
     assert "Hello world" in terminal.capture_pane()
-    assert terminal.title == "some text here\x1b[Amore text"
+    assert terminal.board.title.title == "some text here\x1b[Amore text"
 
 
 def test_parser_feed_multiple_escapes(parser, terminal):
@@ -61,6 +61,6 @@ def test_parser_feed_simple_truncate(parser, terminal):
     assert parser.buffer == "\x1b"
 
     parser.feed("[1;1H")
-    assert terminal.cursor_x == 0
-    assert terminal.cursor_y == 0
+    assert terminal.board.cursor.x == 0
+    assert terminal.board.cursor.y == 0
     assert parser.buffer == ""

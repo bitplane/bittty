@@ -9,7 +9,6 @@ from .terminal import Terminal
 from .buffer import Buffer
 from .parser import Parser
 from .devices.board import TerminalBoard
-from .devices.terminal import TerminalOperationSink
 from .operations import Operation, OperationSink
 from .transports import HostPort, WritableTransport
 from .style import (
@@ -32,7 +31,6 @@ __all__ = [
     "OperationSink",
     "HostPort",
     "TerminalBoard",
-    "TerminalOperationSink",
     "WritableTransport",
     "CURSOR_CODE",
     "RESET_CODE",

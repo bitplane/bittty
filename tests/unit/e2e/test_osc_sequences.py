@@ -43,8 +43,8 @@ def test_osc_set_both_window_and_icon_title():
     parser.feed(title_sequence)
 
     # Check that both titles are set
-    assert terminal.title == "My Terminal Window"
-    assert terminal.icon_title == "My Terminal Window"
+    assert terminal.board.title.title == "My Terminal Window"
+    assert terminal.board.title.icon_title == "My Terminal Window"
 
     # Window title should not appear in screen content
     output = render_terminal_to_string(terminal)
@@ -91,7 +91,7 @@ def test_ps1_osc_title_sequence():
     assert "user@host:/home/user$ " in output  # This is the actual prompt
 
     # Check cursor position is after the prompt
-    assert terminal.cursor_x == len("user@host:/home/user$ ")
+    assert terminal.board.cursor.x == len("user@host:/home/user$ ")
 
 
 def test_ps1_with_colors():
@@ -114,7 +114,7 @@ def test_ps1_with_colors():
     # Check that styles were applied correctly
     # We expect specific ANSI sequences to be present in the buffer
     # This is a simplified check, as full ANSI parsing is complex
-    line_cells = terminal.current_buffer.get_content()[0]
+    line_cells = terminal.board.screen.current_buffer.get_content()[0]
 
     # Check for bold green for "user@host" - now using Style objects
     from bittty.style import Style, Color
@@ -155,7 +155,7 @@ def test_osc_set_icon_title():
     parser.feed("\x1b]1;Icon Title\x07")
 
     # Should set icon title attribute
-    assert terminal.icon_title == "Icon Title"
+    assert terminal.board.title.icon_title == "Icon Title"
 
 
 def test_osc_set_window_title_only():
@@ -167,7 +167,7 @@ def test_osc_set_window_title_only():
     parser.feed("\x1b]2;Window Title\x07")
 
     # Should set window title attribute
-    assert terminal.title == "Window Title"
+    assert terminal.board.title.title == "Window Title"
 
 
 def test_osc_unknown_command():
@@ -218,14 +218,14 @@ def test_osc_set_empty_title_and_icon():
     parser = Parser(terminal)
 
     # Set initial titles
-    terminal.set_title("Initial Title")
-    terminal.set_icon_title("Initial Icon")
+    terminal.board.title.set_title("Initial Title")
+    terminal.board.title.set_icon_title("Initial Icon")
 
     # OSC 0 with empty title should clear both
     parser.feed("\x1b]0;\x07")
 
-    assert terminal.title == ""
-    assert terminal.icon_title == ""
+    assert terminal.board.title.title == ""
+    assert terminal.board.title.icon_title == ""
 
 
 def test_osc_set_title_and_icon_no_semicolon():
@@ -234,14 +234,14 @@ def test_osc_set_title_and_icon_no_semicolon():
     parser = Parser(terminal)
 
     # Set initial titles
-    terminal.set_title("Initial Title")
-    terminal.set_icon_title("Initial Icon")
+    terminal.board.title.set_title("Initial Title")
+    terminal.board.title.set_icon_title("Initial Icon")
 
     # OSC 0 without a semicolon should be ignored
     parser.feed("\x1b]0My Title\x07")
 
-    assert terminal.title == "Initial Title"
-    assert terminal.icon_title == "Initial Icon"
+    assert terminal.board.title.title == "Initial Title"
+    assert terminal.board.title.icon_title == "Initial Icon"
 
 
 def test_osc_repeated_query_runs_each_time():
@@ -268,5 +268,5 @@ def test_osc_same_sequence_applies_to_different_terminals():
     Parser(first).feed("\x1b]2;Shared Title\x07")
     Parser(second).feed("\x1b]2;Shared Title\x07")
 
-    assert first.title == "Shared Title"
-    assert second.title == "Shared Title"
+    assert first.board.title.title == "Shared Title"
+    assert second.board.title.title == "Shared Title"

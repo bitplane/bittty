@@ -9,7 +9,7 @@ def test_decnkm_default_numeric_mode():
     terminal = Terminal(width=20, height=5)
 
     # Should be in numeric mode by default (numeric_keypad = True)
-    assert terminal.numeric_keypad
+    assert terminal.board.modes.numeric_keypad
 
 
 def test_decnkm_set_application_mode():
@@ -21,7 +21,7 @@ def test_decnkm_set_application_mode():
     parser.feed("\x1b[?66h")
 
     # Should enable application keypad mode
-    assert not terminal.numeric_keypad
+    assert not terminal.board.modes.numeric_keypad
 
 
 def test_decnkm_reset_to_numeric():
@@ -31,13 +31,13 @@ def test_decnkm_reset_to_numeric():
 
     # Set application mode first
     parser.feed("\x1b[?66h")
-    assert not terminal.numeric_keypad
+    assert not terminal.board.modes.numeric_keypad
 
     # Reset DECNKM mode (ESC [ ? 66 l)
     parser.feed("\x1b[?66l")
 
     # Should return to numeric mode
-    assert terminal.numeric_keypad
+    assert terminal.board.modes.numeric_keypad
 
 
 def test_decnkm_affects_numpad_keys():
@@ -142,8 +142,8 @@ def test_decnkm_escape_sequences():
 
     # ESC = should set application mode (same as CSI ? 66 h)
     parser.feed("\x1b=")
-    assert not terminal.numeric_keypad
+    assert not terminal.board.modes.numeric_keypad
 
     # ESC > should set numeric mode (same as CSI ? 66 l)
     parser.feed("\x1b>")
-    assert terminal.numeric_keypad
+    assert terminal.board.modes.numeric_keypad

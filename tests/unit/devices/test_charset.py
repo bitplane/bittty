@@ -9,7 +9,7 @@ def test_translate_charset_default():
     terminal = Terminal(width=80, height=24)
 
     # Default charset should not translate
-    result = terminal._translate_charset("hello")
+    result = terminal.board.charset.translate("hello")
     assert result == "hello"
 
 
@@ -23,7 +23,7 @@ def test_translate_charset_dec_special():
 
     # Test translation of DEC special characters
     # 'q' should become horizontal line
-    result = terminal._translate_charset("q")
+    result = terminal.board.charset.translate("q")
     assert result == "─"  # DEC special graphics mapping
 
 
@@ -39,11 +39,11 @@ def test_single_shift_translation():
     parser.feed("\x1bN")  # SS2 - use G2 for next char
 
     # Next character should use G2 charset
-    result = terminal._translate_charset("q")
+    result = terminal.board.charset.translate("q")
     assert result == "─"  # Should use DEC special from G2
 
     # Second character should use normal G0
-    result = terminal._translate_charset("q")
+    result = terminal.board.charset.translate("q")
     assert result == "q"  # Back to normal G0
 
 
@@ -58,13 +58,13 @@ def test_charset_switching():
     # Switch to G1
     parser.feed("\x0e")  # SO - shift out to G1
 
-    result = terminal._translate_charset("q")
+    result = terminal.board.charset.translate("q")
     assert result == "─"  # Should use DEC special from G1
 
     # Switch back to G0
     parser.feed("\x0f")  # SI - shift in to G0
 
-    result = terminal._translate_charset("q")
+    result = terminal.board.charset.translate("q")
     assert result == "q"  # Back to normal G0
 
 
@@ -80,10 +80,10 @@ def test_multiple_charset_sets():
     parser.feed("\x1b+0")  # G3 = DEC Special
 
     # Verify they're set correctly
-    assert terminal.g0_charset == "A"
-    assert terminal.g1_charset == "0"
-    assert terminal.g2_charset == "B"
-    assert terminal.g3_charset == "0"
+    assert terminal.board.charset.g0_charset == "A"
+    assert terminal.board.charset.g1_charset == "0"
+    assert terminal.board.charset.g2_charset == "B"
+    assert terminal.board.charset.g3_charset == "0"
 
 
 def test_single_shift_reset():
@@ -98,12 +98,12 @@ def test_single_shift_reset():
     parser.feed("\x1bN")  # SS2
 
     # First character uses G2
-    result1 = terminal._translate_charset("q")
+    result1 = terminal.board.charset.translate("q")
     assert result1 == "─"
 
     # Single shift should be reset now
-    assert terminal.single_shift is None
+    assert terminal.board.charset.single_shift is None
 
     # Second character uses normal G0
-    result2 = terminal._translate_charset("q")
+    result2 = terminal.board.charset.translate("q")
     assert result2 == "q"

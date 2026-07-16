@@ -40,8 +40,6 @@ class TerminalBoard:
         self.style = StyleDevice(self)
         self.title = TitleDevice(self)
 
-        self._attach_terminal_aliases()
-
         self.control = ControlDevice(self)
         self.query = QueryDevice(self)
 
@@ -58,6 +56,14 @@ class TerminalBoard:
             "style": self.style,
             "title": self.title,
         }
+
+    def resize(self, width: int, height: int) -> None:
+        """Resize the terminal, including buffers and the attached PTY."""
+        self.terminal.resize(width, height)
+
+    def bell(self) -> None:
+        """Ring the terminal bell (UI hook, overridable on the Terminal)."""
+        self.terminal.bell()
 
     @property
     def width(self) -> int:
@@ -76,18 +82,6 @@ class TerminalBoard:
     @height.setter
     def height(self, value: int) -> None:
         self.terminal.height = value
-
-    def _attach_terminal_aliases(self) -> None:
-        """Expose current device slots through the legacy Terminal facade."""
-        self.terminal.charset = self.charset
-        self.terminal.cursor = self.cursor
-        self.terminal.host = self.host
-        self.terminal.keyboard = self.keyboard
-        self.terminal.modes = self.modes
-        self.terminal.mouse = self.mouse
-        self.terminal.screen = self.screen
-        self.terminal.style = self.style
-        self.terminal.title_device = self.title
 
     def get_device(self, name: str):
         """Return a plugged-in device by slot name."""

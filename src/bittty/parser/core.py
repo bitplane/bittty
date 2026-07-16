@@ -11,7 +11,6 @@ if TYPE_CHECKING:
     from ..terminal import Terminal
     from ..operations import OperationSink
 
-from ..devices.terminal import TerminalOperationSink
 from ..operations import Operation, control_name
 from .csi import parse_csi_operation
 from .dcs import parse_dcs_operation
@@ -106,12 +105,7 @@ class Parser:
 
     def __init__(self, terminal: Terminal, sink: OperationSink | None = None) -> None:
         self.terminal = terminal
-        if sink is not None:
-            self.sink = sink
-        elif hasattr(terminal, "board"):
-            self.sink = terminal.board
-        else:
-            self.sink = TerminalOperationSink(terminal)
+        self.sink = sink if sink is not None else terminal.board
         self.buffer = ""
         self.pos = 0
         self.mode: str | None = None  # None, 'csi', 'osc', 'dcs', 'apc', 'pm', 'sos'

@@ -19,7 +19,6 @@ class ModeDevice:
 
     def __init__(self, board: TerminalBoard) -> None:
         self.board = board
-        self.terminal = board.terminal
         self.auto_wrap = True
         self.insert_mode = False
         self.application_keypad = False
@@ -71,6 +70,10 @@ class ModeDevice:
         else:
             self.set_ansi_modes((mode,), value)
 
+    def clear_mode(self, mode: int, private: bool = False) -> None:
+        """Clear a single terminal mode."""
+        self.set_mode(mode, False, private)
+
     def set_ansi_modes(self, params: tuple[int | None, ...], set_mode: bool) -> None:
         for param in params:
             if param is None:
@@ -99,7 +102,7 @@ class ModeDevice:
             elif param == 2:
                 self.ansi_mode = set_mode
             elif param == 3:
-                self.terminal.resize(132 if set_mode else 80, self.terminal.height)
+                self.board.resize(132 if set_mode else 80, self.board.height)
             elif param == 4:
                 self.scroll_mode = set_mode
             elif param == 5:
@@ -120,9 +123,9 @@ class ModeDevice:
                 self.cursor_visible = set_mode
             elif param == 47:
                 if set_mode:
-                    self.terminal.alternate_screen_on()
+                    self.board.screen.switch_screen(True)
                 else:
-                    self.terminal.alternate_screen_off()
+                    self.board.screen.switch_screen(False)
             elif param == 66:
                 self.numeric_keypad = not set_mode
             elif param == 67:
@@ -141,21 +144,21 @@ class ModeDevice:
                 self.urxvt_mouse = set_mode
             elif param == 1047:
                 if set_mode:
-                    self.terminal.alternate_screen_on()
+                    self.board.screen.switch_screen(True)
                 else:
-                    self.terminal.alternate_screen_off()
+                    self.board.screen.switch_screen(False)
             elif param == 1048:
                 if set_mode:
-                    self.terminal.save_cursor()
+                    self.board.cursor.save()
                 else:
-                    self.terminal.restore_cursor()
+                    self.board.cursor.restore()
             elif param == 1049:
                 if set_mode:
-                    self.terminal.save_cursor()
-                    self.terminal.alternate_screen_on()
+                    self.board.cursor.save()
+                    self.board.screen.switch_screen(True)
                 else:
-                    self.terminal.alternate_screen_off()
-                    self.terminal.restore_cursor()
+                    self.board.screen.switch_screen(False)
+                    self.board.cursor.restore()
             elif param == 2004:
                 self.bracketed_paste = set_mode
             elif param == 69:
@@ -169,7 +172,7 @@ class ModeDevice:
         if mode == 2:
             return 1 if self.ansi_mode else 2
         if mode == 3:
-            return 1 if self.terminal.width == 132 else 2
+            return 1 if self.board.width == 132 else 2
         if mode == 6:
             return 1 if self.origin_mode else 2
         if mode == 7:
@@ -177,9 +180,9 @@ class ModeDevice:
         if mode == 25:
             return 1 if self.cursor_visible else 2
         if mode in (47, 1047):
-            return 1 if self.terminal.in_alt_screen else 2
+            return 1 if self.board.screen.in_alt_screen else 2
         if mode == 1049:
-            return 1 if self.terminal.in_alt_screen else 2
+            return 1 if self.board.screen.in_alt_screen else 2
         if mode == 69:
             return 1 if self.keyboard_usage_mode else 2
         if mode == 2028:

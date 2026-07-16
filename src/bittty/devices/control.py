@@ -19,14 +19,13 @@ class ControlDevice:
 
     def __init__(self, board: TerminalBoard) -> None:
         self.board = board
-        self.terminal = board.terminal
         self.cursor = board.cursor
         self.charset = board.charset
 
     def handle_operation(self, operation: Operation) -> None:
         ch = operation.raw
         if ch == constants.BEL:
-            self.terminal.bell()
+            self.board.bell()
         elif ch == constants.BS:
             self.cursor.backspace()
         elif ch == constants.HT:

@@ -135,13 +135,13 @@ class StdoutFrontend:
 
     def sync_host_mouse(self):
         """Mirror bittty's requested mouse mode onto the host terminal."""
-        if self.terminal.mouse_any_tracking:
+        if self.terminal.board.modes.mouse_any_tracking:
             mode = "any"
             enable = "\033[?1003h\033[?1006h"
-        elif self.terminal.mouse_button_tracking:
+        elif self.terminal.board.modes.mouse_button_tracking:
             mode = "button"
             enable = "\033[?1002h\033[?1006h"
-        elif self.terminal.mouse_tracking:
+        elif self.terminal.board.modes.mouse_tracking:
             mode = "basic"
             enable = "\033[?1000h\033[?1006h"
         else:

@@ -23,7 +23,7 @@ def test_g1_designation_and_switching():
     parser.feed("\x0f")  # SI
     parser.feed("DEF")
 
-    assert terminal.current_buffer.get_line_text(0).rstrip() == "ABC┌─┐DEF"
+    assert terminal.board.screen.current_buffer.get_line_text(0).rstrip() == "ABC┌─┐DEF"
 
 
 def test_g2_g3_designation():
@@ -38,8 +38,8 @@ def test_g2_g3_designation():
     parser.feed("\x1b+A")  # ESC + A
 
     # Verify the character sets were set
-    assert terminal.g2_charset == "0"
-    assert terminal.g3_charset == "A"
+    assert terminal.board.charset.g2_charset == "0"
+    assert terminal.board.charset.g3_charset == "A"
 
 
 def test_single_shift_2():
@@ -60,7 +60,7 @@ def test_single_shift_2():
     # Back to normal G0
     parser.feed("B")
 
-    assert terminal.current_buffer.get_line_text(0).rstrip() == "A┌B"
+    assert terminal.board.screen.current_buffer.get_line_text(0).rstrip() == "A┌B"
 
 
 def test_single_shift_3():
@@ -81,7 +81,7 @@ def test_single_shift_3():
     # Back to normal G0
     parser.feed("B")
 
-    assert terminal.current_buffer.get_line_text(0).rstrip() == "A£B"
+    assert terminal.board.screen.current_buffer.get_line_text(0).rstrip() == "A£B"
 
 
 def test_multiple_single_shifts():
@@ -111,7 +111,7 @@ def test_multiple_single_shifts():
 
     parser.feed("B")
 
-    assert terminal.current_buffer.get_line_text(0).rstrip() == "A┌£┐B"
+    assert terminal.board.screen.current_buffer.get_line_text(0).rstrip() == "A┌£┐B"
 
 
 def test_si_so_switching():
@@ -141,7 +141,7 @@ def test_si_so_switching():
     parser.feed("\x0f")  # SI
     parser.feed("C")
 
-    assert terminal.current_buffer.get_line_text(0).rstrip() == "A┌─┐B└┘─C"
+    assert terminal.board.screen.current_buffer.get_line_text(0).rstrip() == "A┌─┐B└┘─C"
 
 
 def test_persistent_charset_state():
@@ -160,9 +160,9 @@ def test_persistent_charset_state():
     parser.feed("x  x\r\n")
     parser.feed("mqqj")
 
-    assert terminal.current_buffer.get_line_text(0).rstrip() == "┌──┐"
-    assert terminal.current_buffer.get_line_text(1).rstrip() == "│  │"
-    assert terminal.current_buffer.get_line_text(2).rstrip() == "└──┘"
+    assert terminal.board.screen.current_buffer.get_line_text(0).rstrip() == "┌──┐"
+    assert terminal.board.screen.current_buffer.get_line_text(1).rstrip() == "│  │"
+    assert terminal.board.screen.current_buffer.get_line_text(2).rstrip() == "└──┘"
 
 
 def test_mixed_character_sets():
@@ -199,7 +199,7 @@ def test_mixed_character_sets():
     parser.feed("\x0f")  # Back to G0
     parser.feed(" End")  # G0 ASCII
 
-    assert terminal.current_buffer.get_line_text(0).rstrip() == "Text┌─ £ ┐┘ End"
+    assert terminal.board.screen.current_buffer.get_line_text(0).rstrip() == "Text┌─ £ ┐┘ End"
 
 
 def test_charset_with_colors():
@@ -221,14 +221,14 @@ def test_charset_with_colors():
     parser.feed("TEXT")  # Blue text
 
     # Check characters
-    assert terminal.current_buffer.get_line_text(0).rstrip() == "┌──┐TEXT"
+    assert terminal.board.screen.current_buffer.get_line_text(0).rstrip() == "┌──┐TEXT"
 
     # Check colors
-    style, char = terminal.current_buffer.get_cell(0, 0)
+    style, char = terminal.board.screen.current_buffer.get_cell(0, 0)
     assert char == "┌"
     assert style.fg.value == 1  # Red
 
-    style, char = terminal.current_buffer.get_cell(4, 0)
+    style, char = terminal.board.screen.current_buffer.get_cell(4, 0)
     assert char == "T"
     assert style.fg.value == 4  # Blue
 
@@ -246,17 +246,17 @@ def test_charset_reset_on_esc_c():
 
     # Verify we're in G1 with graphics
     parser.feed("l")
-    assert terminal.current_buffer.get_cell(0, 0)[1] == "┌"
+    assert terminal.board.screen.current_buffer.get_cell(0, 0)[1] == "┌"
 
     # Reset terminal
     parser.feed("\x1bc")  # ESC c (RIS - Reset)
 
     # Character sets should be reset to defaults
-    assert terminal.g0_charset == "B"
-    assert terminal.g1_charset == "B"
-    assert terminal.g2_charset == "B"
-    assert terminal.g3_charset == "B"
-    assert terminal.current_charset == 0
+    assert terminal.board.charset.g0_charset == "B"
+    assert terminal.board.charset.g1_charset == "B"
+    assert terminal.board.charset.g2_charset == "B"
+    assert terminal.board.charset.g3_charset == "B"
+    assert terminal.board.charset.current_charset == 0
 
 
 def test_all_dec_special_graphics_characters():
@@ -272,7 +272,7 @@ def test_all_dec_special_graphics_characters():
 
     parser.feed(test_chars)
 
-    result = terminal.current_buffer.get_line_text(0)
+    result = terminal.board.screen.current_buffer.get_line_text(0)
     assert result[: len(expected)] == expected
 
 
@@ -285,13 +285,13 @@ def test_uk_national_character_set():
 
     parser.feed("Price: #10")
 
-    assert terminal.current_buffer.get_line_text(0).rstrip() == "Price: £10"
+    assert terminal.board.screen.current_buffer.get_line_text(0).rstrip() == "Price: £10"
 
     # Other characters should be unchanged
     parser.feed("\r\n")
     parser.feed("ABC!@$%^&*()")
 
-    assert terminal.current_buffer.get_line_text(1).rstrip() == "ABC!@$%^&*()"
+    assert terminal.board.screen.current_buffer.get_line_text(1).rstrip() == "ABC!@$%^&*()"
 
 
 def test_dec_technical_charset_designation():
@@ -303,7 +303,7 @@ def test_dec_technical_charset_designation():
     parser.feed("\x1b)>")  # ESC ) >
 
     # Verify charset was set
-    assert terminal.g1_charset == ">"
+    assert terminal.board.charset.g1_charset == ">"
 
     # Normal ASCII text
     parser.feed("Math: ")
@@ -321,7 +321,7 @@ def test_dec_technical_charset_designation():
     parser.feed("!")
 
     # Check the result
-    assert terminal.current_buffer.get_line_text(0).rstrip() == "Math: ΠΣ∫!"
+    assert terminal.board.screen.current_buffer.get_line_text(0).rstrip() == "Math: ΠΣ∫!"
 
 
 def test_dec_technical_greek_letters():
@@ -342,7 +342,7 @@ def test_dec_technical_greek_letters():
     parser.feed("p")  # π (pi)
 
     # Check the result
-    assert terminal.current_buffer.get_line_text(0).rstrip() == "ΔΦΓαβπ"
+    assert terminal.board.screen.current_buffer.get_line_text(0).rstrip() == "ΔΦΓαβπ"
 
 
 def test_dec_technical_mathematical_symbols():
@@ -363,7 +363,7 @@ def test_dec_technical_mathematical_symbols():
     parser.feed(">")  # ≥ (greater than or equal)
 
     # Check the result
-    assert terminal.current_buffer.get_line_text(0).rstrip() == "∞÷×√≤≥"
+    assert terminal.board.screen.current_buffer.get_line_text(0).rstrip() == "∞÷×√≤≥"
 
 
 def test_german_national_charset():
@@ -378,7 +378,7 @@ def test_german_national_charset():
     parser.feed("@[\\]`{|}")  # @ÄÖÜäöüß
 
     # Check the result
-    assert terminal.current_buffer.get_line_text(0).rstrip() == "§ÄÖÜäöüß"
+    assert terminal.board.screen.current_buffer.get_line_text(0).rstrip() == "§ÄÖÜäöüß"
 
 
 def test_french_national_charset():
@@ -393,7 +393,7 @@ def test_french_national_charset():
     parser.feed("#@[\\]`{|}~")
 
     # Check the result
-    assert terminal.current_buffer.get_line_text(0).rstrip() == "£à°ç§`éùè¨"
+    assert terminal.board.screen.current_buffer.get_line_text(0).rstrip() == "£à°ç§`éùè¨"
 
 
 def test_spanish_national_charset():
@@ -408,7 +408,7 @@ def test_spanish_national_charset():
     parser.feed("#@[\\]`{|")
 
     # Check the result
-    assert terminal.current_buffer.get_line_text(0).rstrip() == "£§¡Ñ¿˚ñç"
+    assert terminal.board.screen.current_buffer.get_line_text(0).rstrip() == "£§¡Ñ¿˚ñç"
 
 
 def test_italian_national_charset():
@@ -423,7 +423,7 @@ def test_italian_national_charset():
     parser.feed("#@[\\]`{|}~")
 
     # Check the result
-    assert terminal.current_buffer.get_line_text(0).rstrip() == "£§°çéùàòèì"
+    assert terminal.board.screen.current_buffer.get_line_text(0).rstrip() == "£§°çéùàòèì"
 
 
 def test_swedish_national_charset():
@@ -438,7 +438,7 @@ def test_swedish_national_charset():
     parser.feed("@[\\]^`{|}~")
 
     # Check the result
-    assert terminal.current_buffer.get_line_text(0).rstrip() == "ÉÄÖÅÜéäöåü"
+    assert terminal.board.screen.current_buffer.get_line_text(0).rstrip() == "ÉÄÖÅÜéäöåü"
 
 
 def test_danish_norwegian_charset():
@@ -453,7 +453,7 @@ def test_danish_norwegian_charset():
     parser.feed("[\\]`{|")
 
     # Check the result
-    assert terminal.current_buffer.get_line_text(0).rstrip() == "ÆØÅæøå"
+    assert terminal.board.screen.current_buffer.get_line_text(0).rstrip() == "ÆØÅæøå"
 
 
 def test_finnish_national_charset():
@@ -468,7 +468,7 @@ def test_finnish_national_charset():
     parser.feed("[\\]^`{|}~")
 
     # Check the result
-    assert terminal.current_buffer.get_line_text(0).rstrip() == "ÄÖÅÜéäöåü"
+    assert terminal.board.screen.current_buffer.get_line_text(0).rstrip() == "ÄÖÅÜéäöåü"
 
 
 def test_dutch_national_charset():
@@ -483,7 +483,7 @@ def test_dutch_national_charset():
     parser.feed("#@[\\]`{|}~")
 
     # Check the result
-    assert terminal.current_buffer.get_line_text(0).rstrip() == "£¾ĳ½¦`¨ƒ¼´"
+    assert terminal.board.screen.current_buffer.get_line_text(0).rstrip() == "£¾ĳ½¦`¨ƒ¼´"
 
 
 def test_french_canadian_charset():
@@ -498,7 +498,7 @@ def test_french_canadian_charset():
     parser.feed("@[\\]^`{|}~")
 
     # Check the result
-    assert terminal.current_buffer.get_line_text(0).rstrip() == "àâçêîôéùèû"
+    assert terminal.board.screen.current_buffer.get_line_text(0).rstrip() == "àâçêîôéùèû"
 
 
 def test_japanese_roman_charset():
@@ -513,7 +513,7 @@ def test_japanese_roman_charset():
     parser.feed("Price: \\100~")
 
     # Check the result
-    assert terminal.current_buffer.get_line_text(0).rstrip() == "Price: ¥100¯"
+    assert terminal.board.screen.current_buffer.get_line_text(0).rstrip() == "Price: ¥100¯"
 
 
 def test_swiss_national_charset():
@@ -528,7 +528,7 @@ def test_swiss_national_charset():
     parser.feed("#@[\\]^_`{|}~")
 
     # Check the result
-    assert terminal.current_buffer.get_line_text(0).rstrip() == "ùàéçêîèôäöüû"
+    assert terminal.board.screen.current_buffer.get_line_text(0).rstrip() == "ùàéçêîèôäöüû"
 
 
 def test_national_charset_switching():
@@ -552,4 +552,4 @@ def test_national_charset_switching():
     parser.feed("]")  # German: Ü
 
     # Check the result
-    assert terminal.current_buffer.get_line_text(0).rstrip() == "§Äà°Ü"
+    assert terminal.board.screen.current_buffer.get_line_text(0).rstrip() == "§Äà°Ü"

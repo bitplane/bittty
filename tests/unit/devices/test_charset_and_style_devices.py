@@ -5,7 +5,7 @@ from bittty.terminal import Terminal
 
 def test_charset_device_translates_active_and_single_shift_charsets():
     terminal = Terminal(width=10, height=3)
-    charset = terminal.charset
+    charset = terminal.board.charset
 
     charset.set_g0_charset("0")
     assert charset.translate("q") == "─"
@@ -19,7 +19,7 @@ def test_charset_device_translates_active_and_single_shift_charsets():
 
 def test_charset_device_handles_operations_and_reset():
     terminal = Terminal(width=10, height=3)
-    charset = terminal.charset
+    charset = terminal.board.charset
 
     charset.handle_charset_operation(Operation("charset", "SCS_G1", ("0",), "\x1b)0"))
     charset.handle_escape_operation(Operation("escape", "SS3", raw="\x1bO"))
@@ -35,7 +35,7 @@ def test_charset_device_handles_operations_and_reset():
 
 def test_style_device_applies_reset_and_merge():
     terminal = Terminal(width=10, height=3)
-    style = terminal.style
+    style = terminal.board.style
 
     style.apply_sgr(Style(bold=True))
     style.apply_sgr(Style(fg=Color("indexed", 1)))
@@ -51,6 +51,6 @@ def test_style_device_applies_reset_and_merge():
 def test_style_device_reports_background_ansi():
     terminal = Terminal(width=10, height=3)
 
-    terminal.style.current_ansi_code = "\x1b[48;5;21m"
+    terminal.board.style.current_ansi_code = "\x1b[48;5;21m"
 
-    assert terminal.style.background_ansi() == "\x1b[48;5;21m"
+    assert terminal.board.style.background_ansi() == "\x1b[48;5;21m"

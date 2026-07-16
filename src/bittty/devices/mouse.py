@@ -15,7 +15,6 @@ class MouseDevice:
 
     def __init__(self, board: TerminalBoard) -> None:
         self.board = board
-        self.terminal = board.terminal
         self.x = 0
         self.y = 0
         self.show = False
@@ -37,12 +36,12 @@ class MouseDevice:
         is_move = event_type == "move"
         is_press_release = event_type in ("press", "release")
 
-        if is_move and not self.terminal.mouse_any_tracking:
+        if is_move and not self.board.modes.mouse_any_tracking:
             return
-        if is_press_release and not self.terminal.mouse_tracking:
+        if is_press_release and not self.board.modes.mouse_tracking:
             return
 
-        if self.terminal.mouse_sgr_mode:
+        if self.board.modes.mouse_sgr_mode:
             if "shift" in modifiers:
                 button |= constants.MOUSE_MOD_SHIFT
             if "meta" in modifiers:
@@ -54,4 +53,4 @@ class MouseDevice:
             if is_move:
                 button = constants.MOUSE_BUTTON_MOVEMENT
 
-            self.terminal.host.write(f"{constants.ESC}[<{button};{x};{y}{final_char}")
+            self.board.host.write(f"{constants.ESC}[<{button};{x};{y}{final_char}")

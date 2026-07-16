@@ -32,7 +32,7 @@ def test_unicode_emoji():
     assert "🏠 Home" in output
 
     # Check cursor position - counting characters not display width
-    assert terminal.cursor_x == 6  # 1 char for emoji + 1 space + 4 for "Home"
+    assert terminal.board.cursor.x == 6  # 1 char for emoji + 1 space + 4 for "Home"
 
 
 def test_unicode_various():
@@ -49,7 +49,7 @@ def test_unicode_various():
     assert test_string in output
 
     # Check the actual characters were written
-    line_text = terminal.current_buffer.get_line_text(0)
+    line_text = terminal.board.screen.current_buffer.get_line_text(0)
     assert "Hello" in line_text
     assert "café" in line_text
     assert "你好" in line_text

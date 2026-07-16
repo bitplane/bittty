@@ -15,7 +15,6 @@ class KeyboardDevice:
 
     def __init__(self, board: TerminalBoard) -> None:
         self.board = board
-        self.terminal = board.terminal
 
     def input_key(self, char: str, modifier: int = constants.KEY_MOD_NONE) -> None:
         """Convert key + modifier to standard control codes, then send to input()."""
@@ -36,7 +35,7 @@ class KeyboardDevice:
             return
 
         if char == constants.BS:
-            if self.terminal.backarrow_key_sends_bs:
+            if self.board.modes.backarrow_key_sends_bs:
                 self.input(constants.BS)
             else:
                 self.input(constants.DEL)
@@ -75,7 +74,7 @@ class KeyboardDevice:
 
     def input_numpad_key(self, key: str) -> None:
         """Convert numpad key to the sequence for the current keypad mode."""
-        if self.terminal.numeric_keypad:
+        if self.board.modes.numeric_keypad:
             numeric_map = {
                 "0": "0",
                 "1": "1",
@@ -120,9 +119,9 @@ class KeyboardDevice:
 
     def input(self, data: str) -> None:
         """Translate control codes based on terminal modes and send to the host."""
-        if self.terminal.cursor_application_mode and f"{constants.ESC}[" in data:
+        if self.board.modes.cursor_application_mode and f"{constants.ESC}[" in data:
             data = self.translate_application_cursor_keys(data)
-        self.terminal.host.write(data)
+        self.board.host.write(data)
 
     def translate_application_cursor_keys(self, data: str) -> str:
         """Translate embedded normal cursor-key CSI sequences to application mode."""

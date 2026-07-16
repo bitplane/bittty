@@ -10,7 +10,7 @@ def test_decarm_default_auto_repeat_enabled():
     terminal = Terminal(width=20, height=5)
 
     # Should be enabled by default (auto_repeat = True)
-    assert terminal.auto_repeat
+    assert terminal.board.modes.auto_repeat
 
 
 def test_decarm_disable_auto_repeat():
@@ -22,7 +22,7 @@ def test_decarm_disable_auto_repeat():
     parser.feed("\x1b[?8l")
 
     # Should disable auto-repeat
-    assert not terminal.auto_repeat
+    assert not terminal.board.modes.auto_repeat
 
 
 def test_decarm_enable_auto_repeat():
@@ -32,13 +32,13 @@ def test_decarm_enable_auto_repeat():
 
     # Disable first
     parser.feed("\x1b[?8l")
-    assert not terminal.auto_repeat
+    assert not terminal.board.modes.auto_repeat
 
     # Enable DECARM mode (ESC [ ? 8 h)
     parser.feed("\x1b[?8h")
 
     # Should enable auto-repeat
-    assert terminal.auto_repeat
+    assert terminal.board.modes.auto_repeat
 
 
 def test_decarm_affects_key_handling():
@@ -74,16 +74,16 @@ def test_decarm_toggle_state():
     parser = Parser(terminal)
 
     # Start with default (enabled)
-    assert terminal.auto_repeat
+    assert terminal.board.modes.auto_repeat
 
     # Disable
     parser.feed("\x1b[?8l")
-    assert not terminal.auto_repeat
+    assert not terminal.board.modes.auto_repeat
 
     # Enable
     parser.feed("\x1b[?8h")
-    assert terminal.auto_repeat
+    assert terminal.board.modes.auto_repeat
 
     # Disable again
     parser.feed("\x1b[?8l")
-    assert not terminal.auto_repeat
+    assert not terminal.board.modes.auto_repeat

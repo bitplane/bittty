@@ -7,11 +7,11 @@ def test_show_mouse_cursor():
     terminal = Terminal(width=20, height=10)
 
     # Enable the mouse cursor
-    terminal.show_mouse = True
+    terminal.board.mouse.show = True
 
     # Set a mouse position
-    terminal.mouse_x = 5
-    terminal.mouse_y = 3
+    terminal.board.mouse.x = 5
+    terminal.board.mouse.y = 3
 
     # Get the content and check for the cursor
     content = terminal.capture_pane()
@@ -21,7 +21,7 @@ def test_show_mouse_cursor():
     assert lines[2][4] == "↖"
 
     # Disable the mouse cursor
-    terminal.show_mouse = False
+    terminal.board.mouse.show = False
 
     # Get the content and check that the cursor is gone
     content = terminal.capture_pane()
@@ -34,14 +34,14 @@ def test_input_mouse_basic():
     terminal = Terminal(width=80, height=24)
 
     # Enable mouse tracking
-    terminal.mouse_tracking = True
+    terminal.board.modes.mouse_tracking = True
 
     # Test mouse press
     terminal.input_mouse(10, 5, 1, "press", set())
 
     # Mouse position should be cached
-    assert terminal.mouse_x == 10
-    assert terminal.mouse_y == 5
+    assert terminal.board.mouse.x == 10
+    assert terminal.board.mouse.y == 5
 
 
 def test_input_mouse_sgr_mode():
@@ -49,16 +49,16 @@ def test_input_mouse_sgr_mode():
     terminal = Terminal(width=80, height=24)
 
     # Enable SGR mouse mode
-    terminal.mouse_sgr_mode = True
-    terminal.mouse_tracking = True
+    terminal.board.modes.mouse_sgr_mode = True
+    terminal.board.modes.mouse_tracking = True
 
     # Test mouse press with modifiers
     modifiers = {"shift", "ctrl"}
     terminal.input_mouse(15, 8, 1, "press", modifiers)
 
     # Should handle the input without errors
-    assert terminal.mouse_x == 15
-    assert terminal.mouse_y == 8
+    assert terminal.board.mouse.x == 15
+    assert terminal.board.mouse.y == 8
 
 
 def test_input_numpad_key_numeric_mode():
@@ -66,7 +66,7 @@ def test_input_numpad_key_numeric_mode():
     terminal = Terminal(width=80, height=24)
 
     # Numeric mode (default)
-    terminal.numeric_keypad = True
+    terminal.board.modes.numeric_keypad = True
 
     # Test numpad keys
     terminal.input_numpad_key("5")
@@ -81,7 +81,7 @@ def test_input_numpad_key_application_mode():
     terminal = Terminal(width=80, height=24)
 
     # Application mode
-    terminal.numeric_keypad = False
+    terminal.board.modes.numeric_keypad = False
 
     # Test numpad keys in application mode
     terminal.input_numpad_key("0")
@@ -145,11 +145,11 @@ def test_input_key_backspace():
     terminal = Terminal(width=80, height=24)
 
     # Test default mode (sends DEL)
-    terminal.backarrow_key_sends_bs = False
+    terminal.board.modes.backarrow_key_sends_bs = False
     terminal.input_key("\x08")  # BS character
 
     # Test DECBKM mode (sends BS)
-    terminal.backarrow_key_sends_bs = True
+    terminal.board.modes.backarrow_key_sends_bs = True
     terminal.input_key("\x08")  # BS character
 
     # Should complete without errors

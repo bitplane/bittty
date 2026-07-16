@@ -20,7 +20,6 @@ class ScreenDevice:
 
     def __init__(self, board: TerminalBoard) -> None:
         self.board = board
-        self.terminal = board.terminal
         self.primary_buffer = Buffer(board.width, board.height)
         self.alt_buffer = Buffer(board.width, board.height)
         self.current_buffer = self.primary_buffer
@@ -31,27 +30,27 @@ class ScreenDevice:
 
     def write_text(self, text: str, ansi_code: str = "") -> None:
         """Write printable text at the cursor position."""
-        self.terminal.cursor.prepare_for_text_write()
+        self.board.cursor.prepare_for_text_write()
 
-        code_to_use = ansi_code if ansi_code else self.terminal.style.current_ansi_code
-        translated_text = self.terminal.charset.translate(text)
+        code_to_use = ansi_code if ansi_code else self.board.style.current_ansi_code
+        translated_text = self.board.charset.translate(text)
 
-        if self.terminal.insert_mode:
+        if self.board.modes.insert_mode:
             self.current_buffer.insert(
-                self.terminal.cursor_x,
-                self.terminal.cursor_y,
+                self.board.cursor.x,
+                self.board.cursor.y,
                 translated_text,
                 code_to_use,
             )
         else:
             self.current_buffer.set(
-                self.terminal.cursor_x,
-                self.terminal.cursor_y,
+                self.board.cursor.x,
+                self.board.cursor.y,
                 translated_text,
                 code_to_use,
             )
 
-        self.terminal.cursor.advance_after_text_write(len(translated_text))
+        self.board.cursor.advance_after_text_write(len(translated_text))
 
         if translated_text:
             self.last_printed_char = translated_text[-1]
@@ -63,41 +62,41 @@ class ScreenDevice:
 
     def resize(self, width: int, height: int) -> None:
         """Resize terminal dimensions and screen buffers."""
-        self.terminal.width = width
-        self.terminal.height = height
+        self.board.width = width
+        self.board.height = height
 
         self.primary_buffer.resize(width, height)
         self.alt_buffer.resize(width, height)
         self.scroll_bottom = height - 1
 
-        self.terminal.cursor.clamp_to_terminal()
+        self.board.cursor.clamp_to_terminal()
 
     def clear_screen(self, mode: int = constants.ERASE_FROM_CURSOR_TO_END) -> None:
         """Clear screen."""
-        bg_ansi = self.terminal.style.background_ansi()
+        bg_ansi = self.board.style.background_ansi()
 
         if mode == constants.ERASE_FROM_CURSOR_TO_END:
             self.current_buffer.clear_line(
-                self.terminal.cursor_y,
+                self.board.cursor.y,
                 constants.ERASE_FROM_CURSOR_TO_END,
-                self.terminal.cursor_x,
+                self.board.cursor.x,
                 bg_ansi,
             )
-            for y in range(self.terminal.cursor_y + 1, self.terminal.height):
+            for y in range(self.board.cursor.y + 1, self.board.height):
                 self.current_buffer.clear_line(y, constants.ERASE_ALL, 0, bg_ansi)
         elif mode == constants.ERASE_FROM_START_TO_CURSOR:
-            for y in range(self.terminal.cursor_y):
+            for y in range(self.board.cursor.y):
                 self.current_buffer.clear_line(y, constants.ERASE_ALL, 0, bg_ansi)
             self.clear_line(constants.ERASE_FROM_START_TO_CURSOR)
         elif mode == constants.ERASE_ALL:
-            for y in range(self.terminal.height):
+            for y in range(self.board.height):
                 self.current_buffer.clear_line(y, constants.ERASE_ALL, 0, bg_ansi)
-            self.terminal.set_cursor(0, 0)
+            self.board.cursor.set_position(0, 0)
 
     def clear_line(self, mode: int = constants.ERASE_FROM_CURSOR_TO_END) -> None:
         """Clear line."""
-        bg_ansi = self.terminal.style.background_ansi()
-        self.current_buffer.clear_line(self.terminal.cursor_y, mode, self.terminal.cursor_x, bg_ansi)
+        bg_ansi = self.board.style.background_ansi()
+        self.current_buffer.clear_line(self.board.cursor.y, mode, self.board.cursor.x, bg_ansi)
 
     def clear_rect(self, x1: int, y1: int, x2: int, y2: int, ansi_code: str = "") -> None:
         """Clear a rectangular region."""
@@ -114,41 +113,41 @@ class ScreenDevice:
 
     def alignment_test(self) -> None:
         """Fill the screen with 'E' characters for alignment testing."""
-        test_text = "E" * self.terminal.width
-        for y in range(self.terminal.height):
+        test_text = "E" * self.board.width
+        for y in range(self.board.height):
             self.current_buffer.set(0, y, test_text)
 
     def set_scroll_region(self, top: int, bottom: int) -> None:
         """Set scroll region."""
-        self.scroll_top = max(0, min(top, self.terminal.height - 1))
-        self.scroll_bottom = max(self.scroll_top, min(bottom, self.terminal.height - 1))
+        self.scroll_top = max(0, min(top, self.board.height - 1))
+        self.scroll_bottom = max(self.scroll_top, min(bottom, self.board.height - 1))
 
     def insert_lines(self, count: int) -> None:
         """Insert blank lines at cursor position."""
-        if count <= 0 or not (self.scroll_top <= self.terminal.cursor_y <= self.scroll_bottom):
+        if count <= 0 or not (self.scroll_top <= self.board.cursor.y <= self.scroll_bottom):
             return
 
-        self.current_buffer.scroll_region_down(self.terminal.cursor_y, self.scroll_bottom, count)
+        self.current_buffer.scroll_region_down(self.board.cursor.y, self.scroll_bottom, count)
 
     def delete_lines(self, count: int) -> None:
         """Delete lines at cursor position."""
-        if count <= 0 or not (self.scroll_top <= self.terminal.cursor_y <= self.scroll_bottom):
+        if count <= 0 or not (self.scroll_top <= self.board.cursor.y <= self.scroll_bottom):
             return
 
-        self.current_buffer.scroll_region_up(self.terminal.cursor_y, self.scroll_bottom, count)
+        self.current_buffer.scroll_region_up(self.board.cursor.y, self.scroll_bottom, count)
 
     def insert_characters(self, count: int, ansi_code: str = "") -> None:
         """Insert blank characters at cursor position."""
-        if not (0 <= self.terminal.cursor_y < self.terminal.height):
+        if not (0 <= self.board.cursor.y < self.board.height):
             return
         spaces = " " * count
-        self.current_buffer.insert(self.terminal.cursor_x, self.terminal.cursor_y, spaces, ansi_code)
+        self.current_buffer.insert(self.board.cursor.x, self.board.cursor.y, spaces, ansi_code)
 
     def delete_characters(self, count: int) -> None:
         """Delete characters at cursor position."""
-        if not (0 <= self.terminal.cursor_y < self.terminal.height):
+        if not (0 <= self.board.cursor.y < self.board.height):
             return
-        self.current_buffer.delete(self.terminal.cursor_x, self.terminal.cursor_y, count)
+        self.current_buffer.delete(self.board.cursor.x, self.board.cursor.y, count)
 
     def scroll(self, lines: int) -> None:
         """Scroll content within the active scroll region."""
@@ -173,11 +172,11 @@ class ScreenDevice:
         """Set terminal width for DECCOLM."""
         if columns not in (80, 132):
             return
-        if self.terminal.width == columns:
+        if self.board.width == columns:
             return
 
-        self.resize(columns, self.terminal.height)
-        self.terminal.set_cursor(0, 0)
+        self.resize(columns, self.board.height)
+        self.board.cursor.set_position(0, 0)
 
     def handle_edit_operation(self, operation: Operation) -> None:
         if operation.name == "ED":
@@ -198,7 +197,7 @@ class ScreenDevice:
             return
         if operation.name == "ICH":
             (count,) = operation.args
-            self.insert_characters(count, self.terminal.style.current_ansi_code)
+            self.insert_characters(count, self.board.style.current_ansi_code)
             return
         if operation.name == "DCH":
             (count,) = operation.args
@@ -208,13 +207,13 @@ class ScreenDevice:
             (count,) = operation.args
             for _ in range(count):
                 self.current_buffer.set(
-                    self.terminal.cursor_x,
-                    self.terminal.cursor_y,
+                    self.board.cursor.x,
+                    self.board.cursor.y,
                     " ",
-                    self.terminal.style.current_ansi_code,
+                    self.board.style.current_ansi_code,
                 )
-                if self.terminal.cursor_x < self.terminal.width - 1:
-                    self.terminal.cursor_x += 1
+                if self.board.cursor.x < self.board.width - 1:
+                    self.board.cursor.x += 1
             return
         if operation.name == "SU":
             (count,) = operation.args
@@ -234,13 +233,13 @@ class ScreenDevice:
     def handle_screen_operation(self, operation: Operation) -> None:
         if operation.name == "DECSTBM":
             top, bottom = operation.args
-            self.set_scroll_region(top, self.terminal.height - 1 if bottom is None else bottom)
+            self.set_scroll_region(top, self.board.height - 1 if bottom is None else bottom)
             return
         if operation.name == "RIS":
             self.clear_screen(constants.ERASE_ALL)
-            self.terminal.set_cursor(0, 0)
-            self.terminal.style.reset()
-            self.terminal.charset.reset()
+            self.board.cursor.set_position(0, 0)
+            self.board.style.reset()
+            self.board.charset.reset()
             return
 
         logger.debug("Unknown screen operation: %s", operation)

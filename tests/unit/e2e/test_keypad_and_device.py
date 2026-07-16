@@ -25,13 +25,13 @@ def test_keypad_application_mode():
     parser = Parser(terminal)
 
     # Initially should be in normal keypad mode
-    assert not terminal.application_keypad
+    assert not terminal.board.modes.application_keypad
 
     # Send DECKPAM sequence
     parser.feed(f"{ESC}=")
 
     # Should now be in application keypad mode
-    assert terminal.application_keypad
+    assert terminal.board.modes.application_keypad
 
 
 def test_keypad_normal_mode():
@@ -40,14 +40,14 @@ def test_keypad_normal_mode():
     parser = Parser(terminal)
 
     # Start in application mode
-    terminal.set_mode(DECKPAM_APPLICATION_KEYPAD, True)  # Application keypad mode
-    assert terminal.application_keypad
+    terminal.board.modes.set_mode(DECKPAM_APPLICATION_KEYPAD, True)  # Application keypad mode
+    assert terminal.board.modes.application_keypad
 
     # Send DECKPNM sequence
     parser.feed("\x1b>")
 
     # Should now be in normal keypad mode
-    assert not terminal.application_keypad
+    assert not terminal.board.modes.application_keypad
 
 
 def test_esc_greater_than_keypad_numeric_mode():
@@ -59,8 +59,8 @@ def test_esc_greater_than_keypad_numeric_mode():
     parser.feed("\x1b>")
 
     # Should not appear in terminal content and should not crash
-    assert terminal.cursor_x == 0
-    assert terminal.cursor_y == 0
+    assert terminal.board.cursor.x == 0
+    assert terminal.board.cursor.y == 0
 
 
 def test_keypad_mode_sequences_with_text():
@@ -72,7 +72,7 @@ def test_keypad_mode_sequences_with_text():
     parser.feed("\x1b=Hello\x1b> World")
 
     # Check mode was set and text was written
-    assert not terminal.application_keypad  # Should end in normal mode
+    assert not terminal.board.modes.application_keypad  # Should end in normal mode
     output = render_terminal_to_string(terminal)
     assert "Hello World" in output
 
@@ -86,15 +86,15 @@ def test_keypad_sequences_with_text():
     parser.feed("\x1b[p\x1b>Hello")
 
     # Only the text should appear
-    line_text = terminal.current_buffer.get_line_text(0)
+    line_text = terminal.board.screen.current_buffer.get_line_text(0)
     assert line_text.startswith("Hello")
     assert line_text[0] == "H"
     assert line_text[1] == "e"
     assert line_text[2] == "l"
     assert line_text[3] == "l"
     assert line_text[4] == "o"
-    assert terminal.cursor_x == 5
-    assert terminal.cursor_y == 0
+    assert terminal.board.cursor.x == 5
+    assert terminal.board.cursor.y == 0
 
 
 # Device control and status tests
@@ -107,8 +107,8 @@ def test_csi_p_device_status():
     parser.feed("\x1b[p")
 
     # Should not appear in terminal content and should not crash
-    assert terminal.cursor_x == 0
-    assert terminal.cursor_y == 0
+    assert terminal.board.cursor.x == 0
+    assert terminal.board.cursor.y == 0
 
 
 def test_device_control_string():
@@ -191,13 +191,13 @@ def test_csi_cursor_save_restore():
 
     # Move cursor elsewhere
     parser.feed("\x1b[5;5H")  # Move to row 5, col 5
-    assert terminal.cursor_x == 4  # 0-based
-    assert terminal.cursor_y == 4  # 0-based
+    assert terminal.board.cursor.x == 4  # 0-based
+    assert terminal.board.cursor.y == 4  # 0-based
 
     # Restore cursor
     parser.feed("\x1b[u")  # Restore cursor
-    assert terminal.cursor_x == 19  # 0-based (was col 20)
-    assert terminal.cursor_y == 9  # 0-based (was row 10)
+    assert terminal.board.cursor.x == 19  # 0-based (was col 20)
+    assert terminal.board.cursor.y == 9  # 0-based (was row 10)
 
 
 # Privacy and other CSI sequences
@@ -210,5 +210,5 @@ def test_csi_privacy_message():
     parser.feed("\x1b[38^")
 
     # Should not appear in terminal content and should not crash
-    assert terminal.cursor_x == 0
-    assert terminal.cursor_y == 0
+    assert terminal.board.cursor.x == 0
+    assert terminal.board.cursor.y == 0

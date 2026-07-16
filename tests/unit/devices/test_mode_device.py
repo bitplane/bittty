@@ -5,7 +5,7 @@ from bittty.terminal import Terminal
 
 def test_mode_device_owns_ansi_and_private_mode_state():
     terminal = Terminal(width=80, height=24)
-    modes = terminal.modes
+    modes = terminal.board.modes
 
     modes.set_ansi_modes((4, 7, 12, 20), True)
     assert modes.insert_mode is True
@@ -24,7 +24,7 @@ def test_mode_device_owns_ansi_and_private_mode_state():
 
 def test_mode_device_reports_query_status_from_its_state():
     terminal = Terminal(width=80, height=24)
-    modes = terminal.modes
+    modes = terminal.board.modes
 
     modes.insert_mode = True
     modes.auto_wrap = False
@@ -37,7 +37,7 @@ def test_mode_device_reports_query_status_from_its_state():
 
 def test_mode_device_keypad_operations_and_side_effects():
     terminal = Terminal(width=80, height=24)
-    modes = terminal.modes
+    modes = terminal.board.modes
 
     modes.handle_operation(Operation("mode", "DECKPAM", raw="\x1b="))
     assert modes.application_keypad is True
@@ -53,13 +53,13 @@ def test_mode_device_keypad_operations_and_side_effects():
 
 def test_mode_device_alt_screen_and_save_restore_side_effects():
     terminal = Terminal(width=80, height=24)
-    terminal.cursor.set_position(3, 4)
+    terminal.board.cursor.set_position(3, 4)
 
-    terminal.modes.set_private_modes((1049,), True)
-    assert terminal.screen.in_alt_screen is True
+    terminal.board.modes.set_private_modes((1049,), True)
+    assert terminal.board.screen.in_alt_screen is True
 
-    terminal.cursor.set_position(9, 9)
-    terminal.modes.set_private_modes((1049,), False)
+    terminal.board.cursor.set_position(9, 9)
+    terminal.board.modes.set_private_modes((1049,), False)
 
-    assert terminal.screen.in_alt_screen is False
-    assert (terminal.cursor.x, terminal.cursor.y) == (3, 4)
+    assert terminal.board.screen.in_alt_screen is False
+    assert (terminal.board.cursor.x, terminal.board.cursor.y) == (3, 4)

@@ -62,7 +62,7 @@ def test_mixed_escape_and_text_parsing(terminal):
     parser.feed("Hello \x1b[31mRed\x1b[0m World")
 
     # Should have written text and processed color changes
-    text_content = terminal.current_buffer.get_line_text(0).strip()
+    text_content = terminal.board.screen.current_buffer.get_line_text(0).strip()
     assert "Hello" in text_content
     assert "Red" in text_content
     assert "World" in text_content
@@ -76,10 +76,10 @@ def test_complete_sequence_processing(terminal):
     parser.feed("\x1b[10;20H")  # Complete cursor position sequence (row;col format)
 
     # CUP format is row;column, so 10;20 means row 10, column 20 (0-based: y=9, x=19)
-    assert terminal.cursor_y == 9  # row 10 -> y=9
-    assert terminal.cursor_x == 19  # column 20 -> x=19
+    assert terminal.board.cursor.y == 9  # row 10 -> y=9
+    assert terminal.board.cursor.x == 19  # column 20 -> x=19
 
     # Test another complete sequence
     parser.feed("\x1b[5;10H")  # row 5, column 10
-    assert terminal.cursor_y == 4  # row 5 -> y=4
-    assert terminal.cursor_x == 9  # column 10 -> x=9
+    assert terminal.board.cursor.y == 4  # row 5 -> y=4
+    assert terminal.board.cursor.x == 9  # column 10 -> x=9

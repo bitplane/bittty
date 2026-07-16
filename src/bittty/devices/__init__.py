@@ -10,7 +10,6 @@ from .mouse import MouseDevice
 from .query import QueryDevice
 from .screen import ScreenDevice
 from .style import StyleDevice
-from .terminal import TerminalOperationSink
 from .title import TitleDevice
 
 __all__ = [
@@ -24,6 +23,5 @@ __all__ = [
     "ScreenDevice",
     "StyleDevice",
     "TerminalBoard",
-    "TerminalOperationSink",
     "TitleDevice",
 ]
