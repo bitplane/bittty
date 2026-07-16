@@ -197,6 +197,26 @@ class Parser:
                 self.mode = None
                 continue
 
+            # Linux console fixed-length palette forms hijack the OSC introducer but
+            # carry no ST/BEL terminator: ESC ] P nrrggbb (10 chars) and ESC ] R.
+            if self.mode == "osc":
+                head = self.buffer[self._scan_from] if self._scan_from < len(self.buffer) else ""
+                if head == "R":
+                    end = self._scan_from + 1
+                    self.emit(Operation("LINUX_PALETTE_RESET", (), self.buffer[self._seq_start : end]))
+                    self.pos = end
+                    self.mode = None
+                    continue
+                if head == "P":
+                    if len(self.buffer) < self._scan_from + 8:
+                        break  # ESC ] P + 7 hex not all here yet — wait for the next chunk
+                    end = self._scan_from + 8
+                    payload = self.buffer[self._scan_from + 1 : end]
+                    self.emit(Operation("LINUX_PALETTE_SET", (payload,), self.buffer[self._seq_start : end]))
+                    self.pos = end
+                    self.mode = None
+                    continue
+
             # STRING modes (OSC/DCS/APC/PM/SOS) — ST or BEL terminate; CAN/SUB cancels
             m = STR_TERM_RE.search(self.buffer, self._scan_from)
             if not m:

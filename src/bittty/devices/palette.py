@@ -30,6 +30,8 @@ class PaletteDevice:
             "OSC_RESET_FOREGROUND": lambda op: self.reset_special("foreground"),
             "OSC_RESET_BACKGROUND": lambda op: self.reset_special("background"),
             "OSC_RESET_CURSOR": lambda op: self.reset_special("cursor"),
+            "LINUX_PALETTE_SET": self.set_linux_palette,
+            "LINUX_PALETTE_RESET": lambda op: self.reset(),
         }
 
     def reset(self) -> None:
@@ -106,6 +108,18 @@ class PaletteDevice:
     def reset_special(self, slot: str) -> None:
         """OSC 110/111/112 — reset the fg/bg/cursor colour to the personality default."""
         setattr(self, slot, getattr(self._defaults, slot))
+
+    def set_linux_palette(self, operation: Operation) -> None:
+        """ESC ] P nrrggbb — the linux console's own single-entry palette set."""
+        payload = operation.args[0]
+        if len(payload) != 7:
+            return
+        try:
+            index = int(payload[0], 16)
+            r, g, b = int(payload[1:3], 16), int(payload[3:5], 16), int(payload[5:7], 16)
+        except ValueError:
+            return
+        self.colors[index] = (r, g, b)
 
     def handle_operation(self, operation: Operation) -> None:
         handler = self.handlers.get(operation.name)

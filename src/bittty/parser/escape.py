@@ -18,6 +18,7 @@ ESCAPE_OPERATION_NAMES = {
     "O": ("SS3", ()),
     "E": ("NEL", ()),
     "H": ("HTS", ()),
+    "Z": ("DA1", ()),  # DECID — obsolete "identify", answered like primary DA
 }
 
 

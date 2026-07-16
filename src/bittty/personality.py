@@ -106,7 +106,7 @@ LINUX = Personality(
             (True, 2004),
         }
     ),
-    charsets=frozenset({"B", "A", "0"}),
+    charsets=frozenset({"B", "A", "0", "U"}),
     color_depth="256",
     palette=VGA_PALETTE,
     keymap=LINUX_KEYMAP,

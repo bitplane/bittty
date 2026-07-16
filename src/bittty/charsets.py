@@ -353,6 +353,7 @@ CHARSETS = {
     "0": DEC_SPECIAL_GRAPHICS,  # DEC Special Graphics
     "1": {},  # Alternate ROM (same as ASCII usually)
     "2": {},  # Alternate ROM Special Graphics
+    "U": {},  # Linux console: IBM PC ROM / CP437 (passthrough under Unicode)
     "<": DEC_SUPPLEMENTAL,  # DEC Supplemental
     ">": DEC_TECHNICAL,  # DEC Technical
     "4": DUTCH_NATIONAL,  # Dutch
