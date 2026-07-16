@@ -25,6 +25,8 @@ class StyleDevice(Device):
             "SGR": lambda op: self.apply_sgr(*op.args),
             "OSC_HYPERLINK": lambda op: self.set_hyperlink(op.args[0]),
             "DECSCA": lambda op: self.set_protected(op.args[0]),
+            "SPA": lambda op: self.set_protected(1),  # start protected area
+            "EPA": lambda op: self.set_protected(0),  # end protected area
             "XTPUSHSGR": lambda op: self.stack.append(self.current),
             "XTPOPSGR": lambda op: self.pop_sgr(),
         }

@@ -168,6 +168,19 @@ MODE_SPECS: list[Mode] = [
     Mode(2027, True, "grapheme_clustering", queryable=True),
     Mode(2028, True, "auto_resize_mode", queryable=True),
     Mode(2031, True, "color_scheme_updates", queryable=True),  # report light/dark changes
+    # Tail: scrollback/keyboard/clipboard/sixel behaviour flags a frontend actuates.
+    Mode(1010, True, "scroll_on_output", queryable=True),
+    Mode(1011, True, "scroll_on_keypress", queryable=True),
+    Mode(1034, True, "eight_bit_input", queryable=True),
+    Mode(1035, True, "special_modifiers", queryable=True),
+    Mode(1037, True, "delete_sends_del", queryable=True),
+    Mode(1040, True, "keep_selection", queryable=True),
+    Mode(1041, True, "select_to_clipboard", queryable=True),
+    Mode(1044, True, "reuse_clipboard", queryable=True),
+    Mode(1070, True, "sixel_private_registers", queryable=True),
+    Mode(7727, True, "application_escape", queryable=True),
+    Mode(7786, True, "mousewheel_to_arrows", queryable=True),
+    Mode(8452, True, "sixel_cursor_right", queryable=True),
 ]
 
 
@@ -235,6 +248,18 @@ class ModeDevice(Device):
         self.allow_alt_screen = True  # alt-screen switching permitted by default
         self.grapheme_clustering = False
         self.color_scheme_updates = False
+        self.scroll_on_output = False
+        self.scroll_on_keypress = False
+        self.eight_bit_input = False
+        self.special_modifiers = True  # xterm default: Alt/NumLock modifiers active
+        self.delete_sends_del = False
+        self.keep_selection = False
+        self.select_to_clipboard = False
+        self.reuse_clipboard = False
+        self.sixel_private_registers = True  # xterm default: per-sixel private colour registers
+        self.application_escape = False
+        self.mousewheel_to_arrows = False
+        self.sixel_cursor_right = False
 
     def reset(self, hard: bool = True) -> None:
         """Reset modes. hard restores every flag (RIS); soft is the DECSTR subset."""

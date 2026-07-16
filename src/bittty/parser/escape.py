@@ -20,6 +20,8 @@ ESCAPE_OPERATION_NAMES = {
     "O": ("SS3", ()),
     "E": ("NEL", ()),
     "H": ("HTS", ()),
+    "V": ("SPA", ()),  # Start of Protected Area
+    "W": ("EPA", ()),  # End of Protected Area
     "Z": ("DA1", ()),  # DECID — obsolete "identify", answered like primary DA
     # Locking shifts (ISO 2022): invoke a G-set into GL (n/o) or GR (~/}/|) persistently.
     "n": ("LS2", ()),  # G2 -> GL

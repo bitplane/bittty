@@ -34,6 +34,9 @@ class ControlDevice(Device):
             "ST": lambda op: None,
             "NEL": lambda op: self.next_line(),
             "HTS": lambda op: self.cursor.set_tab_stop(),
+            "S7C1T": lambda op: setattr(self.board, "c1_eightbit", False),
+            "S8C1T": lambda op: setattr(self.board, "c1_eightbit", True),
+            "ANSI_LEVEL": lambda op: setattr(self.board, "ansi_conformance_level", op.args[0]),
         }
 
     def next_line(self) -> None:

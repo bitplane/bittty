@@ -46,6 +46,8 @@ class TerminalBoard:
         self.notifications: list[str] = []  # OSC 9 / 777 messages
         self.prompt_marks: list[tuple[str, int]] = []  # OSC 133 (mark, row)
         self.conformance_level: int = 62  # DECSCL
+        self.c1_eightbit: bool = False  # S7C1T/S8C1T: transmit C1 controls as 8-bit
+        self.ansi_conformance_level: int = 1  # ESC SP L/M/N
         # linux console setterm hardware registers; a display/audio backend actuates these.
         self.screen_blanked: bool = False
         self.blank_timeout: int = 0  # minutes; 0 = never

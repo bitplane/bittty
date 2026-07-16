@@ -40,11 +40,15 @@ GROUND_PATTERNS = {
     "esc_hash": r"\x1b#[0-9]",
     # ESC % @ / ESC % G — select coding system (UTF-8). Before generic ESC minis.
     "esc_percent": r"\x1b%[@G]",
+    # ESC SP F/G — C1 transmission (S7C1T/S8C1T); ESC SP L/M/N — ANSI conformance level.
+    "esc_space": r"\x1b\x20[FGLMN]",
     # Generic simple ESC minis (not starters for paired strings)
     # excludes [, ], P, _, ^, X, and ST (\)
     "esc": r"\x1b[^][P_^XO\\]",
     # C0/C1 controls except BEL/CAN/SUB/ESC (ESC handled via others; ESC alone should hit 'trail')
     "ctrl": r"[\x00-\x06\x08-\x17\x19\x1C-\x1F\x7F]",
+    # Raw 8-bit C1 format/area controls: IND NEL HTS RI SPA EPA.
+    "c1_ctrl": r"[\x84\x85\x88\x8d\x96\x97]",
     # Specials
     "bel": r"\x07",
     "cancel": r"[\x18\x1A]",  # CAN / SUB (abort current sequence if in one)
@@ -68,6 +72,17 @@ STR_TERM_RE = re.compile(r"(?P<st>(?:\x1b\\|\x9C))|(?P<bel>\x07)|(?P<cancel>[\x1
 
 PAIRED = {"osc", "dcs", "apc", "pm", "sos", "csi"}
 STANDALONES = {"ss2", "ss3", "esc", "esc_charset", "esc_charset2", "ctrl", "bel"}
+
+# Raw 8-bit C1 format/area controls -> their operation names (same as the 7-bit ESC forms).
+_C1_CTRL_NAMES = {"\x84": "IND", "\x85": "NEL", "\x88": "HTS", "\x8d": "RI", "\x96": "SPA", "\x97": "EPA"}
+# ESC SP F/G = 7/8-bit C1 transmission; ESC SP L/M/N = ANSI conformance level 1/2/3.
+_ESC_SPACE_OPS = {
+    "F": ("S7C1T", ()),
+    "G": ("S8C1T", ()),
+    "L": ("ANSI_LEVEL", (1,)),
+    "M": ("ANSI_LEVEL", (2,)),
+    "N": ("ANSI_LEVEL", (3,)),
+}
 
 
 @lru_cache(maxsize=300)
@@ -275,6 +290,13 @@ class Parser:
         if kind == "esc_percent":
             # ESC % @ / ESC % G select the coding system; bittty is always Unicode,
             # so this is consumed and ignored (rather than leaking the final byte).
+            return
+        if kind == "c1_ctrl":
+            self.emit(Operation(_C1_CTRL_NAMES[data], raw=data))
+            return
+        if kind == "esc_space":
+            name, args = _ESC_SPACE_OPS[data[2]]
+            self.emit(Operation(name, args, data))
             return
 
         # Paired sequences
