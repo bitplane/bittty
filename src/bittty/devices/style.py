@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .base import Device
+from ..operations import Operation
 from ..style import Style, get_background, parse_sgr_sequence, style_to_ansi
 
 if TYPE_CHECKING:
@@ -21,7 +22,7 @@ class StyleDevice(Device):
         self.stack: list[Style] = []  # XTPUSHSGR / XTPOPSGR
         self._monochrome = board.personality.color_depth == "monochrome"
         self.handlers = {
-            "SGR": lambda op: self.apply_sgr(*op.args),
+            "SGR": self._handle_sgr,
             "OSC_HYPERLINK": lambda op: self.set_hyperlink(op.args[0]),
             "DECSCA": lambda op: self.set_protected(op.args[0]),
             "SPA": lambda op: self.set_protected(1),  # start protected area
@@ -45,11 +46,17 @@ class StyleDevice(Device):
         self.current = parse_sgr_sequence(value) if value else Style()
 
     def apply_sgr(self, style: Style | None, reset: bool = False) -> None:
-        """Apply an SGR style update; a monochrome terminal drops colour attributes.
+        """Apply an SGR style update (API/testing surface over the hot handler)."""
+        self._handle_sgr(Operation("SGR", (style, reset)))
+
+    def _handle_sgr(self, op: Operation) -> None:
+        """Apply an SGR operation; a monochrome terminal drops colour attributes.
 
         reset means "clear, then apply style" — ESC[0;31m arrives as (red, reset=True),
-        and a pure ESC[0m as (None, True).
+        and a pure ESC[0m as (None, True). This is the per-styled-cell hot path,
+        so the registry points here directly: one frame, no lambda unpacking hop.
         """
+        style, reset = op.args
         if reset:
             # SGR 0 resets to the default attributes but keeps the active hyperlink/protection.
             # No active link/protection (the common case) -> reuse the shared default, no rebuild.

@@ -129,10 +129,14 @@ class TerminalBoard:
         return registry
 
     def _print(self, operation: Operation) -> None:
+        self.print_text(operation.args[0])
+
+    def print_text(self, text: str) -> None:
+        """Write printable text (the parser's fast path — no Operation wrapper)."""
         if self.printer.controller_mode:  # MC printer-controller: text goes to paper, not the screen
-            self.printer.emit(operation.args[0])
+            self.printer.emit(text)
             return
-        self.screen.write_text(operation.args[0], self.style.current)
+        self.screen.write_text(text, self.style.current)
 
     def resize(self, width: int, height: int) -> None:
         """Resize the terminal, including buffers and the attached PTY."""

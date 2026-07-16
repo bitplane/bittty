@@ -161,6 +161,8 @@ class Parser:
         self._registry = registry
         self._print_h = registry.get("PRINT") if registry is not None else None
         self._crlf_h = registry.get("C0_CRLF") if registry is not None else None
+        # Board sinks take printable text directly — no Operation wrapper per run.
+        self._print_text = getattr(sink, "print_text", None) if registry is not None else None
         self._csi_memo: dict = {}
 
     # ---- internal helpers ----
@@ -180,6 +182,7 @@ class Parser:
 
         handle = self._handle
         print_h = self._print_h or handle
+        print_text = self._print_text
         crlf_h = self._crlf_h
         csi_memo = self._csi_memo
 
@@ -198,14 +201,20 @@ class Parser:
                     # flush preceding printables
                     if start > self.pos:
                         text = self.buffer[self.pos : start]
-                        print_h(Operation("PRINT", (text,), text))
+                        if print_text is not None:
+                            print_text(text)
+                        else:
+                            print_h(Operation("PRINT", (text,), text))
                         self.pos = start
 
                     # Hot one-shot tokens: dispatch inline and stay in this
                     # finditer pass (no mode transition, no scanner restart).
                     if kind == "text":
-                        text = m.group()
-                        print_h(Operation("PRINT", (text,), text))
+                        if print_text is not None:
+                            print_text(m.group())
+                        else:
+                            text = m.group()
+                            print_h(Operation("PRINT", (text,), text))
                         self.pos = end
                         continue
                     if kind == "csi_seq":
