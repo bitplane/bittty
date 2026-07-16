@@ -124,6 +124,18 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
         mode = params[0] if params and params[0] is not None else 0
         return Operation("DECSCA", (mode,), raw_csi_data)
 
+    if "'" in intermediates:  # DEC locator (pointing device) family
+        if final_char == "z":  # DECELR - Enable Locator Reporting
+            ps1 = params[0] if params and params[0] is not None else 0
+            ps2 = params[1] if len(params) > 1 and params[1] is not None else 0
+            return Operation("DECELR", (ps1, ps2), raw_csi_data)
+        if final_char == "{":  # DECSLE - Select Locator Events
+            return Operation("DECSLE", (tuple(params),), raw_csi_data)
+        if final_char == "|":  # DECRQLP - Request Locator Position
+            return Operation("DECRQLP", (params[0] if params and params[0] is not None else 0,), raw_csi_data)
+        if final_char == "w":  # DECEFR - Enable Filter Rectangle
+            return Operation("DECEFR", (tuple(params),), raw_csi_data)
+
     if final_char in ("h", "l"):  # SM/RM - Set/Reset Mode
         set_mode = final_char == "h"
         private = "?" in intermediates
