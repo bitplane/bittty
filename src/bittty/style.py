@@ -61,6 +61,11 @@ class Style:
     underline_style: Optional[str] = None  # None=single / "double" / "curly" / "dotted" / "dashed"
     overline: Optional[bool] = None
     underline_color: Optional[Color] = None
+    font: Optional[int] = None  # SGR 10-19: 0 = primary, 1-9 = alternate fonts
+    fraktur: Optional[bool] = None  # SGR 20 (blackletter)
+    framed: Optional[bool] = None  # SGR 51
+    encircled: Optional[bool] = None  # SGR 52
+    ideogram: Optional[str] = None  # SGR 60-65: underline/double_underline/overline/double_overline/stress/none
     hyperlink: Optional[str] = None  # OSC 8 target URI (not an SGR attribute)
     protected: Optional[bool] = None  # DECSCA: shielded from selective erase
 
@@ -88,6 +93,11 @@ class Style:
             underline_style=merge_attr(self.underline_style, other.underline_style),
             overline=merge_attr(self.overline, other.overline),
             underline_color=other.underline_color if other.underline_color is not None else self.underline_color,
+            font=merge_attr(self.font, other.font),
+            fraktur=merge_attr(self.fraktur, other.fraktur),
+            framed=merge_attr(self.framed, other.framed),
+            encircled=merge_attr(self.encircled, other.encircled),
+            ideogram=merge_attr(self.ideogram, other.ideogram),
             hyperlink=merge_attr(self.hyperlink, other.hyperlink),
             protected=merge_attr(self.protected, other.protected),
         )
@@ -190,10 +200,14 @@ def interpret(tokens: Tuple[str, ...]) -> Style:
         elif token == "9":
             style = replace(style, strike=True)
 
+        elif token in ("10", "11", "12", "13", "14", "15", "16", "17", "18", "19"):
+            style = replace(style, font=int(token) - 10)
+        elif token == "20":
+            style = replace(style, fraktur=True)
         elif token == "22":
             style = replace(style, bold=False, dim=False)
         elif token == "23":
-            style = replace(style, italic=False)
+            style = replace(style, italic=False, fraktur=False)
         elif token == "21":
             style = replace(style, underline=True, underline_style="double")
         elif token == "24":
@@ -206,12 +220,31 @@ def interpret(tokens: Tuple[str, ...]) -> Style:
             style = replace(style, conceal=False)
         elif token == "29":
             style = replace(style, strike=False)
+        elif token == "51":
+            style = replace(style, framed=True)
+        elif token == "52":
+            style = replace(style, encircled=True)
         elif token == "53":
             style = replace(style, overline=True)
+        elif token == "54":
+            style = replace(style, framed=False, encircled=False)
         elif token == "55":
             style = replace(style, overline=False)
         elif token == "59":
             style = replace(style, underline_color=Color("default"))
+        elif token in ("60", "61", "62", "63", "64"):
+            style = replace(
+                style,
+                ideogram={
+                    "60": "underline",
+                    "61": "double_underline",
+                    "62": "overline",
+                    "63": "double_overline",
+                    "64": "stress",
+                }[token],
+            )
+        elif token == "65":
+            style = replace(style, ideogram="none")
 
         # Basic indexed colors
         elif token.isdigit() and 30 <= int(token) <= 37:
@@ -337,8 +370,27 @@ def style_to_ansi(style: Style) -> str:
         params.append("8")
     if style.strike is True:
         params.append("9")
+    if style.fraktur is True:
+        params.append("20")
+    if style.font is not None:
+        params.append("10" if style.font == 0 else str(10 + style.font))
+    if style.framed is True:
+        params.append("51")
+    if style.encircled is True:
+        params.append("52")
     if style.overline is True:
         params.append("53")
+    if style.ideogram is not None:
+        params.append(
+            {
+                "underline": "60",
+                "double_underline": "61",
+                "overline": "62",
+                "double_overline": "63",
+                "stress": "64",
+                "none": "65",
+            }[style.ideogram]
+        )
 
     # Foreground color
     if style.fg is not None:
