@@ -20,12 +20,7 @@ class PaletteDevice:
         self.board = board
         self._defaults = board.personality.palette
         self._default_colors = build_256(self._defaults.base16)
-        self.colors = list(self._default_colors)
-        self.foreground = self._defaults.foreground
-        self.background = self._defaults.background
-        self.cursor = self._defaults.cursor
-        for slot, rgb in board.palette_overrides.items():
-            self._set_slot(slot, rgb)
+        self.reset()
         self.handlers = {
             "OSC_SET_PALETTE": self.set_palette,
             "OSC_FOREGROUND": lambda op: self.set_or_query_special(op, "foreground", 10),
@@ -36,6 +31,15 @@ class PaletteDevice:
             "OSC_RESET_BACKGROUND": lambda op: self.reset_special("background"),
             "OSC_RESET_CURSOR": lambda op: self.reset_special("cursor"),
         }
+
+    def reset(self) -> None:
+        """Restore the personality's default colours plus construction overrides (RIS)."""
+        self.colors = list(self._default_colors)
+        self.foreground = self._defaults.foreground
+        self.background = self._defaults.background
+        self.cursor = self._defaults.cursor
+        for slot, rgb in self.board.palette_overrides.items():
+            self._set_slot(slot, rgb)
 
     def _set_slot(self, slot, rgb: RGB) -> None:
         if slot in _SPECIALS:

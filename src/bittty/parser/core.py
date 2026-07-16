@@ -38,6 +38,8 @@ GROUND_PATTERNS = {
     "ss3": r"(?:\x1bO|\x8F)",
     # ESC # n — line size / alignment (DECALN is ESC # 8). Before generic ESC minis.
     "esc_hash": r"\x1b#[0-9]",
+    # ESC % @ / ESC % G — select coding system (UTF-8). Before generic ESC minis.
+    "esc_percent": r"\x1b%[@G]",
     # Generic simple ESC minis (not starters for paired strings)
     # excludes [, ], P, _, ^, X, and ST (\)
     "esc": r"\x1b[^][P_^XO\\]",
@@ -249,6 +251,10 @@ class Parser:
             return
         if kind == "esc_hash":
             self.emit(parse_hash_operation(data) or Operation("ESC_HASH", (data[2],), data))
+            return
+        if kind == "esc_percent":
+            # ESC % @ / ESC % G select the coding system; bittty is always Unicode,
+            # so this is consumed and ignored (rather than leaking the final byte).
             return
 
         # Paired sequences

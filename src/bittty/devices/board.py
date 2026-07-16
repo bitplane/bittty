@@ -116,6 +116,7 @@ class TerminalBoard:
         self.screen.reset(hard=hard)
         if hard:
             self.charset.reset()
+            self.palette.reset()
 
     @property
     def width(self) -> int:
