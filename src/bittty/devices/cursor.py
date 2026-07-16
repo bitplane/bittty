@@ -125,6 +125,15 @@ class CursorDevice:
         self.y = self.saved_y
         self.board.style.current_ansi_code = self.saved_ansi_code
 
+    def reset(self, hard: bool = True) -> None:
+        """Home the cursor and clear saved state; a hard reset restores default tab stops."""
+        self.set_position(0, 0)
+        self.saved_x = 0
+        self.saved_y = 0
+        self.saved_ansi_code = ""
+        if hard:
+            self.tab_stops = set(range(8, self.board.width, 8))
+
     def handle_operation(self, operation: Operation) -> None:
         if operation.name in ("CUP", "HVP"):
             col, row = operation.args

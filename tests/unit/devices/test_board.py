@@ -20,7 +20,7 @@ def test_terminal_builds_board_and_exposes_device_slots():
 def test_parser_reuses_existing_terminal_board_by_default():
     terminal = Terminal(width=12, height=4)
 
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     assert parser.sink is terminal.board
     assert terminal.board.cursor is terminal.board.cursor

@@ -15,7 +15,7 @@ def test_srm_default_echo_enabled():
 def test_srm_disable_local_echo():
     """Test disabling SRM to turn off local echo."""
     terminal = Terminal(width=20, height=5)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Disable SRM mode (ESC [ 12 h) - turns OFF echo
     parser.feed("\x1b[12h")
@@ -27,7 +27,7 @@ def test_srm_disable_local_echo():
 def test_srm_enable_local_echo():
     """Test enabling SRM to turn on local echo."""
     terminal = Terminal(width=20, height=5)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Disable echo first
     parser.feed("\x1b[12h")
@@ -43,7 +43,7 @@ def test_srm_enable_local_echo():
 def test_srm_affects_input_echo():
     """Test that SRM mode affects whether input is echoed to screen."""
     terminal = Terminal(width=20, height=5)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # With echo enabled (default), typing should echo to screen
     terminal.board.screen.write_text("test")
@@ -67,7 +67,7 @@ def test_srm_affects_input_echo():
 def test_srm_password_input_scenario():
     """Test typical password input scenario with SRM."""
     terminal = Terminal(width=20, height=5)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Simulate sudo asking for password
     terminal.board.screen.write_text("Password: ")
@@ -87,7 +87,7 @@ def test_srm_password_input_scenario():
 def test_srm_toggle_state():
     """Test toggling SRM state multiple times."""
     terminal = Terminal(width=20, height=5)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Start with default (echo enabled)
     assert terminal.board.modes.local_echo

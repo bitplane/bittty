@@ -13,7 +13,7 @@ class CollectingSink:
 
 def test_parser_emits_batched_print_operation(terminal):
     sink = CollectingSink()
-    parser = Parser(terminal, sink=sink)
+    parser = Parser(sink)
 
     parser.feed("hello")
 
@@ -23,7 +23,7 @@ def test_parser_emits_batched_print_operation(terminal):
 
 def test_parser_emits_control_operations(terminal):
     sink = CollectingSink()
-    parser = Parser(terminal, sink=sink)
+    parser = Parser(sink)
 
     parser.feed("\r\n")
 
@@ -35,7 +35,7 @@ def test_parser_emits_control_operations(terminal):
 
 def test_parser_emits_escape_and_csi_operations(terminal):
     sink = CollectingSink()
-    parser = Parser(terminal, sink=sink)
+    parser = Parser(sink)
 
     parser.feed("\x1b7\x1b[2t")
 
@@ -47,7 +47,7 @@ def test_parser_emits_escape_and_csi_operations(terminal):
 
 def test_parser_emits_semantic_cursor_operations(terminal):
     sink = CollectingSink()
-    parser = Parser(terminal, sink=sink)
+    parser = Parser(sink)
 
     parser.feed("\x1b[2;3H\x1b[4A\x1b[5B\x1b[6C\x1b[7D\x1b[8G\x1b[9d\x1b[10;11f")
 
@@ -65,7 +65,7 @@ def test_parser_emits_semantic_cursor_operations(terminal):
 
 def test_parser_emits_semantic_edit_operations(terminal):
     sink = CollectingSink()
-    parser = Parser(terminal, sink=sink)
+    parser = Parser(sink)
 
     parser.feed("\x1b[2J\x1b[3K\x1b[4L\x1b[5M\x1b[6@\x1b[7P\x1b[8X\x1b[9S\x1b[10T")
 
@@ -84,7 +84,7 @@ def test_parser_emits_semantic_edit_operations(terminal):
 
 def test_parser_emits_semantic_cursor_state_and_screen_operations(terminal):
     sink = CollectingSink()
-    parser = Parser(terminal, sink=sink)
+    parser = Parser(sink)
 
     parser.feed("\x1b[2;9r\x1b[r\x1b[s\x1b[u\x1b[3b")
 
@@ -99,7 +99,7 @@ def test_parser_emits_semantic_cursor_state_and_screen_operations(terminal):
 
 def test_parser_emits_style_and_query_operations(terminal):
     sink = CollectingSink()
-    parser = Parser(terminal, sink=sink)
+    parser = Parser(sink)
 
     parser.feed("\x1b[31m\x1b[6n\x1b[5n\x1b[c\x1b[>0c\x1b[?25$p\x1b[4$p")
 
@@ -116,7 +116,7 @@ def test_parser_emits_style_and_query_operations(terminal):
 
 def test_parser_emits_reset_sgr_operation(terminal):
     sink = CollectingSink()
-    parser = Parser(terminal, sink=sink)
+    parser = Parser(sink)
 
     parser.feed("\x1b[m\x1b[0m\x1b[00m")
 
@@ -129,7 +129,7 @@ def test_parser_emits_reset_sgr_operation(terminal):
 
 def test_parser_emits_mode_operations(terminal):
     sink = CollectingSink()
-    parser = Parser(terminal, sink=sink)
+    parser = Parser(sink)
 
     parser.feed("\x1b[4h\x1b[4l\x1b[?25h\x1b[?25l\x1b[?1000;1006h")
 
@@ -144,7 +144,7 @@ def test_parser_emits_mode_operations(terminal):
 
 def test_parser_emits_string_sequence_content_and_raw_data(terminal):
     sink = CollectingSink()
-    parser = Parser(terminal, sink=sink)
+    parser = Parser(sink)
 
     parser.feed("\x1b]2;Title\x07\x1bPpayload\x1b\\")
 
@@ -155,7 +155,7 @@ def test_parser_emits_string_sequence_content_and_raw_data(terminal):
 
 
 def test_default_operation_sink_preserves_terminal_behavior(terminal):
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     parser.feed("Hi\tThere\r\nNext")
 

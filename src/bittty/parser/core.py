@@ -8,7 +8,6 @@ from functools import lru_cache
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from ..terminal import Terminal
     from ..operations import OperationSink
 
 from ..operations import Operation, control_name
@@ -103,29 +102,15 @@ class Parser:
     Uses small, state-specific scanners for speed.
     """
 
-    def __init__(self, terminal: Terminal, sink: OperationSink | None = None) -> None:
-        self.terminal = terminal
-        self.sink = sink if sink is not None else terminal.board
+    def __init__(self, sink: OperationSink) -> None:
+        self.sink = sink
         self.buffer = ""
         self.pos = 0
         self.mode: str | None = None  # None, 'csi', 'osc', 'dcs', 'apc', 'pm', 'sos'
 
-        # kept for API compatibility
-        self.escape_patterns = GROUND_PATTERNS.copy()
-        self.tokenizer = GROUND_RE
-
         # bounds for current paired sequence
         self._seq_start = 0  # index where introducer starts
         self._scan_from = 0  # index just after introducer (for searching finals)
-
-    def update_tokenizer(self) -> None:
-        # API compat; nothing dynamic here
-        self.tokenizer = GROUND_RE
-
-    def update_pattern(self, key: str, pattern: str) -> None:
-        # Rarely used; keep behavior if you mutate patterns externally
-        self.escape_patterns[key] = pattern
-        self.tokenizer = _compile(self.escape_patterns)
 
     # ---- internal helpers ----
     def _set_seq_bounds(self, start: int) -> None:
@@ -146,7 +131,7 @@ class Parser:
             if self.mode is None:
                 # ---- GROUND: scan for next token
                 trail_start: int | None = None
-                for m in self.tokenizer.finditer(self.buffer, self.pos):
+                for m in GROUND_RE.finditer(self.buffer, self.pos):
                     kind = m.lastgroup
                     start, end = m.start(), m.end()
 

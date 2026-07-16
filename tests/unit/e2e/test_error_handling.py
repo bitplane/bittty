@@ -7,7 +7,7 @@ from bittty.terminal import Terminal
 def test_csi_invalid_characters():
     """Test CSI sequence with invalid characters."""
     terminal = Terminal(width=80, height=24)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # CSI with invalid character should abort sequence
     parser.feed("\x1b[\x01A")  # Invalid control character in CSI
@@ -21,7 +21,7 @@ def test_csi_invalid_characters():
 def test_csi_private_parameter_in_wrong_state():
     """Test private parameter bytes in wrong CSI state."""
     terminal = Terminal(width=80, height=24)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Private parameter byte after regular parameter
     parser.feed("\x1b[1;?25h")  # ? after number should be invalid
@@ -35,7 +35,7 @@ def test_csi_private_parameter_in_wrong_state():
 def test_window_operations_ignored():
     """Test that window operations CSI sequences are ignored."""
     terminal = Terminal(width=80, height=24)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Window operation sequences (CSI Ps t)
     parser.feed("\x1b[8;24;80t")  # Resize window
@@ -50,7 +50,7 @@ def test_window_operations_ignored():
 def test_device_status_queries_ignored():
     """Test that device status queries are ignored."""
     terminal = Terminal(width=80, height=24)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Device status queries
     parser.feed("\x1b[6n")  # Cursor position report
@@ -65,7 +65,7 @@ def test_device_status_queries_ignored():
 def test_privacy_message_ignored():
     """Test that privacy messages are ignored."""
     terminal = Terminal(width=80, height=24)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Privacy message (CSI Ps ^)
     parser.feed("\x1b[1^")
@@ -78,7 +78,7 @@ def test_privacy_message_ignored():
 def test_device_attributes_ignored():
     """Test that device attributes queries are ignored."""
     terminal = Terminal(width=80, height=24)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Device attributes (CSI Ps c)
     parser.feed("\x1b[0c")
@@ -92,7 +92,7 @@ def test_device_attributes_ignored():
 def test_sgr_with_no_parameters():
     """Test SGR sequence with no parameters defaults to reset."""
     terminal = Terminal(width=80, height=24)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Set some style first
     parser.feed("\x1b[31m")  # Red
@@ -114,7 +114,7 @@ def test_sgr_with_no_parameters():
 def test_unknown_csi_sequence_logged():
     """Test that unknown CSI sequences are handled gracefully."""
     terminal = Terminal(width=80, height=24)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Unknown CSI sequence
     parser.feed("\x1b[999z")  # Unknown final character

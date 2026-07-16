@@ -6,8 +6,8 @@ from bittty.style import Style, parse_sgr_sequence
 
 def test_write_cell_overwrite():
     terminal = Terminal(width=10, height=1)
-    parser = Parser(terminal)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
+    parser = Parser(terminal.board)
     parser.feed("\x1b[31m")  # Set red color
     parser.feed("A")
     assert terminal.board.screen.current_buffer.get_line_text(0) == "A         "
@@ -30,8 +30,8 @@ def test_write_cell_overwrite():
 
 def test_write_cell_insert_mode():
     terminal = Terminal(width=10, height=1)
-    parser = Parser(terminal)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
+    parser = Parser(terminal.board)
     parser.feed("\x1b[31m")  # Set red color
     parser.feed("A")
     parser.feed("\x1b[32m")  # Set green color
@@ -49,7 +49,7 @@ def test_write_cell_insert_mode():
 
 def test_write_cell_autowrap():
     terminal = Terminal(width=3, height=2)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
     parser.feed("\x1b[31m")  # Set red color
     parser.feed("A")
     parser.feed("\x1b[32m")  # Set green color

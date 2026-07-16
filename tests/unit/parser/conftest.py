@@ -21,7 +21,7 @@ def terminal():
 @pytest.fixture
 def parser(terminal):
     """Create a Parser attached to a real Terminal."""
-    return Parser(terminal)
+    return Parser(terminal.board)
 
 
 @pytest.fixture
@@ -43,10 +43,10 @@ def small_terminal():
 @pytest.fixture
 def parser_with_standard_terminal(standard_terminal):
     """Return a parser connected to a standard terminal for integration testing."""
-    return Parser(standard_terminal), standard_terminal
+    return Parser(standard_terminal.board), standard_terminal
 
 
 @pytest.fixture
 def parser_with_small_terminal(small_terminal):
     """Return a parser connected to a small terminal for specific test scenarios."""
-    return Parser(small_terminal), small_terminal
+    return Parser(small_terminal.board), small_terminal

@@ -44,7 +44,7 @@ def test_write_cell_overwrite_empty_line():
 
 def test_write_cell_overwrite_with_style():
     terminal = Terminal(width=10, height=5)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
     terminal.board.screen.current_buffer.set(0, 0, "12345")
     terminal.board.cursor.x = 2
     terminal.board.cursor.y = 0
@@ -54,7 +54,7 @@ def test_write_cell_overwrite_with_style():
 
 def test_write_cell_insert_with_style():
     terminal = Terminal(width=10, height=5)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
     terminal.board.modes.insert_mode = True
     terminal.board.screen.current_buffer.set(0, 0, "12345")
     terminal.board.cursor.x = 2
@@ -66,7 +66,7 @@ def test_write_cell_insert_with_style():
 
 def test_write_cell_insert_at_end_of_line():
     terminal = Terminal(width=10, height=5)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
     terminal.board.modes.insert_mode = True
     terminal.board.screen.current_buffer.set(0, 0, "123")
     terminal.board.cursor.x = 5
@@ -78,7 +78,7 @@ def test_write_cell_insert_at_end_of_line():
 
 def test_write_cell_overwrite_at_start_of_line():
     terminal = Terminal(width=10, height=5)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
     terminal.board.screen.current_buffer.set(0, 0, "12345")
     terminal.board.cursor.x = 0
     terminal.board.cursor.y = 0
@@ -89,7 +89,7 @@ def test_write_cell_overwrite_at_start_of_line():
 
 def test_write_cell_insert_and_truncate():
     terminal = Terminal(width=5, height=5)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
     terminal.board.modes.insert_mode = True
     terminal.board.screen.current_buffer.set(0, 0, "12345")
     terminal.board.cursor.x = 2

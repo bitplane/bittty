@@ -19,6 +19,10 @@ class ModeDevice:
 
     def __init__(self, board: TerminalBoard) -> None:
         self.board = board
+        self._set_defaults()
+
+    def _set_defaults(self) -> None:
+        """Set every mode flag to its power-on default."""
         self.auto_wrap = True
         self.insert_mode = False
         self.application_keypad = False
@@ -43,6 +47,16 @@ class ModeDevice:
         self.auto_resize_mode = False
         self.keyboard_usage_mode = False
         self.bracketed_paste = False
+
+    def reset(self, hard: bool = True) -> None:
+        """Reset modes. hard restores every flag (RIS); soft is the DECSTR subset."""
+        if hard:
+            self._set_defaults()
+            return
+        # DECSTR soft reset — the widely-agreed subset (SGR is reset by the style device).
+        self.insert_mode = False
+        self.origin_mode = False
+        self.cursor_visible = True
 
     def handle_operation(self, operation: Operation) -> None:
         if operation.name in ("SM", "RM", "DECSET", "DECRST"):

@@ -56,7 +56,7 @@ def test_parse_dcs_sequences():
 
 def test_mixed_escape_and_text_parsing(terminal):
     """Test parsing mixed escape sequences and text."""
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Mix of text, CSI, and text
     parser.feed("Hello \x1b[31mRed\x1b[0m World")
@@ -70,7 +70,7 @@ def test_mixed_escape_and_text_parsing(terminal):
 
 def test_complete_sequence_processing(terminal):
     """Test that complete sequences are processed correctly."""
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Feed complete sequences
     parser.feed("\x1b[10;20H")  # Complete cursor position sequence (row;col format)

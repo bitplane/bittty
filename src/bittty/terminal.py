@@ -78,7 +78,7 @@ class Terminal:
         self._pty_data_callback: Optional[Callable[[str], None]] = None
 
         # Parser
-        self.parser = Parser(self, sink=self.board)
+        self.parser = Parser(self.board)
 
     @property
     def pty(self) -> Optional[Any]:

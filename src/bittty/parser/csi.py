@@ -108,6 +108,9 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
         private = "?" in intermediates
         return Operation("query", "DECRQM", (mode, private), raw_csi_data)
 
+    if final_char == "p" and "!" in intermediates:  # DECSTR - Soft Terminal Reset
+        return Operation("screen", "DECSTR", (), raw_csi_data)
+
     if final_char in ("h", "l"):  # SM/RM - Set/Reset Mode
         set_mode = final_char == "h"
         private = "?" in intermediates

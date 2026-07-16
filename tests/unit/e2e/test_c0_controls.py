@@ -4,7 +4,7 @@ from bittty.constants import BS, HT
 
 def test_backspace(terminal):
     """Test that backspace moves the cursor back."""
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Write some text first
     parser.feed("Hello")
@@ -19,7 +19,7 @@ def test_backspace(terminal):
 
 def test_horizontal_tab(terminal):
     """Test that a horizontal tab moves the cursor to the next tab stop."""
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Move cursor to position 2
     parser.feed("ab")
@@ -34,7 +34,7 @@ def test_horizontal_tab(terminal):
 
 def test_horizontal_tab_uses_set_tab_stop(terminal):
     """ESC H should set a tab stop used by subsequent horizontal tabs."""
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     terminal.board.cursor.set_position(3, 0)
     parser.feed("\x1bH")
@@ -46,7 +46,7 @@ def test_horizontal_tab_uses_set_tab_stop(terminal):
 
 def test_line_feed(terminal):
     """Test that a line feed moves the cursor down."""
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
     initial_y = terminal.board.cursor.y
 
     parser.feed("\x0a")  # Line feed
@@ -57,7 +57,7 @@ def test_line_feed(terminal):
 
 def test_carriage_return(terminal):
     """Test that a carriage return moves the cursor to the beginning of the line."""
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Move cursor to the right
     parser.feed("Hello World")

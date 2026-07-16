@@ -75,7 +75,7 @@ def benchmark_parser(ansi_content: str, runs: int = 5, temp_profile_path: str = 
 
     # Run with profiling for profile data (don't include timing)
     terminal = Terminal()
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     profiler = cProfile.Profile()
     profiler.enable()
@@ -88,7 +88,7 @@ def benchmark_parser(ansi_content: str, runs: int = 5, temp_profile_path: str = 
     # Now run without profiling for clean timing data
     for _ in range(runs):
         terminal = Terminal()
-        parser = Parser(terminal)
+        parser = Parser(terminal.board)
 
         start_time = time.perf_counter()
         parser.feed(ansi_content)

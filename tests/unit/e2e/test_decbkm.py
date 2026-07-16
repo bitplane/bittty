@@ -28,7 +28,7 @@ def test_decbkm_default_mode():
 def test_decbkm_set_bs_mode():
     """Test setting DECBKM to send BS instead of DEL."""
     terminal = Terminal(width=20, height=5)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Mock the PTY to capture output
     sent_data = []
@@ -52,7 +52,7 @@ def test_decbkm_set_bs_mode():
 def test_decbkm_reset_to_del():
     """Test resetting DECBKM back to DEL mode."""
     terminal = Terminal(width=20, height=5)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Mock the PTY to capture output
     sent_data = []

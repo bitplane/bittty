@@ -4,7 +4,7 @@ from bittty.constants import ESC, BEL
 
 def test_bell_character(terminal):
     """Test that the BEL character (0x07) processes without causing visible changes."""
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
     initial_cursor = (terminal.board.cursor.x, terminal.board.cursor.y)
     initial_text = terminal.board.screen.current_buffer.get_line_text(0)
 
@@ -17,13 +17,13 @@ def test_bell_character(terminal):
 
 def test_escape_to_csi_entry(terminal):
     """Test transition from ESCAPE to CSI_ENTRY state."""
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
     parser.feed(f"{ESC}[")  # ESC then [
 
 
 def test_ris_reset_terminal(terminal):
     """Test RIS (Reset to Initial State) sequence."""
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Write some content and move cursor
     parser.feed("Hello World")
@@ -46,7 +46,7 @@ def test_ris_reset_terminal(terminal):
 
 def test_ind_index(terminal):
     """Test IND (Index) sequence."""
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
     initial_y = terminal.board.cursor.y
 
     parser.feed("\x1bD")  # ESC then D (IND - Index)
@@ -57,7 +57,7 @@ def test_ind_index(terminal):
 
 def test_ri_reverse_index_no_scroll(terminal):
     """Test RI (Reverse Index) sequence without scrolling."""
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Move cursor down a few lines first
     parser.feed("\x1b[6H")  # Move to line 6 (1-indexed)
@@ -72,7 +72,7 @@ def test_ri_reverse_index_no_scroll(terminal):
 
 def test_ri_reverse_index_with_scroll(terminal):
     """Test RI (Reverse Index) sequence with scrolling."""
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Cursor should start at 0,0
     assert terminal.board.cursor.y == 0
@@ -92,7 +92,7 @@ def test_ri_reverse_index_with_scroll(terminal):
 
 def test_desc_save_cursor(terminal):
     """Test DECSC (Save Cursor) sequence."""
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Move cursor to a specific position
     parser.feed("\x1b[10;20H")  # Move to line 10, column 20
@@ -110,7 +110,7 @@ def test_desc_save_cursor(terminal):
 
 def test_decrc_restore_cursor(terminal):
     """Test DECRC (Restore Cursor) sequence."""
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Move and save cursor
     parser.feed("\x1b[5;15H")  # Move to specific position

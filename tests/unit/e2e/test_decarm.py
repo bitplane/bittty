@@ -16,7 +16,7 @@ def test_decarm_default_auto_repeat_enabled():
 def test_decarm_disable_auto_repeat():
     """Test disabling DECARM to prevent key auto-repeat."""
     terminal = Terminal(width=20, height=5)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Disable DECARM mode (ESC [ ? 8 l)
     parser.feed("\x1b[?8l")
@@ -28,7 +28,7 @@ def test_decarm_disable_auto_repeat():
 def test_decarm_enable_auto_repeat():
     """Test enabling DECARM to allow key auto-repeat."""
     terminal = Terminal(width=20, height=5)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Disable first
     parser.feed("\x1b[?8l")
@@ -44,7 +44,7 @@ def test_decarm_enable_auto_repeat():
 def test_decarm_affects_key_handling():
     """Test that DECARM mode affects how keys are processed."""
     terminal = Terminal(width=20, height=5)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Mock key repeat detection
     sent_data = []
@@ -71,7 +71,7 @@ def test_decarm_affects_key_handling():
 def test_decarm_toggle_state():
     """Test toggling DECARM state multiple times."""
     terminal = Terminal(width=20, height=5)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Start with default (enabled)
     assert terminal.board.modes.auto_repeat

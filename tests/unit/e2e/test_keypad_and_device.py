@@ -22,7 +22,7 @@ def render_lines_to_string(lines: list[list[tuple[str, str]]]) -> list[str]:
 def test_keypad_application_mode():
     """Test ESC = (DECKPAM) - Application Keypad Mode."""
     terminal = Terminal(width=80, height=24)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Initially should be in normal keypad mode
     assert not terminal.board.modes.application_keypad
@@ -37,7 +37,7 @@ def test_keypad_application_mode():
 def test_keypad_normal_mode():
     """Test ESC > (DECKPNM) - Normal Keypad Mode."""
     terminal = Terminal(width=80, height=24)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Start in application mode
     terminal.board.modes.set_mode(DECKPAM_APPLICATION_KEYPAD, True)  # Application keypad mode
@@ -53,7 +53,7 @@ def test_keypad_normal_mode():
 def test_esc_greater_than_keypad_numeric_mode():
     """Test ESC > sequence (DECKPNM - keypad numeric mode) basic functionality."""
     terminal = Terminal(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # ESC > sets keypad to numeric mode - should be consumed without error
     parser.feed("\x1b>")
@@ -66,7 +66,7 @@ def test_esc_greater_than_keypad_numeric_mode():
 def test_keypad_mode_sequences_with_text():
     """Test keypad sequences followed by regular text."""
     terminal = Terminal(width=80, height=24)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Test sequence: DECKPAM, text, DECKPNM, more text
     parser.feed("\x1b=Hello\x1b> World")
@@ -80,7 +80,7 @@ def test_keypad_mode_sequences_with_text():
 def test_keypad_sequences_with_text():
     """Test keypad sequences followed by regular text - basic version."""
     terminal = Terminal(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Send keypad sequences followed by text
     parser.feed("\x1b[p\x1b>Hello")
@@ -101,7 +101,7 @@ def test_keypad_sequences_with_text():
 def test_csi_p_device_status():
     """Test CSI p sequence (device status query)."""
     terminal = Terminal(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # CSI p is a device status query - should be consumed without error
     parser.feed("\x1b[p")
@@ -114,7 +114,7 @@ def test_csi_p_device_status():
 def test_device_control_string():
     """Test ESC P...ESC \\ (DCS) - Device Control String."""
     terminal = Terminal(width=80, height=24)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Send a DCS sequence (should be ignored but not crash)
     parser.feed("\x1bPsome device control data\x1b\\")
@@ -132,7 +132,7 @@ def test_device_control_string():
 def test_device_control_string_with_bel():
     """Test DCS terminated with BEL instead of ST."""
     terminal = Terminal(width=80, height=24)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Send a DCS sequence terminated with BEL
     parser.feed("\x1bPdevice data\x07")
@@ -150,7 +150,7 @@ def test_device_control_string_with_bel():
 def test_dcs_with_complex_content():
     """Test DCS with more complex control characters inside."""
     terminal = Terminal(width=80, height=24)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # DCS with various characters including CSI-like sequences
     parser.feed("\x1bP1;2;3;test[31mdata\x1b\\")
@@ -169,7 +169,7 @@ def test_dcs_with_complex_content():
 def test_string_terminator():
     """Test ESC \\ (ST) - String Terminator."""
     terminal = Terminal(width=80, height=24)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # ST should be consumed but not affect output
     parser.feed("\x1b\\")
@@ -183,7 +183,7 @@ def test_string_terminator():
 def test_csi_cursor_save_restore():
     """Test CSI s/u cursor save/restore sequences."""
     terminal = Terminal(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Move cursor and save position
     parser.feed("\x1b[10;20H")  # Move to row 10, col 20
@@ -204,7 +204,7 @@ def test_csi_cursor_save_restore():
 def test_csi_privacy_message():
     """Test CSI ^ sequence (Privacy Message)."""
     terminal = Terminal(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # CSI ^ with parameter should be consumed
     parser.feed("\x1b[38^")

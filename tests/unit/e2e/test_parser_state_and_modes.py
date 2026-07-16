@@ -20,7 +20,7 @@ def terminal(standard_terminal):
 
 def test_csi_sm_rm_private_autowrap(terminal):
     """Test CSI ? 7 h (Set Auto-wrap Mode) and CSI ? 7 l (Reset Auto-wrap Mode)."""
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Set auto-wrap mode
     parser.feed(f"{ESC}[?{DECAWM_AUTOWRAP}h")
@@ -33,7 +33,7 @@ def test_csi_sm_rm_private_autowrap(terminal):
 
 def test_csi_sm_rm_private_cursor_visibility(terminal):
     """Test CSI ? 25 h (Show Cursor) and CSI ? 25 l (Hide Cursor)."""
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Hide cursor
     parser.feed("\x1b[?25l")
@@ -63,7 +63,7 @@ def test_parse_byte_csi_intermediate_transition(terminal):
 
 def test_parse_byte_ht_wraps_cursor(terminal):
     """Test that HT character (0x09) wraps cursor_x if it exceeds terminal width."""
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
     terminal.board.cursor.x = terminal.width - 5  # 5 characters before end
     parser.feed("\x09")
     assert terminal.board.cursor.x == terminal.width - 1  # Should cap at terminal width - 1
@@ -71,7 +71,7 @@ def test_parse_byte_ht_wraps_cursor(terminal):
 
 def test_unknown_escape_sequences_ignored(terminal):
     """Test that unknown escape sequences are ignored and don't affect normal parsing."""
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Unknown escape sequences should be logged but not crash
     parser.feed("Before\x1b9After")  # ESC 9 (unknown/unhandled)
@@ -87,7 +87,7 @@ def test_unknown_escape_sequences_ignored(terminal):
 
 def test_invalid_csi_sequences_ignored(terminal):
     """Test that invalid CSI sequences are ignored and don't affect normal parsing."""
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Invalid CSI sequences behavior matches real terminals
     parser.feed("Hello\x1b[\x01World")  # Invalid control in CSI
@@ -105,7 +105,7 @@ def test_invalid_csi_sequences_ignored(terminal):
 
 def test_malformed_csi_recovery(terminal):
     """Test that parser recovers from malformed CSI sequences."""
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Feed malformed CSI followed by normal text
     parser.feed("Start\x1b[999;999;999ZEnd")  # Unknown CSI sequence
@@ -118,7 +118,7 @@ def test_malformed_csi_recovery(terminal):
 
 def test_incomplete_csi_sequences(terminal):
     """Test handling of incomplete CSI sequences."""
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Incomplete sequences shouldn't crash
     parser.feed("Test\x1b[")  # Just CSI introducer
@@ -164,7 +164,7 @@ def test_parse_byte_csi_param_intermediate(terminal):
 
 def test_parse_byte_csi_intermediate_param_final(terminal):
     """Test CSI_INTERMEDIATE with parameter and final byte."""
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Put some text at cursor position first
     terminal.board.screen.write_text("ABC")
@@ -204,7 +204,7 @@ def test_csi_params_with_invalid_main_param(terminal):
 
 def test_csi_dispatch_sm_rm_basic_modes(terminal):
     """Test _csi_dispatch_sm_rm for basic public modes."""
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Test auto-wrap mode (public mode 7)
     parser.feed("\x1b[7h")  # Set auto-wrap
@@ -221,7 +221,7 @@ def test_csi_dispatch_sm_rm_basic_modes(terminal):
 
 def test_csi_sm_rm_deccolm_column_mode(terminal):
     """Test CSI ? 3 h (132 Column Mode) and CSI ? 3 l (80 Column Mode)."""
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Set 132 column mode
     parser.feed(f"{ESC}[?{DECCOLM_COLUMN_MODE}h")
@@ -238,7 +238,7 @@ def test_csi_sm_rm_deccolm_column_mode(terminal):
 
 def test_csi_sm_rm_decscnm_screen_mode(terminal):
     """Test CSI ? 5 h (Reverse Screen Mode) and CSI ? 5 l (Normal Screen Mode)."""
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Set reverse screen mode
     parser.feed(f"{ESC}[?{DECSCNM_SCREEN_MODE}h")
@@ -251,7 +251,7 @@ def test_csi_sm_rm_decscnm_screen_mode(terminal):
 
 def test_csi_sm_rm_decom_origin_mode(terminal):
     """Test CSI ? 6 h (Origin Mode) and CSI ? 6 l (Normal Mode)."""
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Set origin mode (relative to scroll region)
     parser.feed(f"{ESC}[?{DECOM_ORIGIN_MODE}h")
@@ -268,7 +268,7 @@ def test_csi_sm_rm_decom_origin_mode(terminal):
 
 def test_csi_sm_rm_decarsm_auto_resize_mode(terminal):
     """Test CSI ? 2028 h (Auto-Resize Mode) and CSI ? 2028 l (Disable Auto-Resize Mode)."""
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Enable auto-resize mode
     parser.feed(f"{ESC}[?{DECARSM_AUTO_RESIZE}h")
@@ -281,7 +281,7 @@ def test_csi_sm_rm_decarsm_auto_resize_mode(terminal):
 
 def test_csi_sm_rm_deckbum_keyboard_usage_mode(terminal):
     """Test CSI ? 69 h (Keyboard Usage Mode) and CSI ? 69 l (Normal Keyboard Mode)."""
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Enable keyboard usage mode (typewriter keys send functions)
     parser.feed(f"{ESC}[?{DECKBUM_KEYBOARD_USAGE}h")

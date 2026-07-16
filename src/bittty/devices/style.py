@@ -19,20 +19,24 @@ class StyleDevice:
 
     def __init__(self, board: TerminalBoard) -> None:
         self.board = board
-        self.current_ansi_code = ""
+        self.current = Style()
+
+    @property
+    def current_ansi_code(self) -> str:
+        """The active style as an ANSI SGR string (boundary/compat accessor)."""
+        return style_to_ansi(self.current)
+
+    @current_ansi_code.setter
+    def current_ansi_code(self, value: str) -> None:
+        self.current = parse_sgr_sequence(value) if value else Style()
 
     def apply_sgr(self, style: Style, reset: bool = False) -> None:
         """Apply an SGR style update to the current style state."""
-        if reset:
-            self.current_ansi_code = style_to_ansi(style)
-            return
-
-        current_style = parse_sgr_sequence(self.current_ansi_code) if self.current_ansi_code else Style()
-        self.current_ansi_code = style_to_ansi(current_style.merge(style))
+        self.current = style if reset else self.current.merge(style)
 
     def reset(self) -> None:
         """Reset to the default style."""
-        self.current_ansi_code = ""
+        self.current = Style()
 
     def background_ansi(self) -> str:
         """Return the active background style as ANSI."""

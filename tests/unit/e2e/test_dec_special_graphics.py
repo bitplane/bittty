@@ -7,7 +7,7 @@ from bittty.parser import Parser
 def test_dec_special_graphics_box_drawing():
     """Test that ESC(0 switches to graphics mode and ESC(B switches back."""
     terminal = Terminal(width=10, height=5)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Draw a simple box using DEC Special Graphics
     # In graphics mode: l=┌, q=─, k=┐, x=│, m=└, j=┘
@@ -26,7 +26,7 @@ def test_dec_special_graphics_box_drawing():
 def test_dec_special_graphics_full_mapping():
     """Test all DEC Special Graphics characters."""
     terminal = Terminal(width=20, height=10)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Test various special characters
     # See: https://vt100.net/docs/vt100-ug/table3-9.html
@@ -54,7 +54,7 @@ def test_dec_special_graphics_full_mapping():
 def test_dec_graphics_mode_persists():
     """Test that graphics mode persists until explicitly changed."""
     terminal = Terminal(width=10, height=5)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     parser.feed("\x1b(0")  # Switch to graphics mode
     parser.feed("q")  # Should be ─
@@ -72,7 +72,7 @@ def test_dec_graphics_mode_persists():
 def test_switch_between_modes():
     """Test switching between ASCII and graphics modes."""
     terminal = Terminal(width=15, height=3)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     parser.feed("ABC")  # Normal ASCII
     parser.feed("\x1b(0")  # Switch to graphics
@@ -86,7 +86,7 @@ def test_switch_between_modes():
 def test_graphics_mode_with_colors():
     """Test that colors work correctly with graphics mode."""
     terminal = Terminal(width=10, height=3)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     parser.feed("\x1b[31m")  # Red
     parser.feed("\x1b(0")  # Graphics mode
@@ -106,7 +106,7 @@ def test_graphics_mode_with_colors():
 def test_other_character_sets():
     """Test that other character set designators are handled."""
     terminal = Terminal(width=10, height=3)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # These should all switch back to normal ASCII/US
     parser.feed("\x1b(B")  # US ASCII

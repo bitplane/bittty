@@ -33,7 +33,7 @@ def test_decsclm_default_jump_scrolling():
 def test_decsclm_set_smooth_scrolling():
     """Test setting DECSCLM to enable smooth scrolling."""
     terminal = Terminal(width=20, height=5)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Set DECSCLM mode (ESC [ ? 4 h)
     parser.feed("\x1b[?4h")
@@ -45,7 +45,7 @@ def test_decsclm_set_smooth_scrolling():
 def test_decsclm_reset_to_jump():
     """Test resetting DECSCLM back to jump scrolling."""
     terminal = Terminal(width=20, height=5)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Set smooth scrolling first
     parser.feed("\x1b[?4h")
@@ -61,7 +61,7 @@ def test_decsclm_reset_to_jump():
 def test_decsclm_affects_scroll_behavior():
     """Test that DECSCLM actually affects scrolling behavior."""
     terminal = Terminal(width=20, height=3)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Set smooth scrolling
     parser.feed("\x1b[?4h")

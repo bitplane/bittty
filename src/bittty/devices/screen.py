@@ -32,7 +32,7 @@ class ScreenDevice:
         """Write printable text at the cursor position."""
         self.board.cursor.prepare_for_text_write()
 
-        code_to_use = ansi_code if ansi_code else self.board.style.current_ansi_code
+        code_to_use = ansi_code if ansi_code else self.board.style.current
         translated_text = self.board.charset.translate(text)
 
         if self.board.modes.insert_mode:
@@ -168,6 +168,18 @@ class ScreenDevice:
         """Scroll content down within scroll region."""
         self.scroll(-count)
 
+    def reset(self, hard: bool = True) -> None:
+        """Restore the full scroll region; a hard reset also clears both buffers to primary."""
+        self.set_scroll_region(0, self.board.height - 1)
+        if not hard:
+            return
+        self.in_alt_screen = False
+        self.current_buffer = self.primary_buffer
+        for buf in (self.primary_buffer, self.alt_buffer):
+            for y in range(self.board.height):
+                buf.clear_line(y, constants.ERASE_ALL, 0, "")
+        self.last_printed_char = " "
+
     def set_column_mode(self, columns: int) -> None:
         """Set terminal width for DECCOLM."""
         if columns not in (80, 132):
@@ -197,7 +209,7 @@ class ScreenDevice:
             return
         if operation.name == "ICH":
             (count,) = operation.args
-            self.insert_characters(count, self.board.style.current_ansi_code)
+            self.insert_characters(count, self.board.style.current)
             return
         if operation.name == "DCH":
             (count,) = operation.args
@@ -210,7 +222,7 @@ class ScreenDevice:
                     self.board.cursor.x,
                     self.board.cursor.y,
                     " ",
-                    self.board.style.current_ansi_code,
+                    self.board.style.current,
                 )
                 if self.board.cursor.x < self.board.width - 1:
                     self.board.cursor.x += 1
@@ -236,10 +248,10 @@ class ScreenDevice:
             self.set_scroll_region(top, self.board.height - 1 if bottom is None else bottom)
             return
         if operation.name == "RIS":
-            self.clear_screen(constants.ERASE_ALL)
-            self.board.cursor.set_position(0, 0)
-            self.board.style.reset()
-            self.board.charset.reset()
+            self.board.reset(hard=True)
+            return
+        if operation.name == "DECSTR":
+            self.board.reset(hard=False)
             return
 
         logger.debug("Unknown screen operation: %s", operation)

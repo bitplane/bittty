@@ -7,7 +7,7 @@ from bittty.constants import ESC
 
 def test_rep_basic(small_terminal):
     """Test basic REP functionality."""
-    parser = Parser(small_terminal)
+    parser = Parser(small_terminal.board)
 
     # Write a character, then repeat it
     parser.feed("A")
@@ -22,7 +22,7 @@ def test_rep_basic(small_terminal):
 def test_rep_with_different_counts():
     """Test REP with various repeat counts."""
     terminal = Terminal(width=30, height=10)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Test count = 1
     parser.feed("X")
@@ -43,7 +43,7 @@ def test_rep_with_different_counts():
 def test_rep_with_no_parameter():
     """Test REP with no parameter (should default to 1)."""
     terminal = Terminal(width=20, height=10)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     parser.feed("Z")
     parser.feed(f"{ESC}[b")  # No parameter, should repeat once
@@ -54,7 +54,7 @@ def test_rep_with_no_parameter():
 def test_rep_with_styled_character():
     """Test REP preserves the style of the repeated character."""
     terminal = Terminal(width=20, height=10)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Set red color, write char, then repeat
     parser.feed(f"{ESC}[31m")  # Red
@@ -72,7 +72,7 @@ def test_rep_at_line_wrap():
     """Test REP behavior when reaching end of line."""
     terminal = Terminal(width=10, height=5)
     terminal.board.modes.auto_wrap = True
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Move to near end of line
     parser.feed(f"{ESC}[8G")  # Column 8 (0-based = position 7)
@@ -91,7 +91,7 @@ def test_rep_at_line_wrap():
 def test_rep_with_no_previous_character():
     """Test REP when no character has been printed yet."""
     terminal = Terminal(width=20, height=10)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # REP without printing anything first
     parser.feed(f"{ESC}[5b")
@@ -103,7 +103,7 @@ def test_rep_with_no_previous_character():
 def test_rep_after_control_sequence():
     """Test REP after control sequences (should repeat last graphic char)."""
     terminal = Terminal(width=20, height=10)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     parser.feed("A")
     parser.feed(f"{ESC}[2C")  # Move cursor forward
@@ -117,7 +117,7 @@ def test_rep_after_control_sequence():
 def test_rep_complex_sequence():
     """Test REP in a complex sequence like nethogs uses."""
     terminal = Terminal(width=80, height=24)
-    parser = Parser(terminal)
+    parser = Parser(terminal.board)
 
     # Simulate drawing a line
     parser.feed("─")

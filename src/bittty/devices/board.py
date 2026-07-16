@@ -65,6 +65,15 @@ class TerminalBoard:
         """Ring the terminal bell (UI hook, overridable on the Terminal)."""
         self.terminal.bell()
 
+    def reset(self, hard: bool = True) -> None:
+        """Reset the terminal. hard is RIS (full power-on); soft is DECSTR."""
+        self.style.reset()
+        self.modes.reset(hard=hard)
+        self.cursor.reset(hard=hard)
+        self.screen.reset(hard=hard)
+        if hard:
+            self.charset.reset()
+
     @property
     def width(self) -> int:
         """Terminal width in columns."""
@@ -89,7 +98,7 @@ class TerminalBoard:
 
     def handle_operation(self, operation: Operation) -> None:
         if operation.kind == "text" and operation.name == "PRINT":
-            self.screen.write_text(operation.args[0], self.style.current_ansi_code)
+            self.screen.write_text(operation.args[0], self.style.current)
             return
 
         if operation.kind == "control":
