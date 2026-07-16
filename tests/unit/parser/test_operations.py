@@ -27,8 +27,15 @@ def test_parser_emits_control_operations(terminal):
 
     parser.feed("\r\n")
 
+    # The CR+LF pair is fused into one token (one pipeline trip per line).
+    assert sink.operations == [Operation("C0_CRLF", raw="\r\n")]
+
+    sink.operations.clear()
+    parser.feed("\rx\n")  # lone CR and LF still arrive separately
+
     assert sink.operations == [
         Operation("C0_CR", raw="\r"),
+        Operation("PRINT", ("x",), "x"),
         Operation("C0_LF", raw="\n"),
     ]
 

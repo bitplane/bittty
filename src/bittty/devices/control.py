@@ -26,6 +26,7 @@ class ControlDevice(Device):
             "C0_VT": lambda op: self.cursor.line_feed(),
             "C0_FF": lambda op: self.cursor.line_feed(),
             "C0_CR": lambda op: self.cursor.carriage_return(),
+            "C0_CRLF": lambda op: self.carriage_return_line_feed(),
             "C0_SO": lambda op: self.charset.shift_out(),
             "C0_SI": lambda op: self.charset.shift_in(),
             "C0_DEL": lambda op: None,
@@ -38,6 +39,11 @@ class ControlDevice(Device):
             "S8C1T": lambda op: setattr(self.board, "c1_eightbit", True),
             "ANSI_LEVEL": lambda op: setattr(self.board, "ansi_conformance_level", op.args[0]),
         }
+
+    def carriage_return_line_feed(self) -> None:
+        """CR+LF as one fused token (the parser batches the pair)."""
+        self.cursor.carriage_return()
+        self.cursor.line_feed()
 
     def next_line(self) -> None:
         """NEL — carriage return followed by line feed."""

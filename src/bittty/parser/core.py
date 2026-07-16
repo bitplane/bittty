@@ -23,6 +23,19 @@ logger = logging.getLogger(__name__)
 # Order matters: specific before generic.
 # -------------------------
 GROUND_PATTERNS = {
+    # A run of printable text as one match. Without this the engine fails the
+    # whole alternation at every printable position; with it, bulk text is one
+    # C-speed class scan per run. Excludes C0, DEL, and the C1 range (escape
+    # starters and controls); unmatched C1 strays still print via the gap flush.
+    "text": r"[^\x00-\x1F\x7F-\x9F]+",
+    # A complete CSI in one match (params, intermediates, final — the ECMA-48 byte
+    # ranges are regular). Matching whole sequences here keeps the scanner in a
+    # single finditer pass; the old starter below is the fallback for incomplete
+    # or malformed sequences and drops into the mode machinery.
+    "csi_seq": r"(?:\x1b\[|\x9B)[0-9;:?<=>]*[ -/]*[@-~]",
+    # CR+LF fused into one token: a scroll flood is 30k of these pairs, and one
+    # pipeline trip per pair halves its dispatch cost.
+    "crlf": r"\r\n",
     # Paired sequence starters
     "osc": r"(?:\x1b\]|\x9D)",
     "dcs": r"(?:\x1bP|\x90)",
@@ -81,6 +94,7 @@ _C1_CTRL_NAMES = {"\x84": "IND", "\x85": "NEL", "\x88": "HTS", "\x8d": "RI", "\x
 
 # One shared frozen Operation per C0 control (a scroll flood is mostly CR/LF).
 _BEL_OP = Operation("C0_BEL", raw="\x07")
+_CRLF_OP = Operation("C0_CRLF", raw="\r\n")
 _CTRL_OPS: dict[str, Operation] = {}
 # ESC SP F/G = 7/8-bit C1 transmission; ESC SP L/M/N = ANSI conformance level 1/2/3.
 _ESC_SPACE_OPS = {
@@ -169,6 +183,22 @@ class Parser:
                     if start > self.pos:
                         self.dispatch("print", self.buffer[self.pos : start])
                         self.pos = start
+
+                    # Hot one-shot tokens: emit inline and stay in this finditer
+                    # pass (no mode transition, no scanner restart).
+                    if kind == "text":
+                        self.emit(Operation("PRINT", (self.buffer[start:end],), self.buffer[start:end]))
+                        self.pos = end
+                        continue
+                    if kind == "csi_seq":
+                        raw = self.buffer[start:end]
+                        self.emit(parse_csi_operation(raw) or Operation("CSI", raw=raw))
+                        self.pos = end
+                        continue
+                    if kind == "crlf":
+                        self.emit(_CRLF_OP)
+                        self.pos = end
+                        continue
 
                     if kind in PAIRED:
                         # enter a paired sequence; keep starter in buffer
