@@ -36,6 +36,8 @@ class QueryDevice:
             "LINUX_SETTERM": self.handle_setterm,
             "DECSWBV": lambda op: setattr(self.board, "warning_bell_volume", op.args[0]),
             "DECSMBV": lambda op: setattr(self.board, "margin_bell_volume", op.args[0]),
+            "DECRQCRA": self.request_checksum,
+            "XTGETTCAP": self.request_termcap,
         }
 
     def report_cursor_position(self, operation: Operation) -> None:
@@ -150,6 +152,58 @@ class QueryDevice:
             board.console_requests.append(("previous", 0))
         elif op == 16:
             board.cursor_blink_ms = arg
+
+    def request_checksum(self, operation: Operation) -> None:
+        """DECRQCRA — reply DCS Pid ! ~ HHHH ST with a 16-bit checksum of a rectangle.
+
+        This is the DEC character-value form: the negated sum of the codepoints in
+        the area, masked to 16 bits. (xterm can fold SGR attributes in too; that is a
+        personality detail we can add when a terminal needs it.)
+        """
+        params = operation.args[0]
+
+        def at(index: int, default: int) -> int:
+            value = params[index] if len(params) > index and params[index] is not None else None
+            return default if value is None else value
+
+        pid = params[0] if params and params[0] is not None else 0
+        width, height = self.board.width, self.board.height
+        top = max(0, min(at(2, 1) - 1, height - 1))
+        left = max(0, min(at(3, 1) - 1, width - 1))
+        bottom = max(top, min(at(4, height) - 1, height - 1))
+        right = max(left, min(at(5, width) - 1, width - 1))
+        buffer = self.board.screen.current_buffer
+        total = 0
+        for y in range(top, bottom + 1):
+            for x in range(left, right + 1):
+                char = buffer.get_cell(x, y)[1]
+                total += ord(char) if char else 0x20
+        self.board.host.write(f"\x1bP{pid}!~{(-total) & 0xFFFF:04X}\x1b\\", flush=True)
+
+    def request_termcap(self, operation: Operation) -> None:
+        """XTGETTCAP — answer hex-encoded termcap/terminfo capability requests."""
+        caps = self._termcaps()
+        for token in operation.args[0].split(";"):
+            try:
+                name = bytes.fromhex(token).decode("ascii")
+            except ValueError:
+                continue
+            value = caps.get(name)
+            if value is None:  # unknown capability -> negative reply
+                self.board.host.write(f"\x1bP0+r{token}\x1b\\", flush=True)
+            else:
+                name_hex = name.encode("ascii").hex().upper()
+                value_hex = value.encode("ascii").hex().upper()
+                self.board.host.write(f"\x1bP1+r{name_hex}={value_hex}\x1b\\", flush=True)
+
+    def _termcaps(self) -> dict[str, str]:
+        """The capability strings this personality answers XTGETTCAP with."""
+        personality = self.board.personality
+        colors = {"monochrome": "2", "16": "16", "256": "256", "truecolor": "256"}.get(personality.color_depth, "256")
+        caps = {"TN": personality.name, "Co": colors, "colors": colors}
+        if personality.color_depth == "truecolor":
+            caps["RGB"] = "8/8/8"
+        return caps
 
     def handle_operation(self, operation: Operation) -> None:
         handler = self.handlers.get(operation.name)

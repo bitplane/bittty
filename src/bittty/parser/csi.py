@@ -124,6 +124,9 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
         mode = params[0] if params and params[0] is not None else 0
         return Operation("DECSCA", (mode,), raw_csi_data)
 
+    if final_char == "y" and "*" in intermediates:  # DECRQCRA - Request Checksum of Rectangular Area
+        return Operation("DECRQCRA", (tuple(params),), raw_csi_data)
+
     if "$" in intermediates:  # DEC rectangular-area functions
         rect = {
             "x": "DECFRA",  # Fill Rectangular Area
