@@ -10,7 +10,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .keymap import LINUX_KEYMAP, VT100_KEYMAP, VT220_KEYMAP, XTERM_KEYMAP, KeyMap
+from .keymap import (
+    LINUX_KEYMAP,
+    SCREEN_KEYMAP,
+    URXVT_KEYMAP,
+    VT100_KEYMAP,
+    VT220_KEYMAP,
+    XTERM_KEYMAP,
+    KeyMap,
+)
 from .palette import VGA_PALETTE, XTERM_PALETTE, PaletteDefaults
 
 
@@ -112,4 +120,88 @@ LINUX = Personality(
     keymap=LINUX_KEYMAP,
 )
 
+# GNU screen — a VT100+AVO emulator; keymap and colours from terminfo (screen-256color).
+# DA1 is the standard VT100-with-AVO reply; DA2 type 83 = 'S' (the screen/tmux/urxvt S/T/U
+# pattern, with tmux=84 confirmed against a live session). Version field unverified.
+SCREEN = Personality(
+    name="screen",
+    da1_response="\033[?1;2c",
+    da2_response="\033[>83;0;0c",
+    da3_response=None,
+    color_depth="256",
+    keymap=SCREEN_KEYMAP,
+)
+
+# tmux — live-verified against a running tmux: DA1 ?1;2;4c (VT100+AVO, and it advertises
+# sixel — code 4 — for whatever it fronts), DA2 type 84 = 'T'. Shares screen's keymap.
+TMUX = Personality(
+    name="tmux",
+    da1_response="\033[?1;2;4c",
+    da2_response="\033[>84;0;0c",
+    da3_response=None,
+    color_depth="256",
+    keymap=SCREEN_KEYMAP,
+)
+
+# rxvt-unicode — keymap and colours from terminfo (rxvt-unicode-256color). DA1 is VT100+AVO;
+# DA2 type 85 = 'U' (S/T/U pattern). Version field unverified.
+URXVT = Personality(
+    name="rxvt-unicode",
+    da1_response="\033[?1;2c",
+    da2_response="\033[>85;0;0c",
+    da3_response=None,
+    color_depth="256",
+    keymap=URXVT_KEYMAP,
+)
+
+# GNOME Terminal / VTE — live-verified against gnome-terminal (VTE 0.84): DA1 reports
+# level 61 with ANSI colour (22) and rectangular editing (28); DA2 type 61 carries the
+# VTE version in the firmware field (8400). Truecolour, xterm-family keymap.
+GNOME = Personality(
+    name="gnome",
+    da1_response="\033[?61;1;21;22;28c",
+    da2_response="\033[>61;8400;1c",
+    da3_response=None,
+    color_depth="truecolor",
+    keymap=XTERM_KEYMAP,
+)
+
 DEFAULT = XTERM
+
+# Resolve a $TERM name to a personality (see get_personality).
+PERSONALITIES: dict[str, Personality] = {
+    "xterm": XTERM,
+    "xterm-256color": XTERM,
+    "vt100": VT100,
+    "vt102": VT100,
+    "vt220": VT220,
+    "linux": LINUX,
+    "screen": SCREEN,
+    "screen-256color": SCREEN,
+    "tmux": TMUX,
+    "tmux-256color": TMUX,
+    "rxvt": URXVT,
+    "rxvt-unicode": URXVT,
+    "rxvt-unicode-256color": URXVT,
+    "gnome": GNOME,
+    "gnome-256color": GNOME,
+    "vte": GNOME,
+    "vte-256color": GNOME,
+}
+
+
+def get_personality(term_name: str | None, default: Personality = DEFAULT) -> Personality:
+    """Resolve a $TERM name to a personality, falling back through shorter prefixes.
+
+    So "xterm-kitty" or "screen.xterm-256color" degrade gracefully to the nearest
+    known family, and an unknown or empty TERM yields the default (xterm).
+    """
+    name = term_name or ""
+    while name:
+        if name in PERSONALITIES:
+            return PERSONALITIES[name]
+        if "-" in name:
+            name = name.rsplit("-", 1)[0]
+        else:
+            break
+    return default

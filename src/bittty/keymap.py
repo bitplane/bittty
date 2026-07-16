@@ -67,13 +67,47 @@ def apply_modifier(sequence: str, modifier: int) -> str:
 
 _ARROWS = {"up": "A", "down": "B", "right": "C", "left": "D"}
 
-# xterm: F1-F4 as SS3 letters, F5-F12 as CSI-tilde codes, Home/End, modifiers encoded.
+# The xterm F1-F12 repertoire, reused by screen/tmux (verified against terminfo).
+_XTERM_FUNCTION_KEYS = {
+    1: f"{ESC}OP",
+    2: f"{ESC}OQ",
+    3: f"{ESC}OR",
+    4: f"{ESC}OS",
+    5: f"{ESC}[15~",
+    6: f"{ESC}[17~",
+    7: f"{ESC}[18~",
+    8: f"{ESC}[19~",
+    9: f"{ESC}[20~",
+    10: f"{ESC}[21~",
+    11: f"{ESC}[23~",
+    12: f"{ESC}[24~",
+}
+
+# The xterm editing keypad (insert/delete/page), shared by screen/tmux/rxvt.
+_EDITING_KEYPAD = {"insert": "2~", "delete": "3~", "pageup": "5~", "pagedown": "6~"}
+
+# xterm: F1-F4 as SS3 letters, F5-F12 as CSI-tilde, Home/End as H/F, modifiers encoded.
 XTERM_KEYMAP = KeyMap(
+    function_keys=_XTERM_FUNCTION_KEYS,
+    cursor_keys=_ARROWS,
+    nav_keys={"home": "H", "end": "F", **_EDITING_KEYPAD},
+)
+
+# GNU screen / tmux: xterm's function keys, but VT220-style Home/End (1~/4~). (terminfo)
+SCREEN_KEYMAP = KeyMap(
+    function_keys=_XTERM_FUNCTION_KEYS,
+    cursor_keys=_ARROWS,
+    nav_keys={"home": "1~", "end": "4~", **_EDITING_KEYPAD},
+)
+
+# rxvt-unicode: F1-F4 as CSI 11~-14~ (not SS3), Home/End as 7~/8~, no xterm modifier
+# folding (rxvt uses its own shifted-key scheme). (terminfo: rxvt-unicode-256color)
+URXVT_KEYMAP = KeyMap(
     function_keys={
-        1: f"{ESC}OP",
-        2: f"{ESC}OQ",
-        3: f"{ESC}OR",
-        4: f"{ESC}OS",
+        1: f"{ESC}[11~",
+        2: f"{ESC}[12~",
+        3: f"{ESC}[13~",
+        4: f"{ESC}[14~",
         5: f"{ESC}[15~",
         6: f"{ESC}[17~",
         7: f"{ESC}[18~",
@@ -84,7 +118,8 @@ XTERM_KEYMAP = KeyMap(
         12: f"{ESC}[24~",
     },
     cursor_keys=_ARROWS,
-    nav_keys={"home": "H", "end": "F"},
+    nav_keys={"home": "7~", "end": "8~", **_EDITING_KEYPAD},
+    modifiers=False,
 )
 
 # VT100: four PF keys, arrow keys, no editing keypad and no modifier encoding.
