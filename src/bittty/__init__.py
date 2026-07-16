@@ -11,7 +11,9 @@ from .parser import Parser
 from .devices.board import TerminalBoard
 from .personality import Personality, XTERM, VT100, VT220, LINUX
 from .operations import Operation, OperationSink
-from .transports import HostPort, WritableTransport
+from .transports import DisplayPort, HostPort, Presentable, WritableTransport
+from .caps import DisplayCaps
+from .frontends import Display
 from .style import (
     CURSOR_CODE,
     RESET_CODE,
@@ -31,6 +33,10 @@ __all__ = [
     "Operation",
     "OperationSink",
     "HostPort",
+    "DisplayPort",
+    "Presentable",
+    "Display",
+    "DisplayCaps",
     "TerminalBoard",
     "Personality",
     "XTERM",

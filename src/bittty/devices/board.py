@@ -5,9 +5,11 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from ..caps import DisplayCaps
 from ..operations import Operation
 from ..personality import DEFAULT, Personality
-from ..transports import HostPort
+from ..present import PresentEvent
+from ..transports import DisplayPort, HostPort
 from .charset import CharsetDevice
 from .control import ControlDevice
 from .cursor import CursorDevice
@@ -67,7 +69,9 @@ class TerminalBoard:
         self.answerback: str = ""  # ENQ reply string; a frontend/config sets it
         self.warning_bell_volume: int = 8  # DECSWBV (0-8)
         self.margin_bell_volume: int = 0  # DECSMBV (0-8)
-        self.host = HostPort()
+        self.host = HostPort()  # backend -> child (replies)
+        self.display = DisplayPort()  # backend -> frontend (present events)
+        self.display_caps = DisplayCaps.unknown()  # what the real display can do (frontend pushes)
 
         self.charset = CharsetDevice(self)
         self.cursor = CursorDevice(self)
@@ -137,6 +141,14 @@ class TerminalBoard:
     def bell(self) -> None:
         """Ring the terminal bell (UI hook, overridable on the Terminal)."""
         self.terminal.bell()
+
+    def present(self, event: PresentEvent) -> None:
+        """Push a discrete side-effect to the attached frontend (no-op if none)."""
+        self.display.present(event)
+
+    def set_display_caps(self, caps: DisplayCaps) -> None:
+        """Record what the real display can do (a frontend pushes this after probing)."""
+        self.display_caps = caps
 
     def reset(self, hard: bool = True) -> None:
         """Reset the terminal. hard is RIS (full power-on); soft is DECSTR."""

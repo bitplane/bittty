@@ -102,6 +102,14 @@ class Terminal:
         else:
             self.board.host.attach(value)
 
+    def attach_display(self, display) -> None:
+        """Attach a frontend to receive present events (mirrors the host/PTY cable)."""
+        self.board.display.attach(display)
+
+    def detach_display(self) -> None:
+        """Detach the current frontend."""
+        self.board.display.detach()
+
     def set_pty_data_callback(self, callback: Callable[[str], None]) -> None:
         """Set callback for handling PTY data asynchronously."""
         self._pty_data_callback = callback
