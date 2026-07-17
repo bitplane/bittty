@@ -10,7 +10,7 @@ def test_cursor_keys_normal_mode():
     """Test cursor keys in normal mode (DECCKM disabled)."""
     terminal = Board()
     terminal.pty = Mock()
-    terminal.board.modes.cursor_application_mode = False
+    terminal.modes.cursor_application_mode = False
 
     # Arrow keys should send ESC[A format
     terminal.input_key("up")
@@ -24,7 +24,7 @@ def test_cursor_keys_application_mode():
     """Test cursor keys in application mode (DECCKM enabled)."""
     terminal = Board()
     terminal.pty = Mock()
-    terminal.board.modes.cursor_application_mode = True
+    terminal.modes.cursor_application_mode = True
 
     # Arrow keys should send ESC OA format
     terminal.input_key("up")
@@ -38,7 +38,7 @@ def test_modified_cursor_keys():
     """Test cursor keys with modifiers always use CSI format."""
     terminal = Board()
     terminal.pty = Mock()
-    terminal.board.modes.cursor_application_mode = True  # Even in app mode
+    terminal.modes.cursor_application_mode = True  # Even in app mode
 
     # Modified cursor keys should always use CSI format
     terminal.input_key("up", constants.KEY_MOD_CTRL)

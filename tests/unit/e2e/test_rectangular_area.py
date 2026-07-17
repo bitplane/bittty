@@ -7,11 +7,11 @@ from bittty import Board
 
 def _term():
     terminal = Board(width=10, height=6)
-    return terminal, Parser(terminal.board)
+    return terminal, Parser(terminal)
 
 
 def _rows(terminal):
-    buf = terminal.board.blitter.current_buffer
+    buf = terminal.blitter.current_buffer
     return [buf.get_line_text(y) for y in range(terminal.height)]
 
 
@@ -43,7 +43,7 @@ def test_deccara_changes_attributes_in_a_rectangle():
     terminal, parser = _term()
     parser.feed("\x1b[1;1Hhello")
     parser.feed("\x1b[1;1;1;3;31$r")  # make cols 1-3 of row 1 red
-    buf = terminal.board.blitter.current_buffer
+    buf = terminal.blitter.current_buffer
     assert buf.get_cell(0, 0)[0].fg == Color("indexed", 1)  # 'h' is red
     assert buf.get_cell(3, 0)[0].fg is None  # 'l' (col 4) unchanged
 

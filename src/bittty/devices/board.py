@@ -147,11 +147,6 @@ class Board:
         self.registry = self._build_registry()
         self.parser = Parser(self)
 
-    @property
-    def board(self) -> "Board":
-        """Compat shim: pre-dissolve code reached the board via `.board`. Remove next release."""
-        return self
-
     def _build_registry(self) -> dict:
         """Merge every device's operation handlers into one name -> handler table."""
         registry = {"PRINT": self._print}

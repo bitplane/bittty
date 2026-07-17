@@ -94,8 +94,8 @@ chrome a human looks at, and two full-duplex ports connect the board to its outs
 - "display" survives only in `DisplayPort`, deliberately.
 - `bittty.Terminal` is deliberately not exported at top level; import chrome classes from
   `bittty.terminals`.
-- Compat aliases (`TerminalBoard`, `Buffer`, `Personality`, `WritableTransport`,
-  `DisplayCaps`, the `Board.board` self-shim) are transitional — remove next release.
+- There are no compat aliases: the pre-0.1.0 names (`TerminalBoard`, `Buffer`,
+  `Personality`, `WritableTransport`, `DisplayCaps`, the old backend `Terminal`) are gone.
 
 ### Key Design Patterns
 

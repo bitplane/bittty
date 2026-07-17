@@ -20,8 +20,8 @@ class RecordingTransport:
 def _term(model):
     terminal = Board(width=80, height=24, model=model)
     transport = RecordingTransport()
-    terminal.board.host.attach(transport)
-    return terminal, Parser(terminal.board), transport
+    terminal.host.attach(transport)
+    return terminal, Parser(terminal), transport
 
 
 def test_tmux_reports_its_live_device_attributes():

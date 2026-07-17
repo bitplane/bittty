@@ -24,8 +24,8 @@ def _replies(model, sequence):
         kwargs["model"] = model
     terminal = Board(**kwargs)
     transport = RecordingTransport()
-    terminal.board.host.attach(transport)
-    Parser(terminal.board).feed(sequence)
+    terminal.host.attach(transport)
+    Parser(terminal).feed(sequence)
     return transport.data
 
 
@@ -50,28 +50,28 @@ def test_model_can_omit_a_mode():
     # xterm supports bracketed paste (private mode 2004); a VT100 does not, so
     # the same DECSET sequence is a no-op there.
     xterm = Board(width=80, height=24)
-    Parser(xterm.board).feed("\x1b[?2004h")
-    assert xterm.board.modes.bracketed_paste is True
+    Parser(xterm).feed("\x1b[?2004h")
+    assert xterm.modes.bracketed_paste is True
 
     vt100 = Board(width=80, height=24, model=VT100)
-    Parser(vt100.board).feed("\x1b[?2004h")
-    assert vt100.board.modes.bracketed_paste is False
+    Parser(vt100).feed("\x1b[?2004h")
+    assert vt100.modes.bracketed_paste is False
 
 
 def test_model_charset_repertoire():
     # DEC Supplemental (designator "<") arrived with the VT220; a VT100 ignores
     # the designation and stays on ASCII, while xterm accepts it.
     xterm = Board(width=80, height=24)
-    Parser(xterm.board).feed("\x1b(<")  # SCS G0 -> DEC Supplemental
-    assert xterm.board.charset.g0_charset == "<"
+    Parser(xterm).feed("\x1b(<")  # SCS G0 -> DEC Supplemental
+    assert xterm.charset.g0_charset == "<"
 
     vt100 = Board(width=80, height=24, model=VT100)
-    Parser(vt100.board).feed("\x1b(<")
-    assert vt100.board.charset.g0_charset == "B"  # unsupported -> ignored
+    Parser(vt100).feed("\x1b(<")
+    assert vt100.charset.g0_charset == "B"  # unsupported -> ignored
 
     # ...but a charset the VT100 does know still designates.
-    Parser(vt100.board).feed("\x1b(0")  # DEC Special Graphics
-    assert vt100.board.charset.g0_charset == "0"
+    Parser(vt100).feed("\x1b(0")  # DEC Special Graphics
+    assert vt100.charset.g0_charset == "0"
 
 
 def _fkey(model, num, modifier=constants.KEY_MOD_NONE):
@@ -80,7 +80,7 @@ def _fkey(model, num, modifier=constants.KEY_MOD_NONE):
         kwargs["model"] = model
     terminal = Board(**kwargs)
     transport = RecordingTransport()
-    terminal.board.host.attach(transport)
+    terminal.host.attach(transport)
     terminal.input_fkey(num, modifier)
     return transport.data
 
@@ -91,7 +91,7 @@ def _key(model, char, modifier=constants.KEY_MOD_NONE):
         kwargs["model"] = model
     terminal = Board(**kwargs)
     transport = RecordingTransport()
-    terminal.board.host.attach(transport)
+    terminal.host.attach(transport)
     terminal.input_key(char, modifier)
     return transport.data
 
@@ -113,22 +113,22 @@ def test_vt220_is_distinct_across_every_axis():
     assert _replies(VT220, "\x1b[>c") == ["\033[>1;10;0c"]
 
     vt220 = Board(width=80, height=24, model=VT220)
-    parser = Parser(vt220.board)
+    parser = Parser(vt220)
 
     # Modes: the VT220 predates mouse tracking, so DECSET 1000 is a no-op.
     parser.feed("\x1b[?1000h")
-    assert vt220.board.modes.mouse_tracking is False
+    assert vt220.modes.mouse_tracking is False
 
     # Charsets: it knows DEC Supplemental ("<", a VT220 addition) but not DEC
     # Technical (">", a later set).
     parser.feed("\x1b(<")
-    assert vt220.board.charset.g0_charset == "<"
+    assert vt220.charset.g0_charset == "<"
     parser.feed("\x1b)>")  # DEC Technical -> ignored
-    assert vt220.board.charset.g1_charset == "B"
+    assert vt220.charset.g1_charset == "B"
 
     # Colour: a base VT220 is monochrome, so SGR colour is dropped.
     parser.feed("\x1b[31m")
-    assert vt220.board.style.current.fg is None
+    assert vt220.style.current.fg is None
 
     # Keyboard: it has F6 (a VT100 lacks it) but not F5 (xterm has it), and its
     # Home key is the editing keypad's Find (ESC [ 1 ~), not xterm's ESC [ H.
@@ -150,19 +150,19 @@ def test_linux_console_is_distinct():
 
     # Palette: the console ships the VGA colours, not xterm's.
     linux = Board(width=80, height=24, model=LINUX)
-    assert linux.board.palette.resolve(Color("indexed", 1)) == (170, 0, 0)  # VGA red
-    assert Board().board.palette.resolve(Color("indexed", 1)) == (205, 0, 0)  # xterm red
+    assert linux.palette.resolve(Color("indexed", 1)) == (170, 0, 0)  # VGA red
+    assert Board().palette.resolve(Color("indexed", 1)) == (205, 0, 0)  # xterm red
 
 
 def test_numpad_uses_the_keymap():
     terminal = Board(width=80, height=24)
     transport = RecordingTransport()
-    terminal.board.host.attach(transport)
+    terminal.host.attach(transport)
 
     terminal.input_numpad_key("5")  # numeric keypad (default) sends the digit
     assert transport.data == ["5"]
 
-    Parser(terminal.board).feed("\x1b=")  # DECKPAM -> application keypad
+    Parser(terminal).feed("\x1b=")  # DECKPAM -> application keypad
     transport.data.clear()
     terminal.input_numpad_key("5")
     assert transport.data == ["\x1bOu"]
@@ -182,26 +182,26 @@ def test_monochrome_model_ignores_sgr_colour():
 
     # xterm keeps the colour; a monochrome VT100 drops it but keeps bold.
     xterm = Board(width=80, height=24)
-    Parser(xterm.board).feed("\x1b[31;1m")
-    assert xterm.board.style.current.fg == Color("indexed", 1)
-    assert xterm.board.style.current.bold is True
+    Parser(xterm).feed("\x1b[31;1m")
+    assert xterm.style.current.fg == Color("indexed", 1)
+    assert xterm.style.current.bold is True
 
     vt100 = Board(width=80, height=24, model=VT100)
-    Parser(vt100.board).feed("\x1b[31;1m")
-    assert vt100.board.style.current.fg is None  # colour ignored
-    assert vt100.board.style.current.bold is True  # video attributes still apply
+    Parser(vt100).feed("\x1b[31;1m")
+    assert vt100.style.current.fg is None  # colour ignored
+    assert vt100.style.current.bold is True  # video attributes still apply
 
 
 def test_decrqm_reports_unrecognised_for_omitted_mode():
     # DECRQM for a mode the model lacks must answer "not recognised" (0).
     transport_xterm = RecordingTransport()
     xterm = Board(width=80, height=24)
-    xterm.board.host.attach(transport_xterm)
-    Parser(xterm.board).feed("\x1b[?2028$p")  # DECRQM for auto-resize mode
+    xterm.host.attach(transport_xterm)
+    Parser(xterm).feed("\x1b[?2028$p")  # DECRQM for auto-resize mode
     assert transport_xterm.data == ["\033[?2028;2$y"]  # 2 = reset (recognised)
 
     transport_vt100 = RecordingTransport()
     vt100 = Board(width=80, height=24, model=VT100)
-    vt100.board.host.attach(transport_vt100)
-    Parser(vt100.board).feed("\x1b[?2028$p")
+    vt100.host.attach(transport_vt100)
+    Parser(vt100).feed("\x1b[?2028$p")
     assert transport_vt100.data == ["\033[?2028;0$y"]  # 0 = not recognised

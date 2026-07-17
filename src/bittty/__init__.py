@@ -29,17 +29,9 @@ try:
 except PackageNotFoundError:
     __version__ = "unknown"
 
-# Compat aliases — remove next release.
-TerminalBoard = Board
-Buffer = Video
-Personality = Model
-WritableTransport = Connection
-DisplayCaps = TerminalCaps
-
 __all__ = [
     "Board",
     "Video",
-    "Buffer",
     "Parser",
     "Operation",
     "OperationSink",
@@ -47,16 +39,12 @@ __all__ = [
     "DisplayPort",
     "Presentable",
     "TerminalCaps",
-    "DisplayCaps",
-    "TerminalBoard",
     "Model",
-    "Personality",
     "XTERM",
     "VT100",
     "VT220",
     "LINUX",
     "Connection",
-    "WritableTransport",
     "CURSOR_CODE",
     "RESET_CODE",
 ]

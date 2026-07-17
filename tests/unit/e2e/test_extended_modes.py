@@ -22,13 +22,13 @@ def _term(model=None):
         kwargs["model"] = model
     terminal = Board(**kwargs)
     transport = RecordingTransport()
-    terminal.board.host.attach(transport)
-    return terminal, Parser(terminal.board), transport
+    terminal.host.attach(transport)
+    return terminal, Parser(terminal), transport
 
 
 def test_extended_modes_are_stored():
     terminal, parser, _ = _term()
-    modes = terminal.board.modes
+    modes = terminal.modes
     parser.feed("\x1b[?45h")  # reverse wraparound on
     parser.feed("\x1b[?2027h")  # grapheme clustering on
     parser.feed("\x1b[?1042h")  # bell urgency on
@@ -41,7 +41,7 @@ def test_extended_modes_are_stored():
 
 def test_allow_alt_screen_defaults_on():
     terminal, _, _ = _term()
-    assert terminal.board.modes.allow_alt_screen is True
+    assert terminal.modes.allow_alt_screen is True
 
 
 def test_decrqm_reports_extended_modes_on_xterm():
@@ -60,7 +60,7 @@ def test_vt220_reports_xterm_era_modes_as_unrecognised():
     assert transport.data[-1] == "\x1b[?2027;0$y"  # 0 = not recognised
     # and setting it on a VT220 is a no-op (mode not in its repertoire)
     parser.feed("\x1b[?2027h")
-    assert terminal.board.modes.grapheme_clustering is False
+    assert terminal.modes.grapheme_clustering is False
 
 
 def test_decrqm_now_reports_mouse_and_paste_modes():
@@ -79,6 +79,6 @@ def test_decrqm_now_reports_mouse_and_paste_modes():
 def test_ansi_keyboard_action_mode():
     terminal, parser, _ = _term()
     parser.feed("\x1b[2h")  # KAM (non-private ANSI mode 2)
-    assert terminal.board.modes.keyboard_action_mode is True
+    assert terminal.modes.keyboard_action_mode is True
     parser.feed("\x1b[2l")
-    assert terminal.board.modes.keyboard_action_mode is False
+    assert terminal.modes.keyboard_action_mode is False

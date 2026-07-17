@@ -7,11 +7,11 @@ from bittty import Board
 
 def _term(width=10, height=4):
     terminal = Board(width=width, height=height)
-    return terminal, Parser(terminal.board)
+    return terminal, Parser(terminal)
 
 
 def _attr(terminal, y):
-    return terminal.board.blitter.current_buffer.get_line_attribute(y)
+    return terminal.blitter.current_buffer.get_line_attribute(y)
 
 
 def test_decdwl_sets_double_width_on_the_cursor_line():

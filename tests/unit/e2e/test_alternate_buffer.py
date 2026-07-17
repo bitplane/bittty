@@ -6,18 +6,18 @@ def test_alternate_buffer_enable(parser, terminal):
 
     # Write some text to primary buffer
     parser.feed("Primary buffer text")
-    primary_text = terminal.board.blitter.current_buffer.get_line_text(0).strip()
+    primary_text = terminal.blitter.current_buffer.get_line_text(0).strip()
     assert "Primary buffer text" in primary_text
 
     # Enable alternate screen buffer
     parser.feed(f"{ESC}[?{ALT_SCREEN_BUFFER}h")
 
     # Should now be in alternate screen mode
-    assert terminal.board.blitter.in_alt_screen
+    assert terminal.blitter.in_alt_screen
 
     # Write text to alternate buffer
     parser.feed("Alternate buffer text")
-    alt_text = terminal.board.blitter.current_buffer.get_line_text(0).strip()
+    alt_text = terminal.blitter.current_buffer.get_line_text(0).strip()
     assert "Alternate buffer text" in alt_text
     assert "Primary buffer text" not in alt_text
 
@@ -35,10 +35,10 @@ def test_alternate_buffer_disable(parser, terminal):
     parser.feed(f"{ESC}[?{ALT_SCREEN_BUFFER}l")
 
     # Should be back in primary screen mode
-    assert not terminal.board.blitter.in_alt_screen
+    assert not terminal.blitter.in_alt_screen
 
     # Primary buffer content should be restored
-    primary_text = terminal.board.blitter.current_buffer.get_line_text(0).strip()
+    primary_text = terminal.blitter.current_buffer.get_line_text(0).strip()
     assert "Primary content" in primary_text
     assert "Alt content" not in primary_text
 
@@ -61,8 +61,8 @@ def test_alternate_buffer_persistence(parser, terminal):
     parser.feed(f"{ESC}[?{ALT_SCREEN_BUFFER}l")
 
     # Verify primary content is intact
-    line0 = terminal.board.blitter.current_buffer.get_line_text(0).strip()
-    line1 = terminal.board.blitter.current_buffer.get_line_text(1).strip()
+    line0 = terminal.blitter.current_buffer.get_line_text(0).strip()
+    line1 = terminal.blitter.current_buffer.get_line_text(1).strip()
     assert "Line 1 primary" in line0
     assert "Line 2 primary" in line1
 
@@ -71,8 +71,8 @@ def test_alternate_buffer_persistence(parser, terminal):
 
     # Content is preserved but appears at lines where it was written
     # (cursor was at line 1 when we switched to alt, so content is on lines 1 and 2)
-    alt_line1 = terminal.board.blitter.current_buffer.get_line_text(1).strip()
-    alt_line2 = terminal.board.blitter.current_buffer.get_line_text(2).strip()
+    alt_line1 = terminal.blitter.current_buffer.get_line_text(1).strip()
+    alt_line2 = terminal.blitter.current_buffer.get_line_text(2).strip()
     assert "Alt line 1" in alt_line1
     assert "Alt line 2" in alt_line2
 
@@ -83,22 +83,22 @@ def test_alternate_buffer_with_cursor_visibility(parser, terminal):
     parser.feed("\x1b[?25;1049h")
 
     # Both modes should be set
-    assert terminal.board.modes.cursor_visible is True
-    assert terminal.board.blitter.in_alt_screen is True
+    assert terminal.modes.cursor_visible is True
+    assert terminal.blitter.in_alt_screen is True
 
 
 def test_alternate_buffer_mixed_operations(parser, terminal):
     """Test mixed set/reset operations on alternate buffer and other modes."""
     # Enable cursor + alternate buffer
     parser.feed("\x1b[?25;1049h")
-    assert terminal.board.modes.cursor_visible is True
-    assert terminal.board.blitter.in_alt_screen is True
+    assert terminal.modes.cursor_visible is True
+    assert terminal.blitter.in_alt_screen is True
 
     # Disable cursor, keep alternate buffer enabled
     parser.feed("\x1b[?25l")
-    assert terminal.board.modes.cursor_visible is False
-    assert terminal.board.blitter.in_alt_screen is True  # Still in alt screen
+    assert terminal.modes.cursor_visible is False
+    assert terminal.blitter.in_alt_screen is True  # Still in alt screen
 
     # Disable alternate buffer
     parser.feed("\x1b[?1049l")
-    assert terminal.board.blitter.in_alt_screen is False  # Back to primary
+    assert terminal.blitter.in_alt_screen is False  # Back to primary

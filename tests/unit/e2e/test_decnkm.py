@@ -9,41 +9,41 @@ def test_decnkm_default_numeric_mode():
     terminal = Board(width=20, height=5)
 
     # Should be in numeric mode by default (numeric_keypad = True)
-    assert terminal.board.modes.numeric_keypad
+    assert terminal.modes.numeric_keypad
 
 
 def test_decnkm_set_application_mode():
     """Test setting DECNKM to application keypad mode."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     # Set DECNKM application mode (ESC [ ? 66 h)
     parser.feed("\x1b[?66h")
 
     # Should enable application keypad mode
-    assert not terminal.board.modes.numeric_keypad
+    assert not terminal.modes.numeric_keypad
 
 
 def test_decnkm_reset_to_numeric():
     """Test resetting DECNKM back to numeric mode."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     # Set application mode first
     parser.feed("\x1b[?66h")
-    assert not terminal.board.modes.numeric_keypad
+    assert not terminal.modes.numeric_keypad
 
     # Reset DECNKM mode (ESC [ ? 66 l)
     parser.feed("\x1b[?66l")
 
     # Should return to numeric mode
-    assert terminal.board.modes.numeric_keypad
+    assert terminal.modes.numeric_keypad
 
 
 def test_decnkm_affects_numpad_keys():
     """Test that DECNKM affects how numpad keys are sent."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     # Mock the PTY to capture output
     sent_data = []
@@ -71,7 +71,7 @@ def test_decnkm_affects_numpad_keys():
 def test_decnkm_all_numpad_keys():
     """Test all numpad keys in both modes."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     sent_data = []
 
@@ -138,12 +138,12 @@ def test_decnkm_all_numpad_keys():
 def test_decnkm_escape_sequences():
     """Test that DECNKM responds to both ESC = and ESC > sequences."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     # ESC = should set application mode (same as CSI ? 66 h)
     parser.feed("\x1b=")
-    assert not terminal.board.modes.numeric_keypad
+    assert not terminal.modes.numeric_keypad
 
     # ESC > should set numeric mode (same as CSI ? 66 l)
     parser.feed("\x1b>")
-    assert terminal.board.modes.numeric_keypad
+    assert terminal.modes.numeric_keypad

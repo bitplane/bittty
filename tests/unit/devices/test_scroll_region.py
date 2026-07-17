@@ -9,29 +9,29 @@ def test_scroll_up_within_region():
 
     # Fill terminal with numbered lines
     for i in range(10):
-        terminal.board.blitter.current_buffer.set(0, i, f"Line {i}")
+        terminal.blitter.current_buffer.set(0, i, f"Line {i}")
 
     # Set scroll region to middle of terminal (rows 3-7, 0-based)
-    terminal.board.blitter.set_scroll_region(3, 7)
+    terminal.blitter.set_scroll_region(3, 7)
 
     # Scroll up by 1 within the region
-    terminal.board.blitter.scroll_up(1)
+    terminal.blitter.scroll_up(1)
 
     # Lines 0-2 should be unchanged
-    assert terminal.board.blitter.current_buffer.get_line_text(0) == "Line 0    "
-    assert terminal.board.blitter.current_buffer.get_line_text(1) == "Line 1    "
-    assert terminal.board.blitter.current_buffer.get_line_text(2) == "Line 2    "
+    assert terminal.blitter.current_buffer.get_line_text(0) == "Line 0    "
+    assert terminal.blitter.current_buffer.get_line_text(1) == "Line 1    "
+    assert terminal.blitter.current_buffer.get_line_text(2) == "Line 2    "
 
     # Lines 3-7 should have scrolled up
-    assert terminal.board.blitter.current_buffer.get_line_text(3) == "Line 4    "
-    assert terminal.board.blitter.current_buffer.get_line_text(4) == "Line 5    "
-    assert terminal.board.blitter.current_buffer.get_line_text(5) == "Line 6    "
-    assert terminal.board.blitter.current_buffer.get_line_text(6) == "Line 7    "
-    assert terminal.board.blitter.current_buffer.get_line_text(7) == "          "
+    assert terminal.blitter.current_buffer.get_line_text(3) == "Line 4    "
+    assert terminal.blitter.current_buffer.get_line_text(4) == "Line 5    "
+    assert terminal.blitter.current_buffer.get_line_text(5) == "Line 6    "
+    assert terminal.blitter.current_buffer.get_line_text(6) == "Line 7    "
+    assert terminal.blitter.current_buffer.get_line_text(7) == "          "
 
     # Lines 8-9 should be unchanged
-    assert terminal.board.blitter.current_buffer.get_line_text(8) == "Line 8    "
-    assert terminal.board.blitter.current_buffer.get_line_text(9) == "Line 9    "
+    assert terminal.blitter.current_buffer.get_line_text(8) == "Line 8    "
+    assert terminal.blitter.current_buffer.get_line_text(9) == "Line 9    "
 
 
 def test_scroll_down_within_region():
@@ -40,29 +40,29 @@ def test_scroll_down_within_region():
 
     # Fill terminal with numbered lines
     for i in range(10):
-        terminal.board.blitter.current_buffer.set(0, i, f"Line {i}")
+        terminal.blitter.current_buffer.set(0, i, f"Line {i}")
 
     # Set scroll region to middle of terminal (rows 3-7, 0-based)
-    terminal.board.blitter.set_scroll_region(3, 7)
+    terminal.blitter.set_scroll_region(3, 7)
 
     # Scroll down by 1 within the region
-    terminal.board.blitter.scroll_down(1)
+    terminal.blitter.scroll_down(1)
 
     # Lines 0-2 should be unchanged
-    assert terminal.board.blitter.current_buffer.get_line_text(0) == "Line 0    "
-    assert terminal.board.blitter.current_buffer.get_line_text(1) == "Line 1    "
-    assert terminal.board.blitter.current_buffer.get_line_text(2) == "Line 2    "
+    assert terminal.blitter.current_buffer.get_line_text(0) == "Line 0    "
+    assert terminal.blitter.current_buffer.get_line_text(1) == "Line 1    "
+    assert terminal.blitter.current_buffer.get_line_text(2) == "Line 2    "
 
     # Lines 3-7 should have scrolled down
-    assert terminal.board.blitter.current_buffer.get_line_text(3) == "          "
-    assert terminal.board.blitter.current_buffer.get_line_text(4) == "Line 3    "
-    assert terminal.board.blitter.current_buffer.get_line_text(5) == "Line 4    "
-    assert terminal.board.blitter.current_buffer.get_line_text(6) == "Line 5    "
-    assert terminal.board.blitter.current_buffer.get_line_text(7) == "Line 6    "
+    assert terminal.blitter.current_buffer.get_line_text(3) == "          "
+    assert terminal.blitter.current_buffer.get_line_text(4) == "Line 3    "
+    assert terminal.blitter.current_buffer.get_line_text(5) == "Line 4    "
+    assert terminal.blitter.current_buffer.get_line_text(6) == "Line 5    "
+    assert terminal.blitter.current_buffer.get_line_text(7) == "Line 6    "
 
     # Lines 8-9 should be unchanged
-    assert terminal.board.blitter.current_buffer.get_line_text(8) == "Line 8    "
-    assert terminal.board.blitter.current_buffer.get_line_text(9) == "Line 9    "
+    assert terminal.blitter.current_buffer.get_line_text(8) == "Line 8    "
+    assert terminal.blitter.current_buffer.get_line_text(9) == "Line 9    "
 
 
 def test_line_feed_at_bottom_of_scroll_region():
@@ -71,30 +71,30 @@ def test_line_feed_at_bottom_of_scroll_region():
 
     # Fill terminal with numbered lines
     for i in range(10):
-        terminal.board.blitter.current_buffer.set(0, i, f"Line {i}")
+        terminal.blitter.current_buffer.set(0, i, f"Line {i}")
 
     # Set scroll region to rows 2-5 (0-based)
-    terminal.board.blitter.set_scroll_region(2, 5)
+    terminal.blitter.set_scroll_region(2, 5)
 
     # Place cursor at bottom of scroll region
-    terminal.board.cursor.y = 5
+    terminal.cursor.y = 5
 
     # Line feed should trigger scroll within region
-    terminal.board.cursor.line_feed()
+    terminal.cursor.line_feed()
 
     # Lines outside region should be unchanged
-    assert terminal.board.blitter.current_buffer.get_line_text(0) == "Line 0    "
-    assert terminal.board.blitter.current_buffer.get_line_text(1) == "Line 1    "
-    assert terminal.board.blitter.current_buffer.get_line_text(6) == "Line 6    "
-    assert terminal.board.blitter.current_buffer.get_line_text(7) == "Line 7    "
-    assert terminal.board.blitter.current_buffer.get_line_text(8) == "Line 8    "
-    assert terminal.board.blitter.current_buffer.get_line_text(9) == "Line 9    "
+    assert terminal.blitter.current_buffer.get_line_text(0) == "Line 0    "
+    assert terminal.blitter.current_buffer.get_line_text(1) == "Line 1    "
+    assert terminal.blitter.current_buffer.get_line_text(6) == "Line 6    "
+    assert terminal.blitter.current_buffer.get_line_text(7) == "Line 7    "
+    assert terminal.blitter.current_buffer.get_line_text(8) == "Line 8    "
+    assert terminal.blitter.current_buffer.get_line_text(9) == "Line 9    "
 
     # Lines within region should have scrolled up
-    assert terminal.board.blitter.current_buffer.get_line_text(2) == "Line 3    "
-    assert terminal.board.blitter.current_buffer.get_line_text(3) == "Line 4    "
-    assert terminal.board.blitter.current_buffer.get_line_text(4) == "Line 5    "
-    assert terminal.board.blitter.current_buffer.get_line_text(5) == "          "
+    assert terminal.blitter.current_buffer.get_line_text(2) == "Line 3    "
+    assert terminal.blitter.current_buffer.get_line_text(3) == "Line 4    "
+    assert terminal.blitter.current_buffer.get_line_text(4) == "Line 5    "
+    assert terminal.blitter.current_buffer.get_line_text(5) == "          "
 
 
 def test_multiple_scroll_regions():
@@ -103,31 +103,31 @@ def test_multiple_scroll_regions():
 
     # Fill terminal with numbered lines
     for i in range(10):
-        terminal.board.blitter.current_buffer.set(0, i, f"Line {i}")
+        terminal.blitter.current_buffer.set(0, i, f"Line {i}")
 
     # Set first scroll region (top half)
-    terminal.board.blitter.set_scroll_region(0, 4)
-    terminal.board.blitter.scroll_up(1)
+    terminal.blitter.set_scroll_region(0, 4)
+    terminal.blitter.scroll_up(1)
 
     # Top half should be scrolled
-    assert terminal.board.blitter.current_buffer.get_line_text(0) == "Line 1    "
-    assert terminal.board.blitter.current_buffer.get_line_text(4) == "          "
+    assert terminal.blitter.current_buffer.get_line_text(0) == "Line 1    "
+    assert terminal.blitter.current_buffer.get_line_text(4) == "          "
 
     # Bottom half should be unchanged
-    assert terminal.board.blitter.current_buffer.get_line_text(5) == "Line 5    "
-    assert terminal.board.blitter.current_buffer.get_line_text(9) == "Line 9    "
+    assert terminal.blitter.current_buffer.get_line_text(5) == "Line 5    "
+    assert terminal.blitter.current_buffer.get_line_text(9) == "Line 9    "
 
     # Change scroll region to bottom half
-    terminal.board.blitter.set_scroll_region(5, 9)
-    terminal.board.blitter.scroll_up(1)
+    terminal.blitter.set_scroll_region(5, 9)
+    terminal.blitter.scroll_up(1)
 
     # Top half should remain as it was
-    assert terminal.board.blitter.current_buffer.get_line_text(0) == "Line 1    "
-    assert terminal.board.blitter.current_buffer.get_line_text(4) == "          "
+    assert terminal.blitter.current_buffer.get_line_text(0) == "Line 1    "
+    assert terminal.blitter.current_buffer.get_line_text(4) == "          "
 
     # Bottom half should now be scrolled
-    assert terminal.board.blitter.current_buffer.get_line_text(5) == "Line 6    "
-    assert terminal.board.blitter.current_buffer.get_line_text(9) == "          "
+    assert terminal.blitter.current_buffer.get_line_text(5) == "Line 6    "
+    assert terminal.blitter.current_buffer.get_line_text(9) == "          "
 
 
 def test_reset_scroll_region():
@@ -135,11 +135,11 @@ def test_reset_scroll_region():
     terminal = Board(width=10, height=10)
 
     # Set a custom scroll region
-    terminal.board.blitter.set_scroll_region(3, 6)
-    assert terminal.board.blitter.scroll_top == 3
-    assert terminal.board.blitter.scroll_bottom == 6
+    terminal.blitter.set_scroll_region(3, 6)
+    assert terminal.blitter.scroll_top == 3
+    assert terminal.blitter.scroll_bottom == 6
 
     # Reset should restore full terminal
-    terminal.board.blitter.set_scroll_region(0, 9)  # This is what CSI r with no params should do
-    assert terminal.board.blitter.scroll_top == 0
-    assert terminal.board.blitter.scroll_bottom == 9
+    terminal.blitter.set_scroll_region(0, 9)  # This is what CSI r with no params should do
+    assert terminal.blitter.scroll_top == 0
+    assert terminal.blitter.scroll_bottom == 9

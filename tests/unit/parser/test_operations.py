@@ -18,7 +18,7 @@ def test_parser_emits_batched_print_operation(terminal):
     parser.feed("hello")
 
     assert sink.operations == [Operation("PRINT", ("hello",), "hello")]
-    assert terminal.board.blitter.current_buffer.get_line_text(0).strip() == ""
+    assert terminal.blitter.current_buffer.get_line_text(0).strip() == ""
 
 
 def test_parser_emits_control_operations(terminal):
@@ -163,9 +163,9 @@ def test_parser_emits_string_sequence_content_and_raw_data(terminal):
 
 
 def test_default_operation_sink_preserves_terminal_behavior(terminal):
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     parser.feed("Hi\tThere\r\nNext")
 
-    assert terminal.board.blitter.current_buffer.get_line_text(0).startswith("Hi      There")
-    assert terminal.board.blitter.current_buffer.get_line_text(1).startswith("Next")
+    assert terminal.blitter.current_buffer.get_line_text(0).startswith("Hi      There")
+    assert terminal.blitter.current_buffer.get_line_text(1).startswith("Next")

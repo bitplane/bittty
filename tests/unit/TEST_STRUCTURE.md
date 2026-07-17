@@ -3,7 +3,7 @@
 This tree now mirrors the architecture split:
 
 - `parser/`: parser/tokenizer unit tests. These should assert emitted `Operation` values or parser state-machine behavior, not terminal screen side effects.
-- `devices/`: board and direct device tests. These should exercise board routing plus cursor, screen, charset, style, modes, title, keyboard, mouse, control, and query devices through operations or device APIs (reached via `terminal.<device>` or `terminal.board.<device>`).
+- `devices/`: board and direct device tests. These should exercise board routing plus cursor, screen, charset, style, modes, title, keyboard, mouse, control, and query devices through operations or device APIs (reached via `board.<device>`).
 - `e2e/`: parser-to-terminal integration tests. These keep confidence that real escape sequences still produce the expected terminal behavior.
 - `pty/`: platform PTY unit tests.
 - root `test_*.py`: lower-level non-device modules such as buffer, transports, style diffing, terminfo capabilities, demo adapters, and platform environment helpers.

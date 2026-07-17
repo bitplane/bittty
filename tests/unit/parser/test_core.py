@@ -43,7 +43,7 @@ def test_parser_feed_interrupted_osc(parser, terminal):
     parser.feed("more text\x07world")
 
     assert "Hello world" in terminal.capture_pane()
-    assert terminal.board.title.title == "some text here\x1b[Amore text"
+    assert terminal.title.title == "some text here\x1b[Amore text"
 
 
 def test_parser_feed_multiple_escapes(parser, terminal):
@@ -61,8 +61,8 @@ def test_parser_feed_simple_truncate(parser, terminal):
     assert parser.buffer == "\x1b"
 
     parser.feed("[1;1H")
-    assert terminal.board.cursor.x == 0
-    assert terminal.board.cursor.y == 0
+    assert terminal.cursor.x == 0
+    assert terminal.cursor.y == 0
     assert parser.buffer == ""
 
 
@@ -74,8 +74,8 @@ def test_charset_designation_split_across_chunks():
     terminal.parser.feed("\x1b(")
     terminal.parser.feed("0")
     terminal.parser.feed("q")  # DEC special graphics: q is '─'
-    assert terminal.board.charset.g0_charset == "0"
-    assert terminal.board.blitter.current_buffer.get_line_text(0)[0] == "─"
+    assert terminal.charset.g0_charset == "0"
+    assert terminal.blitter.current_buffer.get_line_text(0)[0] == "─"
 
 
 def test_decaln_split_across_chunks():
@@ -85,4 +85,4 @@ def test_decaln_split_across_chunks():
     terminal = Board(width=4, height=2)
     terminal.parser.feed("\x1b#")
     terminal.parser.feed("8")
-    assert terminal.board.blitter.current_buffer.get_line_text(0) == "EEEE"
+    assert terminal.blitter.current_buffer.get_line_text(0) == "EEEE"

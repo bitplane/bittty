@@ -19,8 +19,8 @@ class RecordingTransport:
 def _term(width=10, height=4):
     terminal = Board(width=width, height=height)
     transport = RecordingTransport()
-    terminal.board.host.attach(transport)
-    return terminal, Parser(terminal.board), transport
+    terminal.host.attach(transport)
+    return terminal, Parser(terminal), transport
 
 
 def _sent(t):
@@ -28,7 +28,7 @@ def _sent(t):
 
 
 def _line(terminal, y=0):
-    return terminal.board.blitter.current_buffer.get_line_text(y).rstrip()
+    return terminal.blitter.current_buffer.get_line_text(y).rstrip()
 
 
 # --- focus events (mode 1004) --- #
@@ -49,11 +49,11 @@ def test_focus_events_only_report_when_enabled():
 
 def test_synchronized_output_flag_tracks_mode_2026():
     terminal, parser, _ = _term()
-    assert terminal.board.modes.synchronized_output is False
+    assert terminal.modes.synchronized_output is False
     parser.feed("\x1b[?2026h")
-    assert terminal.board.modes.synchronized_output is True
+    assert terminal.modes.synchronized_output is True
     parser.feed("\x1b[?2026l")
-    assert terminal.board.modes.synchronized_output is False
+    assert terminal.modes.synchronized_output is False
 
 
 # --- left/right margins (mode 69 DECLRMM + DECSLRM) --- #
@@ -62,31 +62,31 @@ def test_synchronized_output_flag_tracks_mode_2026():
 def test_decslrm_needs_margin_mode_else_saves_cursor():
     terminal, parser, _ = _term()
     # Without DECLRMM, CSI Pl;Pr s is SCOSC (save cursor), not a margin set.
-    terminal.board.cursor.set_position(3, 2)
+    terminal.cursor.set_position(3, 2)
     parser.feed("\x1b[2;6s")
-    assert terminal.board.blitter.left_margin == 0  # unchanged
-    terminal.board.cursor.set_position(0, 0)
+    assert terminal.blitter.left_margin == 0  # unchanged
+    terminal.cursor.set_position(0, 0)
     parser.feed("\x1b[u")  # restore -> the saved (3, 2)
-    assert (terminal.board.cursor.x, terminal.board.cursor.y) == (3, 2)
+    assert (terminal.cursor.x, terminal.cursor.y) == (3, 2)
 
 
 def test_decslrm_sets_margins_when_mode_enabled():
     terminal, parser, _ = _term()
     parser.feed("\x1b[?69h")  # DECLRMM on
     parser.feed("\x1b[3;7s")  # margins to columns 3..7 (0-based 2..6)
-    assert (terminal.board.blitter.left_margin, terminal.board.blitter.right_margin) == (2, 6)
+    assert (terminal.blitter.left_margin, terminal.blitter.right_margin) == (2, 6)
 
 
 def test_disabling_declrmm_resets_margins():
     terminal, parser, _ = _term()
     parser.feed("\x1b[?69h\x1b[3;7s")
     parser.feed("\x1b[?69l")  # disabling DECLRMM restores full width
-    assert (terminal.board.blitter.left_margin, terminal.board.blitter.right_margin) == (0, 9)
+    assert (terminal.blitter.left_margin, terminal.blitter.right_margin) == (0, 9)
 
 
 def test_sl_pans_within_the_left_right_margins():
     terminal, parser, _ = _term()
-    terminal.board.blitter.current_buffer.set(0, 0, "ABCDEFGHIJ")
+    terminal.blitter.current_buffer.set(0, 0, "ABCDEFGHIJ")
     parser.feed("\x1b[?69h\x1b[3;6s")  # margins columns 3..6 (indices 2..5): C D E F
     parser.feed("\x1b[1 @")  # SL 1 — only cols 2..5 pan left: C D E F -> D E F <blank>
     assert _line(terminal) == "ABDEF GHIJ"  # index 5 blanked, cols outside margins untouched
@@ -111,19 +111,19 @@ def test_xtpush_xtpop_sgr_restores_attributes():
     parser.feed("\x1b[#{")  # XTPUSHSGR
     parser.feed("\x1b[0m\x1b[34m")  # reset then blue
     parser.feed("\x1b[#}")  # XTPOPSGR -> back to bold red
-    style = terminal.board.style.current
+    style = terminal.style.current
     assert style.bold is True
     assert style.fg is not None and style.fg.value == 1
 
 
 def test_xtpush_xtpop_colors_restores_palette():
     terminal, parser, _ = _term()
-    before = terminal.board.palette.colors[1]
+    before = terminal.palette.colors[1]
     parser.feed("\x1b[#P")  # XTPUSHCOLORS
     parser.feed("\x1b]4;1;rgb:0102/0304/0506\x07")  # change palette entry 1
-    assert terminal.board.palette.colors[1] != before
+    assert terminal.palette.colors[1] != before
     parser.feed("\x1b[#Q")  # XTPOPCOLORS
-    assert terminal.board.palette.colors[1] == before
+    assert terminal.palette.colors[1] == before
 
 
 # --- DECBI / DECFI --- #
@@ -131,21 +131,21 @@ def test_xtpush_xtpop_colors_restores_palette():
 
 def test_decfi_moves_right_then_pans_at_right_margin():
     terminal, parser, _ = _term()
-    terminal.board.cursor.set_position(4, 0)
+    terminal.cursor.set_position(4, 0)
     parser.feed("\x1b9")  # DECFI below the right margin -> just move right
-    assert terminal.board.cursor.x == 5
-    terminal.board.blitter.current_buffer.set(0, 0, "ABCDEFGHIJ")
-    terminal.board.cursor.set_position(9, 0)  # right margin
+    assert terminal.cursor.x == 5
+    terminal.blitter.current_buffer.set(0, 0, "ABCDEFGHIJ")
+    terminal.cursor.set_position(9, 0)  # right margin
     parser.feed("\x1b9")  # DECFI at right margin -> pan content left, blank at right
     assert _line(terminal) == "BCDEFGHIJ"
 
 
 def test_decbi_moves_left_then_pans_at_left_margin():
     terminal, parser, _ = _term()
-    terminal.board.cursor.set_position(3, 0)
+    terminal.cursor.set_position(3, 0)
     parser.feed("\x1b6")  # DECBI: not at left margin -> move left
-    assert terminal.board.cursor.x == 2
-    terminal.board.blitter.current_buffer.set(0, 0, "ABCDEFGHIJ")
-    terminal.board.cursor.set_position(0, 0)
+    assert terminal.cursor.x == 2
+    terminal.blitter.current_buffer.set(0, 0, "ABCDEFGHIJ")
+    terminal.cursor.set_position(0, 0)
     parser.feed("\x1b6")  # DECBI at left margin -> pan right, blank at left
     assert _line(terminal) == " ABCDEFGHI"

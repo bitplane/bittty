@@ -18,8 +18,8 @@ class RecordingTransport:
 def _driver():
     terminal = Board(width=80, height=24)
     transport = RecordingTransport()
-    terminal.board.host.attach(transport)
-    return Parser(terminal.board), transport
+    terminal.host.attach(transport)
+    return Parser(terminal), transport
 
 
 def test_decrqss_reports_current_sgr():

@@ -7,7 +7,7 @@ from bittty.parser import Parser
 def test_g1_designation_and_switching():
     """Test G1 character set designation and switching."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     # Set G1 to DEC Special Graphics
     parser.feed("\x1b)0")  # ESC ) 0
@@ -23,13 +23,13 @@ def test_g1_designation_and_switching():
     parser.feed("\x0f")  # SI
     parser.feed("DEF")
 
-    assert terminal.board.blitter.current_buffer.get_line_text(0).rstrip() == "ABC┌─┐DEF"
+    assert terminal.blitter.current_buffer.get_line_text(0).rstrip() == "ABC┌─┐DEF"
 
 
 def test_g2_g3_designation():
     """Test G2 and G3 character set designation."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     # Set G2 to DEC Special Graphics
     parser.feed("\x1b*0")  # ESC * 0
@@ -38,14 +38,14 @@ def test_g2_g3_designation():
     parser.feed("\x1b+A")  # ESC + A
 
     # Verify the character sets were set
-    assert terminal.board.charset.g2_charset == "0"
-    assert terminal.board.charset.g3_charset == "A"
+    assert terminal.charset.g2_charset == "0"
+    assert terminal.charset.g3_charset == "A"
 
 
 def test_single_shift_2():
     """Test Single Shift 2 (SS2) for temporary G2 usage."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     # Set G2 to DEC Special Graphics
     parser.feed("\x1b*0")  # ESC * 0
@@ -60,13 +60,13 @@ def test_single_shift_2():
     # Back to normal G0
     parser.feed("B")
 
-    assert terminal.board.blitter.current_buffer.get_line_text(0).rstrip() == "A┌B"
+    assert terminal.blitter.current_buffer.get_line_text(0).rstrip() == "A┌B"
 
 
 def test_single_shift_3():
     """Test Single Shift 3 (SS3) for temporary G3 usage."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     # Set G3 to UK character set
     parser.feed("\x1b+A")  # ESC + A
@@ -81,13 +81,13 @@ def test_single_shift_3():
     # Back to normal G0
     parser.feed("B")
 
-    assert terminal.board.blitter.current_buffer.get_line_text(0).rstrip() == "A£B"
+    assert terminal.blitter.current_buffer.get_line_text(0).rstrip() == "A£B"
 
 
 def test_multiple_single_shifts():
     """Test multiple single shifts in sequence."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     # Set G2 to DEC Special Graphics
     parser.feed("\x1b*0")  # ESC * 0
@@ -111,13 +111,13 @@ def test_multiple_single_shifts():
 
     parser.feed("B")
 
-    assert terminal.board.blitter.current_buffer.get_line_text(0).rstrip() == "A┌£┐B"
+    assert terminal.blitter.current_buffer.get_line_text(0).rstrip() == "A┌£┐B"
 
 
 def test_locking_shift_2_invokes_g2_into_gl():
     """LS2 (ESC n) persistently invokes G2 into GL, unlike the one-shot SS2."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     parser.feed("\x1b*0")  # ESC * 0 — designate G2 = DEC Special Graphics
     parser.feed("\x1bn")  # ESC n — LS2: invoke G2 into GL, persistently
@@ -125,13 +125,13 @@ def test_locking_shift_2_invokes_g2_into_gl():
     parser.feed("\x0f")  # SI (LS0): back to G0 (ASCII)
     parser.feed("AB")
 
-    assert terminal.board.blitter.current_buffer.get_line_text(0).rstrip() == "┌─┐AB"
+    assert terminal.blitter.current_buffer.get_line_text(0).rstrip() == "┌─┐AB"
 
 
 def test_locking_shift_3_invokes_g3_into_gl():
     """LS3 (ESC o) persistently invokes G3 into GL."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     parser.feed("\x1b+0")  # ESC + 0 — designate G3 = DEC Special Graphics
     parser.feed("\x1bo")  # ESC o — LS3
@@ -139,55 +139,55 @@ def test_locking_shift_3_invokes_g3_into_gl():
     parser.feed("\x0f")  # SI back to G0
     parser.feed("X")
 
-    assert terminal.board.blitter.current_buffer.get_line_text(0).rstrip() == "┌─┐X"
+    assert terminal.blitter.current_buffer.get_line_text(0).rstrip() == "┌─┐X"
 
 
 def test_locking_shift_1_right_translates_gr_half():
     """LS1R (ESC ~) invokes G1 into GR; 0xA0-0xFF map through it while GL stays ASCII."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     parser.feed("\x1b)0")  # ESC ) 0 — designate G1 = DEC Special Graphics
     parser.feed("\x1b~")  # ESC ~ — LS1R: invoke G1 into GR
     parser.feed("A")  # GL still ASCII
     parser.feed("\xec\xe1")  # 'l'+0x80, 'a'+0x80 -> box + checkerboard via GR
 
-    assert terminal.board.blitter.current_buffer.get_line_text(0).rstrip() == "A┌▒"
+    assert terminal.blitter.current_buffer.get_line_text(0).rstrip() == "A┌▒"
 
 
 def test_locking_shift_2_right_translates_gr_half():
     """LS2R (ESC }) invokes G2 into GR."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     parser.feed("\x1b*0")  # ESC * 0 — designate G2 = DEC Special Graphics
     parser.feed("\x1b}")  # ESC } — LS2R
     parser.feed("\xec")  # 'l'+0x80 -> ┌
 
-    assert terminal.board.blitter.current_buffer.get_line_text(0).rstrip() == "┌"
+    assert terminal.blitter.current_buffer.get_line_text(0).rstrip() == "┌"
 
 
 def test_reset_clears_locking_shifts():
     """RIS restores GL to G0 and GR to G1 (both ASCII)."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     parser.feed("\x1b*0\x1bn")  # G2 = graphics, LS2 -> GL = G2
     parser.feed("\x1b)0\x1b~")  # G1 = graphics, LS1R -> GR = G1
-    assert terminal.board.charset.current_charset == 2
-    assert terminal.board.charset.gr == 1
+    assert terminal.charset.current_charset == 2
+    assert terminal.charset.gr == 1
 
     parser.feed("\x1bc")  # RIS
-    assert terminal.board.charset.current_charset == 0
-    assert terminal.board.charset.gr == 1
+    assert terminal.charset.current_charset == 0
+    assert terminal.charset.gr == 1
     parser.feed("\xec")  # GR now ASCII -> passthrough, no translation
-    assert terminal.board.blitter.current_buffer.get_line_text(0).rstrip() == "\xec"
+    assert terminal.blitter.current_buffer.get_line_text(0).rstrip() == "\xec"
 
 
 def test_si_so_switching():
     """Test Shift In/Shift Out switching between G0 and G1."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     # Set G1 to DEC Special Graphics
     parser.feed("\x1b)0")  # ESC ) 0
@@ -211,13 +211,13 @@ def test_si_so_switching():
     parser.feed("\x0f")  # SI
     parser.feed("C")
 
-    assert terminal.board.blitter.current_buffer.get_line_text(0).rstrip() == "A┌─┐B└┘─C"
+    assert terminal.blitter.current_buffer.get_line_text(0).rstrip() == "A┌─┐B└┘─C"
 
 
 def test_persistent_charset_state():
     """Test that character set state persists until changed."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     # Set G1 to DEC Special Graphics
     parser.feed("\x1b)0")  # ESC ) 0
@@ -230,15 +230,15 @@ def test_persistent_charset_state():
     parser.feed("x  x\r\n")
     parser.feed("mqqj")
 
-    assert terminal.board.blitter.current_buffer.get_line_text(0).rstrip() == "┌──┐"
-    assert terminal.board.blitter.current_buffer.get_line_text(1).rstrip() == "│  │"
-    assert terminal.board.blitter.current_buffer.get_line_text(2).rstrip() == "└──┘"
+    assert terminal.blitter.current_buffer.get_line_text(0).rstrip() == "┌──┐"
+    assert terminal.blitter.current_buffer.get_line_text(1).rstrip() == "│  │"
+    assert terminal.blitter.current_buffer.get_line_text(2).rstrip() == "└──┘"
 
 
 def test_mixed_character_sets():
     """Test complex mixing of multiple character sets."""
     terminal = Board(width=30, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     # Set all character sets
     parser.feed("\x1b(B")  # G0 = US ASCII (default)
@@ -269,13 +269,13 @@ def test_mixed_character_sets():
     parser.feed("\x0f")  # Back to G0
     parser.feed(" End")  # G0 ASCII
 
-    assert terminal.board.blitter.current_buffer.get_line_text(0).rstrip() == "Text┌─ £ ┐┘ End"
+    assert terminal.blitter.current_buffer.get_line_text(0).rstrip() == "Text┌─ £ ┐┘ End"
 
 
 def test_charset_with_colors():
     """Test character sets work with color changes."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     # Set G1 to DEC Special Graphics
     parser.feed("\x1b)0")
@@ -291,14 +291,14 @@ def test_charset_with_colors():
     parser.feed("TEXT")  # Blue text
 
     # Check characters
-    assert terminal.board.blitter.current_buffer.get_line_text(0).rstrip() == "┌──┐TEXT"
+    assert terminal.blitter.current_buffer.get_line_text(0).rstrip() == "┌──┐TEXT"
 
     # Check colors
-    style, char = terminal.board.blitter.current_buffer.get_cell(0, 0)
+    style, char = terminal.blitter.current_buffer.get_cell(0, 0)
     assert char == "┌"
     assert style.fg.value == 1  # Red
 
-    style, char = terminal.board.blitter.current_buffer.get_cell(4, 0)
+    style, char = terminal.blitter.current_buffer.get_cell(4, 0)
     assert char == "T"
     assert style.fg.value == 4  # Blue
 
@@ -306,7 +306,7 @@ def test_charset_with_colors():
 def test_charset_reset_on_esc_c():
     """Test that ESC c resets character sets to defaults."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     # Set non-default character sets
     parser.feed("\x1b)0")  # G1 = DEC Special Graphics
@@ -316,23 +316,23 @@ def test_charset_reset_on_esc_c():
 
     # Verify we're in G1 with graphics
     parser.feed("l")
-    assert terminal.board.blitter.current_buffer.get_cell(0, 0)[1] == "┌"
+    assert terminal.blitter.current_buffer.get_cell(0, 0)[1] == "┌"
 
     # Reset terminal
     parser.feed("\x1bc")  # ESC c (RIS - Reset)
 
     # Character sets should be reset to defaults
-    assert terminal.board.charset.g0_charset == "B"
-    assert terminal.board.charset.g1_charset == "B"
-    assert terminal.board.charset.g2_charset == "B"
-    assert terminal.board.charset.g3_charset == "B"
-    assert terminal.board.charset.current_charset == 0
+    assert terminal.charset.g0_charset == "B"
+    assert terminal.charset.g1_charset == "B"
+    assert terminal.charset.g2_charset == "B"
+    assert terminal.charset.g3_charset == "B"
+    assert terminal.charset.current_charset == 0
 
 
 def test_all_dec_special_graphics_characters():
     """Test the full DEC Special Graphics character set mapping."""
     terminal = Board(width=50, height=10)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     parser.feed("\x1b(0")  # Set G0 to DEC Special Graphics
 
@@ -342,38 +342,38 @@ def test_all_dec_special_graphics_characters():
 
     parser.feed(test_chars)
 
-    result = terminal.board.blitter.current_buffer.get_line_text(0)
+    result = terminal.blitter.current_buffer.get_line_text(0)
     assert result[: len(expected)] == expected
 
 
 def test_uk_national_character_set():
     """Test UK National character set (# -> £)."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     parser.feed("\x1b(A")  # Set G0 to UK National
 
     parser.feed("Price: #10")
 
-    assert terminal.board.blitter.current_buffer.get_line_text(0).rstrip() == "Price: £10"
+    assert terminal.blitter.current_buffer.get_line_text(0).rstrip() == "Price: £10"
 
     # Other characters should be unchanged
     parser.feed("\r\n")
     parser.feed("ABC!@$%^&*()")
 
-    assert terminal.board.blitter.current_buffer.get_line_text(1).rstrip() == "ABC!@$%^&*()"
+    assert terminal.blitter.current_buffer.get_line_text(1).rstrip() == "ABC!@$%^&*()"
 
 
 def test_dec_technical_charset_designation():
     """Test DEC Technical character set designation and usage."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     # Set G1 to DEC Technical character set
     parser.feed("\x1b)>")  # ESC ) >
 
     # Verify charset was set
-    assert terminal.board.charset.g1_charset == ">"
+    assert terminal.charset.g1_charset == ">"
 
     # Normal ASCII text
     parser.feed("Math: ")
@@ -391,13 +391,13 @@ def test_dec_technical_charset_designation():
     parser.feed("!")
 
     # Check the result
-    assert terminal.board.blitter.current_buffer.get_line_text(0).rstrip() == "Math: ΠΣ∫!"
+    assert terminal.blitter.current_buffer.get_line_text(0).rstrip() == "Math: ΠΣ∫!"
 
 
 def test_dec_technical_greek_letters():
     """Test DEC Technical character set Greek letters."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     # Set G1 to DEC Technical
     parser.feed("\x1b)>")  # ESC ) >
@@ -412,13 +412,13 @@ def test_dec_technical_greek_letters():
     parser.feed("p")  # π (pi)
 
     # Check the result
-    assert terminal.board.blitter.current_buffer.get_line_text(0).rstrip() == "ΔΦΓαβπ"
+    assert terminal.blitter.current_buffer.get_line_text(0).rstrip() == "ΔΦΓαβπ"
 
 
 def test_dec_technical_mathematical_symbols():
     """Test DEC Technical character set mathematical symbols."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     # Set G1 to DEC Technical
     parser.feed("\x1b)>")  # ESC ) >
@@ -433,13 +433,13 @@ def test_dec_technical_mathematical_symbols():
     parser.feed(">")  # ≥ (greater than or equal)
 
     # Check the result
-    assert terminal.board.blitter.current_buffer.get_line_text(0).rstrip() == "∞÷×√≤≥"
+    assert terminal.blitter.current_buffer.get_line_text(0).rstrip() == "∞÷×√≤≥"
 
 
 def test_german_national_charset():
     """Test German National character set (ESC ( K)."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     # Set G0 to German National
     parser.feed("\x1b(K")  # ESC ( K
@@ -448,13 +448,13 @@ def test_german_national_charset():
     parser.feed("@[\\]`{|}")  # @ÄÖÜäöüß
 
     # Check the result
-    assert terminal.board.blitter.current_buffer.get_line_text(0).rstrip() == "§ÄÖÜäöüß"
+    assert terminal.blitter.current_buffer.get_line_text(0).rstrip() == "§ÄÖÜäöüß"
 
 
 def test_french_national_charset():
     """Test French National character set (ESC ( R)."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     # Set G0 to French National
     parser.feed("\x1b(R")  # ESC ( R
@@ -463,13 +463,13 @@ def test_french_national_charset():
     parser.feed("#@[\\]`{|}~")
 
     # Check the result
-    assert terminal.board.blitter.current_buffer.get_line_text(0).rstrip() == "£à°ç§`éùè¨"
+    assert terminal.blitter.current_buffer.get_line_text(0).rstrip() == "£à°ç§`éùè¨"
 
 
 def test_spanish_national_charset():
     """Test Spanish National character set (ESC ( Z)."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     # Set G0 to Spanish National
     parser.feed("\x1b(Z")  # ESC ( Z
@@ -478,13 +478,13 @@ def test_spanish_national_charset():
     parser.feed("#@[\\]`{|")
 
     # Check the result
-    assert terminal.board.blitter.current_buffer.get_line_text(0).rstrip() == "£§¡Ñ¿˚ñç"
+    assert terminal.blitter.current_buffer.get_line_text(0).rstrip() == "£§¡Ñ¿˚ñç"
 
 
 def test_italian_national_charset():
     """Test Italian National character set (ESC ( Y)."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     # Set G0 to Italian National
     parser.feed("\x1b(Y")  # ESC ( Y
@@ -493,13 +493,13 @@ def test_italian_national_charset():
     parser.feed("#@[\\]`{|}~")
 
     # Check the result
-    assert terminal.board.blitter.current_buffer.get_line_text(0).rstrip() == "£§°çéùàòèì"
+    assert terminal.blitter.current_buffer.get_line_text(0).rstrip() == "£§°çéùàòèì"
 
 
 def test_swedish_national_charset():
     """Test Swedish National character set (ESC ( H)."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     # Set G0 to Swedish National
     parser.feed("\x1b(H")  # ESC ( H
@@ -508,13 +508,13 @@ def test_swedish_national_charset():
     parser.feed("@[\\]^`{|}~")
 
     # Check the result
-    assert terminal.board.blitter.current_buffer.get_line_text(0).rstrip() == "ÉÄÖÅÜéäöåü"
+    assert terminal.blitter.current_buffer.get_line_text(0).rstrip() == "ÉÄÖÅÜéäöåü"
 
 
 def test_danish_norwegian_charset():
     """Test Danish/Norwegian National character set (ESC ( E)."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     # Set G0 to Danish/Norwegian National
     parser.feed("\x1b(E")  # ESC ( E
@@ -523,13 +523,13 @@ def test_danish_norwegian_charset():
     parser.feed("[\\]`{|")
 
     # Check the result
-    assert terminal.board.blitter.current_buffer.get_line_text(0).rstrip() == "ÆØÅæøå"
+    assert terminal.blitter.current_buffer.get_line_text(0).rstrip() == "ÆØÅæøå"
 
 
 def test_finnish_national_charset():
     """Test Finnish National character set (ESC ( C)."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     # Set G0 to Finnish National
     parser.feed("\x1b(C")  # ESC ( C
@@ -538,13 +538,13 @@ def test_finnish_national_charset():
     parser.feed("[\\]^`{|}~")
 
     # Check the result
-    assert terminal.board.blitter.current_buffer.get_line_text(0).rstrip() == "ÄÖÅÜéäöåü"
+    assert terminal.blitter.current_buffer.get_line_text(0).rstrip() == "ÄÖÅÜéäöåü"
 
 
 def test_dutch_national_charset():
     """Test Dutch National character set (ESC ( 4)."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     # Set G0 to Dutch National
     parser.feed("\x1b(4")  # ESC ( 4
@@ -553,13 +553,13 @@ def test_dutch_national_charset():
     parser.feed("#@[\\]`{|}~")
 
     # Check the result
-    assert terminal.board.blitter.current_buffer.get_line_text(0).rstrip() == "£¾ĳ½¦`¨ƒ¼´"
+    assert terminal.blitter.current_buffer.get_line_text(0).rstrip() == "£¾ĳ½¦`¨ƒ¼´"
 
 
 def test_french_canadian_charset():
     """Test French Canadian National character set (ESC ( Q)."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     # Set G0 to French Canadian National
     parser.feed("\x1b(Q")  # ESC ( Q
@@ -568,13 +568,13 @@ def test_french_canadian_charset():
     parser.feed("@[\\]^`{|}~")
 
     # Check the result
-    assert terminal.board.blitter.current_buffer.get_line_text(0).rstrip() == "àâçêîôéùèû"
+    assert terminal.blitter.current_buffer.get_line_text(0).rstrip() == "àâçêîôéùèû"
 
 
 def test_japanese_roman_charset():
     """Test Japanese Roman character set (ESC ( J)."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     # Set G0 to Japanese Roman
     parser.feed("\x1b(J")  # ESC ( J
@@ -583,13 +583,13 @@ def test_japanese_roman_charset():
     parser.feed("Price: \\100~")
 
     # Check the result
-    assert terminal.board.blitter.current_buffer.get_line_text(0).rstrip() == "Price: ¥100¯"
+    assert terminal.blitter.current_buffer.get_line_text(0).rstrip() == "Price: ¥100¯"
 
 
 def test_swiss_national_charset():
     """Test Swiss National character set (ESC ( =)."""
     terminal = Board(width=20, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     # Set G0 to Swiss National
     parser.feed("\x1b(=")  # ESC ( =
@@ -598,13 +598,13 @@ def test_swiss_national_charset():
     parser.feed("#@[\\]^_`{|}~")
 
     # Check the result
-    assert terminal.board.blitter.current_buffer.get_line_text(0).rstrip() == "ùàéçêîèôäöüû"
+    assert terminal.blitter.current_buffer.get_line_text(0).rstrip() == "ùàéçêîèôäöüû"
 
 
 def test_national_charset_switching():
     """Test switching between different national character sets."""
     terminal = Board(width=30, height=5)
-    parser = Parser(terminal.board)
+    parser = Parser(terminal)
 
     # Set G0 to German, G1 to French
     parser.feed("\x1b(K")  # German G0
@@ -622,4 +622,4 @@ def test_national_charset_switching():
     parser.feed("]")  # German: Ü
 
     # Check the result
-    assert terminal.board.blitter.current_buffer.get_line_text(0).rstrip() == "§Äà°Ü"
+    assert terminal.blitter.current_buffer.get_line_text(0).rstrip() == "§Äà°Ü"

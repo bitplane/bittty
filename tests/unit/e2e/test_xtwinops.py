@@ -19,22 +19,22 @@ class RecordingTransport:
 def _term(width=80, height=24):
     terminal = Board(width=width, height=height)
     transport = RecordingTransport()
-    terminal.board.host.attach(transport)
-    return terminal, Parser(terminal.board), transport
+    terminal.host.attach(transport)
+    return terminal, Parser(terminal), transport
 
 
 def test_iconify_state():
     terminal, parser, _ = _term()
     parser.feed("\x1b[2t")  # iconify
-    assert terminal.board.window_iconified is True
+    assert terminal.window_iconified is True
     parser.feed("\x1b[1t")  # de-iconify
-    assert terminal.board.window_iconified is False
+    assert terminal.window_iconified is False
 
 
 def test_move_and_report_position():
     terminal, parser, transport = _term()
     parser.feed("\x1b[3;120;40t")  # move window to (120, 40)
-    assert terminal.board.window_position == (120, 40)
+    assert terminal.window_position == (120, 40)
     parser.feed("\x1b[13t")  # report position
     assert transport.data[-1] == "\x1b[3;120;40t"
 
@@ -50,17 +50,17 @@ def test_report_iconify_state():
 def test_maximize_and_fullscreen():
     terminal, parser, _ = _term()
     parser.feed("\x1b[9;1t")  # maximize
-    assert terminal.board.window_maximized is True
+    assert terminal.window_maximized is True
     parser.feed("\x1b[10;1t")  # fullscreen on
-    assert terminal.board.window_fullscreen is True
+    assert terminal.window_fullscreen is True
     parser.feed("\x1b[10;2t")  # fullscreen toggle -> off
-    assert terminal.board.window_fullscreen is False
+    assert terminal.window_fullscreen is False
 
 
 def test_raise_lower_refresh_are_signals():
     terminal, parser, _ = _term()
     parser.feed("\x1b[5t\x1b[6t\x1b[7t")
-    assert terminal.board.window_requests == ["raise", "lower", "refresh"]
+    assert terminal.window_requests == ["raise", "lower", "refresh"]
 
 
 def test_report_window_title():
@@ -73,12 +73,12 @@ def test_report_window_title():
 def test_resize_to_lines():
     terminal, parser, _ = _term()
     parser.feed("\x1b[40t")  # Ps >= 24 -> resize to 40 lines
-    assert terminal.board.height == 40
+    assert terminal.height == 40
 
 
 def test_pixel_reports_from_terminal_caps():
     terminal, parser, transport = _term()
-    terminal.board.set_caps(TerminalCaps(cell_px=(8, 16), window_px=(640, 480)))
+    terminal.set_caps(TerminalCaps(cell_px=(8, 16), window_px=(640, 480)))
     parser.feed("\x1b[14t")  # window size in pixels
     assert transport.data[-1] == "\x1b[4;480;640t"
     parser.feed("\x1b[16t")  # cell size in pixels

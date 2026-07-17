@@ -12,14 +12,14 @@ def test_sgr_reset_all_attributes(parser, terminal):
     # Set some styling first
     parser.feed(f"{ESC}[1;3;4m")  # Bold, italic, underline
     # Check that bold, italic, underline parameters are in the ANSI code
-    assert "1" in terminal.board.style.current_ansi_code  # Bold parameter
-    assert "3" in terminal.board.style.current_ansi_code  # Italic parameter
-    assert "4" in terminal.board.style.current_ansi_code  # Underline parameter
-    assert terminal.board.style.current_ansi_code == "\x1b[1;3;4m"  # Expected format
+    assert "1" in terminal.style.current_ansi_code  # Bold parameter
+    assert "3" in terminal.style.current_ansi_code  # Italic parameter
+    assert "4" in terminal.style.current_ansi_code  # Underline parameter
+    assert terminal.style.current_ansi_code == "\x1b[1;3;4m"  # Expected format
 
     # Reset should clear everything
     parser.feed(f"{ESC}[{SGR_RESET}m")
-    assert terminal.board.style.current_ansi_code == ""
+    assert terminal.style.current_ansi_code == ""
 
 
 def test_sgr_bold_styling(parser, terminal):
@@ -29,17 +29,17 @@ def test_sgr_bold_styling(parser, terminal):
     parser.feed("Bold text")
 
     # Verify bold is active and text was written
-    assert "1" in terminal.board.style.current_ansi_code  # Bold parameter
-    line_text = terminal.board.blitter.current_buffer.get_line_text(0).strip()
+    assert "1" in terminal.style.current_ansi_code  # Bold parameter
+    line_text = terminal.blitter.current_buffer.get_line_text(0).strip()
     assert "Bold text" in line_text
 
     # Remove bold
     parser.feed(f"{ESC}[{SGR_NOT_BOLD_NOR_FAINT}m")
-    assert "1" not in terminal.board.style.current_ansi_code  # Bold should be removed
+    assert "1" not in terminal.style.current_ansi_code  # Bold should be removed
 
     # Write more text
     parser.feed(" Normal text")
-    line_text = terminal.board.blitter.current_buffer.get_line_text(0).strip()
+    line_text = terminal.blitter.current_buffer.get_line_text(0).strip()
     assert "Bold text Normal text" in line_text
 
 
@@ -49,14 +49,14 @@ def test_sgr_multiple_attributes(parser, terminal):
     parser.feed(f"{ESC}[1;3;4;5m")  # Bold, italic, underline, blink
 
     # All should be present
-    assert "1" in terminal.board.style.current_ansi_code  # Bold
-    assert "3" in terminal.board.style.current_ansi_code  # Italic
-    assert "4" in terminal.board.style.current_ansi_code  # Underline
-    assert "5" in terminal.board.style.current_ansi_code  # Blink
+    assert "1" in terminal.style.current_ansi_code  # Bold
+    assert "3" in terminal.style.current_ansi_code  # Italic
+    assert "4" in terminal.style.current_ansi_code  # Underline
+    assert "5" in terminal.style.current_ansi_code  # Blink
 
     # Write styled text
     parser.feed("Styled text")
-    line_text = terminal.board.blitter.current_buffer.get_line_text(0).strip()
+    line_text = terminal.blitter.current_buffer.get_line_text(0).strip()
     assert "Styled text" in line_text
 
 
@@ -65,17 +65,17 @@ def test_sgr_color_codes(parser, terminal):
     # Set red foreground and blue background
     parser.feed(f"{ESC}[31;44m")
 
-    assert "31" in terminal.board.style.current_ansi_code  # Red foreground
-    assert "44" in terminal.board.style.current_ansi_code  # Blue background
+    assert "31" in terminal.style.current_ansi_code  # Red foreground
+    assert "44" in terminal.style.current_ansi_code  # Blue background
 
     parser.feed("Colored text")
-    line_text = terminal.board.blitter.current_buffer.get_line_text(0).strip()
+    line_text = terminal.blitter.current_buffer.get_line_text(0).strip()
     assert "Colored text" in line_text
 
     # Reset colors
     parser.feed(f"{ESC}[39;49m")  # Default fg/bg
     # After reset, colors should be gone (default colors don't appear in ANSI)
-    assert terminal.board.style.current_ansi_code == ""
+    assert terminal.style.current_ansi_code == ""
 
 
 def test_sgr_256_color_support(parser, terminal):
@@ -84,11 +84,11 @@ def test_sgr_256_color_support(parser, terminal):
     parser.feed(f"{ESC}[38;5;196;48;5;21m")  # Bright red fg, bright blue bg
 
     # Should contain the 256-color sequences
-    assert "38;5;196" in terminal.board.style.current_ansi_code  # 256-color foreground
-    assert "48;5;21" in terminal.board.style.current_ansi_code  # 256-color background
+    assert "38;5;196" in terminal.style.current_ansi_code  # 256-color foreground
+    assert "48;5;21" in terminal.style.current_ansi_code  # 256-color background
 
     parser.feed("256-color text")
-    line_text = terminal.board.blitter.current_buffer.get_line_text(0).strip()
+    line_text = terminal.blitter.current_buffer.get_line_text(0).strip()
     assert "256-color text" in line_text
 
 
@@ -98,11 +98,11 @@ def test_sgr_rgb_color_support(parser, terminal):
     parser.feed(f"{ESC}[38;2;255;0;0;48;2;0;0;255m")  # Red fg, blue bg
 
     # Should contain the RGB sequences
-    assert "38;2;255;0;0" in terminal.board.style.current_ansi_code  # RGB foreground
-    assert "48;2;0;0;255" in terminal.board.style.current_ansi_code  # RGB background
+    assert "38;2;255;0;0" in terminal.style.current_ansi_code  # RGB foreground
+    assert "48;2;0;0;255" in terminal.style.current_ansi_code  # RGB background
 
     parser.feed("RGB text")
-    line_text = terminal.board.blitter.current_buffer.get_line_text(0).strip()
+    line_text = terminal.blitter.current_buffer.get_line_text(0).strip()
     assert "RGB text" in line_text
 
 
@@ -117,11 +117,11 @@ def test_sgr_style_inheritance(parser, terminal):
     parser.feed(" underlined")
 
     # Should still have bold + red + underline
-    assert "1" in terminal.board.style.current_ansi_code  # Bold
-    assert "31" in terminal.board.style.current_ansi_code  # Red
-    assert "4" in terminal.board.style.current_ansi_code  # Underline
+    assert "1" in terminal.style.current_ansi_code  # Bold
+    assert "31" in terminal.style.current_ansi_code  # Red
+    assert "4" in terminal.style.current_ansi_code  # Underline
 
-    line_text = terminal.board.blitter.current_buffer.get_line_text(0).strip()
+    line_text = terminal.blitter.current_buffer.get_line_text(0).strip()
     assert "Red bold underlined" in line_text
 
 
@@ -135,7 +135,7 @@ def test_sgr_selective_reset(parser, terminal):
 
     # Should still have bold, underline, red (but not italic)
     expected = "\x1b[1;4;31m"  # Bold, underline, red (no italic)
-    assert terminal.board.style.current_ansi_code == expected
+    assert terminal.style.current_ansi_code == expected
 
 
 def test_sgr_reset_mid_sequence_clears_prior_attributes(parser, terminal):
@@ -143,7 +143,7 @@ def test_sgr_reset_mid_sequence_clears_prior_attributes(parser, terminal):
     parser.feed(f"{ESC}[1;4m")  # bold + underline
     parser.feed(f"{ESC}[0;31m")
 
-    style = terminal.board.style.current
+    style = terminal.style.current
     assert style.bold is None
     assert style.underline is None
     assert style.fg is not None and style.fg.value == 1  # red
@@ -154,7 +154,7 @@ def test_sgr_empty_leading_parameter_is_a_reset(parser, terminal):
     parser.feed(f"{ESC}[1m")
     parser.feed(f"{ESC}[;31m")
 
-    style = terminal.board.style.current
+    style = terminal.style.current
     assert style.bold is None
     assert style.fg is not None and style.fg.value == 1
 
@@ -163,7 +163,7 @@ def test_sgr_trailing_empty_parameter_resets(parser, terminal):
     """ESC[31;m applies red then reset — the net effect is a full reset."""
     parser.feed(f"{ESC}[1;31;m")
 
-    style = terminal.board.style.current
+    style = terminal.style.current
     assert style.bold is None
     assert style.fg is None
 
@@ -173,7 +173,7 @@ def test_sgr_zero_colour_channels_are_not_resets(parser, terminal):
     parser.feed(f"{ESC}[1m")
     parser.feed(f"{ESC}[38;2;0;0;0m")
 
-    style = terminal.board.style.current
+    style = terminal.style.current
     assert style.bold is True  # survived: no reset happened
     assert style.fg is not None and style.fg.value == (0, 0, 0)
 
@@ -181,4 +181,4 @@ def test_sgr_zero_colour_channels_are_not_resets(parser, terminal):
 def test_sgr_rapid_blink_maps_to_blink(parser, terminal):
     """SGR 6 (rapid blink) renders as blink."""
     parser.feed(f"{ESC}[6m")
-    assert terminal.board.style.current.blink is True
+    assert terminal.style.current.blink is True

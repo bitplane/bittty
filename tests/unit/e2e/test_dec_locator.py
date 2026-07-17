@@ -18,8 +18,8 @@ class RecordingTransport:
 def _driver():
     terminal = Board(width=80, height=24)
     transport = RecordingTransport()
-    terminal.board.host.attach(transport)
-    return terminal, Parser(terminal.board), transport
+    terminal.host.attach(transport)
+    return terminal, Parser(terminal), transport
 
 
 def test_request_locator_when_disabled_reports_unavailable():

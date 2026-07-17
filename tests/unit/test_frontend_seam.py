@@ -51,8 +51,8 @@ def test_board_present_reaches_attached_frontend():
     terminal = _term()
     display = RecordingTerminal(terminal)
     display.attach()
-    terminal.board.present(TitleChanged("hi", "hi"))
-    terminal.board.present(Bell())
+    terminal.present(TitleChanged("hi", "hi"))
+    terminal.present(Bell())
     assert display.events == [("title", "hi", "hi"), ("bell",)]
 
 
@@ -60,7 +60,7 @@ def test_unoverridden_hook_is_a_safe_noop():
     terminal = _term()
     display = RecordingTerminal(terminal)
     display.attach()
-    terminal.board.present(Notification("hello"))  # on_notify defaults to no-op
+    terminal.present(Notification("hello"))  # on_notify defaults to no-op
     assert display.events == []
 
 
@@ -69,30 +69,30 @@ def test_detach_stops_delivery():
     display = RecordingTerminal(terminal)
     display.attach()
     display.detach()
-    terminal.board.present(Bell())
+    terminal.present(Bell())
     assert display.events == []
 
 
 def test_present_with_no_frontend_is_noop():
     terminal = _term()  # nothing attached
-    terminal.board.present(Bell())  # must not raise
-    assert terminal.board.display.connected is False
+    terminal.present(Bell())  # must not raise
+    assert terminal.display.connected is False
 
 
 def test_caps_default_and_push():
     terminal = _term()
-    assert terminal.board.caps == TerminalCaps.unknown()
+    assert terminal.caps == TerminalCaps.unknown()
     display = RecordingTerminal(terminal)
     caps = TerminalCaps(color_depth="256", cell_px=(8, 16))
     display.set_caps(caps)
-    assert terminal.board.caps is caps
+    assert terminal.caps is caps
 
 
 def test_mouse_mode_event_dispatch():
     terminal = _term()
     display = RecordingTerminal(terminal)
     display.attach()
-    terminal.board.present(MouseModeChanged("any", True))
+    terminal.present(MouseModeChanged("any", True))
     assert display.events == [("mouse", "any", True)]
 
 

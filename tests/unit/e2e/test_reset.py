@@ -7,7 +7,7 @@ from bittty import Board
 
 def _terminal():
     terminal = Board(width=20, height=5)
-    return terminal, Parser(terminal.board)
+    return terminal, Parser(terminal)
 
 
 def _dirty(terminal, parser):
@@ -22,14 +22,14 @@ def _dirty(terminal, parser):
 def test_ris_restores_defaults_and_clears_screen():
     terminal, parser = _terminal()
     _dirty(terminal, parser)
-    assert (terminal.board.blitter.scroll_top, terminal.board.blitter.scroll_bottom) != (0, 4)
+    assert (terminal.blitter.scroll_top, terminal.blitter.scroll_bottom) != (0, 4)
 
     parser.feed("\x1bc")  # RIS
 
-    assert terminal.board.style.current == Style()
-    assert terminal.board.modes.origin_mode is False
-    assert (terminal.board.blitter.scroll_top, terminal.board.blitter.scroll_bottom) == (0, 4)
-    assert (terminal.board.cursor.x, terminal.board.cursor.y) == (0, 0)
+    assert terminal.style.current == Style()
+    assert terminal.modes.origin_mode is False
+    assert (terminal.blitter.scroll_top, terminal.blitter.scroll_bottom) == (0, 4)
+    assert (terminal.cursor.x, terminal.cursor.y) == (0, 0)
     assert "Hello" not in terminal.capture_pane()  # hard reset clears the screen
 
 
@@ -41,10 +41,10 @@ def test_decstr_soft_reset_preserves_screen():
     parser.feed("\x1b[!p")  # DECSTR
 
     # Soft-reset subset is restored...
-    assert terminal.board.style.current == Style()
-    assert terminal.board.modes.origin_mode is False
-    assert terminal.board.modes.insert_mode is False
-    assert terminal.board.modes.cursor_visible is True
-    assert (terminal.board.blitter.scroll_top, terminal.board.blitter.scroll_bottom) == (0, 4)
+    assert terminal.style.current == Style()
+    assert terminal.modes.origin_mode is False
+    assert terminal.modes.insert_mode is False
+    assert terminal.modes.cursor_visible is True
+    assert (terminal.blitter.scroll_top, terminal.blitter.scroll_bottom) == (0, 4)
     # ...but the screen content is left intact.
     assert "Hello" in terminal.capture_pane()

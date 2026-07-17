@@ -19,8 +19,8 @@ class RecordingTransport:
 def terminal_with_transport(width=80, height=24):
     terminal = Board(width=width, height=height)
     transport = RecordingTransport()
-    terminal.board.host.attach(transport)
-    return terminal, Parser(terminal.board), transport
+    terminal.host.attach(transport)
+    return terminal, Parser(terminal), transport
 
 
 def test_cursor_position_report():
@@ -28,8 +28,8 @@ def test_cursor_position_report():
     terminal, parser, transport = terminal_with_transport()
 
     # Move cursor to position (5, 10) - 0-based
-    terminal.board.cursor.x = 10
-    terminal.board.cursor.y = 5
+    terminal.cursor.x = 10
+    terminal.cursor.y = 5
 
     # Send cursor position report query
     parser.feed("\x1b[6n")  # ESC [ 6 n
@@ -80,13 +80,13 @@ def test_decrqm_private_mode_query_cursor_keys():
     terminal, parser, transport = terminal_with_transport()
 
     # Test with cursor keys in normal mode
-    terminal.board.modes.cursor_application_mode = False
+    terminal.modes.cursor_application_mode = False
     parser.feed("\x1b[?1$p")  # ESC [ ? 1 $ p
 
     # Should respond with mode reset (2)
     assert transport.data[-1] == "\033[?1;2$y"
 
-    terminal.board.modes.cursor_application_mode = True
+    terminal.modes.cursor_application_mode = True
     parser.feed("\x1b[?1$p")  # ESC [ ? 1 $ p
 
     # Should respond with mode set (1)
@@ -99,13 +99,13 @@ def test_decrqm_private_mode_query_autowrap():
     terminal, parser, transport = terminal_with_transport()
 
     # Test with autowrap enabled (default)
-    terminal.board.modes.auto_wrap = True
+    terminal.modes.auto_wrap = True
     parser.feed("\x1b[?7$p")  # ESC [ ? 7 $ p
 
     # Should respond with mode set (1)
     assert transport.data[-1] == "\033[?7;1$y"
 
-    terminal.board.modes.auto_wrap = False
+    terminal.modes.auto_wrap = False
     parser.feed("\x1b[?7$p")  # ESC [ ? 7 $ p
 
     # Should respond with mode reset (2)
@@ -118,13 +118,13 @@ def test_decrqm_private_mode_query_cursor_visibility():
     terminal, parser, transport = terminal_with_transport()
 
     # Test with cursor visible (default)
-    terminal.board.modes.cursor_visible = True
+    terminal.modes.cursor_visible = True
     parser.feed("\x1b[?25$p")  # ESC [ ? 25 $ p
 
     # Should respond with mode set (1)
     assert transport.data[-1] == "\033[?25;1$y"
 
-    terminal.board.modes.cursor_visible = False
+    terminal.modes.cursor_visible = False
     parser.feed("\x1b[?25$p")  # ESC [ ? 25 $ p
 
     # Should respond with mode reset (2)
@@ -137,13 +137,13 @@ def test_decrqm_private_mode_query_alternate_screen():
     terminal, parser, transport = terminal_with_transport()
 
     # Test with primary screen (default)
-    terminal.board.blitter.in_alt_screen = False
+    terminal.blitter.in_alt_screen = False
     parser.feed("\x1b[?1049$p")  # ESC [ ? 1049 $ p
 
     # Should respond with mode reset (2)
     assert transport.data[-1] == "\033[?1049;2$y"
 
-    terminal.board.blitter.in_alt_screen = True
+    terminal.blitter.in_alt_screen = True
     parser.feed("\x1b[?1049$p")  # ESC [ ? 1049 $ p
 
     # Should respond with mode set (1)
@@ -165,13 +165,13 @@ def test_decrqm_ansi_mode_query_insert_mode():
     terminal, parser, transport = terminal_with_transport()
 
     # Test with replace mode (default)
-    terminal.board.modes.insert_mode = False
+    terminal.modes.insert_mode = False
     parser.feed("\x1b[4$p")  # ESC [ 4 $ p
 
     # Should respond with mode reset (2) - no ? prefix for ANSI modes
     assert transport.data[-1] == "\033[4;2$y"
 
-    terminal.board.modes.insert_mode = True
+    terminal.modes.insert_mode = True
     parser.feed("\x1b[4$p")  # ESC [ 4 $ p
 
     # Should respond with mode set (1)
@@ -201,8 +201,8 @@ def test_multiple_device_queries():
     terminal, parser, transport = terminal_with_transport()
 
     # Move cursor to a specific position
-    terminal.board.cursor.x = 15
-    terminal.board.cursor.y = 10
+    terminal.cursor.x = 15
+    terminal.cursor.y = 10
 
     # Send multiple queries
     parser.feed("\x1b[6n")  # Cursor Position Report

@@ -3,7 +3,7 @@ def test_printable_characters(parser, terminal):
     parser.feed("Hello, World!")
 
     # Check that the text appears in the terminal buffer
-    line_text = terminal.board.blitter.current_buffer.get_line_text(0)
+    line_text = terminal.blitter.current_buffer.get_line_text(0)
     assert "Hello, World!" in line_text
 
 
@@ -12,5 +12,5 @@ def test_empty_feed(parser, terminal):
     parser.feed("")
 
     # Buffer should remain empty
-    line_text = terminal.board.blitter.current_buffer.get_line_text(0)
+    line_text = terminal.blitter.current_buffer.get_line_text(0)
     assert line_text.strip() == ""

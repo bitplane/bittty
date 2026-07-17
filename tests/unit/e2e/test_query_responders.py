@@ -18,8 +18,8 @@ class RecordingTransport:
 def _term(width=10, height=3):
     terminal = Board(width=width, height=height)
     transport = RecordingTransport()
-    terminal.board.host.attach(transport)
-    return terminal, Parser(terminal.board), transport
+    terminal.host.attach(transport)
+    return terminal, Parser(terminal), transport
 
 
 def _reply(transport):

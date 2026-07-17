@@ -34,7 +34,7 @@ def test_on_mouse_mode_mirrors_onto_the_host(capsys):
 
 def test_mouse_mode_flows_from_the_parser_through_the_seam(capsys):
     display = StdioTerminal()
-    parser = Parser(display.board.board)
+    parser = Parser(display.board)
     parser.feed("\x1b[?1000h")  # child turns on mouse tracking
     # the modes device emits MouseModeChanged -> on_mouse_mode -> host enable printed
     assert "\033[?1000h\033[?1006h" in capsys.readouterr().out
