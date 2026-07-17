@@ -7,7 +7,6 @@ the display port; the child program is wired to the host port via a PTY.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import subprocess
 import sys
@@ -77,7 +76,6 @@ class Board:
         self.stdout = stdout
         self._pty: Optional[Any] = None
         self.process: Optional[subprocess.Popen] = None
-        self._pty_reader_task: Optional[asyncio.Task] = None
         self._pty_data_callback: Optional[Callable[[str], None]] = None
 
         self.model = model or DEFAULT
@@ -112,8 +110,8 @@ class Board:
         self.answerback: str = ""  # ENQ reply string; a frontend/config sets it
         self.warning_bell_volume: int = 8  # DECSWBV (0-8)
         self.margin_bell_volume: int = 0  # DECSMBV (0-8)
-        self.host = HostPort()  # board -> child (replies, encoded input)
-        self.display = DisplayPort()  # board -> frontend (present events)
+        self.host = HostPort()  # duplex jack toward the child (PTY plugs in)
+        self.display = DisplayPort(self)  # duplex jack toward the terminal (chrome)
         self.caps = TerminalCaps.unknown()  # what the real terminal can do (frontend pushes)
 
         self.charset = CharsetDevice(self)
@@ -328,12 +326,20 @@ class Board:
             self.host.attach(value)
 
     def set_pty_data_callback(self, callback: Callable[[str], None]) -> None:
-        """Set callback for handling PTY data asynchronously."""
+        """Swap the host port's receive sink (a terminal uses this to add render throttling)."""
         self._pty_data_callback = callback
 
-    def _process_pty_data_sync(self, data: str) -> None:
-        """Process PTY data synchronously (fallback)."""
-        self.parser.feed(data)
+    def _dispatch_pty_data(self, data: str) -> None:
+        """The host port's receive sink: the callback if set, else straight into the parser."""
+        (self._pty_data_callback or self.parser.feed)(data)
+
+    def _pty_idle(self) -> bool:
+        """Nothing to read this wakeup: reap the child if it has exited."""
+        if self.process and self.process.poll() is not None:
+            logger.info("Process has exited, stopping terminal")
+            self.stop_process()
+            return True
+        return False
 
     async def start_process(self) -> None:
         """Start the child process with PTY."""
@@ -348,8 +354,13 @@ class Board:
             self.process = self.pty.spawn_process(self.command)
             logger.info(f"Spawned process: pid={self.process.pid}")
 
-            # Start async PTY reader task
-            self._pty_reader_task = asyncio.create_task(self._async_read_from_pty())
+            # The host port pumps the PTY's receive side from here on
+            self.host.connect(
+                self.pty,
+                self._dispatch_pty_data,
+                on_idle=self._pty_idle,
+                on_closed=self.stop_process,
+            )
 
         except Exception:
             logger.exception("Failed to start terminal process")
@@ -360,10 +371,7 @@ class Board:
         if self.pty is None and self.process is None:
             return
 
-        # Cancel PTY reader task
-        if self._pty_reader_task and not self._pty_reader_task.done():
-            self._pty_reader_task.cancel()
-            self._pty_reader_task = None
+        self.host.disconnect()
 
         # Close PTY - let it handle platform-specific process cleanup
         if self.pty is not None:
@@ -372,42 +380,3 @@ class Board:
             self.pty = None
 
         self.process = None
-
-    async def _async_read_from_pty(self) -> None:
-        """Async task to read PTY data and dispatch to callback or process directly."""
-
-        while self.pty is not None and not self.pty.closed:
-            try:
-                # Use the PTY's async read method (a big buffer so a flooding
-                # child drains in few wakeups instead of blocking on the PTY)
-                data = await self.pty.read_async(65536)
-
-                if not data:
-                    # No data available, check if process has exited
-                    if self.process and self.process.poll() is not None:
-                        logger.info("Process has exited, stopping terminal")
-                        self.stop_process()
-                        break
-                    await asyncio.sleep(0.01)
-                    continue
-
-                # Use callback if set, otherwise process directly
-                if self._pty_data_callback:
-                    self._pty_data_callback(data)
-                else:
-                    self._process_pty_data_sync(data)
-
-                # Yield control to other async operations (like resize)
-                await asyncio.sleep(0)
-
-            except asyncio.CancelledError:
-                # Task was cancelled, exit cleanly
-                break
-            except OSError as e:
-                logger.info(f"PTY read error: {e}")
-                self.stop_process()
-                break
-            except Exception:
-                logger.exception("Error reading from terminal")
-                self.stop_process()
-                break

@@ -5,6 +5,7 @@ from bittty.terminals.stdio import StdioTerminal
 
 class FakeBoard:
     def __init__(self):
+        self.display = self  # stands in for both the board and its display port
         self.mouse_events = []
         self.keyboard_input = []
 

@@ -199,15 +199,15 @@ class StdioTerminal(Terminal):
             event_type = "move"
             base_button &= ~32
 
-        self.board.input_mouse(x, y, base_button, event_type, modifiers)
+        self.board.display.input_mouse(x, y, base_button, event_type, modifiers)
         return True
 
     def handle_focus(self, focused: bool) -> None:
         """A host focus event: the backend owns the state; we just repaint."""
         if focused:
-            self.board.focus_in()
+            self.board.display.focus_in()
         else:
-            self.board.focus_out()
+            self.board.display.focus_out()
         self.dirty = True
 
     def handle_input(self, data: str) -> None:
@@ -221,7 +221,7 @@ class StdioTerminal(Terminal):
         while index < len(stream):
             if stream.startswith("\033[I", index) or stream.startswith("\033[O", index):
                 if plain_input:
-                    self.board.input("".join(plain_input))
+                    self.board.display.input("".join(plain_input))
                     plain_input = []
                 self.handle_focus(stream[index + 2] == "I")
                 index += 3
@@ -229,7 +229,7 @@ class StdioTerminal(Terminal):
 
             if stream.startswith(mouse_prefix, index):
                 if plain_input:
-                    self.board.input("".join(plain_input))
+                    self.board.display.input("".join(plain_input))
                     plain_input = []
                 end = index + len(mouse_prefix)
                 while end < len(stream) and stream[end] not in "Mm":
@@ -239,7 +239,7 @@ class StdioTerminal(Terminal):
                     return
                 sequence = stream[index : end + 1]
                 if not self.handle_sgr_mouse_sequence(sequence):
-                    self.board.input(sequence)
+                    self.board.display.input(sequence)
                 index = end + 1
                 continue
 
@@ -252,7 +252,7 @@ class StdioTerminal(Terminal):
             index += 1
 
         if plain_input:
-            self.board.input("".join(plain_input))
+            self.board.display.input("".join(plain_input))
 
     def flush_pending_input(self) -> None:
         """Release a held partial prefix that never became a mouse report.
@@ -263,7 +263,7 @@ class StdioTerminal(Terminal):
         """
         if self.input_sequence_buffer:
             pending, self.input_sequence_buffer = self.input_sequence_buffer, ""
-            self.board.input(pending)
+            self.board.display.input(pending)
 
     def handle_resize(self) -> None:
         """Re-read the host size and resize the emulator (called from a SIGWINCH handler)."""

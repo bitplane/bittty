@@ -56,7 +56,7 @@ class Terminal:
 
     def set_caps(self, caps: TerminalCaps) -> None:
         """Push the real terminal's capabilities down to the board."""
-        self.board.set_caps(caps)
+        self.board.display.set_caps(caps)
 
     # --- present dispatch --- #
 
