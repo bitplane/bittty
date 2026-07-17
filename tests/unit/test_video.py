@@ -418,3 +418,33 @@ def test_get_line_tuple_final_reset():
     # Should always end with final reset
     assert isinstance(result, tuple)
     assert "final_reset" in result
+
+
+def test_write_stamps_only_its_row():
+    buffer = Video(width=10, height=3)
+    seen = buffer.observe()
+    buffer.set(0, 1, "hi")
+    assert buffer.dirty_rows(seen) == [1]
+    assert buffer.dirty_rows(buffer.observe()) == []
+
+
+def test_full_height_scroll_dirties_the_page():
+    buffer = Video(width=10, height=3)
+    seen = buffer.observe()
+    buffer.scroll_region_up(0, 2, 1)
+    assert buffer.page_gen >= seen
+    assert buffer.dirty_rows(seen) == [0, 1, 2]
+
+
+def test_region_scroll_dirties_only_the_region():
+    buffer = Video(width=10, height=4)
+    seen = buffer.observe()
+    buffer.scroll_region_up(1, 2, 1)
+    assert buffer.dirty_rows(seen) == [1, 2]
+
+
+def test_resize_dirties_everything():
+    buffer = Video(width=10, height=3)
+    seen = buffer.observe()
+    buffer.resize(8, 4)
+    assert buffer.dirty_rows(seen) == [0, 1, 2, 3]

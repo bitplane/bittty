@@ -144,3 +144,28 @@ def test_handle_resize_tracks_the_outer_terminal():
     display.board.resize(5, 5)  # knock the board out of sync
     display.handle_resize()
     assert (display.board.width, display.board.height) == (display.width, display.height)
+
+
+def test_render_repaints_only_dirty_rows():
+    """Generation tracking: unchanged rows are not repainted."""
+    display = StdioTerminal()
+    display.board.parser.feed("hello\r\nworld")
+
+    import io
+    from contextlib import redirect_stdout
+
+    def render():
+        out = io.StringIO()
+        with redirect_stdout(out):
+            display.render_screen()
+        return out.getvalue()
+
+    first = render()  # first paint: everything
+    assert "\033[1H" in first and "\033[2H" in first
+
+    quiet = render()  # nothing changed: no rows repainted
+    assert "\033[1H" not in quiet and "\033[2H" not in quiet
+
+    display.board.parser.feed("\033[2;1HWORLD")  # touches row 1 only
+    out = render()
+    assert "\033[2H" in out and "\033[1H" not in out

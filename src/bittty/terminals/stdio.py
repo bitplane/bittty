@@ -64,6 +64,8 @@ class StdioTerminal(Terminal):
         self.host_mouse_mode: str | None = None
         self.input_sequence_buffer = ""
         self.dirty = False  # PTY data arrived; the run loop repaints on its tick
+        self._seen_page = None  # video page rendered last frame
+        self._seen_gen = -1  # its generation when we rendered it
 
     def get_default_shell(self) -> str:
         """Get the default shell command for the current platform."""
@@ -157,10 +159,18 @@ class StdioTerminal(Terminal):
         child wants it visible (DECTCEM). The host hollows it on unfocus by
         itself, exactly like a real terminal.
         """
-        print("\033[?25l\033[H", end="")
-        for i, line in enumerate(self.board.capture_pane().split("\n")):
-            if i < self.height:
-                print(f"\033[{i + 1}H{line}\033[K", end="")
+        page = self.board.blitter.current_buffer
+        if page is self._seen_page:
+            rows = page.dirty_rows(self._seen_gen)
+        else:
+            rows = range(page.height)  # new page (startup or alt-screen flip): paint everything
+        self._seen_page = page
+        self._seen_gen = page.observe()
+
+        print("\033[?25l", end="")
+        for y in rows:
+            if y < self.height:
+                print(f"\033[{y + 1}H{page.get_line(y, width=self.width)}\033[K", end="")
         status = f"bittty demo | {self.width}x{self.height} | exit normally to quit"
         print(f"\033[{self.height + 1}H\033[7m{status:<{self.width}}\033[0m", end="")
         board = self.board

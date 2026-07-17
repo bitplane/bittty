@@ -45,6 +45,48 @@ class Video:
         # Per-line DECDHL/DECDWL/DECSWL attribute, kept parallel to grid rows.
         self.line_attributes: List[str] = [constants.LINE_SINGLE] * height
 
+        # Dirty tracking: readers own the clock. Writes stamp the CURRENT
+        # epoch (one store — no increment on the hot path); a renderer calls
+        # observe() to open a new epoch after it snapshots. Targeted writes
+        # stamp their row in row_gen; whole-page upheavals (full scroll,
+        # resize) stamp page_gen instead of touching every row.
+        self.generation = 1
+        self.page_gen = 0
+        self.row_gen: List[int] = [0] * height
+
+    def _touch_row(self, y: int) -> None:
+        """Stamp a row as changed in the current epoch."""
+        self.row_gen[y] = self.generation
+
+    def _touch_page(self) -> None:
+        """Stamp the whole page as changed in the current epoch."""
+        self.page_gen = self.generation
+
+    def _touch_scrolled(self, top: int, bottom: int) -> None:
+        """Stamp a scrolled region: whole page for a full-height scroll (the hot
+        path — one store instead of a stamp per row), per-row otherwise."""
+        if top == 0 and bottom == self.height - 1:
+            self.page_gen = self.generation
+            return
+        g = self.generation
+        for y in range(top, bottom + 1):
+            self.row_gen[y] = g
+
+    def observe(self) -> int:
+        """Snapshot for dirty tracking: close the current epoch, open a new one.
+
+        Returns the new epoch; rows stamped at or after it are dirty relative
+        to this observation. Each reader keeps its own returned value.
+        """
+        self.generation += 1
+        return self.generation
+
+    def dirty_rows(self, seen: int) -> List[int]:
+        """Rows changed since `seen` (a value returned by observe())."""
+        if self.page_gen >= seen:
+            return list(range(self.height))
+        return [y for y, g in enumerate(self.row_gen) if g >= seen]
+
     def _create_empty_row(self) -> List[Cell]:
         """Create a row filled with the shared empty cell (list-multiply, no per-cell build)."""
         return [self._empty_cell] * self.width
@@ -53,6 +95,7 @@ class Video:
         """Set a line's DECDHL/DECDWL/DECSWL attribute."""
         if 0 <= y < self.height:
             self.line_attributes[y] = attribute
+            self._touch_row(y)
 
     def get_line_attribute(self, y: int) -> str:
         """Return a line's width/height attribute (single by default)."""
@@ -63,6 +106,7 @@ class Video:
     def reset_line_attributes(self) -> None:
         """Return every line to single-width, single-height (RIS)."""
         self.line_attributes = [constants.LINE_SINGLE] * self.height
+        self._touch_page()
 
     def get_content(self) -> List[List[Cell]]:
         """Get buffer content as a 2D grid."""
@@ -84,6 +128,7 @@ class Video:
         """
         if 0 <= y < self.height and 0 <= x < self.width:
             self.grid[y][x] = (_coerce_style(style_or_ansi), char)
+            self._touch_row(y)
 
     def set(self, x: int, y: int, text: str, style_or_ansi=None) -> None:
         """Set text at position, overwriting existing content."""
@@ -95,6 +140,7 @@ class Video:
         end = min(x + len(text), self.width)
         if end <= x:
             return
+        self.row_gen[y] = self.generation
         if end - x == 1:  # single cell (the common case for TUI repaints)
             self.grid[y][x] = (style, text[0])
             return
@@ -127,6 +173,7 @@ class Video:
             row.extend(new_cells)
             # Truncate to width
             self.grid[y] = row[: self.width]
+        self._touch_row(y)
 
     def delete(self, x: int, y: int, count: int = 1) -> None:
         """Delete characters at position."""
@@ -143,6 +190,7 @@ class Video:
             while len(new_row) < self.width:
                 new_row.append((Style(), " "))
             self.grid[y] = new_row
+            self._touch_row(y)
 
     def clear_region(self, x1: int, y1: int, x2: int, y2: int, style_or_ansi=None) -> None:
         """Clear a rectangular region."""
@@ -152,8 +200,10 @@ class Video:
         if right <= left:
             return
         blanks = [(style, " ")] * (right - left)
+        g = self.generation
         for y in range(max(0, y1), min(self.height, y2 + 1)):
             self.grid[y][left:right] = blanks
+            self.row_gen[y] = g
 
     def clear_line(
         self, y: int, mode: int = constants.ERASE_FROM_CURSOR_TO_END, cursor_x: int = 0, style_or_ansi=None
@@ -164,6 +214,7 @@ class Video:
 
         style = _coerce_style(style_or_ansi)
 
+        self._touch_row(y)
         if mode == constants.ERASE_FROM_CURSOR_TO_END:
             # Clear from cursor to end of line
             if cursor_x < self.width:
@@ -193,6 +244,7 @@ class Video:
 
         del self.line_attributes[:count]
         self.line_attributes.extend([constants.LINE_SINGLE] * count)
+        self._touch_page()
 
     def scroll_down(self, count: int) -> None:
         """Scroll content down, removing bottom lines and adding blank lines at top."""
@@ -208,6 +260,7 @@ class Video:
 
         del self.line_attributes[-count:]
         self.line_attributes[:0] = [constants.LINE_SINGLE] * count
+        self._touch_page()
 
     def scroll_region_up(self, top: int, bottom: int, count: int) -> None:
         """Scroll a specific region up by count lines. BLAZING FAST bulk operation!"""
@@ -227,6 +280,8 @@ class Video:
             self.grid[i] = self._create_empty_row()
             self.line_attributes[i] = constants.LINE_SINGLE
 
+        self._touch_scrolled(top, bottom)
+
     def scroll_region_down(self, top: int, bottom: int, count: int) -> None:
         """Scroll a specific region down by count lines. BLAZING FAST bulk operation!"""
         if count <= 0 or top > bottom or bottom >= self.height:
@@ -244,6 +299,8 @@ class Video:
         for i in range(top, top + count):
             self.grid[i] = self._create_empty_row()
             self.line_attributes[i] = constants.LINE_SINGLE
+
+        self._touch_scrolled(top, bottom)
 
     def resize(self, width: int, height: int) -> None:
         """Resize buffer to new dimensions."""
@@ -271,6 +328,10 @@ class Video:
         # Update dimensions
         self.width = width
         self.height = height
+
+        # Every row is suspect after a reshape.
+        self.row_gen = [0] * height
+        self._touch_page()
 
     def get_line_text(self, y: int) -> str:
         """Get plain text content of a line (for debugging/testing)."""
