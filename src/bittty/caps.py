@@ -1,4 +1,4 @@
-"""DisplayCaps: physical facts about the real display, pushed *up* by a frontend.
+"""TerminalCaps: physical facts about the real terminal, pushed *up* by the chrome.
 
 The backend answers the child's physical-fact queries (window/cell pixel size,
 background colour) from these when a frontend has supplied them. Every field
@@ -16,8 +16,8 @@ from typing import Optional
 
 
 @dataclass(frozen=True)
-class DisplayCaps:
-    """What the real display can actually do (frontend -> backend)."""
+class TerminalCaps:
+    """What the real terminal can actually do (terminal -> board)."""
 
     color_depth: str = "unknown"  # "monochrome" / "16" / "256" / "truecolor" / "unknown"
     cell_px: Optional[tuple[int, int]] = None  # character cell size in pixels (CSI 16 t)
@@ -25,6 +25,6 @@ class DisplayCaps:
     background: Optional[tuple[int, int, int]] = None  # actual background colour (OSC 11)
 
     @classmethod
-    def unknown(cls) -> "DisplayCaps":
+    def unknown(cls) -> "TerminalCaps":
         """Caps that assert nothing — the backend keeps its current behaviour."""
         return cls()

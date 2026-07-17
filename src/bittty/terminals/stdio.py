@@ -18,7 +18,7 @@ import sys
 
 from ..devices.board import Board
 from .base import Terminal
-from .probe import probe_display_caps
+from .probe import probe_caps
 
 try:
     import termios
@@ -135,7 +135,7 @@ class StdioTerminal(Terminal):
     # --- rendering --- #
 
     def probe_capabilities(self) -> None:
-        """Ask the outer terminal what it can do and push DisplayCaps to the backend."""
+        """Ask the outer terminal what it can do and push TerminalCaps to the backend."""
 
         def write(data: str) -> None:
             sys.stdout.write(data)
@@ -145,7 +145,7 @@ class StdioTerminal(Terminal):
             fd = sys.stdin.fileno()
         except (OSError, ValueError):
             fd = None
-        caps = probe_display_caps(fd, write, os.environ)
+        caps = probe_caps(fd, write, os.environ)
         self.set_caps(caps)
         logger.info("Display caps: %s", caps)
 

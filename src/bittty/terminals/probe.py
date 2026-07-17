@@ -1,12 +1,12 @@
 """Capability probing for the passthrough client.
 
-Ask the real outer terminal what it can do, then hand a DisplayCaps up to the
+Ask the real outer terminal what it can do, then hand a TerminalCaps up to the
 backend. Uses a DA1-terminated handshake: fire all the queries plus a Primary DA
 request, then read until the (universally answered) DA reply arrives, so optional
 queries that go unanswered never make us hang. Non-tty or timeout ⇒ env/config
 caps only.
 
-Nothing here reads capabilities the backend then trusts blindly — DisplayCaps is
+Nothing here reads capabilities the backend then trusts blindly — TerminalCaps is
 purely physical facts (colour depth, pixel geometry, background). Graphics-mode
 reconciliation is deferred with the graphics families.
 """
@@ -18,7 +18,7 @@ import re
 import select
 import time
 
-from ..caps import DisplayCaps
+from ..caps import TerminalCaps
 
 # Response patterns:
 #   OSC 11 ; rgb:RRRR/GGGG/BBBB   (background colour)
@@ -51,8 +51,8 @@ def _high_byte(hex_channel: str) -> int:
     return int(hex_channel[:2].ljust(2, "0"), 16)
 
 
-def parse_probe_replies(buf: str, env) -> DisplayCaps:
-    """Build DisplayCaps from a probe-reply buffer, unioned with env (probe wins)."""
+def parse_probe_replies(buf: str, env) -> TerminalCaps:
+    """Build TerminalCaps from a probe-reply buffer, unioned with env (probe wins)."""
     background = None
     if (m := _BG.search(buf)) is not None:
         background = (_high_byte(m.group(1)), _high_byte(m.group(2)), _high_byte(m.group(3)))
@@ -62,7 +62,7 @@ def parse_probe_replies(buf: str, env) -> DisplayCaps:
     window_px = None
     if (m := _WINDOW.search(buf)) is not None:
         window_px = (int(m.group(2)), int(m.group(1)))
-    return DisplayCaps(
+    return TerminalCaps(
         color_depth=color_depth_from_env(env),
         cell_px=cell_px,
         window_px=window_px,
@@ -70,8 +70,8 @@ def parse_probe_replies(buf: str, env) -> DisplayCaps:
     )
 
 
-def probe_display_caps(stdin_fd, write, env=None, timeout: float = 0.5) -> DisplayCaps:
-    """Query the real terminal and return DisplayCaps; env-only on a non-tty/timeout.
+def probe_caps(stdin_fd, write, env=None, timeout: float = 0.5) -> TerminalCaps:
+    """Query the real terminal and return TerminalCaps; env-only on a non-tty/timeout.
 
     `write` is a callable that writes a str to the outer terminal (and flushes).
     """

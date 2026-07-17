@@ -1,7 +1,7 @@
 """The Terminal abstract base: the chrome a human looks at.
 
 A concrete terminal *is-a* Terminal and *has-a* Board (composition). It plugs
-itself into the board's display port, pushes DisplayCaps up, and receives
+itself into the board's display port, pushes TerminalCaps up, and receives
 discrete side-effects through present(), which dispatches each PresentEvent to
 a typed hook. Every hook defaults to a no-op, so adding a new event type can
 never break an existing terminal — it just grows the surface with another
@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..caps import DisplayCaps
+from ..caps import TerminalCaps
 from ..present import (
     Bell,
     ClipboardChanged,
@@ -54,9 +54,9 @@ class Terminal:
         """Unplug from the board's display port."""
         self.board.detach_display()
 
-    def set_caps(self, caps: DisplayCaps) -> None:
+    def set_caps(self, caps: TerminalCaps) -> None:
         """Push the real terminal's capabilities down to the board."""
-        self.board.set_display_caps(caps)
+        self.board.set_caps(caps)
 
     # --- present dispatch --- #
 

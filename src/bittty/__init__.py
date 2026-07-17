@@ -15,8 +15,8 @@ from .video import Video
 from .parser import Parser
 from .model import Model, XTERM, VT100, VT220, LINUX
 from .operations import Operation, OperationSink
-from .transports import DisplayPort, HostPort, Presentable, WritableTransport
-from .caps import DisplayCaps
+from .connections import Connection, DisplayPort, HostPort, Presentable
+from .caps import TerminalCaps
 from .style import (
     CURSOR_CODE,
     RESET_CODE,
@@ -33,6 +33,7 @@ except PackageNotFoundError:
 TerminalBoard = Board
 Buffer = Video
 Personality = Model
+WritableTransport = Connection
 
 __all__ = [
     "Board",
@@ -44,7 +45,7 @@ __all__ = [
     "HostPort",
     "DisplayPort",
     "Presentable",
-    "DisplayCaps",
+    "TerminalCaps",
     "TerminalBoard",
     "Model",
     "Personality",
@@ -52,6 +53,7 @@ __all__ = [
     "VT100",
     "VT220",
     "LINUX",
+    "Connection",
     "WritableTransport",
     "CURSOR_CODE",
     "RESET_CODE",

@@ -1,7 +1,7 @@
 from bittty import HostPort
 
 
-class RecordingTransport:
+class RecordingConnection:
     def __init__(self):
         self.data = []
         self.flush_count = 0
@@ -14,31 +14,31 @@ class RecordingTransport:
         self.flush_count += 1
 
 
-def test_host_port_ignores_writes_until_transport_is_attached():
+def test_host_port_ignores_writes_until_connection_is_attached():
     port = HostPort()
 
     assert port.connected is False
     assert port.write("abc") is None
 
 
-def test_host_port_writes_and_flushes_attached_transport():
-    transport = RecordingTransport()
-    port = HostPort(transport)
+def test_host_port_writes_and_flushes_attached_connection():
+    connection = RecordingConnection()
+    port = HostPort(connection)
 
     result = port.write("abc", flush=True)
 
     assert result == 3
     assert port.connected is True
-    assert transport.data == ["abc"]
-    assert transport.flush_count == 1
+    assert connection.data == ["abc"]
+    assert connection.flush_count == 1
 
 
-def test_host_port_can_detach_transport():
-    transport = RecordingTransport()
-    port = HostPort(transport)
+def test_host_port_can_detach_connection():
+    connection = RecordingConnection()
+    port = HostPort(connection)
 
     port.detach()
     port.write("abc", flush=True)
 
     assert port.connected is False
-    assert transport.data == []
+    assert connection.data == []

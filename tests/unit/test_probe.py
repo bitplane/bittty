@@ -1,7 +1,7 @@
 """Phase 4: capability probing — parsing and env fallback (tty-free)."""
 
-from bittty.caps import DisplayCaps
-from bittty.terminals.probe import color_depth_from_env, parse_probe_replies, probe_display_caps
+from bittty.caps import TerminalCaps
+from bittty.terminals.probe import color_depth_from_env, parse_probe_replies, probe_caps
 
 
 def test_color_depth_from_env():
@@ -25,13 +25,13 @@ def test_parse_probe_replies_full():
 
 def test_parse_probe_replies_empty_is_env_only():
     caps = parse_probe_replies("", {"TERM": "xterm-256color"})
-    assert caps == DisplayCaps(color_depth="256")  # depth from env, geometry unknown
+    assert caps == TerminalCaps(color_depth="256")  # depth from env, geometry unknown
 
 
 def test_probe_non_tty_returns_env_caps():
     # fd None -> never touches stdin, never blocks; env-derived depth only
     written = []
-    caps = probe_display_caps(None, written.append, {"COLORTERM": "truecolor"})
+    caps = probe_caps(None, written.append, {"COLORTERM": "truecolor"})
     assert caps.color_depth == "truecolor"
     assert caps.cell_px is None and caps.background is None
     assert written == []  # no query emitted on a non-tty

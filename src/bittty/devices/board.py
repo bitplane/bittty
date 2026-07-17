@@ -14,12 +14,12 @@ import sys
 from typing import Any, Callable, Optional
 
 from .. import constants
-from ..caps import DisplayCaps
+from ..caps import TerminalCaps
 from ..operations import Operation
 from ..parser import Parser
 from ..model import DEFAULT, Model
 from ..present import Bell, PresentEvent
-from ..transports import DisplayPort, HostPort
+from ..connections import DisplayPort, HostPort
 from .charset import CharsetDevice
 from .control import ControlDevice
 from .cursor import CursorDevice
@@ -114,7 +114,7 @@ class Board:
         self.margin_bell_volume: int = 0  # DECSMBV (0-8)
         self.host = HostPort()  # board -> child (replies, encoded input)
         self.display = DisplayPort()  # board -> frontend (present events)
-        self.display_caps = DisplayCaps.unknown()  # what the real terminal can do (frontend pushes)
+        self.caps = TerminalCaps.unknown()  # what the real terminal can do (frontend pushes)
 
         self.charset = CharsetDevice(self)
         self.cursor = CursorDevice(self)
@@ -201,9 +201,9 @@ class Board:
         """Push a discrete side-effect to the attached frontend (no-op if none)."""
         self.display.present(event)
 
-    def set_display_caps(self, caps: DisplayCaps) -> None:
+    def set_caps(self, caps: TerminalCaps) -> None:
         """Record what the real terminal can do (a frontend pushes this after probing)."""
-        self.display_caps = caps
+        self.caps = caps
 
     def set_focus(self, focused: bool) -> None:
         """Record the box's focus state and report it to the child (DECSET 1004)."""

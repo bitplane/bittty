@@ -1,9 +1,9 @@
 """The display seam: DisplayPort forwarding, the Terminal ABC, caps push."""
 
-from bittty import Board, DisplayCaps
+from bittty import Board, TerminalCaps
 from bittty.terminals import Terminal
 from bittty.present import Bell, MouseModeChanged, Notification, TitleChanged
-from bittty.transports import DisplayPort
+from bittty.connections import DisplayPort
 
 
 class RecordingTerminal(Terminal):
@@ -79,13 +79,13 @@ def test_present_with_no_frontend_is_noop():
     assert terminal.board.display.connected is False
 
 
-def test_display_caps_default_and_push():
+def test_caps_default_and_push():
     terminal = _term()
-    assert terminal.board.display_caps == DisplayCaps.unknown()
+    assert terminal.board.caps == TerminalCaps.unknown()
     display = RecordingTerminal(terminal)
-    caps = DisplayCaps(color_depth="256", cell_px=(8, 16))
+    caps = TerminalCaps(color_depth="256", cell_px=(8, 16))
     display.set_caps(caps)
-    assert terminal.board.display_caps is caps
+    assert terminal.board.caps is caps
 
 
 def test_mouse_mode_event_dispatch():

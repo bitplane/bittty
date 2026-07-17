@@ -28,7 +28,7 @@ def test_keyboard_device_encodes_keys_and_application_cursor_mode():
     terminal.board.keyboard.input_key("a", constants.KEY_MOD_CTRL)
 
     assert terminal.pty.data == ["\x1b[A", "\x1bOB", "\x01"]
-    assert terminal.board.host.transport is terminal.pty
+    assert terminal.board.host.connection is terminal.pty
 
 
 def test_keyboard_device_encodes_function_and_numpad_keys():

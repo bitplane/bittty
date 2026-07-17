@@ -1,4 +1,4 @@
-"""Transport ports for terminal host I/O."""
+"""Connections and the board-side ports they plug into."""
 
 from __future__ import annotations
 
@@ -9,8 +9,8 @@ if TYPE_CHECKING:
 
 
 @runtime_checkable
-class WritableTransport(Protocol):
-    """Transport that accepts terminal input/reply data."""
+class Connection(Protocol):
+    """A cable implementation (PTY, pipe, socket) that accepts terminal input/reply data."""
 
     def write(self, data: str):
         """Write data to the connected host."""
@@ -25,40 +25,42 @@ class Presentable(Protocol):
 
 
 class HostPort:
-    """Cable between terminal devices and an attached host transport."""
+    """The board's jack toward the child program; a Connection (PTY, pipe) plugs in."""
 
-    def __init__(self, transport: WritableTransport | None = None) -> None:
-        self.transport = transport
+    def __init__(self, connection: Connection | None = None) -> None:
+        self.connection = connection
 
-    def attach(self, transport: WritableTransport) -> None:
-        """Attach a transport to this host port."""
-        self.transport = transport
+    def attach(self, connection: Connection) -> None:
+        """Attach a connection to this host port."""
+        self.connection = connection
 
     def detach(self) -> None:
-        """Detach the current transport."""
-        self.transport = None
+        """Detach the current connection."""
+        self.connection = None
 
     @property
     def connected(self) -> bool:
-        """Whether a transport is attached."""
-        return self.transport is not None
+        """Whether a connection is attached."""
+        return self.connection is not None
 
     def write(self, data: str, flush: bool = False):
-        """Write data to the attached transport."""
-        if self.transport is None:
+        """Write data to the attached connection."""
+        if self.connection is None:
             return None
 
-        result = self.transport.write(data)
-        if flush and hasattr(self.transport, "flush"):
-            self.transport.flush()
+        result = self.connection.write(data)
+        if flush and hasattr(self.connection, "flush"):
+            self.connection.flush()
         return result
 
 
 class DisplayPort:
-    """Cable between the board and an attached frontend (mirrors HostPort).
+    """The board's jack toward the terminal (chrome); mirrors HostPort.
 
-    The board pushes discrete present events here; when no frontend is attached
-    present() is a no-op, so the backend runs headless exactly as before.
+    The name is the video-connector pun, kept on purpose: the one place
+    "display" survives in board vocabulary. The board pushes discrete present
+    events here; when no terminal is attached present() is a no-op, so the
+    board runs headless exactly as before.
     """
 
     def __init__(self, frontend: Presentable | None = None) -> None:
