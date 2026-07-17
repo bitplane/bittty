@@ -18,6 +18,7 @@ import signal
 import sys
 
 from ..devices.board import Board
+from ..parser import Parser
 from .base import Terminal
 from .probe import probe_caps
 
@@ -47,6 +48,35 @@ _HOST_MOUSE_ENABLE = {
 }
 
 
+class HostInputSink:
+    """Sink for the input-direction parser: host bytes in, board events out.
+
+    Every operation carries its raw bytes, so anything we don't intercept is
+    forwarded to the child verbatim and in order — arrow keys, control chars,
+    pastes, whole unknown sequences. Interception is by raw prefix, not
+    operation name: on the input direction CSI I is a focus report, never CHT.
+    """
+
+    def __init__(self, terminal: "StdioTerminal") -> None:
+        self.terminal = terminal
+
+    def handle_operation(self, op) -> None:
+        raw = op.raw
+        if raw is None:
+            logger.warning("Host input operation without raw bytes dropped: %s", op)
+            return
+        terminal = self.terminal
+        if raw.startswith("\033[<") and terminal.handle_sgr_mouse_sequence(raw):
+            return
+        if raw == "\033[I":
+            terminal.handle_focus(True)
+            return
+        if raw == "\033[O":
+            terminal.handle_focus(False)
+            return
+        terminal.board.display.input(raw)
+
+
 class StdioTerminal(Terminal):
     """Render a bittty Board to the real terminal this program is running in."""
 
@@ -62,7 +92,7 @@ class StdioTerminal(Terminal):
         self.running = True
         self.old_termios = None
         self.host_mouse_mode: str | None = None
-        self.input_sequence_buffer = ""
+        self.input_parser = Parser(HostInputSink(self))  # host keystrokes/reports in
         self.dirty = False  # PTY data arrived; the run loop repaints on its tick
         self._seen_page = None  # video page rendered last frame
         self._seen_gen = -1  # its generation when we rendered it
@@ -231,59 +261,22 @@ class StdioTerminal(Terminal):
         self.dirty = True
 
     def handle_input(self, data: str) -> None:
-        """Forward host input to bittty, intercepting SGR mouse reports and focus events."""
-        stream = self.input_sequence_buffer + data
-        self.input_sequence_buffer = ""
-        plain_input: list[str] = []
-        index = 0
-        mouse_prefix = "\033[<"
+        """Feed host input through the input-direction parser.
 
-        while index < len(stream):
-            if stream.startswith("\033[I", index) or stream.startswith("\033[O", index):
-                if plain_input:
-                    self.board.display.input("".join(plain_input))
-                    plain_input = []
-                self.handle_focus(stream[index + 2] == "I")
-                index += 3
-                continue
-
-            if stream.startswith(mouse_prefix, index):
-                if plain_input:
-                    self.board.display.input("".join(plain_input))
-                    plain_input = []
-                end = index + len(mouse_prefix)
-                while end < len(stream) and stream[end] not in "Mm":
-                    end += 1
-                if end >= len(stream):
-                    self.input_sequence_buffer = stream[index:]
-                    return
-                sequence = stream[index : end + 1]
-                if not self.handle_sgr_mouse_sequence(sequence):
-                    self.board.display.input(sequence)
-                index = end + 1
-                continue
-
-            remaining = stream[index:]
-            if mouse_prefix.startswith(remaining):
-                self.input_sequence_buffer = remaining
-                break
-
-            plain_input.append(stream[index])
-            index += 1
-
-        if plain_input:
-            self.board.display.input("".join(plain_input))
+        The parser reassembles sequences split across reads; HostInputSink
+        intercepts SGR mouse reports and focus events and forwards everything
+        else to the child verbatim.
+        """
+        self.input_parser.feed(data)
 
     def flush_pending_input(self) -> None:
-        """Release a held partial prefix that never became a mouse report.
+        """Release a held incomplete sequence that never completed.
 
-        A lone ESC keypress matches the start of the mouse-report prefix, so
-        handle_input buffers it; when no follow-up arrives within an input-loop
-        tick it was a real ESC and must reach the child.
+        A lone ESC keypress looks like a sequence prefix, so the parser holds
+        it; when no follow-up arrives within an input-loop tick it was a real
+        ESC and must reach the child.
         """
-        if self.input_sequence_buffer:
-            pending, self.input_sequence_buffer = self.input_sequence_buffer, ""
-            self.board.display.input(pending)
+        self.input_parser.flush_trailing()
 
     def handle_resize(self) -> None:
         """Re-read the host size and resize the emulator (called from a SIGWINCH handler)."""

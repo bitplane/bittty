@@ -86,3 +86,32 @@ def test_decaln_split_across_chunks():
     board.parser.feed("\x1b#")
     board.parser.feed("8")
     assert board.blitter.current_buffer.get_line_text(0) == "EEEE"
+
+
+def test_flush_trailing_releases_held_bytes():
+    """Input-direction escape hatch: a dangling prefix comes out as plain text."""
+
+    class Recorder:
+        def __init__(self):
+            self.ops = []
+
+        def handle_operation(self, op):
+            self.ops.append(op)
+
+    from bittty.parser import Parser
+
+    parser = Parser(Recorder())
+    parser.feed("\x1b")  # lone ESC: held as a possible sequence prefix
+    assert parser.sink.ops == []
+
+    parser.flush_trailing()
+    assert [(op.name, op.raw) for op in parser.sink.ops] == [("PRINT", "\x1b")]
+
+    parser.flush_trailing()  # idempotent when nothing is held
+    assert len(parser.sink.ops) == 1
+
+    parser.feed("\x1b[<0;3;")  # incomplete CSI: held mid-sequence
+    parser.flush_trailing()
+    assert parser.sink.ops[-1].raw == "\x1b[<0;3;"
+    parser.feed("hello")  # parser is back in ground and healthy
+    assert parser.sink.ops[-1].raw == "hello"

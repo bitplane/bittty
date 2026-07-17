@@ -244,7 +244,11 @@ class Parser:
                         break
 
                     if kind == "cancel":
-                        # CAN/SUB in ground: ignore
+                        # CAN/SUB in ground: nothing to cancel. Emit as a plain
+                        # control op (no board handler claims it, so output
+                        # sinks still ignore it — but an input-direction sink
+                        # must see the byte: it's a Ctrl+X/Ctrl+Z keystroke).
+                        self.dispatch("ctrl", self.buffer[start:end])
                         self.pos = end
                         continue
 
@@ -400,6 +404,22 @@ class Parser:
 
     def emit(self, operation: Operation) -> None:
         self.sink.handle_operation(operation)
+
+    def flush_trailing(self) -> None:
+        """Emit any held incomplete sequence as plain text and reset to ground.
+
+        For an input-direction parser: a lone ESC (or a dangling introducer)
+        that never completed within the caller's patience was a keypress, not
+        a sequence prefix, and must reach the sink as-is. Never called on the
+        output direction, where waiting for the rest of the sequence is right.
+        """
+        if not self.buffer:
+            return
+        data = self.buffer
+        self.buffer = ""
+        self.pos = 0
+        self.mode = None
+        self.emit(Operation("PRINT", (data,), data))
 
     def reset(self) -> None:
         self.buffer = ""

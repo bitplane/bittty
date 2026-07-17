@@ -1,6 +1,8 @@
 """The stdio terminal's input demux: SGR mouse interception vs. raw forwarding."""
 
-from bittty.terminals.stdio import StdioTerminal
+from bittty.parser import Parser
+
+from bittty.terminals.stdio import HostInputSink, StdioTerminal
 
 
 class FakeBoard:
@@ -20,7 +22,7 @@ def make_frontend():
     # Bypass __init__ (no real board/tty needed to test the input demux).
     frontend = StdioTerminal.__new__(StdioTerminal)
     frontend.board = FakeBoard()
-    frontend.input_sequence_buffer = ""
+    frontend.input_parser = Parser(HostInputSink(frontend))
     return frontend
 
 

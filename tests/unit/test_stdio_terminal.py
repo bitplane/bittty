@@ -71,21 +71,42 @@ def test_shell_detection_returns_something():
 
 
 def test_lone_escape_keypress_is_flushed_next_tick():
-    """A bare ESC held back by the mouse-prefix buffer must reach the child."""
+    """A bare ESC held by the input parser must reach the child on the idle tick."""
     display = StdioTerminal()
     sent = []
     display.board.input = sent.append
 
-    display.handle_input("\033")  # could be the start of a mouse report: buffered
+    display.handle_input("\033")  # could be the start of a sequence: held
     assert sent == []
-    assert display.input_sequence_buffer == "\033"
 
     display.flush_pending_input()  # input loop found nothing more: it was a keypress
     assert sent == ["\033"]
-    assert display.input_sequence_buffer == ""
 
     display.flush_pending_input()  # idempotent when empty
     assert sent == ["\033"]
+
+
+def test_control_keystrokes_pass_through():
+    """Ctrl+C, Ctrl+X, Ctrl+Z (CAN/SUB) and friends reach the child intact."""
+    display = StdioTerminal()
+    sent = []
+    display.board.input = sent.append
+
+    for ch in ("\x03", "\x18", "\x1a", "\t", "\r", "\x7f"):
+        display.handle_input(ch)
+    assert sent == ["\x03", "\x18", "\x1a", "\t", "\r", "\x7f"]
+
+
+def test_unknown_escape_sequences_forward_verbatim():
+    """Arrow keys and other host sequences we don't intercept reach the child whole."""
+    display = StdioTerminal()
+    sent = []
+    display.board.input = sent.append
+
+    display.handle_input("\033[A")  # up arrow, one read
+    for ch in "\033[1;5C":  # ctrl+right, dribbled char by char
+        display.handle_input(ch)
+    assert sent == ["\033[A", "\033[1;5C"]
 
 
 def test_split_mouse_report_still_reassembles():
