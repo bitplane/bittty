@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .. import constants
-from ..buffer import Buffer
+from ..video import Video
 from ..operations import Operation
 from .base import Device
 from ..style import Style, parse_sgr_sequence
@@ -21,8 +21,8 @@ class ScreenDevice(Device):
 
     def __init__(self, board: Board) -> None:
         self.board = board
-        self.primary_buffer = Buffer(board.width, board.height)
-        self.alt_buffer = Buffer(board.width, board.height)
+        self.primary_buffer = Video(board.width, board.height)
+        self.alt_buffer = Video(board.width, board.height)
         self.current_buffer = self.primary_buffer
         self.in_alt_screen = False
         self.scroll_top = 0

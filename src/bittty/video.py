@@ -1,4 +1,7 @@
-"""A grid-based terminal buffer."""
+"""Video memory: the 2D cell grid the blitter writes and terminals render.
+
+A Board has two pages of it (primary and alternate).
+"""
 
 from __future__ import annotations
 
@@ -21,7 +24,7 @@ def _coerce_style(style_or_ansi) -> Style:
     return Style()
 
 
-class Buffer:
+class Video:
     """A 2D grid that stores terminal content."""
 
     def __init__(self, width: int, height: int) -> None:

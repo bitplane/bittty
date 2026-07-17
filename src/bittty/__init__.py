@@ -11,7 +11,7 @@ here — import it from bittty.terminals.
 """
 
 from .devices.board import Board
-from .buffer import Buffer
+from .video import Video
 from .parser import Parser
 from .personality import Personality, XTERM, VT100, VT220, LINUX
 from .operations import Operation, OperationSink
@@ -31,9 +31,11 @@ except PackageNotFoundError:
 
 # Compat aliases — remove next release.
 TerminalBoard = Board
+Buffer = Video
 
 __all__ = [
     "Board",
+    "Video",
     "Buffer",
     "Parser",
     "Operation",
