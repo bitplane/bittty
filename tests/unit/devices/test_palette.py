@@ -3,7 +3,7 @@
 from bittty.palette import XTERM_16, format_rgb, parse_color_spec
 from bittty.parser import Parser
 from bittty.style import Color
-from bittty.terminal import Terminal
+from bittty import Board
 
 
 class RecordingTransport:
@@ -18,7 +18,7 @@ class RecordingTransport:
 
 
 def _terminal(**kwargs):
-    terminal = Terminal(width=80, height=24, **kwargs)
+    terminal = Board(width=80, height=24, **kwargs)
     transport = RecordingTransport()
     terminal.board.host.attach(transport)
     return terminal, Parser(terminal.board), transport

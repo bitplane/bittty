@@ -1,4 +1,4 @@
-"""Query operation handler for the current Terminal state."""
+"""Query operation handler for the current board state."""
 
 from __future__ import annotations
 
@@ -22,13 +22,13 @@ from .base import Device
 from ..style import style_to_ansi
 
 if TYPE_CHECKING:
-    from .board import TerminalBoard
+    from .board import Board
 
 
 class QueryDevice(Device):
-    """Applies terminal query operations to the current Terminal implementation."""
+    """Applies terminal query operations to the current board implementation."""
 
-    def __init__(self, board: TerminalBoard) -> None:
+    def __init__(self, board: Board) -> None:
         self.board = board
         self.modes = board.modes
         self.handlers = {

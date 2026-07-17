@@ -1,9 +1,9 @@
-"""The passthrough frontend's input demux: SGR mouse interception vs. raw passthrough."""
+"""The stdio terminal's input demux: SGR mouse interception vs. raw forwarding."""
 
-from bittty.frontends.passthrough import PassthroughDisplay
+from bittty.terminals.stdio import StdioTerminal
 
 
-class FakeTerminal:
+class FakeBoard:
     def __init__(self):
         self.mouse_events = []
         self.keyboard_input = []
@@ -16,9 +16,9 @@ class FakeTerminal:
 
 
 def make_frontend():
-    # Bypass __init__ (no real Terminal/tty needed to test the input demux).
-    frontend = PassthroughDisplay.__new__(PassthroughDisplay)
-    frontend.terminal = FakeTerminal()
+    # Bypass __init__ (no real board/tty needed to test the input demux).
+    frontend = StdioTerminal.__new__(StdioTerminal)
+    frontend.board = FakeBoard()
     frontend.input_sequence_buffer = ""
     return frontend
 
@@ -29,8 +29,8 @@ def test_demo_forwards_sgr_mouse_press():
     for char in "\033[<20;15;8M":
         frontend.handle_input(char)
 
-    assert frontend.terminal.mouse_events == [(15, 8, 0, "press", {"shift", "ctrl"})]
-    assert frontend.terminal.keyboard_input == []
+    assert frontend.board.mouse_events == [(15, 8, 0, "press", {"shift", "ctrl"})]
+    assert frontend.board.keyboard_input == []
 
 
 def test_demo_forwards_non_mouse_escape_input():
@@ -39,5 +39,5 @@ def test_demo_forwards_non_mouse_escape_input():
     for char in "\033[A":
         frontend.handle_input(char)
 
-    assert frontend.terminal.mouse_events == []
-    assert "".join(frontend.terminal.keyboard_input) == "\033[A"
+    assert frontend.board.mouse_events == []
+    assert "".join(frontend.board.keyboard_input) == "\033[A"

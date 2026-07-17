@@ -14,7 +14,7 @@ from bittty.constants import (
 # Use real terminal instead of mock
 @pytest.fixture
 def terminal(standard_terminal):
-    """Return a real Terminal instance for testing."""
+    """Return a real Board instance for testing."""
     return standard_terminal
 
 

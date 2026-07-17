@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""bittty terminal emulator demo — a thin entry point over the passthrough frontend.
+"""bittty terminal emulator demo — a thin entry point over the stdio terminal.
 
-The frontend logic now lives in bittty.frontends.passthrough.PassthroughDisplay,
-the reference Display implementation. This file only wires up logging + signals
-and runs it, so it stays a working `python3 demo/terminal.py` entry point.
+The chrome logic lives in bittty.terminals.stdio.StdioTerminal, the reference
+Terminal implementation. This file only wires up logging + signals and runs it,
+so it stays a working `python3 demo/terminal.py` entry point.
 """
 
 import asyncio
@@ -12,7 +12,7 @@ import signal
 import sys
 from pathlib import Path
 
-from bittty.frontends.passthrough import PassthroughDisplay
+from bittty.terminals.stdio import StdioTerminal
 
 LOG_PATH = Path(__file__).resolve().parents[1] / "logs" / "demo" / "terminal.log"
 logger = logging.getLogger(__name__)
@@ -47,7 +47,7 @@ async def main() -> None:
     if hasattr(signal, "SIGTERM"):
         signal.signal(signal.SIGTERM, _signal_handler)
 
-    display = PassthroughDisplay()
+    display = StdioTerminal()
     if hasattr(signal, "SIGWINCH"):
         _sigwinch_handler.display = display
         signal.signal(signal.SIGWINCH, _sigwinch_handler)

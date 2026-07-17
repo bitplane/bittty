@@ -1,11 +1,11 @@
 """DECIC/DECDC column edits, HPB/VPB position-backward, and CTC/DECST8C tab control."""
 
 from bittty.parser import Parser
-from bittty.terminal import Terminal
+from bittty import Board
 
 
 def _term(width=10, height=6):
-    terminal = Terminal(width=width, height=height)
+    terminal = Board(width=width, height=height)
     return terminal, Parser(terminal.board)
 
 

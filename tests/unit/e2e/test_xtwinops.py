@@ -2,7 +2,7 @@
 
 from bittty.caps import DisplayCaps
 from bittty.parser import Parser
-from bittty.terminal import Terminal
+from bittty import Board
 
 
 class RecordingTransport:
@@ -17,7 +17,7 @@ class RecordingTransport:
 
 
 def _term(width=80, height=24):
-    terminal = Terminal(width=width, height=height)
+    terminal = Board(width=width, height=height)
     transport = RecordingTransport()
     terminal.board.host.attach(transport)
     return terminal, Parser(terminal.board), transport

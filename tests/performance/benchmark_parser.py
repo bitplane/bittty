@@ -22,7 +22,10 @@ try:
 except ImportError:
     HAS_PLOTEXT = False
 
-from bittty.terminal import Terminal
+try:
+    from bittty import Board as Emulator  # current tree
+except ImportError:  # compare-versions.sh runs this harness against old tags
+    from bittty.terminal import Terminal as Emulator
 
 
 def get_git_commit_hash() -> str:
@@ -72,11 +75,11 @@ def benchmark_parser(ansi_content: str, runs: int = 5, temp_profile_path: str = 
     else:
         profile_filename = temp_profile_path
 
-    # Every bittty version wires up terminal.parser, so use it rather than
-    # constructing a Parser by hand — compare-versions.sh runs this harness
+    # Every bittty version wires up the emulator's .parser, so use it rather
+    # than constructing a Parser by hand — compare-versions.sh runs this harness
     # against old tags whose Parser signature differs.
     def fresh_parser():
-        return Terminal().parser
+        return Emulator().parser
 
     # Run with profiling for profile data (don't include timing)
     parser = fresh_parser()

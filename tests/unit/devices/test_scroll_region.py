@@ -1,11 +1,11 @@
 """Tests for scroll region functionality."""
 
-from bittty.terminal import Terminal
+from bittty import Board
 
 
 def test_scroll_up_within_region():
     """Test scrolling up within a constrained scroll region."""
-    terminal = Terminal(width=10, height=10)
+    terminal = Board(width=10, height=10)
 
     # Fill terminal with numbered lines
     for i in range(10):
@@ -36,7 +36,7 @@ def test_scroll_up_within_region():
 
 def test_scroll_down_within_region():
     """Test scrolling down within a constrained scroll region."""
-    terminal = Terminal(width=10, height=10)
+    terminal = Board(width=10, height=10)
 
     # Fill terminal with numbered lines
     for i in range(10):
@@ -67,7 +67,7 @@ def test_scroll_down_within_region():
 
 def test_line_feed_at_bottom_of_scroll_region():
     """Test line feed when cursor is at bottom of scroll region."""
-    terminal = Terminal(width=10, height=10)
+    terminal = Board(width=10, height=10)
 
     # Fill terminal with numbered lines
     for i in range(10):
@@ -99,7 +99,7 @@ def test_line_feed_at_bottom_of_scroll_region():
 
 def test_multiple_scroll_regions():
     """Test changing scroll regions and scrolling."""
-    terminal = Terminal(width=10, height=10)
+    terminal = Board(width=10, height=10)
 
     # Fill terminal with numbered lines
     for i in range(10):
@@ -132,7 +132,7 @@ def test_multiple_scroll_regions():
 
 def test_reset_scroll_region():
     """Test resetting scroll region with CSI r."""
-    terminal = Terminal(width=10, height=10)
+    terminal = Board(width=10, height=10)
 
     # Set a custom scroll region
     terminal.board.screen.set_scroll_region(3, 6)

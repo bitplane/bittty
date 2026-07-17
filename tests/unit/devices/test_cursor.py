@@ -1,9 +1,9 @@
-from bittty.terminal import Terminal
+from bittty import Board
 from bittty.constants import DEFAULT_TERMINAL_WIDTH, DEFAULT_TERMINAL_HEIGHT
 
 
 def test_set_cursor():
-    terminal = Terminal(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
+    terminal = Board(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
     terminal.board.cursor.set_position(10, 5)
     assert terminal.board.cursor.x == 10
     assert terminal.board.cursor.y == 5
@@ -19,7 +19,7 @@ def test_set_cursor():
 
 
 def test_carriage_return():
-    terminal = Terminal(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
+    terminal = Board(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
     terminal.board.cursor.set_position(10, 5)
     terminal.board.cursor.carriage_return()
     assert terminal.board.cursor.x == 0
@@ -27,7 +27,7 @@ def test_carriage_return():
 
 
 def test_line_feed():
-    terminal = Terminal(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
+    terminal = Board(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
     terminal.board.cursor.set_position(10, 5)
     terminal.board.cursor.line_feed()
     assert terminal.board.cursor.x == 10
@@ -41,7 +41,7 @@ def test_line_feed():
 
 
 def test_backspace():
-    terminal = Terminal(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
+    terminal = Board(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
     terminal.board.cursor.set_position(10, 5)
     terminal.board.cursor.backspace()
     assert terminal.board.cursor.x == 9
@@ -61,7 +61,7 @@ def test_backspace():
 
 
 def test_save_restore_cursor():
-    terminal = Terminal(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
+    terminal = Board(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
     terminal.board.cursor.x = 10
     terminal.board.cursor.y = 5
     terminal.board.cursor.save()
@@ -75,7 +75,7 @@ def test_save_restore_cursor():
 
 
 def test_backspace_wrap():
-    terminal = Terminal(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
+    terminal = Board(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
     terminal.board.cursor.x = 0
     terminal.board.cursor.y = 5
     terminal.board.cursor.backspace()
@@ -84,7 +84,7 @@ def test_backspace_wrap():
 
 
 def test_cursor_device_owns_position_and_save_restore():
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     cursor = terminal.board.cursor
 
     cursor.set_position(4, 2)
@@ -100,7 +100,7 @@ def test_cursor_device_owns_position_and_save_restore():
 
 
 def test_cursor_device_tabs_and_basic_movement():
-    terminal = Terminal(width=12, height=5)
+    terminal = Board(width=12, height=5)
     cursor = terminal.board.cursor
 
     cursor.set_position(3, 2)
@@ -120,7 +120,7 @@ def test_cursor_device_tabs_and_basic_movement():
 
 
 def test_cursor_device_line_feed_scrolls_screen_region():
-    terminal = Terminal(width=8, height=3)
+    terminal = Board(width=8, height=3)
     terminal.board.screen.current_buffer.set(0, 0, "top")
     terminal.board.screen.current_buffer.set(0, 1, "mid")
     terminal.board.screen.current_buffer.set(0, 2, "bot")
@@ -134,7 +134,7 @@ def test_cursor_device_line_feed_scrolls_screen_region():
 
 
 def test_cursor_device_text_write_wrap_preparation():
-    terminal = Terminal(width=4, height=3)
+    terminal = Board(width=4, height=3)
     cursor = terminal.board.cursor
 
     cursor.x = 4
@@ -145,7 +145,7 @@ def test_cursor_device_text_write_wrap_preparation():
 
 
 def test_origin_mode_column_is_relative_to_left_margin():
-    terminal = Terminal(width=20, height=10)
+    terminal = Board(width=20, height=10)
     terminal.parser.feed("\x1b[?69h")  # DECLRMM
     terminal.parser.feed("\x1b[5;15s")  # DECSLRM: margins at columns 5-15
     terminal.parser.feed("\x1b[?6h")  # DECOM

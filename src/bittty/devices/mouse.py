@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from .. import constants
 
 if TYPE_CHECKING:
-    from .board import TerminalBoard
+    from .board import Board
     from ..operations import Operation
 from .base import Device
 
@@ -18,7 +18,7 @@ _LOCATOR_BUTTON_BIT = {0: 4, 1: 2, 2: 1}
 class MouseDevice(Device):
     """Owns mouse presentation state and emits mouse input reports."""
 
-    def __init__(self, board: TerminalBoard) -> None:
+    def __init__(self, board: Board) -> None:
         self.board = board
         self.x = 0
         self.y = 0

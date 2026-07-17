@@ -1,4 +1,4 @@
-"""Title operation handler for the current Terminal state."""
+"""Title operation handler for the current board state."""
 
 from __future__ import annotations
 
@@ -8,13 +8,13 @@ from ..present import TitleChanged
 from .base import Device
 
 if TYPE_CHECKING:
-    from .board import TerminalBoard
+    from .board import Board
 
 
 class TitleDevice(Device):
     """Owns terminal title state and applies title operations."""
 
-    def __init__(self, board: TerminalBoard) -> None:
+    def __init__(self, board: Board) -> None:
         self.board = board
         self.title = "Terminal"
         self.icon_title = "Terminal"

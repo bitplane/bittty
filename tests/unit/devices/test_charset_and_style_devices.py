@@ -1,11 +1,11 @@
 from bittty.operations import Operation
 from bittty.style import Color, Style, parse_sgr_sequence
-from bittty.terminal import Terminal
+from bittty import Board
 from bittty.parser import Parser
 
 
 def test_charset_device_translates_active_and_single_shift_charsets():
-    terminal = Terminal(width=10, height=3)
+    terminal = Board(width=10, height=3)
     charset = terminal.board.charset
 
     charset.set_g0_charset("0")
@@ -19,7 +19,7 @@ def test_charset_device_translates_active_and_single_shift_charsets():
 
 
 def test_charset_device_handles_operations_and_reset():
-    terminal = Terminal(width=10, height=3)
+    terminal = Board(width=10, height=3)
     charset = terminal.board.charset
 
     charset.handle_operation(Operation("SCS_G1", ("0",), "\x1b)0"))
@@ -35,7 +35,7 @@ def test_charset_device_handles_operations_and_reset():
 
 
 def test_style_device_applies_reset_and_merge():
-    terminal = Terminal(width=10, height=3)
+    terminal = Board(width=10, height=3)
     style = terminal.board.style
 
     style.apply_sgr(Style(bold=True))
@@ -50,7 +50,7 @@ def test_style_device_applies_reset_and_merge():
 
 
 def test_style_device_reports_background_ansi():
-    terminal = Terminal(width=10, height=3)
+    terminal = Board(width=10, height=3)
 
     terminal.board.style.current_ansi_code = "\x1b[48;5;21m"
 
@@ -62,7 +62,7 @@ def test_style_device_reports_background_ansi():
 
 def test_translate_charset_default():
     """Test character translation with default charset."""
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
 
     # Default charset should not translate
     result = terminal.board.charset.translate("hello")
@@ -71,7 +71,7 @@ def test_translate_charset_default():
 
 def test_translate_charset_dec_special():
     """Test character translation with DEC Special Graphics."""
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
     parser = Parser(terminal.board)
 
     # Set G0 to DEC Special Graphics
@@ -85,7 +85,7 @@ def test_translate_charset_dec_special():
 
 def test_single_shift_translation():
     """Test character translation with single shift (SS2/SS3)."""
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
     parser = Parser(terminal.board)
 
     # Set G2 to DEC Special Graphics
@@ -105,7 +105,7 @@ def test_single_shift_translation():
 
 def test_charset_switching():
     """Test switching between G0 and G1 charsets."""
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
     parser = Parser(terminal.board)
 
     # Set G1 to DEC Special Graphics
@@ -126,7 +126,7 @@ def test_charset_switching():
 
 def test_multiple_charset_sets():
     """Test setting multiple charset designators."""
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
     parser = Parser(terminal.board)
 
     # Set different charsets for each G set
@@ -144,7 +144,7 @@ def test_multiple_charset_sets():
 
 def test_single_shift_reset():
     """Test that single shift resets after one character."""
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
     parser = Parser(terminal.board)
 
     # Set G2 to DEC Special

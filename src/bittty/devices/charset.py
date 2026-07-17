@@ -1,4 +1,4 @@
-"""Charset operation handler for the current Terminal state."""
+"""Charset operation handler for the current board state."""
 
 from __future__ import annotations
 
@@ -8,13 +8,13 @@ from ..charsets import get_charset
 from .base import Device
 
 if TYPE_CHECKING:
-    from .board import TerminalBoard
+    from .board import Board
 
 
 class CharsetDevice(Device):
     """Owns charset state and applies charset operations."""
 
-    def __init__(self, board: TerminalBoard) -> None:
+    def __init__(self, board: Board) -> None:
         self.board = board
         self.g0_charset = "B"
         self.g1_charset = "B"

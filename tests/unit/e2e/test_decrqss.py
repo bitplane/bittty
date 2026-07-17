@@ -1,7 +1,7 @@
 """DECRQSS (DCS $q ... ST): reporting the current setting back to the host."""
 
 from bittty.parser import Parser
-from bittty.terminal import Terminal
+from bittty import Board
 
 
 class RecordingTransport:
@@ -16,7 +16,7 @@ class RecordingTransport:
 
 
 def _driver():
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
     transport = RecordingTransport()
     terminal.board.host.attach(transport)
     return Parser(terminal.board), transport

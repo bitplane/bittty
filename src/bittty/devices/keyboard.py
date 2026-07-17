@@ -8,7 +8,7 @@ from .. import constants
 from ..keymap import apply_modifier
 
 if TYPE_CHECKING:
-    from .board import TerminalBoard
+    from .board import Board
     from ..operations import Operation
 from .base import Device
 
@@ -35,7 +35,7 @@ _DECUDK_CODE_TO_FKEY = {
 class KeyboardDevice(Device):
     """Encodes keyboard input into terminal control sequences."""
 
-    def __init__(self, board: TerminalBoard) -> None:
+    def __init__(self, board: Board) -> None:
         self.board = board
         self.user_defined_keys: dict[int, str] = {}  # DECUDK: F-number -> sequence
         self.modify_other_keys = 0  # xterm modifyOtherKeys level (0/1/2)

@@ -1,11 +1,11 @@
-from bittty.terminal import Terminal
+from bittty import Board
 from bittty import constants
 from bittty.parser import Parser
 from bittty.style import Style, parse_sgr_sequence
 
 
 def test_write_cell_overwrite():
-    terminal = Terminal(width=10, height=1)
+    terminal = Board(width=10, height=1)
     parser = Parser(terminal.board)
     parser = Parser(terminal.board)
     parser.feed("\x1b[31m")  # Set red color
@@ -29,7 +29,7 @@ def test_write_cell_overwrite():
 
 
 def test_write_cell_insert_mode():
-    terminal = Terminal(width=10, height=1)
+    terminal = Board(width=10, height=1)
     parser = Parser(terminal.board)
     parser = Parser(terminal.board)
     parser.feed("\x1b[31m")  # Set red color
@@ -48,7 +48,7 @@ def test_write_cell_insert_mode():
 
 
 def test_write_cell_autowrap():
-    terminal = Terminal(width=3, height=2)
+    terminal = Board(width=3, height=2)
     parser = Parser(terminal.board)
     parser.feed("\x1b[31m")  # Set red color
     parser.feed("A")
@@ -68,7 +68,7 @@ def test_write_cell_autowrap():
 
 
 def test_clear_rect():
-    terminal = Terminal(width=5, height=5)
+    terminal = Board(width=5, height=5)
     for y in range(5):
         for x in range(5):
             terminal.board.screen.current_buffer.set_cell(x, y, "X", "\x1b[31m")
@@ -84,7 +84,7 @@ def test_clear_rect():
 
 
 def test_clear_screen():
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     for y in range(5):
         for x in range(10):
             terminal.board.screen.current_buffer.set_cell(x, y, chr(ord("A") + y))
@@ -126,7 +126,7 @@ def test_clear_screen():
 
 
 def test_clear_line():
-    terminal = Terminal(width=10, height=1)
+    terminal = Board(width=10, height=1)
     for x in range(10):
         terminal.board.screen.current_buffer.set_cell(x, 0, "X")
     terminal.board.cursor.set_position(5, 0)
@@ -155,7 +155,7 @@ def test_clear_line():
 
 
 def test_insert_lines():
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     for y in range(5):
         terminal.board.screen.current_buffer.set(0, y, f"Line {y}")
     terminal.board.cursor.set_position(0, 2)
@@ -168,7 +168,7 @@ def test_insert_lines():
     assert terminal.board.screen.current_buffer.get_line_text(4) == "Line 3    "
 
     # Insert multiple lines
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     for y in range(5):
         terminal.board.screen.current_buffer.set(0, y, f"Line {y}")
     terminal.board.cursor.set_position(0, 1)
@@ -181,7 +181,7 @@ def test_insert_lines():
 
 
 def test_delete_lines():
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     for y in range(5):
         terminal.board.screen.current_buffer.set(0, y, f"Line {y}")
     terminal.board.cursor.set_position(0, 1)
@@ -194,7 +194,7 @@ def test_delete_lines():
     assert terminal.board.screen.current_buffer.get_line_text(4) == "          "
 
     # Delete multiple lines
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     for y in range(5):
         terminal.board.screen.current_buffer.set(0, y, f"Line {y}")
     terminal.board.cursor.set_position(0, 0)
@@ -207,7 +207,7 @@ def test_delete_lines():
 
 
 def test_insert_characters():
-    terminal = Terminal(width=10, height=1)
+    terminal = Board(width=10, height=1)
     terminal.board.screen.current_buffer.set(0, 0, "ABCDEFGHIJ")
     terminal.board.cursor.set_position(2, 0)
 
@@ -216,7 +216,7 @@ def test_insert_characters():
 
 
 def test_delete_characters():
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     terminal.board.screen.current_buffer.set(0, 0, "12345")
     terminal.board.cursor.x = 2
     terminal.board.cursor.y = 0
@@ -225,7 +225,7 @@ def test_delete_characters():
 
 
 def test_delete_characters_from_middle_of_line():
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     terminal.board.screen.current_buffer.set(0, 0, "123456789")
     terminal.board.cursor.x = 2
     terminal.board.cursor.y = 0
@@ -234,7 +234,7 @@ def test_delete_characters_from_middle_of_line():
 
 
 def test_delete_characters_at_end_of_line_no_effect():
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     terminal.board.screen.current_buffer.set(0, 0, "abc")
     terminal.board.cursor.x = 3
     terminal.board.cursor.y = 0
@@ -243,7 +243,7 @@ def test_delete_characters_at_end_of_line_no_effect():
 
 
 def test_delete_characters_beyond_end_of_line():
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     terminal.board.screen.current_buffer.set(0, 0, "12345")
     terminal.board.cursor.x = 2
     terminal.board.cursor.y = 0
@@ -252,7 +252,7 @@ def test_delete_characters_beyond_end_of_line():
 
 
 def test_delete_characters_from_empty_line():
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     terminal.board.cursor.x = 0
     terminal.board.cursor.y = 0
     terminal.board.screen.delete_characters(5)
@@ -260,7 +260,7 @@ def test_delete_characters_from_empty_line():
 
 
 def test_delete_last_character_on_line():
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     terminal.board.screen.current_buffer.set(0, 0, "abcde")
     terminal.board.cursor.x = 4
     terminal.board.cursor.y = 0
@@ -269,7 +269,7 @@ def test_delete_last_character_on_line():
 
 
 def test_insert_characters_at_end_of_line():
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     terminal.board.screen.current_buffer.set(0, 0, "12345")
     terminal.board.cursor.x = 5
     terminal.board.cursor.y = 0
@@ -278,7 +278,7 @@ def test_insert_characters_at_end_of_line():
 
 
 def test_insert_characters_invalid_cursor():
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     terminal.board.cursor.y = 10  # Invalid cursor position
     terminal.board.screen.insert_characters(1)
     # Should not raise an error and do nothing
@@ -286,7 +286,7 @@ def test_insert_characters_invalid_cursor():
 
 def test_insert_characters_with_padding_preserves_style_objects():
     """Test that insert beyond row length creates proper Style objects when padding."""
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     terminal.board.cursor.x = 8  # Near end of line
     terminal.board.cursor.y = 0
 
@@ -300,7 +300,7 @@ def test_insert_characters_with_padding_preserves_style_objects():
 
 
 def test_delete_characters_invalid_cursor():
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     terminal.board.cursor.y = 10  # Invalid cursor position
     terminal.board.screen.delete_characters(1)
     # Should not raise an error and do nothing
@@ -308,7 +308,7 @@ def test_delete_characters_invalid_cursor():
 
 def test_delete_characters_preserves_style_objects():
     """Test that delete_characters creates proper Style objects, not empty strings."""
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     terminal.board.screen.current_buffer.set(0, 0, "hello", Style(bold=True))
     terminal.board.cursor.x = 1
     terminal.board.cursor.y = 0

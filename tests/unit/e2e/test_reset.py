@@ -2,11 +2,11 @@
 
 from bittty.parser import Parser
 from bittty.style import Style
-from bittty.terminal import Terminal
+from bittty import Board
 
 
 def _terminal():
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     return terminal, Parser(terminal.board)
 
 

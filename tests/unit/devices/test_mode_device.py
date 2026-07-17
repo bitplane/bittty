@@ -1,9 +1,9 @@
 from bittty.operations import Operation
-from bittty.terminal import Terminal
+from bittty import Board
 
 
 def test_mode_device_owns_ansi_and_private_mode_state():
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
     modes = terminal.board.modes
 
     modes.set_ansi_modes((4, 12, 20), True)
@@ -21,7 +21,7 @@ def test_mode_device_owns_ansi_and_private_mode_state():
 
 
 def test_mode_device_reports_query_status_from_its_state():
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
     modes = terminal.board.modes
 
     modes.insert_mode = True
@@ -34,7 +34,7 @@ def test_mode_device_reports_query_status_from_its_state():
 
 
 def test_mode_device_keypad_operations_and_side_effects():
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
     modes = terminal.board.modes
 
     modes.handle_operation(Operation("DECKPAM", raw="\x1b="))
@@ -52,7 +52,7 @@ def test_mode_device_keypad_operations_and_side_effects():
 
 
 def test_mode_device_alt_screen_and_save_restore_side_effects():
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
     terminal.board.cursor.set_position(3, 4)
 
     terminal.board.modes.set_private_modes((1049,), True)

@@ -1,6 +1,6 @@
 """Test device query responses and capabilities."""
 
-from bittty.terminal import Terminal
+from bittty import Board
 from bittty.parser import Parser
 
 
@@ -17,7 +17,7 @@ class RecordingTransport:
 
 
 def terminal_with_transport(width=80, height=24):
-    terminal = Terminal(width=width, height=height)
+    terminal = Board(width=width, height=height)
     transport = RecordingTransport()
     terminal.board.host.attach(transport)
     return terminal, Parser(terminal.board), transport

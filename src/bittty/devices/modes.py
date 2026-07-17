@@ -19,7 +19,7 @@ from ..present import CursorVisibilityChanged, MouseModeChanged, SyncOutputChang
 from .base import Device
 
 if TYPE_CHECKING:
-    from .board import TerminalBoard
+    from .board import Board
 
 
 @dataclass(frozen=True)
@@ -190,7 +190,7 @@ MODE_SPECS: list[Mode] = [
 class ModeDevice(Device):
     """Owns terminal mode state and applies mode operations via the mode table."""
 
-    def __init__(self, board: TerminalBoard) -> None:
+    def __init__(self, board: Board) -> None:
         self.board = board
         self._set_defaults()
         # Edge-trigger caches for peripheral present events (None = not yet emitted).

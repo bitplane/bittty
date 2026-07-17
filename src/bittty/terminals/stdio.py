@@ -1,9 +1,9 @@
-"""PassthroughDisplay: the reference stdio frontend, in passthrough mode.
+"""StdioTerminal: the reference terminal, whose venue is this process's stdio.
 
-Composes a Terminal (never subclasses it) and drives a real outer terminal:
-raw-mode stdin, ANSI rendering to stdout, SIGWINCH resize, and mouse mirroring.
-Discrete side-effects arrive through the Display hooks (on_bell/on_title/
-on_mouse_mode) instead of the old per-batch polling of board flags.
+Composes a Board (never subclasses it) and drives the real outer terminal:
+raw-mode stdin, ANSI rendering to stdout, resize handling, and mouse mirroring.
+Discrete side-effects arrive through the Terminal hooks (on_bell/on_title/
+on_mouse_mode).
 """
 
 from __future__ import annotations
@@ -16,8 +16,8 @@ import select
 import shutil
 import sys
 
-from ..terminal import Terminal
-from .display import Display
+from ..devices.board import Board
+from .base import Terminal
 from .probe import probe_display_caps
 
 try:
@@ -46,16 +46,16 @@ _HOST_MOUSE_ENABLE = {
 }
 
 
-class PassthroughDisplay(Display):
-    """Render a bittty Terminal to the real terminal this program is running in."""
+class StdioTerminal(Terminal):
+    """Render a bittty Board to the real terminal this program is running in."""
 
     def __init__(self) -> None:
         size = shutil.get_terminal_size()
         self.width = size.columns
         self.height = size.lines - 2  # reserve 2 lines for the status/instructions
         self.is_windows = platform.system() == "Windows"
-        terminal = Terminal(command=self.get_default_shell(), width=self.width, height=self.height)
-        super().__init__(terminal)
+        board = Board(command=self.get_default_shell(), width=self.width, height=self.height)
+        super().__init__(board)
         self.attach()
 
         self.running = True
@@ -152,7 +152,7 @@ class PassthroughDisplay(Display):
     def render_screen(self) -> None:
         """Render the current terminal state to stdout."""
         print("\033[H", end="")
-        for i, line in enumerate(self.terminal.capture_pane().split("\n")):
+        for i, line in enumerate(self.board.capture_pane().split("\n")):
             if i < self.height:
                 print(f"\033[{i + 1}H{line}\033[K", end="")
         status = f"bittty demo | {self.width}x{self.height} | exit normally to quit"
@@ -166,7 +166,7 @@ class PassthroughDisplay(Display):
         while we paint), turning a 66ms `find` into a 750ms one.
         """
         try:
-            self.terminal.parser.feed(data)
+            self.board.parser.feed(data)
             self.dirty = True
         except Exception:
             logger.exception("Error handling PTY data: %r", data[-200:])
@@ -198,15 +198,15 @@ class PassthroughDisplay(Display):
             event_type = "move"
             base_button &= ~32
 
-        self.terminal.input_mouse(x, y, base_button, event_type, modifiers)
+        self.board.input_mouse(x, y, base_button, event_type, modifiers)
         return True
 
     def handle_focus(self, focused: bool) -> None:
         """A host focus event: the backend owns the state; we just repaint."""
         if focused:
-            self.terminal.focus_in()
+            self.board.focus_in()
         else:
-            self.terminal.focus_out()
+            self.board.focus_out()
         self.dirty = True
 
     def handle_input(self, data: str) -> None:
@@ -220,7 +220,7 @@ class PassthroughDisplay(Display):
         while index < len(stream):
             if stream.startswith("\033[I", index) or stream.startswith("\033[O", index):
                 if plain_input:
-                    self.terminal.input("".join(plain_input))
+                    self.board.input("".join(plain_input))
                     plain_input = []
                 self.handle_focus(stream[index + 2] == "I")
                 index += 3
@@ -228,7 +228,7 @@ class PassthroughDisplay(Display):
 
             if stream.startswith(mouse_prefix, index):
                 if plain_input:
-                    self.terminal.input("".join(plain_input))
+                    self.board.input("".join(plain_input))
                     plain_input = []
                 end = index + len(mouse_prefix)
                 while end < len(stream) and stream[end] not in "Mm":
@@ -238,7 +238,7 @@ class PassthroughDisplay(Display):
                     return
                 sequence = stream[index : end + 1]
                 if not self.handle_sgr_mouse_sequence(sequence):
-                    self.terminal.input(sequence)
+                    self.board.input(sequence)
                 index = end + 1
                 continue
 
@@ -251,7 +251,7 @@ class PassthroughDisplay(Display):
             index += 1
 
         if plain_input:
-            self.terminal.input("".join(plain_input))
+            self.board.input("".join(plain_input))
 
     def flush_pending_input(self) -> None:
         """Release a held partial prefix that never became a mouse report.
@@ -262,7 +262,7 @@ class PassthroughDisplay(Display):
         """
         if self.input_sequence_buffer:
             pending, self.input_sequence_buffer = self.input_sequence_buffer, ""
-            self.terminal.input(pending)
+            self.board.input(pending)
 
     def handle_resize(self) -> None:
         """Re-read the host size and resize the emulator (called from a SIGWINCH handler)."""
@@ -270,7 +270,7 @@ class PassthroughDisplay(Display):
         self.width = size.columns
         self.height = size.lines - 2
         logger.info("Resize: %sx%s", self.width, self.height)
-        self.terminal.resize(self.width, self.height)
+        self.board.resize(self.width, self.height)
 
     # --- run loop --- #
 
@@ -313,8 +313,8 @@ class PassthroughDisplay(Display):
         try:
             self.setup_terminal()
             self.probe_capabilities()
-            self.terminal.set_pty_data_callback(self.handle_pty_data)
-            await self.terminal.start_process()
+            self.board.set_pty_data_callback(self.handle_pty_data)
+            await self.board.start_process()
             self.render_screen()
 
             input_task = asyncio.create_task(self.input_loop())
@@ -323,10 +323,10 @@ class PassthroughDisplay(Display):
                 if self.dirty:
                     self.dirty = False
                     self.render_screen()
-                if self.terminal.process and self.terminal.process.poll() is not None:
+                if self.board.process and self.board.process.poll() is not None:
                     self.running = False
                     break
-                if not self.terminal.process:
+                if not self.board.process:
                     self.running = False
                     break
 
@@ -350,5 +350,5 @@ class PassthroughDisplay(Display):
         """Tear down the child and restore the host terminal."""
         logger.info("Cleaning up")
         self.running = False
-        self.terminal.stop_process()
+        self.board.stop_process()
         self.restore_terminal()

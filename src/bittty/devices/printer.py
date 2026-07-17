@@ -15,13 +15,13 @@ from ..operations import Operation
 from .base import Device
 
 if TYPE_CHECKING:
-    from .board import TerminalBoard
+    from .board import Board
 
 
 class PrinterDevice(Device):
     """Owns printer state (controller/auto-print modes) and the output sink."""
 
-    def __init__(self, board: TerminalBoard) -> None:
+    def __init__(self, board: Board) -> None:
         self.board = board
         self.sink = None  # a frontend attaches a file/StringIO/callable
         self.controller_mode = False  # CSI 5 i: printable output goes to the printer, not the screen

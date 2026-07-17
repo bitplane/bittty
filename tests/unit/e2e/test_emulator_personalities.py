@@ -3,7 +3,7 @@
 from bittty import constants
 from bittty.parser import Parser
 from bittty.personality import GNOME, KITTY, SCREEN, TMUX, URXVT, XTERM, get_personality
-from bittty.terminal import Terminal
+from bittty import Board
 
 
 class RecordingTransport:
@@ -18,7 +18,7 @@ class RecordingTransport:
 
 
 def _term(personality):
-    terminal = Terminal(width=80, height=24, personality=personality)
+    terminal = Board(width=80, height=24, personality=personality)
     transport = RecordingTransport()
     terminal.board.host.attach(transport)
     return terminal, Parser(terminal.board), transport

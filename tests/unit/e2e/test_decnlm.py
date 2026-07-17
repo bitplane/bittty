@@ -1,12 +1,12 @@
 """Test DECNLM (Line Feed/New Line Mode) implementation."""
 
-from bittty.terminal import Terminal
+from bittty import Board
 from bittty.parser import Parser
 
 
 def test_decnlm_default_mode():
     """Test that line feed only moves cursor down by default (DECNLM disabled)."""
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     parser = Parser(terminal.board)
 
     # Move cursor to column 5
@@ -23,7 +23,7 @@ def test_decnlm_default_mode():
 
 def test_decnlm_enabled_cr_lf():
     """Test that when DECNLM is enabled, line feed also performs carriage return."""
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     parser = Parser(terminal.board)
 
     # Enable DECNLM (ESC [ ? 20 h)
@@ -43,7 +43,7 @@ def test_decnlm_enabled_cr_lf():
 
 def test_decnlm_disabled_lf_only():
     """Test that when DECNLM is disabled, line feed only moves cursor down."""
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     parser = Parser(terminal.board)
 
     # Enable DECNLM first
@@ -66,7 +66,7 @@ def test_decnlm_disabled_lf_only():
 
 def test_decnlm_multiple_line_feeds():
     """Test DECNLM behavior with multiple line feeds."""
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     parser = Parser(terminal.board)
 
     # Enable DECNLM
@@ -86,7 +86,7 @@ def test_decnlm_multiple_line_feeds():
 
 def test_decnlm_at_bottom_with_scrolling():
     """Test DECNLM behavior when line feed causes scrolling."""
-    terminal = Terminal(width=10, height=3)
+    terminal = Board(width=10, height=3)
     parser = Parser(terminal.board)
 
     # Enable DECNLM
@@ -106,7 +106,7 @@ def test_decnlm_at_bottom_with_scrolling():
 
 def test_decnlm_explicit_carriage_return_unaffected():
     """Test that explicit carriage return is unaffected by DECNLM mode."""
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     parser = Parser(terminal.board)
 
     # Enable DECNLM
@@ -126,7 +126,7 @@ def test_decnlm_explicit_carriage_return_unaffected():
 
 def test_decnlm_with_cr_lf_sequence():
     """Test DECNLM with explicit CR+LF sequence."""
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     parser = Parser(terminal.board)
 
     # Test with DECNLM disabled first
@@ -156,7 +156,7 @@ def test_decnlm_with_cr_lf_sequence():
 
 def test_decnlm_mode_flag_state():
     """Test that the DECNLM mode flag is correctly set and unset."""
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     parser = Parser(terminal.board)
 
     # Initially disabled
@@ -173,7 +173,7 @@ def test_decnlm_mode_flag_state():
 
 def test_decnlm_wrapped_line_behavior():
     """Test DECNLM behavior when line wrapping occurs."""
-    terminal = Terminal(width=5, height=3)
+    terminal = Board(width=5, height=3)
     parser = Parser(terminal.board)
 
     # Enable DECNLM
@@ -195,7 +195,7 @@ def test_decnlm_wrapped_line_behavior():
 
 def test_decnlm_vertical_tab_default():
     """Test that vertical tab moves cursor down by default (DECNLM disabled)."""
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     parser = Parser(terminal.board)
 
     # Move cursor to column 5
@@ -212,7 +212,7 @@ def test_decnlm_vertical_tab_default():
 
 def test_decnlm_vertical_tab_enabled():
     """Test that when DECNLM is enabled, vertical tab also performs carriage return."""
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     parser = Parser(terminal.board)
 
     # Enable DECNLM (ESC [ ? 20 h)
@@ -232,7 +232,7 @@ def test_decnlm_vertical_tab_enabled():
 
 def test_decnlm_form_feed_default():
     """Test that form feed moves cursor down by default (DECNLM disabled)."""
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     parser = Parser(terminal.board)
 
     # Move cursor to column 5
@@ -249,7 +249,7 @@ def test_decnlm_form_feed_default():
 
 def test_decnlm_form_feed_enabled():
     """Test that when DECNLM is enabled, form feed also performs carriage return."""
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     parser = Parser(terminal.board)
 
     # Enable DECNLM (ESC [ ? 20 h)
@@ -269,7 +269,7 @@ def test_decnlm_form_feed_enabled():
 
 def test_decnlm_mixed_lf_vt_ff():
     """Test DECNLM behavior with mixed LF, VT, and FF characters."""
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     parser = Parser(terminal.board)
 
     # Enable DECNLM

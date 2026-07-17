@@ -9,7 +9,7 @@ from .base import Device
 from ..palette import RGB, build_256, format_rgb, parse_color_spec
 
 if TYPE_CHECKING:
-    from .board import TerminalBoard
+    from .board import Board
 
 _SPECIALS = ("foreground", "background", "cursor")
 
@@ -17,7 +17,7 @@ _SPECIALS = ("foreground", "background", "cursor")
 class PaletteDevice(Device):
     """Holds the current 256-colour table plus fg/bg/cursor, and applies OSC colour ops."""
 
-    def __init__(self, board: TerminalBoard) -> None:
+    def __init__(self, board: Board) -> None:
         self.board = board
         self._defaults = board.personality.palette
         self._default_colors = build_256(self._defaults.base16)

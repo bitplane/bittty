@@ -1,11 +1,11 @@
 """Inert-select cluster (raw 8-bit C1, SPA/EPA, S7C1T/S8C1T, ANSI level) + the mode tail."""
 
 from bittty.parser import Parser
-from bittty.terminal import Terminal
+from bittty import Board
 
 
 def _term(width=10, height=3):
-    terminal = Terminal(width=width, height=height)
+    terminal = Board(width=width, height=height)
     return terminal, Parser(terminal.board)
 
 

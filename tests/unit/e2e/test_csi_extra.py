@@ -1,11 +1,11 @@
 """Newly supported CSI final bytes: CNL/CPL, HPA/HPR/VPR, CHT/CBT, TBC, DECSCUSR."""
 
 from bittty.parser import Parser
-from bittty.terminal import Terminal
+from bittty import Board
 
 
 def _term():
-    terminal = Terminal(width=40, height=10)
+    terminal = Board(width=40, height=10)
     return terminal, Parser(terminal.board)
 
 

@@ -1,12 +1,12 @@
 """Test DECNKM (Numeric-Keypad Mode) implementation."""
 
-from bittty.terminal import Terminal
+from bittty import Board
 from bittty.parser import Parser
 
 
 def test_decnkm_default_numeric_mode():
     """Test that keypad is in numeric mode by default."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
 
     # Should be in numeric mode by default (numeric_keypad = True)
     assert terminal.board.modes.numeric_keypad
@@ -14,7 +14,7 @@ def test_decnkm_default_numeric_mode():
 
 def test_decnkm_set_application_mode():
     """Test setting DECNKM to application keypad mode."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Set DECNKM application mode (ESC [ ? 66 h)
@@ -26,7 +26,7 @@ def test_decnkm_set_application_mode():
 
 def test_decnkm_reset_to_numeric():
     """Test resetting DECNKM back to numeric mode."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Set application mode first
@@ -42,7 +42,7 @@ def test_decnkm_reset_to_numeric():
 
 def test_decnkm_affects_numpad_keys():
     """Test that DECNKM affects how numpad keys are sent."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Mock the PTY to capture output
@@ -70,7 +70,7 @@ def test_decnkm_affects_numpad_keys():
 
 def test_decnkm_all_numpad_keys():
     """Test all numpad keys in both modes."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     sent_data = []
@@ -137,7 +137,7 @@ def test_decnkm_all_numpad_keys():
 
 def test_decnkm_escape_sequences():
     """Test that DECNKM responds to both ESC = and ESC > sequences."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # ESC = should set application mode (same as CSI ? 66 h)

@@ -1,13 +1,13 @@
 """Test DECBKM (Backarrow-Key Mode) implementation."""
 
-from bittty.terminal import Terminal
+from bittty import Board
 from bittty.parser import Parser
 from bittty import constants
 
 
 def test_decbkm_default_mode():
     """Test that backspace sends DEL by default."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
 
     # Mock the PTY to capture output
     sent_data = []
@@ -27,7 +27,7 @@ def test_decbkm_default_mode():
 
 def test_decbkm_set_bs_mode():
     """Test setting DECBKM to send BS instead of DEL."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Mock the PTY to capture output
@@ -51,7 +51,7 @@ def test_decbkm_set_bs_mode():
 
 def test_decbkm_reset_to_del():
     """Test resetting DECBKM back to DEL mode."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Mock the PTY to capture output

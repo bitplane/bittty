@@ -1,9 +1,9 @@
 from bittty.operations import Operation
-from bittty.terminal import Terminal
+from bittty import Board
 
 
 def test_title_device_owns_title_state():
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     title = terminal.board.title
 
     title.set_title("Window")
@@ -16,7 +16,7 @@ def test_title_device_owns_title_state():
 
 
 def test_title_device_handles_title_operations():
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     title = terminal.board.title
 
     title.handle_operation(Operation("SET_ICON_AND_WINDOW_TITLE", ("Both",), "\x1b]0;Both\x07"))

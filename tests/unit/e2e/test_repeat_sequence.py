@@ -1,7 +1,7 @@
 """Tests for REP (Repeat) escape sequence."""
 
 from bittty.parser import Parser
-from bittty.terminal import Terminal
+from bittty import Board
 from bittty.constants import ESC
 
 
@@ -21,7 +21,7 @@ def test_rep_basic(small_terminal):
 
 def test_rep_with_different_counts():
     """Test REP with various repeat counts."""
-    terminal = Terminal(width=30, height=10)
+    terminal = Board(width=30, height=10)
     parser = Parser(terminal.board)
 
     # Test count = 1
@@ -42,7 +42,7 @@ def test_rep_with_different_counts():
 
 def test_rep_with_no_parameter():
     """Test REP with no parameter (should default to 1)."""
-    terminal = Terminal(width=20, height=10)
+    terminal = Board(width=20, height=10)
     parser = Parser(terminal.board)
 
     parser.feed("Z")
@@ -53,7 +53,7 @@ def test_rep_with_no_parameter():
 
 def test_rep_with_styled_character():
     """Test REP preserves the style of the repeated character."""
-    terminal = Terminal(width=20, height=10)
+    terminal = Board(width=20, height=10)
     parser = Parser(terminal.board)
 
     # Set red color, write char, then repeat
@@ -70,7 +70,7 @@ def test_rep_with_styled_character():
 
 def test_rep_at_line_wrap():
     """Test REP behavior when reaching end of line."""
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     terminal.board.modes.auto_wrap = True
     parser = Parser(terminal.board)
 
@@ -90,7 +90,7 @@ def test_rep_at_line_wrap():
 
 def test_rep_with_no_previous_character():
     """Test REP when no character has been printed yet."""
-    terminal = Terminal(width=20, height=10)
+    terminal = Board(width=20, height=10)
     parser = Parser(terminal.board)
 
     # REP without printing anything first
@@ -102,7 +102,7 @@ def test_rep_with_no_previous_character():
 
 def test_rep_after_control_sequence():
     """Test REP after control sequences (should repeat last graphic char)."""
-    terminal = Terminal(width=20, height=10)
+    terminal = Board(width=20, height=10)
     parser = Parser(terminal.board)
 
     parser.feed("A")
@@ -116,7 +116,7 @@ def test_rep_after_control_sequence():
 
 def test_rep_complex_sequence():
     """Test REP in a complex sequence like nethogs uses."""
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
     parser = Parser(terminal.board)
 
     # Simulate drawing a line

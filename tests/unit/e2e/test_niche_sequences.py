@@ -2,7 +2,7 @@
 
 from bittty.parser import Parser
 from bittty.personality import VT100
-from bittty.terminal import Terminal
+from bittty import Board
 
 
 class RecordingTransport:
@@ -17,7 +17,7 @@ class RecordingTransport:
 
 
 def _driver(**kwargs):
-    terminal = Terminal(width=20, height=5, **kwargs)
+    terminal = Board(width=20, height=5, **kwargs)
     transport = RecordingTransport()
     terminal.board.host.attach(transport)
     return terminal, Parser(terminal.board), transport

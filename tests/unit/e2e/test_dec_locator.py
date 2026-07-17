@@ -1,7 +1,7 @@
 """DEC locator: DECELR / DECSLE / DECRQLP / DECEFR and the DECLRP report."""
 
 from bittty.parser import Parser
-from bittty.terminal import Terminal
+from bittty import Board
 
 
 class RecordingTransport:
@@ -16,7 +16,7 @@ class RecordingTransport:
 
 
 def _driver():
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
     transport = RecordingTransport()
     terminal.board.host.attach(transport)
     return terminal, Parser(terminal.board), transport

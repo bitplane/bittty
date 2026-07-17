@@ -3,17 +3,20 @@ bittty: A fast, pure Python terminal emulator library.
 
 bittty (bitplane-tty) is a high-performance terminal emulator engine
 that provides comprehensive ANSI sequence parsing and terminal state management.
+
+Vocabulary: the `Board` is the machine (devices, registers, video memory, the
+child process). A terminal (bittty.terminals) is the chrome a human looks at,
+plugged into the board's display port. `Terminal` is deliberately not exported
+here — import it from bittty.terminals.
 """
 
-from .terminal import Terminal
+from .devices.board import Board
 from .buffer import Buffer
 from .parser import Parser
-from .devices.board import TerminalBoard
 from .personality import Personality, XTERM, VT100, VT220, LINUX
 from .operations import Operation, OperationSink
 from .transports import DisplayPort, HostPort, Presentable, WritableTransport
 from .caps import DisplayCaps
-from .frontends import Display
 from .style import (
     CURSOR_CODE,
     RESET_CODE,
@@ -26,8 +29,11 @@ try:
 except PackageNotFoundError:
     __version__ = "unknown"
 
+# Compat aliases — remove next release.
+TerminalBoard = Board
+
 __all__ = [
-    "Terminal",
+    "Board",
     "Buffer",
     "Parser",
     "Operation",
@@ -35,7 +41,6 @@ __all__ = [
     "HostPort",
     "DisplayPort",
     "Presentable",
-    "Display",
     "DisplayCaps",
     "TerminalBoard",
     "Personality",

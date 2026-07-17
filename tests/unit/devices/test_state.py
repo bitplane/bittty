@@ -1,9 +1,9 @@
-from bittty.terminal import Terminal
+from bittty import Board
 from bittty.constants import DEFAULT_TERMINAL_WIDTH, DEFAULT_TERMINAL_HEIGHT, DECAWM_AUTOWRAP, IRM_INSERT_REPLACE
 
 
 def test_resize():
-    terminal = Terminal(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
+    terminal = Board(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
     terminal.board.cursor.x = 70
     terminal.board.cursor.y = 20
 
@@ -23,7 +23,7 @@ def test_resize():
 
 
 def test_alternate_terminal_switching():
-    terminal = Terminal(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
+    terminal = Board(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
     assert not terminal.board.screen.in_alt_screen
     assert terminal.board.screen.current_buffer == terminal.board.screen.primary_buffer
 
@@ -47,7 +47,7 @@ def test_alternate_terminal_switching():
 
 
 def test_alignment_test():
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     terminal.board.screen.alignment_test()
 
     expected_char = "E"
@@ -58,7 +58,7 @@ def test_alignment_test():
 
 
 def test_alternate_terminal_on_off_restores_lines():
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     terminal.board.screen.current_buffer.set(0, 0, "Hello")
     terminal.board.screen.switch_screen(True)
     assert terminal.board.screen.current_buffer.get_line_text(0) == "          "
@@ -67,7 +67,7 @@ def test_alternate_terminal_on_off_restores_lines():
 
 
 def test_set_and_clear_modes():
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
 
     # Test setting a private mode
     terminal.board.modes.set_mode(DECAWM_AUTOWRAP, private=True)

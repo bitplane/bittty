@@ -1,14 +1,14 @@
 """Tests for OSC (Operating System Command) sequences."""
 
 from bittty.parser import Parser
-from bittty.terminal import Terminal
+from bittty import Board
 from bittty.constants import (
     DEFAULT_TERMINAL_WIDTH,
     DEFAULT_TERMINAL_HEIGHT,
 )
 
 
-def render_terminal_to_string(terminal: Terminal) -> str:
+def render_terminal_to_string(terminal: Board) -> str:
     """Render the terminal content to a plain string for testing."""
     return "\n".join(render_lines_to_string(terminal.get_content()))
 
@@ -34,36 +34,36 @@ class RecordingTransport:
 
 def test_osc_set_both_window_and_icon_title():
     """Test OSC 0 for setting both window and icon title."""
-    terminal = Terminal(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
+    terminal = Board(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
     parser = Parser(terminal.board)
 
     # OSC 0 sets both window and icon title
     # Format: ESC ] 0 ; <title> BEL
-    title_sequence = "\x1b]0;My Terminal Window\x07"
+    title_sequence = "\x1b]0;My Board Window\x07"
     parser.feed(title_sequence)
 
     # Check that both titles are set
-    assert terminal.board.title.title == "My Terminal Window"
-    assert terminal.board.title.icon_title == "My Terminal Window"
+    assert terminal.board.title.title == "My Board Window"
+    assert terminal.board.title.icon_title == "My Board Window"
 
     # Window title should not appear in screen content
     output = render_terminal_to_string(terminal)
-    assert "My Terminal Window" not in output
+    assert "My Board Window" not in output
     assert output.strip() == ""  # Screen should be empty
 
 
 def test_osc_window_title_with_text():
     """Test OSC sequence followed by regular text."""
-    terminal = Terminal(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
+    terminal = Board(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
     parser = Parser(terminal.board)
 
     # OSC sequence followed by text
-    data = "\x1b]0;Terminal Title\x07Hello World"
+    data = "\x1b]0;Board Title\x07Hello World"
     parser.feed(data)
 
     # Only "Hello World" should be visible
     output = render_terminal_to_string(terminal)
-    assert "Terminal Title" not in output
+    assert "Board Title" not in output
     assert "Hello World" in output
 
 
@@ -76,7 +76,7 @@ def test_ps1_osc_title_sequence():
     # \[\033[00m\] - Reset
     # \[\033[01;34m\] - Blue bold
 
-    terminal = Terminal(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
+    terminal = Board(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
     parser = Parser(terminal.board)
 
     # Simulate a typical PS1 prompt output
@@ -96,7 +96,7 @@ def test_ps1_osc_title_sequence():
 
 def test_ps1_with_colors():
     """Test PS1 with color escape sequences."""
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
     parser = Parser(terminal.board)
 
     # Simplified PS1 with colors: green username, blue path
@@ -133,7 +133,7 @@ def test_ps1_with_colors():
 
 def test_osc_string_terminator():
     """Test OSC with ST (String Terminator) instead of BEL."""
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
     parser = Parser(terminal.board)
 
     # OSC can be terminated with ST (ESC \) instead of BEL
@@ -148,7 +148,7 @@ def test_osc_string_terminator():
 
 def test_osc_set_icon_title():
     """Test OSC 1 for setting icon title only."""
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
     parser = Parser(terminal.board)
 
     # OSC 1 sets icon title
@@ -160,7 +160,7 @@ def test_osc_set_icon_title():
 
 def test_osc_set_window_title_only():
     """Test OSC 2 for setting window title only."""
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
     parser = Parser(terminal.board)
 
     # OSC 2 sets window title only
@@ -172,7 +172,7 @@ def test_osc_set_window_title_only():
 
 def test_osc_unknown_command():
     """Test OSC with unknown command number."""
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
     parser = Parser(terminal.board)
 
     # OSC with unknown command - should be consumed without error
@@ -186,7 +186,7 @@ def test_osc_unknown_command():
 
 def test_osc_malformed_command():
     """Test OSC with malformed command."""
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
     parser = Parser(terminal.board)
 
     # OSC with non-numeric command
@@ -200,7 +200,7 @@ def test_osc_malformed_command():
 
 def test_osc_empty_command():
     """Test OSC with empty string."""
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
     parser = Parser(terminal.board)
 
     # Empty OSC
@@ -214,7 +214,7 @@ def test_osc_empty_command():
 
 def test_osc_set_empty_title_and_icon():
     """Test OSC 0 with an empty title string."""
-    terminal = Terminal(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
+    terminal = Board(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
     parser = Parser(terminal.board)
 
     # Set initial titles
@@ -230,7 +230,7 @@ def test_osc_set_empty_title_and_icon():
 
 def test_osc_set_title_and_icon_no_semicolon():
     """Test OSC 0 without a semicolon separator."""
-    terminal = Terminal(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
+    terminal = Board(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
     parser = Parser(terminal.board)
 
     # Set initial titles
@@ -246,7 +246,7 @@ def test_osc_set_title_and_icon_no_semicolon():
 
 def test_osc_repeated_query_runs_each_time():
     """Repeated OSC queries must not be skipped by function-level caching."""
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
     parser = Parser(terminal.board)
     transport = RecordingTransport()
     terminal.board.host.attach(transport)
@@ -262,8 +262,8 @@ def test_osc_repeated_query_runs_each_time():
 
 def test_osc_same_sequence_applies_to_different_terminals():
     """OSC dispatch mutates the target terminal and must not cache by sequence only."""
-    first = Terminal(width=80, height=24)
-    second = Terminal(width=80, height=24)
+    first = Board(width=80, height=24)
+    second = Board(width=80, height=24)
 
     Parser(first.board).feed("\x1b]2;Shared Title\x07")
     Parser(second.board).feed("\x1b]2;Shared Title\x07")

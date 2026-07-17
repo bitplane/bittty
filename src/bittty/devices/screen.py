@@ -1,4 +1,4 @@
-"""Screen and editing operation handlers for the current Terminal state."""
+"""Screen and editing operation handlers for the current board state."""
 
 from __future__ import annotations
 
@@ -13,13 +13,13 @@ from ..style import Style, parse_sgr_sequence
 _REVERSE_ATTRS = {1: "bold", 4: "underline", 5: "blink", 7: "reverse"}
 
 if TYPE_CHECKING:
-    from .board import TerminalBoard
+    from .board import Board
 
 
 class ScreenDevice(Device):
     """Owns screen buffers and applies screen/editing operations."""
 
-    def __init__(self, board: TerminalBoard) -> None:
+    def __init__(self, board: Board) -> None:
         self.board = board
         self.primary_buffer = Buffer(board.width, board.height)
         self.alt_buffer = Buffer(board.width, board.height)

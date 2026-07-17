@@ -1,12 +1,12 @@
-from bittty import Parser, Terminal, TerminalBoard
+from bittty import Board, Parser
 from bittty.operations import Operation
 from bittty.style import parse_sgr_sequence
 
 
 def test_terminal_builds_board_and_exposes_device_slots():
-    terminal = Terminal(width=12, height=4)
+    terminal = Board(width=12, height=4)
 
-    assert isinstance(terminal.board, TerminalBoard)
+    assert isinstance(terminal.board, Board)
     assert terminal.parser.sink is terminal.board
     assert terminal.board.devices["cursor"] is terminal.board.cursor
     assert terminal.board.devices["host"] is terminal.board.host
@@ -18,7 +18,7 @@ def test_terminal_builds_board_and_exposes_device_slots():
 
 
 def test_parser_reuses_existing_terminal_board_by_default():
-    terminal = Terminal(width=12, height=4)
+    terminal = Board(width=12, height=4)
 
     parser = Parser(terminal.board)
 
@@ -27,7 +27,7 @@ def test_parser_reuses_existing_terminal_board_by_default():
 
 
 def test_board_routes_operations_to_plugged_in_devices():
-    terminal = Terminal(width=12, height=4)
+    terminal = Board(width=12, height=4)
     board = terminal.board
 
     board.handle_operation(Operation("SGR", (parse_sgr_sequence("\x1b[31m"), False), "\x1b[31m"))

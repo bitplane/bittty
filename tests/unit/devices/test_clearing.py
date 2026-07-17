@@ -1,4 +1,4 @@
-from bittty.terminal import Terminal
+from bittty import Board
 from bittty.constants import (
     ERASE_FROM_CURSOR_TO_END,
     ERASE_FROM_START_TO_CURSOR,
@@ -7,7 +7,7 @@ from bittty.constants import (
 
 
 def test_clear_rect():
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     for y in range(5):
         for x in range(10):
             terminal.board.screen.current_buffer.set_cell(x, y, "X")
@@ -24,7 +24,7 @@ def test_clear_rect():
 
 
 def test_clear_rect_with_style():
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     for y in range(5):
         for x in range(10):
             terminal.board.screen.current_buffer.set_cell(x, y, "X", f"\x1b[{31 + y}m")
@@ -43,7 +43,7 @@ def test_clear_rect_with_style():
 
 
 def test_clear_line_from_cursor_to_end():
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     terminal.board.screen.current_buffer.set(0, 0, "0123456789")
     terminal.board.cursor.x = 5
     terminal.board.cursor.y = 0
@@ -52,7 +52,7 @@ def test_clear_line_from_cursor_to_end():
 
 
 def test_clear_line_from_beginning_to_cursor():
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     terminal.board.screen.current_buffer.set(0, 0, "0123456789")
     terminal.board.cursor.x = 5
     terminal.board.cursor.y = 0
@@ -61,7 +61,7 @@ def test_clear_line_from_beginning_to_cursor():
 
 
 def test_clear_line_entire_line():
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     terminal.board.screen.current_buffer.set(0, 0, "0123456789")
     terminal.board.cursor.y = 0
     terminal.board.screen.clear_line(ERASE_ALL)
@@ -69,7 +69,7 @@ def test_clear_line_entire_line():
 
 
 def test_clear_line_with_mixed_styles():
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     terminal.board.screen.current_buffer.set(0, 0, "ABCDEFGHI")
     terminal.board.cursor.x = 3
     terminal.board.cursor.y = 0
@@ -84,14 +84,14 @@ def test_clear_line_with_mixed_styles():
 
 
 def test_clear_line_invalid_cursor():
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     terminal.board.cursor.y = 10  # Invalid cursor position
     terminal.board.screen.clear_line(ERASE_FROM_CURSOR_TO_END)
     # Should not raise an error and do nothing
 
 
 def test_clear_screen_invalid_cursor():
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     terminal.board.cursor.y = 10  # Invalid cursor position
     terminal.board.screen.clear_screen(0)
     # Should not raise an error but still clear the terminal below

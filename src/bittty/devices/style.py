@@ -1,4 +1,4 @@
-"""Style operation handler for the current Terminal state."""
+"""Style operation handler for the current board state."""
 
 from __future__ import annotations
 
@@ -9,13 +9,13 @@ from ..operations import Operation
 from ..style import Style, get_background, parse_sgr_sequence, style_to_ansi
 
 if TYPE_CHECKING:
-    from .board import TerminalBoard
+    from .board import Board
 
 
 class StyleDevice(Device):
     """Owns current style state and applies style operations."""
 
-    def __init__(self, board: TerminalBoard) -> None:
+    def __init__(self, board: Board) -> None:
         self.board = board
         self.current = Style()
         self.default = Style()  # ESC[8]: the attributes SGR 0 resets to

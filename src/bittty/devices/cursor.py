@@ -1,4 +1,4 @@
-"""Cursor operation handler for the current Terminal state."""
+"""Cursor operation handler for the current board state."""
 
 from __future__ import annotations
 
@@ -7,13 +7,13 @@ from typing import TYPE_CHECKING
 from .base import Device
 
 if TYPE_CHECKING:
-    from .board import TerminalBoard
+    from .board import Board
 
 
 class CursorDevice(Device):
     """Owns cursor state and applies cursor operations."""
 
-    def __init__(self, board: TerminalBoard) -> None:
+    def __init__(self, board: Board) -> None:
         self.board = board
         self.x = 0
         self.y = 0

@@ -1,24 +1,23 @@
-"""Phase 3: PassthroughDisplay — the reference frontend, tested without a real tty.
+"""StdioTerminal — the reference terminal, tested without a real tty.
 
 Construction allocates no PTY and spawns no process (that happens in start_process),
 so these exercise the composition and the Display hooks in isolation.
 """
 
-from bittty.frontends import Display
-from bittty.frontends.passthrough import PassthroughDisplay
+from bittty.terminals import StdioTerminal, Terminal
 from bittty.parser import Parser
 
 
-def test_is_a_display_composing_a_terminal():
-    display = PassthroughDisplay()
-    assert isinstance(display, Display)
-    assert display.terminal is not None
-    assert display.terminal.board.display.connected is True  # attached itself
-    assert display.terminal.pty is None  # no PTY until start_process
+def test_is_a_terminal_composing_a_board():
+    display = StdioTerminal()
+    assert isinstance(display, Terminal)
+    assert display.board is not None
+    assert display.board.display.connected is True  # attached itself
+    assert display.board.pty is None  # no PTY until start_process
 
 
 def test_on_mouse_mode_mirrors_onto_the_host(capsys):
-    display = PassthroughDisplay()
+    display = StdioTerminal()
     display.on_mouse_mode("basic", False)
     assert "\033[?1000h\033[?1006h" in capsys.readouterr().out
     assert display.host_mouse_mode == "basic"
@@ -34,8 +33,8 @@ def test_on_mouse_mode_mirrors_onto_the_host(capsys):
 
 
 def test_mouse_mode_flows_from_the_parser_through_the_seam(capsys):
-    display = PassthroughDisplay()
-    parser = Parser(display.terminal.board)
+    display = StdioTerminal()
+    parser = Parser(display.board.board)
     parser.feed("\x1b[?1000h")  # child turns on mouse tracking
     # the modes device emits MouseModeChanged -> on_mouse_mode -> host enable printed
     assert "\033[?1000h\033[?1006h" in capsys.readouterr().out
@@ -43,7 +42,7 @@ def test_mouse_mode_flows_from_the_parser_through_the_seam(capsys):
 
 
 def test_on_bell_and_on_title(capsys):
-    display = PassthroughDisplay()
+    display = StdioTerminal()
     display.on_bell()
     assert "\a" in capsys.readouterr().out
     display.on_title("my title", "my title")
@@ -51,9 +50,9 @@ def test_on_bell_and_on_title(capsys):
 
 
 def test_handle_sgr_mouse_sequence_reinjects(monkeypatch):
-    display = PassthroughDisplay()
+    display = StdioTerminal()
     calls = []
-    monkeypatch.setattr(display.terminal, "input_mouse", lambda *a, **k: calls.append((a, k)))
+    monkeypatch.setattr(display.board, "input_mouse", lambda *a, **k: calls.append((a, k)))
 
     assert display.handle_sgr_mouse_sequence("\033[<0;10;5M") is True  # left press at (10,5)
     assert calls == [((10, 5, 0, "press", set()), {})]
@@ -67,15 +66,15 @@ def test_handle_sgr_mouse_sequence_reinjects(monkeypatch):
 
 
 def test_shell_detection_returns_something():
-    display = PassthroughDisplay()
+    display = StdioTerminal()
     assert isinstance(display.get_default_shell(), str)
 
 
 def test_lone_escape_keypress_is_flushed_next_tick():
     """A bare ESC held back by the mouse-prefix buffer must reach the child."""
-    display = PassthroughDisplay()
+    display = StdioTerminal()
     sent = []
-    display.terminal.input = sent.append
+    display.board.input = sent.append
 
     display.handle_input("\033")  # could be the start of a mouse report: buffered
     assert sent == []
@@ -91,9 +90,9 @@ def test_lone_escape_keypress_is_flushed_next_tick():
 
 def test_split_mouse_report_still_reassembles():
     """A mouse report split across reads is held and re-injected whole."""
-    display = PassthroughDisplay()
+    display = StdioTerminal()
     seen = []
-    display.terminal.input_mouse = lambda x, y, b, e, m: seen.append((x, y, b, e))
+    display.board.input_mouse = lambda x, y, b, e, m: seen.append((x, y, b, e))
 
     display.handle_input("\033[<0;3;")
     assert seen == []
@@ -103,32 +102,32 @@ def test_split_mouse_report_still_reassembles():
 
 def test_host_focus_events_reach_the_board_and_child():
     """CSI I / CSI O from the host set the board's focus register."""
-    display = PassthroughDisplay()
+    display = StdioTerminal()
     typed = []
-    display.terminal.input = typed.append
+    display.board.input = typed.append
 
     display.handle_input("ab\033[Ocd")
-    assert display.terminal.board.focused is False
+    assert display.board.focused is False
     assert display.dirty is True
     assert typed == ["ab", "cd"]  # surrounding keystrokes still delivered
 
     display.handle_input("\033[I")
-    assert display.terminal.board.focused is True
+    assert display.board.focused is True
 
 
 def test_render_hides_software_cursor_when_unfocused(capsys):
-    display = PassthroughDisplay()
-    display.terminal.parser.feed("hello")
+    display = StdioTerminal()
+    display.board.parser.feed("hello")
 
     def pane_area():
         # Everything before the status line (which uses reverse video itself).
         out = capsys.readouterr().out
         return out.split(f"\033[{display.height + 1}H")[0]
 
-    display.terminal.board.focused = True
+    display.board.focused = True
     display.render_screen()
     assert "\033[7m" in pane_area()  # reverse-video cursor cell
 
-    display.terminal.board.focused = False
+    display.board.focused = False
     display.render_screen()
     assert "\033[7m" not in pane_area()

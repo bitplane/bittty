@@ -1,7 +1,7 @@
 """Phase 4: capability probing — parsing and env fallback (tty-free)."""
 
 from bittty.caps import DisplayCaps
-from bittty.frontends.probe import color_depth_from_env, parse_probe_replies, probe_display_caps
+from bittty.terminals.probe import color_depth_from_env, parse_probe_replies, probe_display_caps
 
 
 def test_color_depth_from_env():

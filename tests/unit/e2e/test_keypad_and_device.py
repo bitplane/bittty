@@ -1,11 +1,11 @@
 """Tests for keypad mode and device control sequences."""
 
 from bittty.parser import Parser
-from bittty.terminal import Terminal
+from bittty import Board
 from bittty.constants import ESC, DEFAULT_TERMINAL_WIDTH, DEFAULT_TERMINAL_HEIGHT
 
 
-def render_terminal_to_string(terminal: Terminal) -> str:
+def render_terminal_to_string(terminal: Board) -> str:
     """Render the terminal content to a plain string for testing."""
     return "\n".join(render_lines_to_string(terminal.get_content()))
 
@@ -21,7 +21,7 @@ def render_lines_to_string(lines: list[list[tuple[str, str]]]) -> list[str]:
 # Keypad mode tests
 def test_keypad_application_mode():
     """Test ESC = (DECKPAM) - Application Keypad Mode."""
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
     parser = Parser(terminal.board)
 
     # Initially should be in normal keypad mode
@@ -36,7 +36,7 @@ def test_keypad_application_mode():
 
 def test_keypad_normal_mode():
     """Test ESC > (DECKPNM) - Normal Keypad Mode."""
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
     parser = Parser(terminal.board)
 
     # Start in application mode
@@ -52,7 +52,7 @@ def test_keypad_normal_mode():
 
 def test_esc_greater_than_keypad_numeric_mode():
     """Test ESC > sequence (DECKPNM - keypad numeric mode) basic functionality."""
-    terminal = Terminal(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
+    terminal = Board(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
     parser = Parser(terminal.board)
 
     # ESC > sets keypad to numeric mode - should be consumed without error
@@ -65,7 +65,7 @@ def test_esc_greater_than_keypad_numeric_mode():
 
 def test_keypad_mode_sequences_with_text():
     """Test keypad sequences followed by regular text."""
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
     parser = Parser(terminal.board)
 
     # Test sequence: DECKPAM, text, DECKPNM, more text
@@ -79,7 +79,7 @@ def test_keypad_mode_sequences_with_text():
 
 def test_keypad_sequences_with_text():
     """Test keypad sequences followed by regular text - basic version."""
-    terminal = Terminal(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
+    terminal = Board(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
     parser = Parser(terminal.board)
 
     # Send keypad sequences followed by text
@@ -100,7 +100,7 @@ def test_keypad_sequences_with_text():
 # Device control and status tests
 def test_csi_p_device_status():
     """Test CSI p sequence (device status query)."""
-    terminal = Terminal(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
+    terminal = Board(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
     parser = Parser(terminal.board)
 
     # CSI p is a device status query - should be consumed without error
@@ -113,7 +113,7 @@ def test_csi_p_device_status():
 
 def test_device_control_string():
     """Test ESC P...ESC \\ (DCS) - Device Control String."""
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
     parser = Parser(terminal.board)
 
     # Send a DCS sequence (should be ignored but not crash)
@@ -131,7 +131,7 @@ def test_device_control_string():
 
 def test_device_control_string_with_bel():
     """Test DCS terminated with BEL instead of ST."""
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
     parser = Parser(terminal.board)
 
     # Send a DCS sequence terminated with BEL
@@ -149,7 +149,7 @@ def test_device_control_string_with_bel():
 
 def test_dcs_with_complex_content():
     """Test DCS with more complex control characters inside."""
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
     parser = Parser(terminal.board)
 
     # DCS with various characters including CSI-like sequences
@@ -168,7 +168,7 @@ def test_dcs_with_complex_content():
 
 def test_string_terminator():
     """Test ESC \\ (ST) - String Terminator."""
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
     parser = Parser(terminal.board)
 
     # ST should be consumed but not affect output
@@ -182,7 +182,7 @@ def test_string_terminator():
 # Cursor save/restore tests
 def test_csi_cursor_save_restore():
     """Test CSI s/u cursor save/restore sequences."""
-    terminal = Terminal(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
+    terminal = Board(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
     parser = Parser(terminal.board)
 
     # Move cursor and save position
@@ -203,7 +203,7 @@ def test_csi_cursor_save_restore():
 # Privacy and other CSI sequences
 def test_csi_privacy_message():
     """Test CSI ^ sequence (Privacy Message)."""
-    terminal = Terminal(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
+    terminal = Board(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
     parser = Parser(terminal.board)
 
     # CSI ^ with parameter should be consumed

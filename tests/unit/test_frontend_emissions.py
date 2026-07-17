@@ -1,6 +1,6 @@
 """Phase 2: devices emit present events alongside (never instead of) their register writes."""
 
-from bittty import Terminal
+from bittty import Board
 from bittty.parser import Parser
 from bittty.present import (
     Bell,
@@ -28,7 +28,7 @@ class Recorder:
 
 
 def _term():
-    terminal = Terminal(width=20, height=3)
+    terminal = Board(width=20, height=3)
     rec = Recorder()
     terminal.board.display.attach(rec)
     return terminal, Parser(terminal.board), rec
@@ -107,7 +107,7 @@ def test_cursor_and_sync_events():
 
 def test_events_are_dropped_with_no_frontend():
     # backward-compat: unattached board mutates registers and never errors
-    terminal = Terminal(width=20, height=3)
+    terminal = Board(width=20, height=3)
     parser = Parser(terminal.board)
     parser.feed("\x1b]2;t\x07\x1b[?1000h\x07")
     assert terminal.board.title.title == "t"

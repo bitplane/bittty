@@ -4,7 +4,7 @@ from bittty import constants
 from bittty.parser import Parser
 from bittty.personality import LINUX, VT100, VT220, XTERM
 from bittty.style import Color
-from bittty.terminal import Terminal
+from bittty import Board
 
 
 class RecordingTransport:
@@ -22,7 +22,7 @@ def _replies(personality, sequence):
     kwargs = {"width": 80, "height": 24}
     if personality is not None:
         kwargs["personality"] = personality
-    terminal = Terminal(**kwargs)
+    terminal = Board(**kwargs)
     transport = RecordingTransport()
     terminal.board.host.attach(transport)
     Parser(terminal.board).feed(sequence)
@@ -43,17 +43,17 @@ def test_vt100_does_not_answer_secondary_da():
 
 def test_default_personality_is_xterm():
     assert _replies(None, "\x1b[c") == ["\033[?62;1;6;8;9;15;18;21;22;23c"]
-    assert Terminal().personality.name == "xterm"
+    assert Board().personality.name == "xterm"
 
 
 def test_personality_can_omit_a_mode():
     # xterm supports bracketed paste (private mode 2004); a VT100 does not, so
     # the same DECSET sequence is a no-op there.
-    xterm = Terminal(width=80, height=24)
+    xterm = Board(width=80, height=24)
     Parser(xterm.board).feed("\x1b[?2004h")
     assert xterm.board.modes.bracketed_paste is True
 
-    vt100 = Terminal(width=80, height=24, personality=VT100)
+    vt100 = Board(width=80, height=24, personality=VT100)
     Parser(vt100.board).feed("\x1b[?2004h")
     assert vt100.board.modes.bracketed_paste is False
 
@@ -61,11 +61,11 @@ def test_personality_can_omit_a_mode():
 def test_personality_charset_repertoire():
     # DEC Supplemental (designator "<") arrived with the VT220; a VT100 ignores
     # the designation and stays on ASCII, while xterm accepts it.
-    xterm = Terminal(width=80, height=24)
+    xterm = Board(width=80, height=24)
     Parser(xterm.board).feed("\x1b(<")  # SCS G0 -> DEC Supplemental
     assert xterm.board.charset.g0_charset == "<"
 
-    vt100 = Terminal(width=80, height=24, personality=VT100)
+    vt100 = Board(width=80, height=24, personality=VT100)
     Parser(vt100.board).feed("\x1b(<")
     assert vt100.board.charset.g0_charset == "B"  # unsupported -> ignored
 
@@ -78,7 +78,7 @@ def _fkey(personality, num, modifier=constants.KEY_MOD_NONE):
     kwargs = {"width": 80, "height": 24}
     if personality is not None:
         kwargs["personality"] = personality
-    terminal = Terminal(**kwargs)
+    terminal = Board(**kwargs)
     transport = RecordingTransport()
     terminal.board.host.attach(transport)
     terminal.input_fkey(num, modifier)
@@ -89,7 +89,7 @@ def _key(personality, char, modifier=constants.KEY_MOD_NONE):
     kwargs = {"width": 80, "height": 24}
     if personality is not None:
         kwargs["personality"] = personality
-    terminal = Terminal(**kwargs)
+    terminal = Board(**kwargs)
     transport = RecordingTransport()
     terminal.board.host.attach(transport)
     terminal.input_key(char, modifier)
@@ -112,7 +112,7 @@ def test_vt220_is_distinct_across_every_axis():
     assert _replies(VT220, "\x1b[c") == ["\033[?62;1;2;6;8;9c"]
     assert _replies(VT220, "\x1b[>c") == ["\033[>1;10;0c"]
 
-    vt220 = Terminal(width=80, height=24, personality=VT220)
+    vt220 = Board(width=80, height=24, personality=VT220)
     parser = Parser(vt220.board)
 
     # Modes: the VT220 predates mouse tracking, so DECSET 1000 is a no-op.
@@ -149,13 +149,13 @@ def test_linux_console_is_distinct():
     assert _fkey(LINUX, 6) == ["\x1b[17~"]
 
     # Palette: the console ships the VGA colours, not xterm's.
-    linux = Terminal(width=80, height=24, personality=LINUX)
+    linux = Board(width=80, height=24, personality=LINUX)
     assert linux.board.palette.resolve(Color("indexed", 1)) == (170, 0, 0)  # VGA red
-    assert Terminal().board.palette.resolve(Color("indexed", 1)) == (205, 0, 0)  # xterm red
+    assert Board().board.palette.resolve(Color("indexed", 1)) == (205, 0, 0)  # xterm red
 
 
 def test_numpad_uses_the_keymap():
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
     transport = RecordingTransport()
     terminal.board.host.attach(transport)
 
@@ -181,12 +181,12 @@ def test_monochrome_personality_ignores_sgr_colour():
     from bittty.style import Color
 
     # xterm keeps the colour; a monochrome VT100 drops it but keeps bold.
-    xterm = Terminal(width=80, height=24)
+    xterm = Board(width=80, height=24)
     Parser(xterm.board).feed("\x1b[31;1m")
     assert xterm.board.style.current.fg == Color("indexed", 1)
     assert xterm.board.style.current.bold is True
 
-    vt100 = Terminal(width=80, height=24, personality=VT100)
+    vt100 = Board(width=80, height=24, personality=VT100)
     Parser(vt100.board).feed("\x1b[31;1m")
     assert vt100.board.style.current.fg is None  # colour ignored
     assert vt100.board.style.current.bold is True  # video attributes still apply
@@ -195,13 +195,13 @@ def test_monochrome_personality_ignores_sgr_colour():
 def test_decrqm_reports_unrecognised_for_omitted_mode():
     # DECRQM for a mode the personality lacks must answer "not recognised" (0).
     transport_xterm = RecordingTransport()
-    xterm = Terminal(width=80, height=24)
+    xterm = Board(width=80, height=24)
     xterm.board.host.attach(transport_xterm)
     Parser(xterm.board).feed("\x1b[?2028$p")  # DECRQM for auto-resize mode
     assert transport_xterm.data == ["\033[?2028;2$y"]  # 2 = reset (recognised)
 
     transport_vt100 = RecordingTransport()
-    vt100 = Terminal(width=80, height=24, personality=VT100)
+    vt100 = Board(width=80, height=24, personality=VT100)
     vt100.board.host.attach(transport_vt100)
     Parser(vt100.board).feed("\x1b[?2028$p")
     assert transport_vt100.data == ["\033[?2028;0$y"]  # 0 = not recognised

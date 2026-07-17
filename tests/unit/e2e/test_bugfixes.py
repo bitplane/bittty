@@ -1,11 +1,11 @@
 """Regression tests for the Tier-0 correctness bugs."""
 
 from bittty.parser import Parser
-from bittty.terminal import Terminal
+from bittty import Board
 
 
 def _term():
-    terminal = Terminal(width=20, height=10)
+    terminal = Board(width=20, height=10)
     return terminal, Parser(terminal.board)
 
 

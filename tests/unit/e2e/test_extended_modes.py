@@ -2,7 +2,7 @@
 
 from bittty.parser import Parser
 from bittty.personality import VT220
-from bittty.terminal import Terminal
+from bittty import Board
 
 
 class RecordingTransport:
@@ -20,7 +20,7 @@ def _term(personality=None):
     kwargs = {"width": 20, "height": 5}
     if personality is not None:
         kwargs["personality"] = personality
-    terminal = Terminal(**kwargs)
+    terminal = Board(**kwargs)
     transport = RecordingTransport()
     terminal.board.host.attach(transport)
     return terminal, Parser(terminal.board), transport

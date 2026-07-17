@@ -1,12 +1,12 @@
 """Test DECSCLM (Scrolling Mode) implementation."""
 
-from bittty.terminal import Terminal
+from bittty import Board
 from bittty.parser import Parser
 
 
 def test_decsclm_default_jump_scrolling():
     """Test that scrolling is jump (instant) by default."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
 
     # Should be jump scrolling by default (scroll_mode = False)
     assert not terminal.board.modes.scroll_mode
@@ -32,7 +32,7 @@ def test_decsclm_default_jump_scrolling():
 
 def test_decsclm_set_smooth_scrolling():
     """Test setting DECSCLM to enable smooth scrolling."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Set DECSCLM mode (ESC [ ? 4 h)
@@ -44,7 +44,7 @@ def test_decsclm_set_smooth_scrolling():
 
 def test_decsclm_reset_to_jump():
     """Test resetting DECSCLM back to jump scrolling."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Set smooth scrolling first
@@ -60,7 +60,7 @@ def test_decsclm_reset_to_jump():
 
 def test_decsclm_affects_scroll_behavior():
     """Test that DECSCLM actually affects scrolling behavior."""
-    terminal = Terminal(width=20, height=3)
+    terminal = Board(width=20, height=3)
     parser = Parser(terminal.board)
 
     # Set smooth scrolling

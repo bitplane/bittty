@@ -2,7 +2,7 @@
 
 from bittty.parser import Parser
 from bittty.personality import LINUX
-from bittty.terminal import Terminal
+from bittty import Board
 
 
 class RecordingTransport:
@@ -17,7 +17,7 @@ class RecordingTransport:
 
 
 def _term(**kwargs):
-    terminal = Terminal(width=20, height=3, **kwargs)
+    terminal = Board(width=20, height=3, **kwargs)
     return terminal, Parser(terminal.board)
 
 

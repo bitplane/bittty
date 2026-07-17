@@ -1,12 +1,12 @@
 """Test SRM (Send/Receive Mode) implementation."""
 
-from bittty.terminal import Terminal
+from bittty import Board
 from bittty.parser import Parser
 
 
 def test_srm_default_echo_enabled():
     """Test that local echo is enabled by default."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
 
     # Should have local echo enabled by default (local_echo = True)
     assert terminal.board.modes.local_echo
@@ -14,7 +14,7 @@ def test_srm_default_echo_enabled():
 
 def test_srm_disable_local_echo():
     """Test disabling SRM to turn off local echo."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Disable SRM mode (ESC [ 12 h) - turns OFF echo
@@ -26,7 +26,7 @@ def test_srm_disable_local_echo():
 
 def test_srm_enable_local_echo():
     """Test enabling SRM to turn on local echo."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Disable echo first
@@ -42,7 +42,7 @@ def test_srm_enable_local_echo():
 
 def test_srm_affects_input_echo():
     """Test that SRM mode affects whether input is echoed to screen."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # With echo enabled (default), typing should echo to screen
@@ -66,7 +66,7 @@ def test_srm_affects_input_echo():
 
 def test_srm_password_input_scenario():
     """Test typical password input scenario with SRM."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Simulate sudo asking for password
@@ -86,7 +86,7 @@ def test_srm_password_input_scenario():
 
 def test_srm_toggle_state():
     """Test toggling SRM state multiple times."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Start with default (echo enabled)

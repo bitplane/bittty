@@ -4,7 +4,7 @@ import base64
 
 from bittty.parser import Parser
 from bittty.style import Color
-from bittty.terminal import Terminal
+from bittty import Board
 
 
 class RecordingTransport:
@@ -19,7 +19,7 @@ class RecordingTransport:
 
 
 def test_osc8_stamps_hyperlink_on_cells():
-    terminal = Terminal(width=20, height=3)
+    terminal = Board(width=20, height=3)
     parser = Parser(terminal.board)
     parser.feed("\x1b]8;;http://example.com\x1b\\link")
     parser.feed("\x1b]8;;\x1b\\X")  # close the link, then a plain char
@@ -31,7 +31,7 @@ def test_osc8_stamps_hyperlink_on_cells():
 
 
 def test_hyperlink_survives_sgr_reset_but_colour_does_not():
-    terminal = Terminal(width=20, height=3)
+    terminal = Board(width=20, height=3)
     parser = Parser(terminal.board)
     parser.feed("\x1b]8;id=1;http://x\x1b\\")
     parser.feed("\x1b[31ma")  # red 'a' inside the link
@@ -45,7 +45,7 @@ def test_hyperlink_survives_sgr_reset_but_colour_does_not():
 
 
 def test_osc52_set_and_query_clipboard():
-    terminal = Terminal(width=20, height=3)
+    terminal = Board(width=20, height=3)
     transport = RecordingTransport()
     terminal.board.host.attach(transport)
     parser = Parser(terminal.board)

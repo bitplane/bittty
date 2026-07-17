@@ -1,7 +1,7 @@
 """ENQ answerback, ECMA-48 SL/SR panning, and DEC bell-volume registers."""
 
 from bittty.parser import Parser
-from bittty.terminal import Terminal
+from bittty import Board
 
 
 class RecordingTransport:
@@ -16,7 +16,7 @@ class RecordingTransport:
 
 
 def _term():
-    terminal = Terminal(width=10, height=3)
+    terminal = Board(width=10, height=3)
     return terminal, Parser(terminal.board)
 
 

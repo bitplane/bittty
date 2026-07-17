@@ -1,12 +1,12 @@
 """Test comprehensive character set switching functionality."""
 
-from bittty.terminal import Terminal
+from bittty import Board
 from bittty.parser import Parser
 
 
 def test_g1_designation_and_switching():
     """Test G1 character set designation and switching."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Set G1 to DEC Special Graphics
@@ -28,7 +28,7 @@ def test_g1_designation_and_switching():
 
 def test_g2_g3_designation():
     """Test G2 and G3 character set designation."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Set G2 to DEC Special Graphics
@@ -44,7 +44,7 @@ def test_g2_g3_designation():
 
 def test_single_shift_2():
     """Test Single Shift 2 (SS2) for temporary G2 usage."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Set G2 to DEC Special Graphics
@@ -65,7 +65,7 @@ def test_single_shift_2():
 
 def test_single_shift_3():
     """Test Single Shift 3 (SS3) for temporary G3 usage."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Set G3 to UK character set
@@ -86,7 +86,7 @@ def test_single_shift_3():
 
 def test_multiple_single_shifts():
     """Test multiple single shifts in sequence."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Set G2 to DEC Special Graphics
@@ -116,7 +116,7 @@ def test_multiple_single_shifts():
 
 def test_locking_shift_2_invokes_g2_into_gl():
     """LS2 (ESC n) persistently invokes G2 into GL, unlike the one-shot SS2."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     parser.feed("\x1b*0")  # ESC * 0 — designate G2 = DEC Special Graphics
@@ -130,7 +130,7 @@ def test_locking_shift_2_invokes_g2_into_gl():
 
 def test_locking_shift_3_invokes_g3_into_gl():
     """LS3 (ESC o) persistently invokes G3 into GL."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     parser.feed("\x1b+0")  # ESC + 0 — designate G3 = DEC Special Graphics
@@ -144,7 +144,7 @@ def test_locking_shift_3_invokes_g3_into_gl():
 
 def test_locking_shift_1_right_translates_gr_half():
     """LS1R (ESC ~) invokes G1 into GR; 0xA0-0xFF map through it while GL stays ASCII."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     parser.feed("\x1b)0")  # ESC ) 0 — designate G1 = DEC Special Graphics
@@ -157,7 +157,7 @@ def test_locking_shift_1_right_translates_gr_half():
 
 def test_locking_shift_2_right_translates_gr_half():
     """LS2R (ESC }) invokes G2 into GR."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     parser.feed("\x1b*0")  # ESC * 0 — designate G2 = DEC Special Graphics
@@ -169,7 +169,7 @@ def test_locking_shift_2_right_translates_gr_half():
 
 def test_reset_clears_locking_shifts():
     """RIS restores GL to G0 and GR to G1 (both ASCII)."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     parser.feed("\x1b*0\x1bn")  # G2 = graphics, LS2 -> GL = G2
@@ -186,7 +186,7 @@ def test_reset_clears_locking_shifts():
 
 def test_si_so_switching():
     """Test Shift In/Shift Out switching between G0 and G1."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Set G1 to DEC Special Graphics
@@ -216,7 +216,7 @@ def test_si_so_switching():
 
 def test_persistent_charset_state():
     """Test that character set state persists until changed."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Set G1 to DEC Special Graphics
@@ -237,7 +237,7 @@ def test_persistent_charset_state():
 
 def test_mixed_character_sets():
     """Test complex mixing of multiple character sets."""
-    terminal = Terminal(width=30, height=5)
+    terminal = Board(width=30, height=5)
     parser = Parser(terminal.board)
 
     # Set all character sets
@@ -274,7 +274,7 @@ def test_mixed_character_sets():
 
 def test_charset_with_colors():
     """Test character sets work with color changes."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Set G1 to DEC Special Graphics
@@ -305,7 +305,7 @@ def test_charset_with_colors():
 
 def test_charset_reset_on_esc_c():
     """Test that ESC c resets character sets to defaults."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Set non-default character sets
@@ -331,7 +331,7 @@ def test_charset_reset_on_esc_c():
 
 def test_all_dec_special_graphics_characters():
     """Test the full DEC Special Graphics character set mapping."""
-    terminal = Terminal(width=50, height=10)
+    terminal = Board(width=50, height=10)
     parser = Parser(terminal.board)
 
     parser.feed("\x1b(0")  # Set G0 to DEC Special Graphics
@@ -348,7 +348,7 @@ def test_all_dec_special_graphics_characters():
 
 def test_uk_national_character_set():
     """Test UK National character set (# -> £)."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     parser.feed("\x1b(A")  # Set G0 to UK National
@@ -366,7 +366,7 @@ def test_uk_national_character_set():
 
 def test_dec_technical_charset_designation():
     """Test DEC Technical character set designation and usage."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Set G1 to DEC Technical character set
@@ -396,7 +396,7 @@ def test_dec_technical_charset_designation():
 
 def test_dec_technical_greek_letters():
     """Test DEC Technical character set Greek letters."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Set G1 to DEC Technical
@@ -417,7 +417,7 @@ def test_dec_technical_greek_letters():
 
 def test_dec_technical_mathematical_symbols():
     """Test DEC Technical character set mathematical symbols."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Set G1 to DEC Technical
@@ -438,7 +438,7 @@ def test_dec_technical_mathematical_symbols():
 
 def test_german_national_charset():
     """Test German National character set (ESC ( K)."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Set G0 to German National
@@ -453,7 +453,7 @@ def test_german_national_charset():
 
 def test_french_national_charset():
     """Test French National character set (ESC ( R)."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Set G0 to French National
@@ -468,7 +468,7 @@ def test_french_national_charset():
 
 def test_spanish_national_charset():
     """Test Spanish National character set (ESC ( Z)."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Set G0 to Spanish National
@@ -483,7 +483,7 @@ def test_spanish_national_charset():
 
 def test_italian_national_charset():
     """Test Italian National character set (ESC ( Y)."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Set G0 to Italian National
@@ -498,7 +498,7 @@ def test_italian_national_charset():
 
 def test_swedish_national_charset():
     """Test Swedish National character set (ESC ( H)."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Set G0 to Swedish National
@@ -513,7 +513,7 @@ def test_swedish_national_charset():
 
 def test_danish_norwegian_charset():
     """Test Danish/Norwegian National character set (ESC ( E)."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Set G0 to Danish/Norwegian National
@@ -528,7 +528,7 @@ def test_danish_norwegian_charset():
 
 def test_finnish_national_charset():
     """Test Finnish National character set (ESC ( C)."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Set G0 to Finnish National
@@ -543,7 +543,7 @@ def test_finnish_national_charset():
 
 def test_dutch_national_charset():
     """Test Dutch National character set (ESC ( 4)."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Set G0 to Dutch National
@@ -558,7 +558,7 @@ def test_dutch_national_charset():
 
 def test_french_canadian_charset():
     """Test French Canadian National character set (ESC ( Q)."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Set G0 to French Canadian National
@@ -573,7 +573,7 @@ def test_french_canadian_charset():
 
 def test_japanese_roman_charset():
     """Test Japanese Roman character set (ESC ( J)."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Set G0 to Japanese Roman
@@ -588,7 +588,7 @@ def test_japanese_roman_charset():
 
 def test_swiss_national_charset():
     """Test Swiss National character set (ESC ( =)."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Set G0 to Swiss National
@@ -603,7 +603,7 @@ def test_swiss_national_charset():
 
 def test_national_charset_switching():
     """Test switching between different national character sets."""
-    terminal = Terminal(width=30, height=5)
+    terminal = Board(width=30, height=5)
     parser = Parser(terminal.board)
 
     # Set G0 to German, G1 to French

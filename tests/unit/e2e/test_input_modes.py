@@ -2,13 +2,13 @@
 
 from unittest.mock import Mock
 
-from bittty.terminal import Terminal
+from bittty import Board
 from bittty import constants
 
 
 def test_cursor_keys_normal_mode():
     """Test cursor keys in normal mode (DECCKM disabled)."""
-    terminal = Terminal()
+    terminal = Board()
     terminal.pty = Mock()
     terminal.board.modes.cursor_application_mode = False
 
@@ -22,7 +22,7 @@ def test_cursor_keys_normal_mode():
 
 def test_cursor_keys_application_mode():
     """Test cursor keys in application mode (DECCKM enabled)."""
-    terminal = Terminal()
+    terminal = Board()
     terminal.pty = Mock()
     terminal.board.modes.cursor_application_mode = True
 
@@ -36,7 +36,7 @@ def test_cursor_keys_application_mode():
 
 def test_cursor_keys_application_mode_translates_input_stream():
     """Raw frontend streams may contain multiple cursor-key sequences."""
-    terminal = Terminal()
+    terminal = Board()
     terminal.pty = Mock()
     terminal.board.modes.cursor_application_mode = True
 
@@ -46,7 +46,7 @@ def test_cursor_keys_application_mode_translates_input_stream():
 
 
 def test_cursor_keys_application_mode_translates_embedded_sequence():
-    terminal = Terminal()
+    terminal = Board()
     terminal.pty = Mock()
     terminal.board.modes.cursor_application_mode = True
 
@@ -57,7 +57,7 @@ def test_cursor_keys_application_mode_translates_embedded_sequence():
 
 def test_modified_cursor_keys():
     """Test cursor keys with modifiers always use CSI format."""
-    terminal = Terminal()
+    terminal = Board()
     terminal.pty = Mock()
     terminal.board.modes.cursor_application_mode = True  # Even in app mode
 
@@ -68,7 +68,7 @@ def test_modified_cursor_keys():
 
 def test_control_characters():
     """Test control character generation."""
-    terminal = Terminal()
+    terminal = Board()
     terminal.pty = Mock()
 
     # Ctrl+A should send \x01
@@ -82,7 +82,7 @@ def test_control_characters():
 
 def test_function_keys():
     """Test function key generation."""
-    terminal = Terminal()
+    terminal = Board()
     terminal.pty = Mock()
 
     # F1 should send ESC OP
@@ -96,7 +96,7 @@ def test_function_keys():
 
 def test_raw_input_passthrough():
     """Test that raw input passes through unchanged."""
-    terminal = Terminal()
+    terminal = Board()
     terminal.pty = Mock()
 
     # Raw escape sequences should pass through
@@ -110,7 +110,7 @@ def test_raw_input_passthrough():
 
 def test_unhandled_keys_fallback():
     """Test that unhandled keys in input_key() fall back to raw input."""
-    terminal = Terminal()
+    terminal = Board()
     terminal.pty = Mock()
 
     # Backspace character should pass through as fallback

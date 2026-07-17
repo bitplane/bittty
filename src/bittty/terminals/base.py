@@ -1,13 +1,14 @@
-"""The Display abstract base: the blessed frontend contract.
+"""The Terminal abstract base: the chrome a human looks at.
 
-A concrete frontend *is-a* Display and *has-a* Terminal (composition). It attaches
-itself as the board's display port, pushes DisplayCaps up, and receives discrete
-side-effects through present(), which dispatches each PresentEvent to a typed hook.
-Every hook defaults to a no-op, so adding a new event type can never break an
-existing frontend — it just grows the surface with another optional override.
+A concrete terminal *is-a* Terminal and *has-a* Board (composition). It plugs
+itself into the board's display port, pushes DisplayCaps up, and receives
+discrete side-effects through present(), which dispatches each PresentEvent to
+a typed hook. Every hook defaults to a no-op, so adding a new event type can
+never break an existing terminal — it just grows the surface with another
+optional override.
 
-The backend (`Terminal`) never imports this module: the boundary only ever runs
-frontend -> backend, never the reverse.
+The board never imports this module: the boundary only ever runs
+terminal -> board, never the reverse.
 """
 
 from __future__ import annotations
@@ -34,28 +35,28 @@ from ..present import (
 )
 
 if TYPE_CHECKING:
-    from ..terminal import Terminal
+    from ..devices.board import Board
 
 
-class Display:
-    """Abstract base for frontends. Compose a Terminal; override the hooks you need."""
+class Terminal:
+    """Abstract base for terminals (chrome). Compose a Board; override the hooks you need."""
 
-    def __init__(self, terminal: "Terminal") -> None:
-        self.terminal = terminal
+    def __init__(self, board: "Board") -> None:
+        self.board = board
 
     # --- wiring --- #
 
     def attach(self) -> None:
-        """Attach this frontend to its terminal's display port."""
-        self.terminal.attach_display(self)
+        """Plug this terminal into its board's display port."""
+        self.board.attach_display(self)
 
     def detach(self) -> None:
-        """Detach from the terminal's display port."""
-        self.terminal.detach_display()
+        """Unplug from the board's display port."""
+        self.board.detach_display()
 
     def set_caps(self, caps: DisplayCaps) -> None:
-        """Push the real display's capabilities down to the backend."""
-        self.terminal.board.set_display_caps(caps)
+        """Push the real terminal's capabilities down to the board."""
+        self.board.set_display_caps(caps)
 
     # --- present dispatch --- #
 

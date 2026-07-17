@@ -1,8 +1,8 @@
-from bittty.terminal import Terminal
+from bittty import Board
 
 
 def test_scroll_up():
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     # Fill terminal with content
     for i in range(terminal.height):
         terminal.board.screen.current_buffer.set(0, i, f"Line {i}")
@@ -22,7 +22,7 @@ def test_scroll_up():
     assert [terminal.board.screen.current_buffer.get_line_text(i) for i in range(terminal.height)] == expected_lines
 
     # Scroll up by 2
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     for i in range(terminal.height):
         terminal.board.screen.current_buffer.set(0, i, f"Line {i}")
     terminal.board.screen.set_scroll_region(0, terminal.height - 1)
@@ -38,7 +38,7 @@ def test_scroll_up():
 
 
 def test_scroll_down():
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     # Fill terminal with content
     for i in range(terminal.height):
         terminal.board.screen.current_buffer.set(0, i, f"Line {i}")
@@ -58,7 +58,7 @@ def test_scroll_down():
     assert [terminal.board.screen.current_buffer.get_line_text(i) for i in range(terminal.height)] == expected_lines
 
     # Scroll down by 2
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     for i in range(terminal.height):
         terminal.board.screen.current_buffer.set(0, i, f"Line {i}")
     terminal.board.screen.set_scroll_region(0, terminal.height - 1)
@@ -74,7 +74,7 @@ def test_scroll_down():
 
 
 def test_set_scroll_region():
-    terminal = Terminal(width=10, height=10)
+    terminal = Board(width=10, height=10)
     terminal.board.screen.set_scroll_region(2, 7)
     assert terminal.board.screen.scroll_top == 2
     assert terminal.board.screen.scroll_bottom == 7
@@ -90,7 +90,7 @@ def test_set_scroll_region():
 
 
 def test_line_feed_with_scrolling():
-    terminal = Terminal(width=10, height=5)
+    terminal = Board(width=10, height=5)
     # Fill terminal up to the last line
     for i in range(terminal.height - 1):
         terminal.board.screen.current_buffer.set(0, i, f"Line {i}")

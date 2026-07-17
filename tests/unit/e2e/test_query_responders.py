@@ -1,7 +1,7 @@
 """DECRQCRA rectangle checksum and XTGETTCAP termcap query responders."""
 
 from bittty.parser import Parser
-from bittty.terminal import Terminal
+from bittty import Board
 
 
 class RecordingTransport:
@@ -16,7 +16,7 @@ class RecordingTransport:
 
 
 def _term(width=10, height=3):
-    terminal = Terminal(width=width, height=height)
+    terminal = Board(width=width, height=height)
     transport = RecordingTransport()
     terminal.board.host.attach(transport)
     return terminal, Parser(terminal.board), transport

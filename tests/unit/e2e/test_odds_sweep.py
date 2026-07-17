@@ -1,7 +1,7 @@
 """DECSACE attribute-change extent + OSC 5/6 special colours + OSC 15/16/18 Tektronix colours."""
 
 from bittty.parser import Parser
-from bittty.terminal import Terminal
+from bittty import Board
 
 
 class RecordingTransport:
@@ -16,7 +16,7 @@ class RecordingTransport:
 
 
 def _term(width=6, height=3):
-    terminal = Terminal(width=width, height=height)
+    terminal = Board(width=width, height=height)
     transport = RecordingTransport()
     terminal.board.host.attach(transport)
     return terminal, Parser(terminal.board), transport

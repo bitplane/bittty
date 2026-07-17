@@ -3,41 +3,41 @@
 import pytest
 import io
 from bittty.parser import Parser
-from bittty.terminal import Terminal
+from bittty import Board
 from bittty.constants import DEFAULT_TERMINAL_WIDTH, DEFAULT_TERMINAL_HEIGHT
 
 
 @pytest.fixture
 def terminal():
-    """Create a real Terminal with stdio streams for integration testing."""
-    # Use StringIO streams for testing - Terminal creates StdioPTY internally
+    """Create a real Board with stdio streams for integration testing."""
+    # Use StringIO streams for testing - Board creates StdioPTY internally
     stdin = io.StringIO()
     stdout = io.StringIO()
 
-    term = Terminal(width=80, height=24, stdin=stdin, stdout=stdout)
+    term = Board(width=80, height=24, stdin=stdin, stdout=stdout)
     return term
 
 
 @pytest.fixture
 def parser(terminal):
-    """Create a Parser attached to a real Terminal."""
+    """Create a Parser attached to a real Board."""
     return Parser(terminal.board)
 
 
 @pytest.fixture
 def standard_terminal():
-    """Return a real Terminal instance with standard dimensions.
+    """Return a real Board instance with standard dimensions.
 
     Use this fixture when testing end-to-end parser behavior,
     focusing on actual terminal content and state changes.
     """
-    return Terminal(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
+    return Board(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
 
 
 @pytest.fixture
 def small_terminal():
-    """Return a real Terminal instance with smaller dimensions for specific tests."""
-    return Terminal(width=20, height=10)
+    """Return a real Board instance with smaller dimensions for specific tests."""
+    return Board(width=20, height=10)
 
 
 @pytest.fixture

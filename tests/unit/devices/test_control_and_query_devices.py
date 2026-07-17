@@ -1,6 +1,6 @@
 from bittty import constants
 from bittty.operations import Operation
-from bittty.terminal import Terminal
+from bittty import Board
 
 
 class RecordingTransport:
@@ -16,7 +16,7 @@ class RecordingTransport:
 
 
 def test_control_device_routes_c0_controls_to_devices():
-    terminal = Terminal(width=12, height=4)
+    terminal = Board(width=12, height=4)
     control = terminal.parser.sink.control
 
     terminal.board.cursor.set_position(5, 1)
@@ -34,7 +34,7 @@ def test_control_device_routes_c0_controls_to_devices():
 
 
 def test_control_device_shift_and_tab_stop_controls():
-    terminal = Terminal(width=12, height=4)
+    terminal = Board(width=12, height=4)
     control = terminal.parser.sink.control
 
     control.handle_operation(Operation("C0_SO", raw=constants.SO))
@@ -51,7 +51,7 @@ def test_control_device_shift_and_tab_stop_controls():
 
 
 def test_query_device_reports_cursor_and_device_status():
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
     query = terminal.parser.sink.query
     transport = RecordingTransport()
     terminal.board.host.attach(transport)
@@ -70,7 +70,7 @@ def test_query_device_reports_cursor_and_device_status():
 
 
 def test_query_device_reports_mode_status_from_mode_device():
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
     query = terminal.parser.sink.query
     transport = RecordingTransport()
     terminal.board.host.attach(transport)
@@ -91,7 +91,7 @@ def test_query_device_reports_mode_status_from_mode_device():
 
 
 def test_palette_device_reports_osc_colors():
-    terminal = Terminal(width=80, height=24)
+    terminal = Board(width=80, height=24)
     palette = terminal.board.palette
     transport = RecordingTransport()
     terminal.board.host.attach(transport)

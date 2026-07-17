@@ -68,9 +68,9 @@ def test_parser_feed_simple_truncate(parser, terminal):
 
 def test_charset_designation_split_across_chunks():
     """ESC ( arriving at the end of a chunk must wait for its designator."""
-    from bittty.terminal import Terminal
+    from bittty import Board
 
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     terminal.parser.feed("\x1b(")
     terminal.parser.feed("0")
     terminal.parser.feed("q")  # DEC special graphics: q is '─'
@@ -80,9 +80,9 @@ def test_charset_designation_split_across_chunks():
 
 def test_decaln_split_across_chunks():
     """ESC # arriving at the end of a chunk must wait for its final byte."""
-    from bittty.terminal import Terminal
+    from bittty import Board
 
-    terminal = Terminal(width=4, height=2)
+    terminal = Board(width=4, height=2)
     terminal.parser.feed("\x1b#")
     terminal.parser.feed("8")
     assert terminal.board.screen.current_buffer.get_line_text(0) == "EEEE"

@@ -1,13 +1,13 @@
 """Test DECARM (Auto-Repeat Mode) implementation."""
 
-from bittty.terminal import Terminal
+from bittty import Board
 from bittty.parser import Parser
 from bittty import constants
 
 
 def test_decarm_default_auto_repeat_enabled():
     """Test that auto-repeat is enabled by default."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
 
     # Should be enabled by default (auto_repeat = True)
     assert terminal.board.modes.auto_repeat
@@ -15,7 +15,7 @@ def test_decarm_default_auto_repeat_enabled():
 
 def test_decarm_disable_auto_repeat():
     """Test disabling DECARM to prevent key auto-repeat."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Disable DECARM mode (ESC [ ? 8 l)
@@ -27,7 +27,7 @@ def test_decarm_disable_auto_repeat():
 
 def test_decarm_enable_auto_repeat():
     """Test enabling DECARM to allow key auto-repeat."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Disable first
@@ -43,7 +43,7 @@ def test_decarm_enable_auto_repeat():
 
 def test_decarm_affects_key_handling():
     """Test that DECARM mode affects how keys are processed."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Mock key repeat detection
@@ -70,7 +70,7 @@ def test_decarm_affects_key_handling():
 
 def test_decarm_toggle_state():
     """Test toggling DECARM state multiple times."""
-    terminal = Terminal(width=20, height=5)
+    terminal = Board(width=20, height=5)
     parser = Parser(terminal.board)
 
     # Start with default (enabled)

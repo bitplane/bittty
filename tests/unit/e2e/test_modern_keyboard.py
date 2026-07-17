@@ -2,7 +2,7 @@
 
 from bittty import constants
 from bittty.parser import Parser
-from bittty.terminal import Terminal
+from bittty import Board
 
 
 class RecordingTransport:
@@ -17,7 +17,7 @@ class RecordingTransport:
 
 
 def _term():
-    terminal = Terminal(width=20, height=3)
+    terminal = Board(width=20, height=3)
     transport = RecordingTransport()
     terminal.board.host.attach(transport)
     return terminal, Parser(terminal.board), transport
