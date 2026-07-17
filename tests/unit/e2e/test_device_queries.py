@@ -17,19 +17,19 @@ class RecordingTransport:
 
 
 def terminal_with_transport(width=80, height=24):
-    terminal = Board(width=width, height=height)
+    board = Board(width=width, height=height)
     transport = RecordingTransport()
-    terminal.host.attach(transport)
-    return terminal, Parser(terminal), transport
+    board.host.attach(transport)
+    return board, Parser(board), transport
 
 
 def test_cursor_position_report():
     """Test CSI 6 n (Cursor Position Report)."""
-    terminal, parser, transport = terminal_with_transport()
+    board, parser, transport = terminal_with_transport()
 
     # Move cursor to position (5, 10) - 0-based
-    terminal.cursor.x = 10
-    terminal.cursor.y = 5
+    board.cursor.x = 10
+    board.cursor.y = 5
 
     # Send cursor position report query
     parser.feed("\x1b[6n")  # ESC [ 6 n
@@ -77,16 +77,16 @@ def test_device_attributes_with_param():
 
 def test_decrqm_private_mode_query_cursor_keys():
     """Test DECRQM private mode query for cursor keys application mode."""
-    terminal, parser, transport = terminal_with_transport()
+    board, parser, transport = terminal_with_transport()
 
     # Test with cursor keys in normal mode
-    terminal.modes.cursor_application_mode = False
+    board.modes.cursor_application_mode = False
     parser.feed("\x1b[?1$p")  # ESC [ ? 1 $ p
 
     # Should respond with mode reset (2)
     assert transport.data[-1] == "\033[?1;2$y"
 
-    terminal.modes.cursor_application_mode = True
+    board.modes.cursor_application_mode = True
     parser.feed("\x1b[?1$p")  # ESC [ ? 1 $ p
 
     # Should respond with mode set (1)
@@ -96,16 +96,16 @@ def test_decrqm_private_mode_query_cursor_keys():
 
 def test_decrqm_private_mode_query_autowrap():
     """Test DECRQM private mode query for autowrap mode."""
-    terminal, parser, transport = terminal_with_transport()
+    board, parser, transport = terminal_with_transport()
 
     # Test with autowrap enabled (default)
-    terminal.modes.auto_wrap = True
+    board.modes.auto_wrap = True
     parser.feed("\x1b[?7$p")  # ESC [ ? 7 $ p
 
     # Should respond with mode set (1)
     assert transport.data[-1] == "\033[?7;1$y"
 
-    terminal.modes.auto_wrap = False
+    board.modes.auto_wrap = False
     parser.feed("\x1b[?7$p")  # ESC [ ? 7 $ p
 
     # Should respond with mode reset (2)
@@ -115,16 +115,16 @@ def test_decrqm_private_mode_query_autowrap():
 
 def test_decrqm_private_mode_query_cursor_visibility():
     """Test DECRQM private mode query for cursor visibility."""
-    terminal, parser, transport = terminal_with_transport()
+    board, parser, transport = terminal_with_transport()
 
     # Test with cursor visible (default)
-    terminal.modes.cursor_visible = True
+    board.modes.cursor_visible = True
     parser.feed("\x1b[?25$p")  # ESC [ ? 25 $ p
 
     # Should respond with mode set (1)
     assert transport.data[-1] == "\033[?25;1$y"
 
-    terminal.modes.cursor_visible = False
+    board.modes.cursor_visible = False
     parser.feed("\x1b[?25$p")  # ESC [ ? 25 $ p
 
     # Should respond with mode reset (2)
@@ -134,16 +134,16 @@ def test_decrqm_private_mode_query_cursor_visibility():
 
 def test_decrqm_private_mode_query_alternate_screen():
     """Test DECRQM private mode query for alternate screen buffer."""
-    terminal, parser, transport = terminal_with_transport()
+    board, parser, transport = terminal_with_transport()
 
     # Test with primary screen (default)
-    terminal.blitter.in_alt_screen = False
+    board.blitter.in_alt_screen = False
     parser.feed("\x1b[?1049$p")  # ESC [ ? 1049 $ p
 
     # Should respond with mode reset (2)
     assert transport.data[-1] == "\033[?1049;2$y"
 
-    terminal.blitter.in_alt_screen = True
+    board.blitter.in_alt_screen = True
     parser.feed("\x1b[?1049$p")  # ESC [ ? 1049 $ p
 
     # Should respond with mode set (1)
@@ -162,16 +162,16 @@ def test_decrqm_private_mode_query_ansi_mode_default():
 
 def test_decrqm_ansi_mode_query_insert_mode():
     """Test DECRQM ANSI mode query for insert/replace mode."""
-    terminal, parser, transport = terminal_with_transport()
+    board, parser, transport = terminal_with_transport()
 
     # Test with replace mode (default)
-    terminal.modes.insert_mode = False
+    board.modes.insert_mode = False
     parser.feed("\x1b[4$p")  # ESC [ 4 $ p
 
     # Should respond with mode reset (2) - no ? prefix for ANSI modes
     assert transport.data[-1] == "\033[4;2$y"
 
-    terminal.modes.insert_mode = True
+    board.modes.insert_mode = True
     parser.feed("\x1b[4$p")  # ESC [ 4 $ p
 
     # Should respond with mode set (1)
@@ -198,11 +198,11 @@ def test_decrqm_unrecognized_mode():
 
 def test_multiple_device_queries():
     """Test multiple device queries in sequence."""
-    terminal, parser, transport = terminal_with_transport()
+    board, parser, transport = terminal_with_transport()
 
     # Move cursor to a specific position
-    terminal.cursor.x = 15
-    terminal.cursor.y = 10
+    board.cursor.x = 15
+    board.cursor.y = 10
 
     # Send multiple queries
     parser.feed("\x1b[6n")  # Cursor Position Report
@@ -239,7 +239,7 @@ def test_vim_compatibility_queries():
 
 def test_terminal_respond_vs_send():
     """Test that device queries use respond() for immediate flush."""
-    terminal, parser, transport = terminal_with_transport()
+    board, parser, transport = terminal_with_transport()
 
     # Send device query
     parser.feed("\x1b[6n")  # Cursor Position Report
@@ -248,7 +248,7 @@ def test_terminal_respond_vs_send():
     assert transport.flush_count == 1
 
     # Send regular character (this goes through input processing)
-    terminal.input("A")
+    board.input("A")
 
     assert transport.data == ["\033[1;1R", "A"]
     assert transport.flush_count == 1

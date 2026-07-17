@@ -9,8 +9,8 @@ from bittty.connections import DisplayPort, HostPort
 class RecordingTerminal(Terminal):
     """A Terminal that records the hooks it chose to override."""
 
-    def __init__(self, terminal):
-        super().__init__(terminal)
+    def __init__(self, board):
+        super().__init__(board)
         self.events = []
 
     def on_bell(self):
@@ -48,51 +48,51 @@ def test_display_port_forwards_and_is_null_safe():
 
 
 def test_board_present_reaches_attached_frontend():
-    terminal = _term()
-    display = RecordingTerminal(terminal)
+    board = _term()
+    display = RecordingTerminal(board)
     display.attach()
-    terminal.present(TitleChanged("hi", "hi"))
-    terminal.present(Bell())
+    board.present(TitleChanged("hi", "hi"))
+    board.present(Bell())
     assert display.events == [("title", "hi", "hi"), ("bell",)]
 
 
 def test_unoverridden_hook_is_a_safe_noop():
-    terminal = _term()
-    display = RecordingTerminal(terminal)
+    board = _term()
+    display = RecordingTerminal(board)
     display.attach()
-    terminal.present(Notification("hello"))  # on_notify defaults to no-op
+    board.present(Notification("hello"))  # on_notify defaults to no-op
     assert display.events == []
 
 
 def test_detach_stops_delivery():
-    terminal = _term()
-    display = RecordingTerminal(terminal)
+    board = _term()
+    display = RecordingTerminal(board)
     display.attach()
     display.detach()
-    terminal.present(Bell())
+    board.present(Bell())
     assert display.events == []
 
 
 def test_present_with_no_frontend_is_noop():
-    terminal = _term()  # nothing attached
-    terminal.present(Bell())  # must not raise
-    assert terminal.display.connected is False
+    board = _term()  # nothing attached
+    board.present(Bell())  # must not raise
+    assert board.display.connected is False
 
 
 def test_caps_default_and_push():
-    terminal = _term()
-    assert terminal.caps == TerminalCaps.unknown()
-    display = RecordingTerminal(terminal)
+    board = _term()
+    assert board.caps == TerminalCaps.unknown()
+    display = RecordingTerminal(board)
     caps = TerminalCaps(color_depth="256", cell_px=(8, 16))
     display.set_caps(caps)
-    assert terminal.caps is caps
+    assert board.caps is caps
 
 
 def test_mouse_mode_event_dispatch():
-    terminal = _term()
-    display = RecordingTerminal(terminal)
+    board = _term()
+    display = RecordingTerminal(board)
     display.attach()
-    terminal.present(MouseModeChanged("any", True))
+    board.present(MouseModeChanged("any", True))
     assert display.events == [("mouse", "any", True)]
 
 

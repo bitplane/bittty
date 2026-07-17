@@ -11,17 +11,17 @@ class CollectingSink:
         self.operations.append(operation)
 
 
-def test_parser_emits_batched_print_operation(terminal):
+def test_parser_emits_batched_print_operation(board):
     sink = CollectingSink()
     parser = Parser(sink)
 
     parser.feed("hello")
 
     assert sink.operations == [Operation("PRINT", ("hello",), "hello")]
-    assert terminal.blitter.current_buffer.get_line_text(0).strip() == ""
+    assert board.blitter.current_buffer.get_line_text(0).strip() == ""
 
 
-def test_parser_emits_control_operations(terminal):
+def test_parser_emits_control_operations(board):
     sink = CollectingSink()
     parser = Parser(sink)
 
@@ -40,7 +40,7 @@ def test_parser_emits_control_operations(terminal):
     ]
 
 
-def test_parser_emits_escape_and_csi_operations(terminal):
+def test_parser_emits_escape_and_csi_operations(board):
     sink = CollectingSink()
     parser = Parser(sink)
 
@@ -52,7 +52,7 @@ def test_parser_emits_escape_and_csi_operations(terminal):
     ]
 
 
-def test_parser_emits_semantic_cursor_operations(terminal):
+def test_parser_emits_semantic_cursor_operations(board):
     sink = CollectingSink()
     parser = Parser(sink)
 
@@ -70,7 +70,7 @@ def test_parser_emits_semantic_cursor_operations(terminal):
     ]
 
 
-def test_parser_emits_semantic_edit_operations(terminal):
+def test_parser_emits_semantic_edit_operations(board):
     sink = CollectingSink()
     parser = Parser(sink)
 
@@ -89,7 +89,7 @@ def test_parser_emits_semantic_edit_operations(terminal):
     ]
 
 
-def test_parser_emits_semantic_cursor_state_and_screen_operations(terminal):
+def test_parser_emits_semantic_cursor_state_and_screen_operations(board):
     sink = CollectingSink()
     parser = Parser(sink)
 
@@ -104,7 +104,7 @@ def test_parser_emits_semantic_cursor_state_and_screen_operations(terminal):
     ]
 
 
-def test_parser_emits_style_and_query_operations(terminal):
+def test_parser_emits_style_and_query_operations(board):
     sink = CollectingSink()
     parser = Parser(sink)
 
@@ -121,7 +121,7 @@ def test_parser_emits_style_and_query_operations(terminal):
     ]
 
 
-def test_parser_emits_reset_sgr_operation(terminal):
+def test_parser_emits_reset_sgr_operation(board):
     sink = CollectingSink()
     parser = Parser(sink)
 
@@ -135,7 +135,7 @@ def test_parser_emits_reset_sgr_operation(terminal):
     ]
 
 
-def test_parser_emits_mode_operations(terminal):
+def test_parser_emits_mode_operations(board):
     sink = CollectingSink()
     parser = Parser(sink)
 
@@ -150,7 +150,7 @@ def test_parser_emits_mode_operations(terminal):
     ]
 
 
-def test_parser_emits_string_sequence_content_and_raw_data(terminal):
+def test_parser_emits_string_sequence_content_and_raw_data(board):
     sink = CollectingSink()
     parser = Parser(sink)
 
@@ -162,10 +162,10 @@ def test_parser_emits_string_sequence_content_and_raw_data(terminal):
     ]
 
 
-def test_default_operation_sink_preserves_terminal_behavior(terminal):
-    parser = Parser(terminal)
+def test_default_operation_sink_preserves_terminal_behavior(board):
+    parser = Parser(board)
 
     parser.feed("Hi\tThere\r\nNext")
 
-    assert terminal.blitter.current_buffer.get_line_text(0).startswith("Hi      There")
-    assert terminal.blitter.current_buffer.get_line_text(1).startswith("Next")
+    assert board.blitter.current_buffer.get_line_text(0).startswith("Hi      There")
+    assert board.blitter.current_buffer.get_line_text(1).startswith("Next")

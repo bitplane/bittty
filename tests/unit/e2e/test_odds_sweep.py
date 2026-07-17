@@ -16,32 +16,32 @@ class RecordingTransport:
 
 
 def _term(width=6, height=3):
-    terminal = Board(width=width, height=height)
+    board = Board(width=width, height=height)
     transport = RecordingTransport()
-    terminal.host.attach(transport)
-    return terminal, Parser(terminal), transport
+    board.host.attach(transport)
+    return board, Parser(board), transport
 
 
 # --- DECSACE --- #
 
 
 def test_deccara_rectangle_extent_is_the_default():
-    terminal, parser, _ = _term()
+    board, parser, _ = _term()
     parser.feed("\x1b[1;2;2;4;1$r")  # DECCARA bold over rows 1-2, cols 2-4 (rectangle)
-    buf = terminal.blitter.current_buffer
+    buf = board.blitter.current_buffer
     assert buf.get_cell(0, 0)[0].bold is None  # outside the rectangle
     assert buf.get_cell(1, 0)[0].bold is True  # inside (col 2 -> index 1)
     assert buf.get_cell(5, 0)[0].bold is None  # outside on the right
 
 
 def test_decsace_stream_extent_wraps():
-    terminal, parser, _ = _term()
+    board, parser, _ = _term()
     parser.feed("\x1b[1*x")  # DECSACE 1 -> stream
-    assert terminal.blitter.attr_change_extent == "stream"
+    assert board.blitter.attr_change_extent == "stream"
     # stream from (row1,col2) to (row1,col4) = linear indices 1..3 on a width-6 row,
     # but a stream to (row2,col2) wraps across the full width
     parser.feed("\x1b[1;5;2;2;1$r")  # start (r1,c5)=idx4, end (r2,c2)=idx7 -> cols 4,5,0,1
-    buf = terminal.blitter.current_buffer
+    buf = board.blitter.current_buffer
     assert buf.get_cell(4, 0)[0].bold is True
     assert buf.get_cell(5, 0)[0].bold is True  # wrapped past the right edge
     assert buf.get_cell(0, 1)[0].bold is True  # onto the next row
@@ -50,34 +50,34 @@ def test_decsace_stream_extent_wraps():
 
 
 def test_decsace_resets_to_rectangle():
-    terminal, parser, _ = _term()
+    board, parser, _ = _term()
     parser.feed("\x1b[1*x")  # stream
     parser.feed("\x1b[2*x")  # rectangle
-    assert terminal.blitter.attr_change_extent == "rectangle"
+    assert board.blitter.attr_change_extent == "rectangle"
 
 
 # --- OSC special / Tektronix colours --- #
 
 
 def test_osc_5_special_colour_roundtrip():
-    terminal, parser, transport = _term()
+    board, parser, transport = _term()
     parser.feed("\x1b]5;0;rgb:ffff/0000/0000\x07")  # special colour 0 (bold) = red
-    assert terminal.palette.special_colors[0] == (255, 0, 0)
+    assert board.palette.special_colors[0] == (255, 0, 0)
     parser.feed("\x1b]5;0;?\x07")
     assert transport.data[-1] == "\x1b]5;0;rgb:ffff/0000/0000\x07"
 
 
 def test_osc_6_special_colour_enable():
-    terminal, parser, _ = _term()
+    board, parser, _ = _term()
     parser.feed("\x1b]6;1;1\x07")  # enable special colour 1
-    assert terminal.palette.special_color_enabled[1] is True
+    assert board.palette.special_color_enabled[1] is True
     parser.feed("\x1b]6;1;0\x07")
-    assert terminal.palette.special_color_enabled[1] is False
+    assert board.palette.special_color_enabled[1] is False
 
 
 def test_osc_15_tek_foreground():
-    terminal, parser, _ = _term()
+    board, parser, _ = _term()
     parser.feed("\x1b]15;rgb:1010/2020/3030\x07")  # Tektronix foreground
-    assert terminal.palette.tek_foreground == (0x10, 0x20, 0x30)
+    assert board.palette.tek_foreground == (0x10, 0x20, 0x30)
     parser.feed("\x1b]115\x07")  # reset it
-    assert terminal.palette.tek_foreground is None
+    assert board.palette.tek_foreground is None

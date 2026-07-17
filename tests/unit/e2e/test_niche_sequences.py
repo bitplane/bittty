@@ -17,10 +17,10 @@ class RecordingTransport:
 
 
 def _driver(**kwargs):
-    terminal = Board(width=20, height=5, **kwargs)
+    board = Board(width=20, height=5, **kwargs)
     transport = RecordingTransport()
-    terminal.host.attach(transport)
-    return terminal, Parser(terminal), transport
+    board.host.attach(transport)
+    return board, Parser(board), transport
 
 
 def test_da3_answers_on_xterm_and_is_silent_on_vt100():
@@ -34,7 +34,7 @@ def test_da3_answers_on_xterm_and_is_silent_on_vt100():
 
 
 def test_selective_erase_keeps_protected_characters():
-    terminal, parser, _ = _driver()
+    board, parser, _ = _driver()
     parser.feed('\x1b[1"q')  # DECSCA: protect
     parser.feed("KEEP")
     parser.feed('\x1b[0"q')  # DECSCA: unprotect
@@ -42,17 +42,17 @@ def test_selective_erase_keeps_protected_characters():
     parser.feed("\x1b[1;1H")  # home
     parser.feed("\x1b[?2J")  # DECSED: selective erase all
 
-    line = terminal.blitter.current_buffer.get_line_text(0)
+    line = board.blitter.current_buffer.get_line_text(0)
     assert line.startswith("KEEP")  # protected text survives
     assert "gone" not in line  # unprotected text erased
 
 
 def test_decudk_redefines_a_function_key():
-    terminal, parser, transport = _driver()
+    board, parser, transport = _driver()
     # DECUDK: define key 17 (F6) to send "HELLO"; St is the hex of the string.
     hexstr = "HELLO".encode("latin-1").hex().upper()
     parser.feed(f"\x1bP0;0|17/{hexstr}\x1b\\")
-    assert terminal.keyboard.user_defined_keys[6] == "HELLO"
+    assert board.keyboard.user_defined_keys[6] == "HELLO"
 
-    terminal.input_fkey(6)  # F6 now sends the user string, not the keymap default
+    board.input_fkey(6)  # F6 now sends the user string, not the keymap default
     assert transport.data == ["HELLO"]

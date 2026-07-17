@@ -36,33 +36,33 @@ def test_parse_string_sequence(sequence_type, data, expected):
     assert parse_string_sequence(data.decode("latin-1"), sequence_type) == expected
 
 
-def test_parser_feed_interrupted_osc(parser, terminal):
+def test_parser_feed_interrupted_osc(parser, board):
     """Test that the parser handles an OSC sequence interrupted by another escape."""
     # OSC sequence containing an escape, split across two feeds
     parser.feed("Hello \x1b]2;some text here\x1b[A")
     parser.feed("more text\x07world")
 
-    assert "Hello world" in terminal.capture_pane()
-    assert terminal.title.title == "some text here\x1b[Amore text"
+    assert "Hello world" in board.capture_pane()
+    assert board.title.title == "some text here\x1b[Amore text"
 
 
-def test_parser_feed_multiple_escapes(parser, terminal):
+def test_parser_feed_multiple_escapes(parser, board):
     """Test that the parser handles multiple escape characters correctly."""
     parser.feed("hello\x1b\x1b")
-    assert "hello" in terminal.capture_pane()
+    assert "hello" in board.capture_pane()
     # The two escape characters should be consumed and dispatched as 'esc' events
     assert parser.buffer == ""
 
 
-def test_parser_feed_simple_truncate(parser, terminal):
+def test_parser_feed_simple_truncate(parser, board):
     """Test a simple truncated escape sequence."""
     parser.feed("hello\x1b")
-    assert "hello" in terminal.capture_pane()
+    assert "hello" in board.capture_pane()
     assert parser.buffer == "\x1b"
 
     parser.feed("[1;1H")
-    assert terminal.cursor.x == 0
-    assert terminal.cursor.y == 0
+    assert board.cursor.x == 0
+    assert board.cursor.y == 0
     assert parser.buffer == ""
 
 
@@ -70,19 +70,19 @@ def test_charset_designation_split_across_chunks():
     """ESC ( arriving at the end of a chunk must wait for its designator."""
     from bittty import Board
 
-    terminal = Board(width=20, height=5)
-    terminal.parser.feed("\x1b(")
-    terminal.parser.feed("0")
-    terminal.parser.feed("q")  # DEC special graphics: q is '─'
-    assert terminal.charset.g0_charset == "0"
-    assert terminal.blitter.current_buffer.get_line_text(0)[0] == "─"
+    board = Board(width=20, height=5)
+    board.parser.feed("\x1b(")
+    board.parser.feed("0")
+    board.parser.feed("q")  # DEC special graphics: q is '─'
+    assert board.charset.g0_charset == "0"
+    assert board.blitter.current_buffer.get_line_text(0)[0] == "─"
 
 
 def test_decaln_split_across_chunks():
     """ESC # arriving at the end of a chunk must wait for its final byte."""
     from bittty import Board
 
-    terminal = Board(width=4, height=2)
-    terminal.parser.feed("\x1b#")
-    terminal.parser.feed("8")
-    assert terminal.blitter.current_buffer.get_line_text(0) == "EEEE"
+    board = Board(width=4, height=2)
+    board.parser.feed("\x1b#")
+    board.parser.feed("8")
+    assert board.blitter.current_buffer.get_line_text(0) == "EEEE"

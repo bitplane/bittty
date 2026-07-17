@@ -18,10 +18,10 @@ class RecordingTransport:
 
 
 def _term(model):
-    terminal = Board(width=80, height=24, model=model)
+    board = Board(width=80, height=24, model=model)
     transport = RecordingTransport()
-    terminal.host.attach(transport)
-    return terminal, Parser(terminal), transport
+    board.host.attach(transport)
+    return board, Parser(board), transport
 
 
 def test_tmux_reports_its_live_device_attributes():
@@ -55,32 +55,32 @@ def test_screen_and_urxvt_secondary_da_types():
 
 
 def test_screen_function_keys_use_ss3_like_xterm():
-    terminal, _, transport = _term(SCREEN)
-    terminal.input_fkey(1)  # F1
+    board, _, transport = _term(SCREEN)
+    board.input_fkey(1)  # F1
     assert transport.data == [f"{constants.ESC}OP"]
 
 
 def test_urxvt_function_keys_use_tilde_codes():
-    terminal, _, transport = _term(URXVT)
-    terminal.input_fkey(1)  # F1 — rxvt sends CSI 11~, not SS3
+    board, _, transport = _term(URXVT)
+    board.input_fkey(1)  # F1 — rxvt sends CSI 11~, not SS3
     assert transport.data == [f"{constants.ESC}[11~"]
 
 
 def test_screen_home_key_is_vt220_style():
-    terminal, _, transport = _term(SCREEN)
-    terminal.input_key("home")  # screen: CSI 1~ (not xterm's CSI H)
+    board, _, transport = _term(SCREEN)
+    board.input_key("home")  # screen: CSI 1~ (not xterm's CSI H)
     assert transport.data == [f"{constants.ESC}[1~"]
 
 
 def test_urxvt_home_key():
-    terminal, _, transport = _term(URXVT)
-    terminal.input_key("home")  # rxvt: CSI 7~
+    board, _, transport = _term(URXVT)
+    board.input_key("home")  # rxvt: CSI 7~
     assert transport.data == [f"{constants.ESC}[7~"]
 
 
 def test_xterm_now_encodes_the_editing_keypad():
-    terminal, _, transport = _term(XTERM)
-    terminal.input_key("delete")  # newly added to XTERM_KEYMAP from terminfo
+    board, _, transport = _term(XTERM)
+    board.input_key("delete")  # newly added to XTERM_KEYMAP from terminfo
     assert transport.data == [f"{constants.ESC}[3~"]
 
 

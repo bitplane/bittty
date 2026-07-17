@@ -7,92 +7,92 @@ from bittty.constants import (
 
 
 def test_clear_rect():
-    terminal = Board(width=10, height=5)
+    board = Board(width=10, height=5)
     for y in range(5):
         for x in range(10):
-            terminal.blitter.current_buffer.set_cell(x, y, "X")
+            board.blitter.current_buffer.set_cell(x, y, "X")
 
-    terminal.blitter.clear_rect(2, 1, 5, 3)
+    board.blitter.clear_rect(2, 1, 5, 3)
     from bittty.style import Style
 
     for y in range(5):
         for x in range(10):
             if 1 <= y <= 3 and 2 <= x <= 5:
-                assert terminal.blitter.current_buffer.get_cell(x, y) == (Style(), " ")
+                assert board.blitter.current_buffer.get_cell(x, y) == (Style(), " ")
             else:
-                assert terminal.blitter.current_buffer.get_cell(x, y) == (Style(), "X")
+                assert board.blitter.current_buffer.get_cell(x, y) == (Style(), "X")
 
 
 def test_clear_rect_with_style():
-    terminal = Board(width=10, height=5)
+    board = Board(width=10, height=5)
     for y in range(5):
         for x in range(10):
-            terminal.blitter.current_buffer.set_cell(x, y, "X", f"\x1b[{31 + y}m")
+            board.blitter.current_buffer.set_cell(x, y, "X", f"\x1b[{31 + y}m")
 
-    terminal.blitter.clear_rect(2, 1, 5, 3, "\x1b[33m")
+    board.blitter.clear_rect(2, 1, 5, 3, "\x1b[33m")
     from bittty.style import parse_sgr_sequence
 
     yellow_style = parse_sgr_sequence("\x1b[33m")
     for y in range(5):
         for x in range(10):
             if 1 <= y <= 3 and 2 <= x <= 5:
-                assert terminal.blitter.current_buffer.get_cell(x, y) == (yellow_style, " ")
+                assert board.blitter.current_buffer.get_cell(x, y) == (yellow_style, " ")
             else:
                 expected_style = parse_sgr_sequence(f"\x1b[{31 + y}m")
-                assert terminal.blitter.current_buffer.get_cell(x, y) == (expected_style, "X")
+                assert board.blitter.current_buffer.get_cell(x, y) == (expected_style, "X")
 
 
 def test_clear_line_from_cursor_to_end():
-    terminal = Board(width=10, height=5)
-    terminal.blitter.current_buffer.set(0, 0, "0123456789")
-    terminal.cursor.x = 5
-    terminal.cursor.y = 0
-    terminal.blitter.clear_line(ERASE_FROM_CURSOR_TO_END)
-    assert terminal.blitter.current_buffer.get_line_text(0) == "01234     "
+    board = Board(width=10, height=5)
+    board.blitter.current_buffer.set(0, 0, "0123456789")
+    board.cursor.x = 5
+    board.cursor.y = 0
+    board.blitter.clear_line(ERASE_FROM_CURSOR_TO_END)
+    assert board.blitter.current_buffer.get_line_text(0) == "01234     "
 
 
 def test_clear_line_from_beginning_to_cursor():
-    terminal = Board(width=10, height=5)
-    terminal.blitter.current_buffer.set(0, 0, "0123456789")
-    terminal.cursor.x = 5
-    terminal.cursor.y = 0
-    terminal.blitter.clear_line(ERASE_FROM_START_TO_CURSOR)
-    assert terminal.blitter.current_buffer.get_line_text(0) == "      6789"
+    board = Board(width=10, height=5)
+    board.blitter.current_buffer.set(0, 0, "0123456789")
+    board.cursor.x = 5
+    board.cursor.y = 0
+    board.blitter.clear_line(ERASE_FROM_START_TO_CURSOR)
+    assert board.blitter.current_buffer.get_line_text(0) == "      6789"
 
 
 def test_clear_line_entire_line():
-    terminal = Board(width=10, height=5)
-    terminal.blitter.current_buffer.set(0, 0, "0123456789")
-    terminal.cursor.y = 0
-    terminal.blitter.clear_line(ERASE_ALL)
-    assert terminal.blitter.current_buffer.get_line_text(0) == "          "
+    board = Board(width=10, height=5)
+    board.blitter.current_buffer.set(0, 0, "0123456789")
+    board.cursor.y = 0
+    board.blitter.clear_line(ERASE_ALL)
+    assert board.blitter.current_buffer.get_line_text(0) == "          "
 
 
 def test_clear_line_with_mixed_styles():
-    terminal = Board(width=10, height=5)
-    terminal.blitter.current_buffer.set(0, 0, "ABCDEFGHI")
-    terminal.cursor.x = 3
-    terminal.cursor.y = 0
-    terminal.blitter.clear_line(0)  # Clear from cursor to end
-    assert terminal.blitter.current_buffer.get_line_text(0) == "ABC       "
+    board = Board(width=10, height=5)
+    board.blitter.current_buffer.set(0, 0, "ABCDEFGHI")
+    board.cursor.x = 3
+    board.cursor.y = 0
+    board.blitter.clear_line(0)  # Clear from cursor to end
+    assert board.blitter.current_buffer.get_line_text(0) == "ABC       "
 
-    terminal.blitter.current_buffer.set(0, 1, "ABCDEFGHI")
-    terminal.cursor.x = 3
-    terminal.cursor.y = 1
-    terminal.blitter.clear_line(1)  # Clear from beginning to cursor
-    assert terminal.blitter.current_buffer.get_line_text(1) == "    EFGHI "
+    board.blitter.current_buffer.set(0, 1, "ABCDEFGHI")
+    board.cursor.x = 3
+    board.cursor.y = 1
+    board.blitter.clear_line(1)  # Clear from beginning to cursor
+    assert board.blitter.current_buffer.get_line_text(1) == "    EFGHI "
 
 
 def test_clear_line_invalid_cursor():
-    terminal = Board(width=10, height=5)
-    terminal.cursor.y = 10  # Invalid cursor position
-    terminal.blitter.clear_line(ERASE_FROM_CURSOR_TO_END)
+    board = Board(width=10, height=5)
+    board.cursor.y = 10  # Invalid cursor position
+    board.blitter.clear_line(ERASE_FROM_CURSOR_TO_END)
     # Should not raise an error and do nothing
 
 
 def test_clear_screen_invalid_cursor():
-    terminal = Board(width=10, height=5)
-    terminal.cursor.y = 10  # Invalid cursor position
-    terminal.blitter.clear_screen(0)
+    board = Board(width=10, height=5)
+    board.cursor.y = 10  # Invalid cursor position
+    board.blitter.clear_screen(0)
     # Should not raise an error but still clear the terminal below
-    assert all(c == " " for c in terminal.blitter.current_buffer.get_line_text(4))
+    assert all(c == " " for c in board.blitter.current_buffer.get_line_text(4))

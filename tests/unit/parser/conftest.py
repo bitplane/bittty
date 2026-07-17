@@ -8,7 +8,7 @@ from bittty.constants import DEFAULT_TERMINAL_WIDTH, DEFAULT_TERMINAL_HEIGHT
 
 
 @pytest.fixture
-def terminal():
+def board():
     """Create a real Board with stdio streams for integration testing."""
     # Use StringIO streams for testing - Board creates StdioPTY internally
     stdin = io.StringIO()
@@ -19,13 +19,13 @@ def terminal():
 
 
 @pytest.fixture
-def parser(terminal):
+def parser(board):
     """Create a Parser attached to a real Board."""
-    return Parser(terminal)
+    return Parser(board)
 
 
 @pytest.fixture
-def standard_terminal():
+def standard_board():
     """Return a real Board instance with standard dimensions.
 
     Use this fixture when testing end-to-end parser behavior,
@@ -35,18 +35,18 @@ def standard_terminal():
 
 
 @pytest.fixture
-def small_terminal():
+def small_board():
     """Return a real Board instance with smaller dimensions for specific tests."""
     return Board(width=20, height=10)
 
 
 @pytest.fixture
-def parser_with_standard_terminal(standard_terminal):
-    """Return a parser connected to a standard terminal for integration testing."""
-    return Parser(standard_terminal), standard_terminal
+def parser_with_standard_board(standard_board):
+    """Return a parser connected to a standard board for integration testing."""
+    return Parser(standard_board), standard_board
 
 
 @pytest.fixture
-def parser_with_small_terminal(small_terminal):
-    """Return a parser connected to a small terminal for specific test scenarios."""
-    return Parser(small_terminal), small_terminal
+def parser_with_small_board(small_board):
+    """Return a parser connected to a small board for specific test scenarios."""
+    return Parser(small_board), small_board

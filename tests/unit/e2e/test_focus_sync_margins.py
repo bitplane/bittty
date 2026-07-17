@@ -17,30 +17,30 @@ class RecordingTransport:
 
 
 def _term(width=10, height=4):
-    terminal = Board(width=width, height=height)
+    board = Board(width=width, height=height)
     transport = RecordingTransport()
-    terminal.host.attach(transport)
-    return terminal, Parser(terminal), transport
+    board.host.attach(transport)
+    return board, Parser(board), transport
 
 
 def _sent(t):
     return "".join(t.data)
 
 
-def _line(terminal, y=0):
-    return terminal.blitter.current_buffer.get_line_text(y).rstrip()
+def _line(board, y=0):
+    return board.blitter.current_buffer.get_line_text(y).rstrip()
 
 
 # --- focus events (mode 1004) --- #
 
 
 def test_focus_events_only_report_when_enabled():
-    terminal, parser, transport = _term()
-    terminal.focus_in()  # disabled by default -> nothing
+    board, parser, transport = _term()
+    board.focus_in()  # disabled by default -> nothing
     assert _sent(transport) == ""
     parser.feed("\x1b[?1004h")  # enable focus reporting
-    terminal.focus_in()
-    terminal.focus_out()
+    board.focus_in()
+    board.focus_out()
     assert _sent(transport) == "\x1b[I\x1b[O"
 
 
@@ -48,55 +48,55 @@ def test_focus_events_only_report_when_enabled():
 
 
 def test_synchronized_output_flag_tracks_mode_2026():
-    terminal, parser, _ = _term()
-    assert terminal.modes.synchronized_output is False
+    board, parser, _ = _term()
+    assert board.modes.synchronized_output is False
     parser.feed("\x1b[?2026h")
-    assert terminal.modes.synchronized_output is True
+    assert board.modes.synchronized_output is True
     parser.feed("\x1b[?2026l")
-    assert terminal.modes.synchronized_output is False
+    assert board.modes.synchronized_output is False
 
 
 # --- left/right margins (mode 69 DECLRMM + DECSLRM) --- #
 
 
 def test_decslrm_needs_margin_mode_else_saves_cursor():
-    terminal, parser, _ = _term()
+    board, parser, _ = _term()
     # Without DECLRMM, CSI Pl;Pr s is SCOSC (save cursor), not a margin set.
-    terminal.cursor.set_position(3, 2)
+    board.cursor.set_position(3, 2)
     parser.feed("\x1b[2;6s")
-    assert terminal.blitter.left_margin == 0  # unchanged
-    terminal.cursor.set_position(0, 0)
+    assert board.blitter.left_margin == 0  # unchanged
+    board.cursor.set_position(0, 0)
     parser.feed("\x1b[u")  # restore -> the saved (3, 2)
-    assert (terminal.cursor.x, terminal.cursor.y) == (3, 2)
+    assert (board.cursor.x, board.cursor.y) == (3, 2)
 
 
 def test_decslrm_sets_margins_when_mode_enabled():
-    terminal, parser, _ = _term()
+    board, parser, _ = _term()
     parser.feed("\x1b[?69h")  # DECLRMM on
     parser.feed("\x1b[3;7s")  # margins to columns 3..7 (0-based 2..6)
-    assert (terminal.blitter.left_margin, terminal.blitter.right_margin) == (2, 6)
+    assert (board.blitter.left_margin, board.blitter.right_margin) == (2, 6)
 
 
 def test_disabling_declrmm_resets_margins():
-    terminal, parser, _ = _term()
+    board, parser, _ = _term()
     parser.feed("\x1b[?69h\x1b[3;7s")
     parser.feed("\x1b[?69l")  # disabling DECLRMM restores full width
-    assert (terminal.blitter.left_margin, terminal.blitter.right_margin) == (0, 9)
+    assert (board.blitter.left_margin, board.blitter.right_margin) == (0, 9)
 
 
 def test_sl_pans_within_the_left_right_margins():
-    terminal, parser, _ = _term()
-    terminal.blitter.current_buffer.set(0, 0, "ABCDEFGHIJ")
+    board, parser, _ = _term()
+    board.blitter.current_buffer.set(0, 0, "ABCDEFGHIJ")
     parser.feed("\x1b[?69h\x1b[3;6s")  # margins columns 3..6 (indices 2..5): C D E F
     parser.feed("\x1b[1 @")  # SL 1 — only cols 2..5 pan left: C D E F -> D E F <blank>
-    assert _line(terminal) == "ABDEF GHIJ"  # index 5 blanked, cols outside margins untouched
+    assert _line(board) == "ABDEF GHIJ"  # index 5 blanked, cols outside margins untouched
 
 
 # --- XTVERSION --- #
 
 
 def test_xtversion_reports_name_and_version():
-    terminal, parser, transport = _term()
+    board, parser, transport = _term()
     parser.feed("\x1b[>0q")
     reply = _sent(transport)
     assert reply.startswith("\x1bP>|bittty(") and reply.endswith("\x1b\\")
@@ -106,46 +106,46 @@ def test_xtversion_reports_name_and_version():
 
 
 def test_xtpush_xtpop_sgr_restores_attributes():
-    terminal, parser, _ = _term()
+    board, parser, _ = _term()
     parser.feed("\x1b[1;31m")  # bold red
     parser.feed("\x1b[#{")  # XTPUSHSGR
     parser.feed("\x1b[0m\x1b[34m")  # reset then blue
     parser.feed("\x1b[#}")  # XTPOPSGR -> back to bold red
-    style = terminal.style.current
+    style = board.style.current
     assert style.bold is True
     assert style.fg is not None and style.fg.value == 1
 
 
 def test_xtpush_xtpop_colors_restores_palette():
-    terminal, parser, _ = _term()
-    before = terminal.palette.colors[1]
+    board, parser, _ = _term()
+    before = board.palette.colors[1]
     parser.feed("\x1b[#P")  # XTPUSHCOLORS
     parser.feed("\x1b]4;1;rgb:0102/0304/0506\x07")  # change palette entry 1
-    assert terminal.palette.colors[1] != before
+    assert board.palette.colors[1] != before
     parser.feed("\x1b[#Q")  # XTPOPCOLORS
-    assert terminal.palette.colors[1] == before
+    assert board.palette.colors[1] == before
 
 
 # --- DECBI / DECFI --- #
 
 
 def test_decfi_moves_right_then_pans_at_right_margin():
-    terminal, parser, _ = _term()
-    terminal.cursor.set_position(4, 0)
+    board, parser, _ = _term()
+    board.cursor.set_position(4, 0)
     parser.feed("\x1b9")  # DECFI below the right margin -> just move right
-    assert terminal.cursor.x == 5
-    terminal.blitter.current_buffer.set(0, 0, "ABCDEFGHIJ")
-    terminal.cursor.set_position(9, 0)  # right margin
+    assert board.cursor.x == 5
+    board.blitter.current_buffer.set(0, 0, "ABCDEFGHIJ")
+    board.cursor.set_position(9, 0)  # right margin
     parser.feed("\x1b9")  # DECFI at right margin -> pan content left, blank at right
-    assert _line(terminal) == "BCDEFGHIJ"
+    assert _line(board) == "BCDEFGHIJ"
 
 
 def test_decbi_moves_left_then_pans_at_left_margin():
-    terminal, parser, _ = _term()
-    terminal.cursor.set_position(3, 0)
+    board, parser, _ = _term()
+    board.cursor.set_position(3, 0)
     parser.feed("\x1b6")  # DECBI: not at left margin -> move left
-    assert terminal.cursor.x == 2
-    terminal.blitter.current_buffer.set(0, 0, "ABCDEFGHIJ")
-    terminal.cursor.set_position(0, 0)
+    assert board.cursor.x == 2
+    board.blitter.current_buffer.set(0, 0, "ABCDEFGHIJ")
+    board.cursor.set_position(0, 0)
     parser.feed("\x1b6")  # DECBI at left margin -> pan right, blank at left
-    assert _line(terminal) == " ABCDEFGHI"
+    assert _line(board) == " ABCDEFGHI"

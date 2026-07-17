@@ -6,73 +6,73 @@ from bittty.parser import Parser
 
 def test_decsclm_default_jump_scrolling():
     """Test that scrolling is jump (instant) by default."""
-    terminal = Board(width=20, height=5)
+    board = Board(width=20, height=5)
 
     # Should be jump scrolling by default (scroll_mode = False)
-    assert not terminal.modes.scroll_mode
+    assert not board.modes.scroll_mode
 
     # Fill the terminal buffer completely
-    terminal.cursor.y = 0
+    board.cursor.y = 0
     for i in range(5):
-        terminal.blitter.write_text(f"Line {i}")
+        board.blitter.write_text(f"Line {i}")
         if i < 4:  # Don't add newline on last line
-            terminal.cursor.line_feed()
-            terminal.cursor.carriage_return()
+            board.cursor.line_feed()
+            board.cursor.carriage_return()
 
     # Move to last line and trigger a scroll by adding content
-    terminal.cursor.y = 4
-    terminal.cursor.x = 0
-    terminal.cursor.line_feed()  # This should scroll
-    terminal.blitter.write_text("Line 5")
+    board.cursor.y = 4
+    board.cursor.x = 0
+    board.cursor.line_feed()  # This should scroll
+    board.blitter.write_text("Line 5")
 
     # With jump scrolling, the scroll should be instant
     # The top line should have moved up
-    assert terminal.blitter.current_buffer.get_line_text(4) == "Line 5              "
+    assert board.blitter.current_buffer.get_line_text(4) == "Line 5              "
 
 
 def test_decsclm_set_smooth_scrolling():
     """Test setting DECSCLM to enable smooth scrolling."""
-    terminal = Board(width=20, height=5)
-    parser = Parser(terminal)
+    board = Board(width=20, height=5)
+    parser = Parser(board)
 
     # Set DECSCLM mode (ESC [ ? 4 h)
     parser.feed("\x1b[?4h")
 
     # Should enable smooth scrolling
-    assert terminal.modes.scroll_mode
+    assert board.modes.scroll_mode
 
 
 def test_decsclm_reset_to_jump():
     """Test resetting DECSCLM back to jump scrolling."""
-    terminal = Board(width=20, height=5)
-    parser = Parser(terminal)
+    board = Board(width=20, height=5)
+    parser = Parser(board)
 
     # Set smooth scrolling first
     parser.feed("\x1b[?4h")
-    assert terminal.modes.scroll_mode
+    assert board.modes.scroll_mode
 
     # Reset DECSCLM mode (ESC [ ? 4 l)
     parser.feed("\x1b[?4l")
 
     # Should return to jump scrolling
-    assert not terminal.modes.scroll_mode
+    assert not board.modes.scroll_mode
 
 
 def test_decsclm_affects_scroll_behavior():
     """Test that DECSCLM actually affects scrolling behavior."""
-    terminal = Board(width=20, height=3)
-    parser = Parser(terminal)
+    board = Board(width=20, height=3)
+    parser = Parser(board)
 
     # Set smooth scrolling
     parser.feed("\x1b[?4h")
 
     # Fill screen
-    terminal.blitter.write_text("Line 1\nLine 2\nLine 3")
-    terminal.cursor.y = 2  # Move to last line
+    board.blitter.write_text("Line 1\nLine 2\nLine 3")
+    board.cursor.y = 2  # Move to last line
 
     # Trigger scroll - in smooth mode this should be gradual
-    terminal.cursor.line_feed()
+    board.cursor.line_feed()
 
     # In real implementation, smooth scrolling would have intermediate states
     # For now, we just verify the mode is set correctly
-    assert terminal.modes.scroll_mode
+    assert board.modes.scroll_mode

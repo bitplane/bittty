@@ -13,38 +13,38 @@ from bittty.constants import (
 
 # Use real terminal instead of mock
 @pytest.fixture
-def terminal(standard_terminal):
+def board(standard_board):
     """Return a real Board instance for testing."""
-    return standard_terminal
+    return standard_board
 
 
-def test_csi_sm_rm_private_autowrap(terminal):
+def test_csi_sm_rm_private_autowrap(board):
     """Test CSI ? 7 h (Set Auto-wrap Mode) and CSI ? 7 l (Reset Auto-wrap Mode)."""
-    parser = Parser(terminal)
+    parser = Parser(board)
 
     # Set auto-wrap mode
     parser.feed(f"{ESC}[?{DECAWM_AUTOWRAP}h")
-    assert terminal.modes.auto_wrap is True
+    assert board.modes.auto_wrap is True
 
     # Reset auto-wrap mode
     parser.feed(f"{ESC}[?{DECAWM_AUTOWRAP}l")
-    assert terminal.modes.auto_wrap is False
+    assert board.modes.auto_wrap is False
 
 
-def test_csi_sm_rm_private_cursor_visibility(terminal):
+def test_csi_sm_rm_private_cursor_visibility(board):
     """Test CSI ? 25 h (Show Cursor) and CSI ? 25 l (Hide Cursor)."""
-    parser = Parser(terminal)
+    parser = Parser(board)
 
     # Hide cursor
     parser.feed("\x1b[?25l")
-    assert terminal.modes.cursor_visible is False
+    assert board.modes.cursor_visible is False
 
     # Show cursor
     parser.feed("\x1b[?25h")
-    assert terminal.modes.cursor_visible is True
+    assert board.modes.cursor_visible is True
 
 
-def test_parse_byte_csi_intermediate_transition(terminal):
+def test_parse_byte_csi_intermediate_transition(board):
     """Test CSI parsing with intermediate characters."""
     from bittty.parser.csi import parse_csi_params
 
@@ -61,17 +61,17 @@ def test_parse_byte_csi_intermediate_transition(terminal):
     assert final == "c"
 
 
-def test_parse_byte_ht_wraps_cursor(terminal):
+def test_parse_byte_ht_wraps_cursor(board):
     """Test that HT character (0x09) wraps cursor_x if it exceeds terminal width."""
-    parser = Parser(terminal)
-    terminal.cursor.x = terminal.width - 5  # 5 characters before end
+    parser = Parser(board)
+    board.cursor.x = board.width - 5  # 5 characters before end
     parser.feed("\x09")
-    assert terminal.cursor.x == terminal.width - 1  # Should cap at terminal width - 1
+    assert board.cursor.x == board.width - 1  # Should cap at terminal width - 1
 
 
-def test_unknown_escape_sequences_ignored(terminal):
+def test_unknown_escape_sequences_ignored(board):
     """Test that unknown escape sequences are ignored and don't affect normal parsing."""
-    parser = Parser(terminal)
+    parser = Parser(board)
 
     # Unknown escape sequences should be logged but not crash
     parser.feed("Before\x1b9After")  # ESC 9 (unknown/unhandled)
@@ -79,46 +79,46 @@ def test_unknown_escape_sequences_ignored(terminal):
     parser.feed("End")
 
     # Text should still be processed normally
-    text_content = terminal.blitter.current_buffer.get_line_text(0).strip()
+    text_content = board.blitter.current_buffer.get_line_text(0).strip()
     assert "Before" in text_content
     assert "After" in text_content
     assert "End" in text_content
 
 
-def test_invalid_csi_sequences_ignored(terminal):
+def test_invalid_csi_sequences_ignored(board):
     """Test that invalid CSI sequences are ignored and don't affect normal parsing."""
-    parser = Parser(terminal)
+    parser = Parser(board)
 
     # Invalid CSI sequences behavior matches real terminals
     parser.feed("Hello\x1b[\x01World")  # Invalid control in CSI
 
     # Based on tmux behavior: "Hello" appears, CSI is abandoned, "orld" appears (W consumed)
-    text_content = terminal.blitter.current_buffer.get_line_text(0).strip()
+    text_content = board.blitter.current_buffer.get_line_text(0).strip()
     assert "Hello" in text_content
     assert "orld" in text_content
 
     # Test recovery with more text
     parser.feed("More")
-    text_content = terminal.blitter.current_buffer.get_line_text(0).strip()
+    text_content = board.blitter.current_buffer.get_line_text(0).strip()
     assert "More" in text_content
 
 
-def test_malformed_csi_recovery(terminal):
+def test_malformed_csi_recovery(board):
     """Test that parser recovers from malformed CSI sequences."""
-    parser = Parser(terminal)
+    parser = Parser(board)
 
     # Feed an unhandled CSI (final byte W) followed by normal text
     parser.feed("Start\x1b[999;999;999WEnd")  # Unknown CSI sequence
 
     # Should still write the text parts
-    text_content = terminal.blitter.current_buffer.get_line_text(0).strip()
+    text_content = board.blitter.current_buffer.get_line_text(0).strip()
     assert "Start" in text_content
     assert "End" in text_content
 
 
-def test_incomplete_csi_sequences(terminal):
+def test_incomplete_csi_sequences(board):
     """Test handling of incomplete CSI sequences."""
-    parser = Parser(terminal)
+    parser = Parser(board)
 
     # Incomplete sequences shouldn't crash
     parser.feed("Test\x1b[")  # Just CSI introducer
@@ -126,7 +126,7 @@ def test_incomplete_csi_sequences(terminal):
     parser.feed("H")  # CSI final byte - completes as cursor position
 
     # Should have processed "Test" and positioned cursor
-    text_content = terminal.blitter.current_buffer.get_line_text(0).strip()
+    text_content = board.blitter.current_buffer.get_line_text(0).strip()
     assert "Test" in text_content
 
     # Test actual incomplete sequences that stay incomplete
@@ -135,10 +135,10 @@ def test_incomplete_csi_sequences(terminal):
     parser.feed("3m")  # Complete with SGR
 
     # "Next" should appear (cursor was moved by H earlier)
-    assert "Next" in terminal.blitter.current_buffer.get_line_text(4).strip()
+    assert "Next" in board.blitter.current_buffer.get_line_text(4).strip()
 
 
-def test_parse_byte_csi_entry_intermediate_general(terminal):
+def test_parse_byte_csi_entry_intermediate_general(board):
     """Test CSI parsing with general intermediate characters."""
     from bittty.parser.csi import parse_csi_params
 
@@ -149,7 +149,7 @@ def test_parse_byte_csi_entry_intermediate_general(terminal):
     assert final == "p"
 
 
-def test_parse_byte_csi_param_intermediate(terminal):
+def test_parse_byte_csi_param_intermediate(board):
     """Test CSI parsing with parameters and intermediate characters."""
     from bittty.parser.csi import parse_csi_params
 
@@ -162,24 +162,24 @@ def test_parse_byte_csi_param_intermediate(terminal):
     assert final == "p"
 
 
-def test_parse_byte_csi_intermediate_param_final(terminal):
+def test_parse_byte_csi_intermediate_param_final(board):
     """Test CSI_INTERMEDIATE with parameter and final byte."""
-    parser = Parser(terminal)
+    parser = Parser(board)
 
     # Put some text at cursor position first
-    terminal.blitter.write_text("ABC")
-    terminal.cursor.x = 1  # Move cursor to position 1 (between A and B)
+    board.blitter.write_text("ABC")
+    board.cursor.x = 1  # Move cursor to position 1 (between A and B)
 
     # Send ICH (Insert Character) command: ESC [ ? 1 ; 2 @
     # Should insert 1 blank character at cursor position
     parser.feed("\x1b[?1;2@")
 
     # Verify that a space was inserted at position 1
-    line_text = terminal.blitter.current_buffer.get_line_text(0).rstrip()
+    line_text = board.blitter.current_buffer.get_line_text(0).rstrip()
     assert line_text == "A BC"  # Space inserted between A and BC
 
 
-def test_csi_params_with_sub_parameters(terminal):
+def test_csi_params_with_sub_parameters(board):
     """Test CSI parsing with sub-parameters (colon notation)."""
     from bittty.parser.csi import parse_csi_params
 
@@ -190,7 +190,7 @@ def test_csi_params_with_sub_parameters(terminal):
     assert final == "m"
 
 
-def test_csi_params_with_invalid_main_param(terminal):
+def test_csi_params_with_invalid_main_param(board):
     """Test CSI parsing with completely invalid parameters."""
     from bittty.parser.csi import parse_csi_params
 
@@ -202,111 +202,111 @@ def test_csi_params_with_invalid_main_param(terminal):
     assert final == "m"
 
 
-def test_csi_dispatch_sm_rm_basic_modes(terminal):
+def test_csi_dispatch_sm_rm_basic_modes(board):
     """Autowrap and cursor visibility are DEC private modes (?7 / ?25)."""
-    parser = Parser(terminal)
+    parser = Parser(board)
 
     # Test auto-wrap mode (private mode ?7)
     parser.feed("\x1b[?7h")  # Set auto-wrap
-    assert terminal.modes.auto_wrap is True
+    assert board.modes.auto_wrap is True
     parser.feed("\x1b[?7l")  # Reset auto-wrap
-    assert terminal.modes.auto_wrap is False
+    assert board.modes.auto_wrap is False
 
     # Test cursor visibility (private mode ?25)
     parser.feed("\x1b[?25l")  # Hide cursor
-    assert terminal.modes.cursor_visible is False
+    assert board.modes.cursor_visible is False
     parser.feed("\x1b[?25h")  # Show cursor
-    assert terminal.modes.cursor_visible is True
+    assert board.modes.cursor_visible is True
 
 
-def test_csi_sm_rm_deccolm_column_mode(terminal):
+def test_csi_sm_rm_deccolm_column_mode(board):
     """Test CSI ? 3 h (132 Column Mode) and CSI ? 3 l (80 Column Mode)."""
-    parser = Parser(terminal)
+    parser = Parser(board)
 
     # Without mode 40 (allowC132), DECCOLM is ignored — reset strings carry ?3l
     # and must not shrink the terminal.
     parser.feed(f"{ESC}[?{DECCOLM_COLUMN_MODE}h")
-    assert terminal.width == 80
+    assert board.width == 80
 
     parser.feed(f"{ESC}[?40h")  # permit 80<->132 switching
     parser.feed(f"{ESC}[?{DECCOLM_COLUMN_MODE}h")
-    assert terminal.width == 132
-    assert terminal.cursor.x == 0  # Cursor should move to home position
-    assert terminal.cursor.y == 0
+    assert board.width == 132
+    assert board.cursor.x == 0  # Cursor should move to home position
+    assert board.cursor.y == 0
 
     # Reset to 80 column mode
     parser.feed(f"{ESC}[?{DECCOLM_COLUMN_MODE}l")
-    assert terminal.width == 80
-    assert terminal.cursor.x == 0  # Cursor should move to home position
-    assert terminal.cursor.y == 0
+    assert board.width == 80
+    assert board.cursor.x == 0  # Cursor should move to home position
+    assert board.cursor.y == 0
 
 
-def test_csi_sm_rm_decscnm_screen_mode(terminal):
+def test_csi_sm_rm_decscnm_screen_mode(board):
     """Test CSI ? 5 h (Reverse Screen Mode) and CSI ? 5 l (Normal Screen Mode)."""
-    parser = Parser(terminal)
+    parser = Parser(board)
 
     # Set reverse screen mode
     parser.feed(f"{ESC}[?{DECSCNM_SCREEN_MODE}h")
-    assert terminal.modes.reverse_screen is True
+    assert board.modes.reverse_screen is True
 
     # Reset to normal screen mode
     parser.feed(f"{ESC}[?{DECSCNM_SCREEN_MODE}l")
-    assert terminal.modes.reverse_screen is False
+    assert board.modes.reverse_screen is False
 
 
-def test_csi_sm_rm_decom_origin_mode(terminal):
+def test_csi_sm_rm_decom_origin_mode(board):
     """Test CSI ? 6 h (Origin Mode) and CSI ? 6 l (Normal Mode)."""
-    parser = Parser(terminal)
+    parser = Parser(board)
 
     # Set origin mode (relative to scroll region)
     parser.feed(f"{ESC}[?{DECOM_ORIGIN_MODE}h")
-    assert terminal.modes.origin_mode is True
-    assert terminal.cursor.x == 0  # Cursor should move to origin
-    assert terminal.cursor.y == terminal.blitter.scroll_top
+    assert board.modes.origin_mode is True
+    assert board.cursor.x == 0  # Cursor should move to origin
+    assert board.cursor.y == board.blitter.scroll_top
 
     # Reset to normal mode (absolute positioning)
     parser.feed(f"{ESC}[?{DECOM_ORIGIN_MODE}l")
-    assert terminal.modes.origin_mode is False
-    assert terminal.cursor.x == 0  # Cursor should move to home position
-    assert terminal.cursor.y == 0
+    assert board.modes.origin_mode is False
+    assert board.cursor.x == 0  # Cursor should move to home position
+    assert board.cursor.y == 0
 
 
-def test_csi_sm_rm_decarsm_auto_resize_mode(terminal):
+def test_csi_sm_rm_decarsm_auto_resize_mode(board):
     """Test CSI ? 2028 h (Auto-Resize Mode) and CSI ? 2028 l (Disable Auto-Resize Mode)."""
-    parser = Parser(terminal)
+    parser = Parser(board)
 
     # Enable auto-resize mode
     parser.feed(f"{ESC}[?{DECARSM_AUTO_RESIZE}h")
-    assert terminal.modes.auto_resize_mode is True
+    assert board.modes.auto_resize_mode is True
 
     # Disable auto-resize mode
     parser.feed(f"{ESC}[?{DECARSM_AUTO_RESIZE}l")
-    assert terminal.modes.auto_resize_mode is False
+    assert board.modes.auto_resize_mode is False
 
 
-def test_csi_sm_rm_deckbum_keyboard_usage_mode(terminal):
+def test_csi_sm_rm_deckbum_keyboard_usage_mode(board):
     """Test CSI ? 69 h (Keyboard Usage Mode) and CSI ? 69 l (Normal Keyboard Mode)."""
-    parser = Parser(terminal)
+    parser = Parser(board)
 
     # Enable keyboard usage mode (typewriter keys send functions)
     parser.feed(f"{ESC}[?{DECKBUM_KEYBOARD_USAGE}h")
-    assert terminal.modes.keyboard_usage_mode is True
+    assert board.modes.keyboard_usage_mode is True
 
     # Reset to normal keyboard mode
     parser.feed(f"{ESC}[?{DECKBUM_KEYBOARD_USAGE}l")
-    assert terminal.modes.keyboard_usage_mode is False
+    assert board.modes.keyboard_usage_mode is False
 
 
-def test_deccolm_clears_the_screen_and_resets_the_region(terminal):
+def test_deccolm_clears_the_screen_and_resets_the_region(board):
     """DECCOLM always erases the display and restores the full scroll region."""
-    parser = Parser(terminal)
+    parser = Parser(board)
     parser.feed(f"{ESC}[?40h")  # permit column switching
     parser.feed("some text")
     parser.feed(f"{ESC}[5;15r")  # shrink the scroll region
 
     parser.feed(f"{ESC}[?{DECCOLM_COLUMN_MODE}h")
 
-    assert terminal.width == 132
-    assert terminal.blitter.current_buffer.get_line_text(0).strip() == ""
-    assert terminal.blitter.scroll_top == 0
-    assert terminal.blitter.scroll_bottom == terminal.height - 1
+    assert board.width == 132
+    assert board.blitter.current_buffer.get_line_text(0).strip() == ""
+    assert board.blitter.scroll_top == 0
+    assert board.blitter.scroll_bottom == board.height - 1

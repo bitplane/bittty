@@ -1,4 +1,4 @@
-"""Shared fixtures for parser-to-terminal integration tests."""
+"""Shared fixtures for parser-to-board integration tests."""
 
 import io
 
@@ -10,7 +10,7 @@ from bittty import Board
 
 
 @pytest.fixture
-def terminal():
+def board():
     """Create a real Board with stdio streams for integration testing."""
     stdin = io.StringIO()
     stdout = io.StringIO()
@@ -18,30 +18,30 @@ def terminal():
 
 
 @pytest.fixture
-def parser(terminal):
+def parser(board):
     """Create a Parser attached to a real Board."""
-    return Parser(terminal)
+    return Parser(board)
 
 
 @pytest.fixture
-def standard_terminal():
+def standard_board():
     """Return a real Board instance with standard dimensions."""
     return Board(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
 
 
 @pytest.fixture
-def small_terminal():
+def small_board():
     """Return a real Board instance with smaller dimensions for specific tests."""
     return Board(width=20, height=10)
 
 
 @pytest.fixture
-def parser_with_standard_terminal(standard_terminal):
-    """Return a parser connected to a standard terminal for integration testing."""
-    return Parser(standard_terminal), standard_terminal
+def parser_with_standard_board(standard_board):
+    """Return a parser connected to a standard board for integration testing."""
+    return Parser(standard_board), standard_board
 
 
 @pytest.fixture
-def parser_with_small_terminal(small_terminal):
-    """Return a parser connected to a small terminal for specific test scenarios."""
-    return Parser(small_terminal), small_terminal
+def parser_with_small_board(small_board):
+    """Return a parser connected to a small board for specific test scenarios."""
+    return Parser(small_board), small_board

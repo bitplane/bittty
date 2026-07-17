@@ -6,8 +6,8 @@ from bittty.parser import Parser
 
 def test_dec_special_graphics_box_drawing():
     """Test that ESC(0 switches to graphics mode and ESC(B switches back."""
-    terminal = Board(width=10, height=5)
-    parser = Parser(terminal)
+    board = Board(width=10, height=5)
+    parser = Parser(board)
 
     # Draw a simple box using DEC Special Graphics
     # In graphics mode: l=┌, q=─, k=┐, x=│, m=└, j=┘
@@ -18,15 +18,15 @@ def test_dec_special_graphics_box_drawing():
     parser.feed("\x1b(B")  # Switch back to ASCII
 
     # Check that box drawing characters were used
-    assert terminal.blitter.current_buffer.get_line_text(0) == "┌──┐      "
-    assert terminal.blitter.current_buffer.get_line_text(1) == "│  │      "
-    assert terminal.blitter.current_buffer.get_line_text(2) == "└──┘      "
+    assert board.blitter.current_buffer.get_line_text(0) == "┌──┐      "
+    assert board.blitter.current_buffer.get_line_text(1) == "│  │      "
+    assert board.blitter.current_buffer.get_line_text(2) == "└──┘      "
 
 
 def test_dec_special_graphics_full_mapping():
     """Test all DEC Special Graphics characters."""
-    terminal = Board(width=20, height=10)
-    parser = Parser(terminal)
+    board = Board(width=20, height=10)
+    parser = Parser(board)
 
     # Test various special characters
     # See: https://vt100.net/docs/vt100-ug/table3-9.html
@@ -48,13 +48,13 @@ def test_dec_special_graphics_full_mapping():
     parser.feed("\x1b(B")  # Back to ASCII
 
     expected = "┘┐┌└┼─├┤┴┬│         "
-    assert terminal.blitter.current_buffer.get_line_text(0) == expected
+    assert board.blitter.current_buffer.get_line_text(0) == expected
 
 
 def test_dec_graphics_mode_persists():
     """Test that graphics mode persists until explicitly changed."""
-    terminal = Board(width=10, height=5)
-    parser = Parser(terminal)
+    board = Board(width=10, height=5)
+    parser = Parser(board)
 
     parser.feed("\x1b(0")  # Switch to graphics mode
     parser.feed("q")  # Should be ─
@@ -64,15 +64,15 @@ def test_dec_graphics_mode_persists():
     # Still in graphics mode
     parser.feed("n")  # Should be ┼
 
-    assert terminal.blitter.current_buffer.get_line_text(0) == "─         "
-    assert terminal.blitter.current_buffer.get_line_text(1) == "│         "
-    assert terminal.blitter.current_buffer.get_line_text(2) == "┼         "
+    assert board.blitter.current_buffer.get_line_text(0) == "─         "
+    assert board.blitter.current_buffer.get_line_text(1) == "│         "
+    assert board.blitter.current_buffer.get_line_text(2) == "┼         "
 
 
 def test_switch_between_modes():
     """Test switching between ASCII and graphics modes."""
-    terminal = Board(width=15, height=3)
-    parser = Parser(terminal)
+    board = Board(width=15, height=3)
+    parser = Parser(board)
 
     parser.feed("ABC")  # Normal ASCII
     parser.feed("\x1b(0")  # Switch to graphics
@@ -80,13 +80,13 @@ def test_switch_between_modes():
     parser.feed("\x1b(B")  # Back to ASCII
     parser.feed("DEF")  # Normal ASCII
 
-    assert terminal.blitter.current_buffer.get_line_text(0) == "ABC┌─┐DEF      "
+    assert board.blitter.current_buffer.get_line_text(0) == "ABC┌─┐DEF      "
 
 
 def test_graphics_mode_with_colors():
     """Test that colors work correctly with graphics mode."""
-    terminal = Board(width=10, height=3)
-    parser = Parser(terminal)
+    board = Board(width=10, height=3)
+    parser = Parser(board)
 
     parser.feed("\x1b[31m")  # Red
     parser.feed("\x1b(0")  # Graphics mode
@@ -95,9 +95,9 @@ def test_graphics_mode_with_colors():
     parser.feed("\x1b[0m")  # Reset color
 
     # Check both the characters and that they have the red style
-    assert terminal.blitter.current_buffer.get_line_text(0) == "┌──┐      "
+    assert board.blitter.current_buffer.get_line_text(0) == "┌──┐      "
     # Check first character has red foreground
-    style, char = terminal.blitter.current_buffer.get_cell(0, 0)
+    style, char = board.blitter.current_buffer.get_cell(0, 0)
     assert char == "┌"
     assert style.fg.mode == "indexed"
     assert style.fg.value == 1  # Red
@@ -105,8 +105,8 @@ def test_graphics_mode_with_colors():
 
 def test_other_character_sets():
     """Test that other character set designators are handled."""
-    terminal = Board(width=10, height=3)
-    parser = Parser(terminal)
+    board = Board(width=10, height=3)
+    parser = Parser(board)
 
     # These should all switch back to normal ASCII/US
     parser.feed("\x1b(B")  # US ASCII
@@ -117,5 +117,5 @@ def test_other_character_sets():
     parser.feed("DEF")
     parser.feed("\r\n")
 
-    assert terminal.blitter.current_buffer.get_line_text(0) == "ABC       "
-    assert terminal.blitter.current_buffer.get_line_text(1) == "DEF       "
+    assert board.blitter.current_buffer.get_line_text(0) == "ABC       "
+    assert board.blitter.current_buffer.get_line_text(1) == "DEF       "

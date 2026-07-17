@@ -20,15 +20,15 @@ def _term(model=None):
     kwargs = {"width": 20, "height": 5}
     if model is not None:
         kwargs["model"] = model
-    terminal = Board(**kwargs)
+    board = Board(**kwargs)
     transport = RecordingTransport()
-    terminal.host.attach(transport)
-    return terminal, Parser(terminal), transport
+    board.host.attach(transport)
+    return board, Parser(board), transport
 
 
 def test_extended_modes_are_stored():
-    terminal, parser, _ = _term()
-    modes = terminal.modes
+    board, parser, _ = _term()
+    modes = board.modes
     parser.feed("\x1b[?45h")  # reverse wraparound on
     parser.feed("\x1b[?2027h")  # grapheme clustering on
     parser.feed("\x1b[?1042h")  # bell urgency on
@@ -40,12 +40,12 @@ def test_extended_modes_are_stored():
 
 
 def test_allow_alt_screen_defaults_on():
-    terminal, _, _ = _term()
-    assert terminal.modes.allow_alt_screen is True
+    board, _, _ = _term()
+    assert board.modes.allow_alt_screen is True
 
 
 def test_decrqm_reports_extended_modes_on_xterm():
-    terminal, parser, transport = _term()
+    board, parser, transport = _term()
     parser.feed("\x1b[?2031h")  # colour-scheme-change reporting on
     parser.feed("\x1b[?2031$p")  # DECRQM
     assert transport.data[-1] == "\x1b[?2031;1$y"  # 1 = set
@@ -55,17 +55,17 @@ def test_decrqm_reports_extended_modes_on_xterm():
 
 
 def test_vt220_reports_xterm_era_modes_as_unrecognised():
-    terminal, parser, transport = _term(VT220)
+    board, parser, transport = _term(VT220)
     parser.feed("\x1b[?2027$p")  # DECRQM for grapheme clustering
     assert transport.data[-1] == "\x1b[?2027;0$y"  # 0 = not recognised
     # and setting it on a VT220 is a no-op (mode not in its repertoire)
     parser.feed("\x1b[?2027h")
-    assert terminal.modes.grapheme_clustering is False
+    assert board.modes.grapheme_clustering is False
 
 
 def test_decrqm_now_reports_mouse_and_paste_modes():
     # These modes were previously supported but silently answered DECRQM 0.
-    terminal, parser, transport = _term()
+    board, parser, transport = _term()
     parser.feed("\x1b[?1000h\x1b[?1000$p")  # mouse tracking on
     assert transport.data[-1] == "\x1b[?1000;1$y"
     parser.feed("\x1b[?1006h\x1b[?1006$p")  # SGR mouse encoding on
@@ -77,8 +77,8 @@ def test_decrqm_now_reports_mouse_and_paste_modes():
 
 
 def test_ansi_keyboard_action_mode():
-    terminal, parser, _ = _term()
+    board, parser, _ = _term()
     parser.feed("\x1b[2h")  # KAM (non-private ANSI mode 2)
-    assert terminal.modes.keyboard_action_mode is True
+    assert board.modes.keyboard_action_mode is True
     parser.feed("\x1b[2l")
-    assert terminal.modes.keyboard_action_mode is False
+    assert board.modes.keyboard_action_mode is False

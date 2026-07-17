@@ -13,278 +13,278 @@ class RecordingPTY:
         pass
 
 
-def terminal_with_pty():
-    terminal = Board(width=20, height=5)
-    terminal.pty = RecordingPTY()
-    return terminal
+def board_with_pty():
+    board = Board(width=20, height=5)
+    board.pty = RecordingPTY()
+    return board
 
 
 def test_keyboard_device_encodes_keys_and_application_cursor_mode():
-    terminal = terminal_with_pty()
+    board = board_with_pty()
 
-    terminal.keyboard.input_key("up")
-    terminal.modes.cursor_application_mode = True
-    terminal.keyboard.input_key("down")
-    terminal.keyboard.input_key("a", constants.KEY_MOD_CTRL)
+    board.keyboard.input_key("up")
+    board.modes.cursor_application_mode = True
+    board.keyboard.input_key("down")
+    board.keyboard.input_key("a", constants.KEY_MOD_CTRL)
 
-    assert terminal.pty.data == ["\x1b[A", "\x1bOB", "\x01"]
-    assert terminal.host.connection is terminal.pty
+    assert board.pty.data == ["\x1b[A", "\x1bOB", "\x01"]
+    assert board.host.connection is board.pty
 
 
 def test_keyboard_device_encodes_function_and_numpad_keys():
-    terminal = terminal_with_pty()
+    board = board_with_pty()
 
-    terminal.keyboard.input_fkey(1)
-    terminal.keyboard.input_fkey(5, constants.KEY_MOD_CTRL)
-    terminal.keyboard.input_numpad_key("5")
-    terminal.modes.numeric_keypad = False
-    terminal.keyboard.input_numpad_key("Enter")
+    board.keyboard.input_fkey(1)
+    board.keyboard.input_fkey(5, constants.KEY_MOD_CTRL)
+    board.keyboard.input_numpad_key("5")
+    board.modes.numeric_keypad = False
+    board.keyboard.input_numpad_key("Enter")
 
-    assert terminal.pty.data == ["\x1bOP", "\x1b[15;5~", "5", "\x1bOM"]
+    assert board.pty.data == ["\x1bOP", "\x1b[15;5~", "5", "\x1bOM"]
 
 
 def test_keyboard_device_backarrow_mode():
-    terminal = terminal_with_pty()
+    board = board_with_pty()
 
-    terminal.keyboard.input_key(constants.BS)
-    terminal.modes.backarrow_key_sends_bs = True
-    terminal.keyboard.input_key(constants.BS)
+    board.keyboard.input_key(constants.BS)
+    board.modes.backarrow_key_sends_bs = True
+    board.keyboard.input_key(constants.BS)
 
-    assert terminal.pty.data == [constants.DEL, constants.BS]
+    assert board.pty.data == [constants.DEL, constants.BS]
 
 
 def test_mouse_device_caches_position_and_gates_tracking():
-    terminal = terminal_with_pty()
-    mouse = terminal.mouse
+    board = board_with_pty()
+    mouse = board.mouse
 
     mouse.input_mouse(10, 5, 0, "press", set())
     assert (mouse.x, mouse.y) == (10, 5)
-    assert terminal.pty.data == []
+    assert board.pty.data == []
 
-    terminal.modes.mouse_tracking = True
-    terminal.modes.mouse_sgr_mode = True
+    board.modes.mouse_tracking = True
+    board.modes.mouse_sgr_mode = True
     mouse.input_mouse(10, 5, 0, "press", {"shift"})
 
-    assert terminal.pty.data == ["\x1b[<4;10;5M"]
+    assert board.pty.data == ["\x1b[<4;10;5M"]
 
 
 def test_mouse_device_move_requires_any_tracking():
-    terminal = terminal_with_pty()
-    terminal.modes.mouse_tracking = True
-    terminal.modes.mouse_sgr_mode = True
+    board = board_with_pty()
+    board.modes.mouse_tracking = True
+    board.modes.mouse_sgr_mode = True
 
-    terminal.mouse.input_mouse(1, 2, 0, "move", set())
-    assert terminal.pty.data == []
+    board.mouse.input_mouse(1, 2, 0, "move", set())
+    assert board.pty.data == []
 
-    terminal.modes.mouse_any_tracking = True
-    terminal.mouse.input_mouse(1, 2, 0, "move", set())
-    assert terminal.pty.data == ["\x1b[<35;1;2M"]
+    board.modes.mouse_any_tracking = True
+    board.mouse.input_mouse(1, 2, 0, "move", set())
+    assert board.pty.data == ["\x1b[<35;1;2M"]
 
 
 def test_show_mouse_cursor():
     """Test that the mouse cursor is rendered when show_mouse is True."""
     # Create a terminal
-    terminal = Board(width=20, height=10)
+    board = Board(width=20, height=10)
 
     # Enable the mouse cursor
-    terminal.mouse.show = True
+    board.mouse.show = True
 
     # Set a mouse position
-    terminal.mouse.x = 5
-    terminal.mouse.y = 3
+    board.mouse.x = 5
+    board.mouse.y = 3
 
     # Get the content and check for the cursor
-    content = terminal.capture_pane()
+    content = board.capture_pane()
     # The mouse cursor is at (5,3), which is index 4 of line 2 (0-indexed)
     # The capture_pane output includes newlines, so we need to split it.
     lines = content.split("\n")
     assert lines[2][4] == "↖"
 
     # Disable the mouse cursor
-    terminal.mouse.show = False
+    board.mouse.show = False
 
     # Get the content and check that the cursor is gone
-    content = terminal.capture_pane()
+    content = board.capture_pane()
     lines = content.split("\n")
     assert lines[2][4] != "↖"
 
 
 def test_input_mouse_basic():
     """Test basic mouse input functionality."""
-    terminal = Board(width=80, height=24)
+    board = Board(width=80, height=24)
 
     # Enable mouse tracking
-    terminal.modes.mouse_tracking = True
+    board.modes.mouse_tracking = True
 
     # Test mouse press
-    terminal.input_mouse(10, 5, 1, "press", set())
+    board.input_mouse(10, 5, 1, "press", set())
 
     # Mouse position should be cached
-    assert terminal.mouse.x == 10
-    assert terminal.mouse.y == 5
+    assert board.mouse.x == 10
+    assert board.mouse.y == 5
 
 
 def test_input_mouse_sgr_mode():
     """Test mouse input with SGR mode."""
-    terminal = Board(width=80, height=24)
+    board = Board(width=80, height=24)
 
     # Enable SGR mouse mode
-    terminal.modes.mouse_sgr_mode = True
-    terminal.modes.mouse_tracking = True
+    board.modes.mouse_sgr_mode = True
+    board.modes.mouse_tracking = True
 
     # Test mouse press with modifiers
     modifiers = {"shift", "ctrl"}
-    terminal.input_mouse(15, 8, 1, "press", modifiers)
+    board.input_mouse(15, 8, 1, "press", modifiers)
 
     # Should handle the input without errors
-    assert terminal.mouse.x == 15
-    assert terminal.mouse.y == 8
+    assert board.mouse.x == 15
+    assert board.mouse.y == 8
 
 
 def test_input_numpad_key_numeric_mode():
     """Test numpad key input in numeric mode."""
-    terminal = Board(width=80, height=24)
+    board = Board(width=80, height=24)
 
     # Numeric mode (default)
-    terminal.modes.numeric_keypad = True
+    board.modes.numeric_keypad = True
 
     # Test numpad keys
-    terminal.input_numpad_key("5")
-    terminal.input_numpad_key(".")
-    terminal.input_numpad_key("Enter")
+    board.input_numpad_key("5")
+    board.input_numpad_key(".")
+    board.input_numpad_key("Enter")
 
     # Should complete without errors
 
 
 def test_input_numpad_key_application_mode():
     """Test numpad key input in application mode."""
-    terminal = Board(width=80, height=24)
+    board = Board(width=80, height=24)
 
     # Application mode
-    terminal.modes.numeric_keypad = False
+    board.modes.numeric_keypad = False
 
     # Test numpad keys in application mode
-    terminal.input_numpad_key("0")
-    terminal.input_numpad_key("+")
-    terminal.input_numpad_key("Enter")
+    board.input_numpad_key("0")
+    board.input_numpad_key("+")
+    board.input_numpad_key("Enter")
 
     # Should complete without errors
 
 
 def test_input_fkey():
     """Test function key input."""
-    terminal = Board(width=80, height=24)
+    board = Board(width=80, height=24)
 
     # Test F1-F4 keys
-    terminal.input_fkey(1)  # F1
-    terminal.input_fkey(2)  # F2
+    board.input_fkey(1)  # F1
+    board.input_fkey(2)  # F2
 
     # Test F5-F12 keys
-    terminal.input_fkey(5)  # F5
-    terminal.input_fkey(12)  # F12
+    board.input_fkey(5)  # F5
+    board.input_fkey(12)  # F12
 
     # Test with modifiers
     from bittty.constants import KEY_MOD_CTRL
 
-    terminal.input_fkey(1, KEY_MOD_CTRL)
+    board.input_fkey(1, KEY_MOD_CTRL)
 
     # Should complete without errors
 
 
 def test_input_key_cursor_keys():
     """Test cursor key input."""
-    terminal = Board(width=80, height=24)
+    board = Board(width=80, height=24)
 
     # Test basic cursor keys
-    terminal.input_key("UP")
-    terminal.input_key("DOWN")
-    terminal.input_key("LEFT")
-    terminal.input_key("RIGHT")
+    board.input_key("UP")
+    board.input_key("DOWN")
+    board.input_key("LEFT")
+    board.input_key("RIGHT")
 
     # Test with modifiers
     from bittty.constants import KEY_MOD_SHIFT
 
-    terminal.input_key("UP", KEY_MOD_SHIFT)
+    board.input_key("UP", KEY_MOD_SHIFT)
 
     # Should complete without errors
 
 
 def test_input_key_navigation():
     """Test navigation key input."""
-    terminal = Board(width=80, height=24)
+    board = Board(width=80, height=24)
 
     # Test home/end keys
-    terminal.input_key("HOME")
-    terminal.input_key("END")
+    board.input_key("HOME")
+    board.input_key("END")
 
     # Should complete without errors
 
 
 def test_input_key_backspace():
     """Test backspace key handling with DECBKM mode."""
-    terminal = Board(width=80, height=24)
+    board = Board(width=80, height=24)
 
     # Test default mode (sends DEL)
-    terminal.modes.backarrow_key_sends_bs = False
-    terminal.input_key("\x08")  # BS character
+    board.modes.backarrow_key_sends_bs = False
+    board.input_key("\x08")  # BS character
 
     # Test DECBKM mode (sends BS)
-    terminal.modes.backarrow_key_sends_bs = True
-    terminal.input_key("\x08")  # BS character
+    board.modes.backarrow_key_sends_bs = True
+    board.input_key("\x08")  # BS character
 
     # Should complete without errors
 
 
 def test_mouse_device_legacy_encoding_without_sgr():
     """Mode 1000 without 1006 reports in the X10 byte encoding, not silence."""
-    terminal = terminal_with_pty()
-    terminal.modes.mouse_tracking = True
+    board = board_with_pty()
+    board.modes.mouse_tracking = True
 
-    terminal.mouse.input_mouse(10, 5, 0, "press", set())
-    assert terminal.pty.data == ["\x1b[M" + chr(32 + 0) + chr(32 + 10) + chr(32 + 5)]
+    board.mouse.input_mouse(10, 5, 0, "press", set())
+    assert board.pty.data == ["\x1b[M" + chr(32 + 0) + chr(32 + 10) + chr(32 + 5)]
 
-    terminal.pty.data.clear()
-    terminal.mouse.input_mouse(10, 5, 0, "release", set())
+    board.pty.data.clear()
+    board.mouse.input_mouse(10, 5, 0, "release", set())
     # A legacy release cannot name its button: low bits are 3.
-    assert terminal.pty.data == ["\x1b[M" + chr(32 + 3) + chr(32 + 10) + chr(32 + 5)]
+    assert board.pty.data == ["\x1b[M" + chr(32 + 3) + chr(32 + 10) + chr(32 + 5)]
 
 
 def test_mouse_device_button_tracking_reports_drag_motion():
     """Mode 1002 reports motion while a button is held (and only then)."""
-    terminal = terminal_with_pty()
-    terminal.modes.set_private_modes((1002, 1006), True)
+    board = board_with_pty()
+    board.modes.set_private_modes((1002, 1006), True)
 
-    terminal.mouse.input_mouse(3, 3, 0, "move", set())
-    assert terminal.pty.data == []  # no button held: no report
+    board.mouse.input_mouse(3, 3, 0, "move", set())
+    assert board.pty.data == []  # no button held: no report
 
-    terminal.mouse.input_mouse(3, 3, 0, "press", set())
-    terminal.pty.data.clear()
-    terminal.mouse.input_mouse(4, 3, 0, "move", set())
-    assert terminal.pty.data == ["\x1b[<32;4;3M"]  # motion flag + dragged button 0
+    board.mouse.input_mouse(3, 3, 0, "press", set())
+    board.pty.data.clear()
+    board.mouse.input_mouse(4, 3, 0, "move", set())
+    assert board.pty.data == ["\x1b[<32;4;3M"]  # motion flag + dragged button 0
 
-    terminal.mouse.input_mouse(4, 3, 0, "release", set())
-    terminal.pty.data.clear()
-    terminal.mouse.input_mouse(5, 3, 0, "move", set())
-    assert terminal.pty.data == []  # button up again: silence
+    board.mouse.input_mouse(4, 3, 0, "release", set())
+    board.pty.data.clear()
+    board.mouse.input_mouse(5, 3, 0, "move", set())
+    assert board.pty.data == []  # button up again: silence
 
 
 def test_input_key_modified_tilde_nav_keys():
     """Ctrl+PageUp must encode as ESC[5;5~, not ESC[1;55~."""
-    terminal = terminal_with_pty()
-    terminal.input_key("pageup", constants.KEY_MOD_CTRL)
-    assert terminal.pty.data == ["\x1b[5;5~"]
+    board = board_with_pty()
+    board.input_key("pageup", constants.KEY_MOD_CTRL)
+    assert board.pty.data == ["\x1b[5;5~"]
 
-    terminal.pty.data.clear()
-    terminal.input_key("up", constants.KEY_MOD_CTRL)
-    assert terminal.pty.data == ["\x1b[1;5A"]  # letter-final keys keep the 1;mod form
+    board.pty.data.clear()
+    board.input_key("up", constants.KEY_MOD_CTRL)
+    assert board.pty.data == ["\x1b[1;5A"]  # letter-final keys keep the 1;mod form
 
 
 def test_wheel_events_do_not_stick_as_held_buttons():
     """Wheel presses (64/65) have no release; they must not fake a drag."""
-    terminal = terminal_with_pty()
-    terminal.modes.set_private_modes((1002, 1006), True)
+    board = board_with_pty()
+    board.modes.set_private_modes((1002, 1006), True)
 
-    terminal.mouse.input_mouse(5, 5, 64, "press", set())  # wheel up
-    terminal.pty.data.clear()
-    terminal.mouse.input_mouse(6, 5, 0, "move", set())
-    assert terminal.pty.data == []  # no button held: still no motion report
+    board.mouse.input_mouse(5, 5, 64, "press", set())  # wheel up
+    board.pty.data.clear()
+    board.mouse.input_mouse(6, 5, 0, "move", set())
+    assert board.pty.data == []  # no button held: still no motion report

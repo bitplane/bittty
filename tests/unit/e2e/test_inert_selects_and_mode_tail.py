@@ -5,73 +5,73 @@ from bittty import Board
 
 
 def _term(width=10, height=3):
-    terminal = Board(width=width, height=height)
-    return terminal, Parser(terminal)
+    board = Board(width=width, height=height)
+    return board, Parser(board)
 
 
 # --- raw 8-bit C1 format controls --- #
 
 
 def test_raw_8bit_c1_index_and_reverse_index():
-    terminal, parser = _term()
-    terminal.cursor.set_position(0, 1)
+    board, parser = _term()
+    board.cursor.set_position(0, 1)
     parser.feed("\x84")  # IND (8-bit) — line feed
-    assert terminal.cursor.y == 2
+    assert board.cursor.y == 2
     parser.feed("\x8d")  # RI (8-bit) — reverse index
-    assert terminal.cursor.y == 1
+    assert board.cursor.y == 1
 
 
 def test_raw_8bit_c1_hts_sets_tab_stop():
-    terminal, parser = _term(width=20)
-    terminal.cursor.set_position(5, 0)
+    board, parser = _term(width=20)
+    board.cursor.set_position(5, 0)
     parser.feed("\x88")  # HTS (8-bit)
-    terminal.cursor.set_position(0, 0)
+    board.cursor.set_position(0, 0)
     parser.feed("\t")
-    assert terminal.cursor.x == 5
+    assert board.cursor.x == 5
 
 
 # --- SPA / EPA protected area --- #
 
 
 def test_spa_epa_toggle_protection():
-    terminal, parser = _term()
+    board, parser = _term()
     parser.feed("\x1bV")  # SPA (ESC V) — start protected area
-    assert terminal.style.current.protected is True
+    assert board.style.current.protected is True
     parser.feed("\x1bW")  # EPA (ESC W) — end protected area
-    assert terminal.style.current.protected is None
+    assert board.style.current.protected is None
 
 
 def test_spa_8bit_form():
-    terminal, parser = _term()
+    board, parser = _term()
     parser.feed("\x96")  # SPA (8-bit)
-    assert terminal.style.current.protected is True
+    assert board.style.current.protected is True
 
 
 # --- S7C1T / S8C1T and ANSI conformance --- #
 
 
 def test_c1_transmission_select():
-    terminal, parser = _term()
+    board, parser = _term()
     parser.feed("\x1b G")  # ESC SP G — S8C1T
-    assert terminal.c1_eightbit is True
+    assert board.c1_eightbit is True
     parser.feed("\x1b F")  # ESC SP F — S7C1T
-    assert terminal.c1_eightbit is False
+    assert board.c1_eightbit is False
 
 
 def test_ansi_conformance_level():
-    terminal, parser = _term()
+    board, parser = _term()
     parser.feed("\x1b M")  # ESC SP M — ANSI conformance level 2
-    assert terminal.ansi_conformance_level == 2
+    assert board.ansi_conformance_level == 2
     parser.feed("\x1b L")  # ESC SP L — level 1
-    assert terminal.ansi_conformance_level == 1
+    assert board.ansi_conformance_level == 1
 
 
 # --- mode tail --- #
 
 
 def test_mode_tail_flags_store_and_report():
-    terminal, parser = _term()
-    modes = terminal.modes
+    board, parser = _term()
+    modes = board.modes
     parser.feed("\x1b[?1010h")  # scroll on output
     parser.feed("\x1b[?1037h")  # delete sends DEL
     assert modes.scroll_on_output is True
@@ -79,8 +79,8 @@ def test_mode_tail_flags_store_and_report():
 
 
 def test_mode_tail_defaults():
-    terminal, _ = _term()
-    modes = terminal.modes
+    board, _ = _term()
+    modes = board.modes
     # xterm-default-on flags
     assert modes.special_modifiers is True
     assert modes.sixel_private_registers is True
@@ -89,7 +89,7 @@ def test_mode_tail_defaults():
 
 
 def test_mode_tail_reports_via_decrqm():
-    terminal, parser = _term()
+    board, parser = _term()
 
     class Rec:
         def __init__(self):
@@ -102,7 +102,7 @@ def test_mode_tail_reports_via_decrqm():
             pass
 
     rec = Rec()
-    terminal.host.attach(rec)
+    board.host.attach(rec)
     parser.feed("\x1b[?1035$p")  # special_modifiers, default on
     assert rec.data[-1] == "\x1b[?1035;1$y"
     parser.feed("\x1b[?1010$p")  # scroll_on_output, default off

@@ -25,7 +25,7 @@ except ImportError:
 try:
     from bittty import Board as Emulator  # current tree
 except ImportError:  # compare-versions.sh runs this harness against old tags
-    from bittty.terminal import Terminal as Emulator
+    from bittty.board import Terminal as Emulator
 
 
 def get_git_commit_hash() -> str:

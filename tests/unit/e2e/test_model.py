@@ -22,10 +22,10 @@ def _replies(model, sequence):
     kwargs = {"width": 80, "height": 24}
     if model is not None:
         kwargs["model"] = model
-    terminal = Board(**kwargs)
+    board = Board(**kwargs)
     transport = RecordingTransport()
-    terminal.host.attach(transport)
-    Parser(terminal).feed(sequence)
+    board.host.attach(transport)
+    Parser(board).feed(sequence)
     return transport.data
 
 
@@ -78,10 +78,10 @@ def _fkey(model, num, modifier=constants.KEY_MOD_NONE):
     kwargs = {"width": 80, "height": 24}
     if model is not None:
         kwargs["model"] = model
-    terminal = Board(**kwargs)
+    board = Board(**kwargs)
     transport = RecordingTransport()
-    terminal.host.attach(transport)
-    terminal.input_fkey(num, modifier)
+    board.host.attach(transport)
+    board.input_fkey(num, modifier)
     return transport.data
 
 
@@ -89,10 +89,10 @@ def _key(model, char, modifier=constants.KEY_MOD_NONE):
     kwargs = {"width": 80, "height": 24}
     if model is not None:
         kwargs["model"] = model
-    terminal = Board(**kwargs)
+    board = Board(**kwargs)
     transport = RecordingTransport()
-    terminal.host.attach(transport)
-    terminal.input_key(char, modifier)
+    board.host.attach(transport)
+    board.input_key(char, modifier)
     return transport.data
 
 
@@ -155,16 +155,16 @@ def test_linux_console_is_distinct():
 
 
 def test_numpad_uses_the_keymap():
-    terminal = Board(width=80, height=24)
+    board = Board(width=80, height=24)
     transport = RecordingTransport()
-    terminal.host.attach(transport)
+    board.host.attach(transport)
 
-    terminal.input_numpad_key("5")  # numeric keypad (default) sends the digit
+    board.input_numpad_key("5")  # numeric keypad (default) sends the digit
     assert transport.data == ["5"]
 
-    Parser(terminal).feed("\x1b=")  # DECKPAM -> application keypad
+    Parser(board).feed("\x1b=")  # DECKPAM -> application keypad
     transport.data.clear()
-    terminal.input_numpad_key("5")
+    board.input_numpad_key("5")
     assert transport.data == ["\x1bOu"]
 
 

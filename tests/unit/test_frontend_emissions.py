@@ -28,63 +28,63 @@ class Recorder:
 
 
 def _term():
-    terminal = Board(width=20, height=3)
+    board = Board(width=20, height=3)
     rec = Recorder()
-    terminal.display.attach(rec)
-    return terminal, Parser(terminal), rec
+    board.display.attach(rec)
+    return board, Parser(board), rec
 
 
 def test_bell_emits_and_still_hooks():
-    terminal, parser, rec = _term()
+    board, parser, rec = _term()
     parser.feed("\x07")  # C0 BEL
     assert Bell() in rec.events
 
 
 def test_title_event_and_register():
-    terminal, parser, rec = _term()
+    board, parser, rec = _term()
     parser.feed("\x1b]0;hello\x07")  # OSC 0 sets both window + icon title
-    assert terminal.title.title == "hello"  # register still set
+    assert board.title.title == "hello"  # register still set
     assert TitleChanged("hello", "hello") in rec.events
 
 
 def test_cwd_notify_pointer_font_events_and_registers():
-    terminal, parser, rec = _term()
+    board, parser, rec = _term()
     parser.feed("\x1b]7;file:///tmp\x07")
     parser.feed("\x1b]9;ding\x07")
     parser.feed("\x1b]22;pointer\x07")
     parser.feed("\x1b]50;Fira 12\x07")
-    assert terminal.cwd == "file:///tmp" and CwdChanged("file:///tmp") in rec.events
-    assert "ding" in terminal.notifications and Notification("ding") in rec.events
-    assert terminal.pointer_shape == "pointer" and PointerShapeChanged("pointer") in rec.events
-    assert terminal.font == "Fira 12" and FontChanged("Fira 12") in rec.events
+    assert board.cwd == "file:///tmp" and CwdChanged("file:///tmp") in rec.events
+    assert "ding" in board.notifications and Notification("ding") in rec.events
+    assert board.pointer_shape == "pointer" and PointerShapeChanged("pointer") in rec.events
+    assert board.font == "Fira 12" and FontChanged("Fira 12") in rec.events
 
 
 def test_clipboard_event_and_register():
-    terminal, parser, rec = _term()
+    board, parser, rec = _term()
     parser.feed("\x1b]52;c;aGk=\x07")  # base64 "hi"
-    assert terminal.clipboard["c"] == "hi"
+    assert board.clipboard["c"] == "hi"
     assert ClipboardChanged("c", "hi") in rec.events
 
 
 def test_window_state_and_request_events():
-    terminal, parser, rec = _term()
+    board, parser, rec = _term()
     parser.feed("\x1b[2t")  # iconify
-    assert terminal.window_iconified is True
+    assert board.window_iconified is True
     assert any(isinstance(e, WindowStateChanged) and e.iconified for e in rec.events)
     parser.feed("\x1b[5t")  # raise
-    assert "raise" in terminal.window_requests
+    assert "raise" in board.window_requests
     assert WindowRequest("raise") in rec.events
 
 
 def test_console_switch_event():
-    terminal, parser, rec = _term()
+    board, parser, rec = _term()
     parser.feed("\x1b[12;3]")  # setterm: switch to console 3
-    assert ("switch", 3) in terminal.console_requests
+    assert ("switch", 3) in board.console_requests
     assert ConsoleRequest("switch", 3) in rec.events
 
 
 def test_mouse_mode_is_edge_triggered():
-    terminal, parser, rec = _term()
+    board, parser, rec = _term()
     parser.feed("\x1b[?1000h")  # basic tracking on
     parser.feed("\x1b[?1000h")  # again -> no new event (edge-triggered)
     parser.feed("\x1b[?1006h")  # add SGR encoding
@@ -98,7 +98,7 @@ def test_mouse_mode_is_edge_triggered():
 
 
 def test_cursor_and_sync_events():
-    terminal, parser, rec = _term()
+    board, parser, rec = _term()
     parser.feed("\x1b[?25l")  # hide cursor
     assert CursorVisibilityChanged(False) in rec.events
     parser.feed("\x1b[?2026h")  # sync output on
@@ -107,8 +107,8 @@ def test_cursor_and_sync_events():
 
 def test_events_are_dropped_with_no_frontend():
     # backward-compat: unattached board mutates registers and never errors
-    terminal = Board(width=20, height=3)
-    parser = Parser(terminal)
+    board = Board(width=20, height=3)
+    parser = Parser(board)
     parser.feed("\x1b]2;t\x07\x1b[?1000h\x07")
-    assert terminal.title.title == "t"
-    assert terminal.modes.mouse_tracking is True
+    assert board.title.title == "t"
+    assert board.modes.mouse_tracking is True

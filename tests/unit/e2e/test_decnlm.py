@@ -6,45 +6,45 @@ from bittty.parser import Parser
 
 def test_decnlm_default_mode():
     """Test that line feed only moves cursor down by default (DECNLM disabled)."""
-    terminal = Board(width=10, height=5)
-    parser = Parser(terminal)
+    board = Board(width=10, height=5)
+    parser = Parser(board)
 
     # Move cursor to column 5
-    terminal.cursor.x = 5
-    terminal.cursor.y = 1
+    board.cursor.x = 5
+    board.cursor.y = 1
 
     # Send line feed
     parser.feed("\n")
 
     # Should only move cursor down, not affect x position
-    assert terminal.cursor.x == 5
-    assert terminal.cursor.y == 2
+    assert board.cursor.x == 5
+    assert board.cursor.y == 2
 
 
 def test_decnlm_enabled_cr_lf():
     """Test that when DECNLM is enabled, line feed also performs carriage return."""
-    terminal = Board(width=10, height=5)
-    parser = Parser(terminal)
+    board = Board(width=10, height=5)
+    parser = Parser(board)
 
     # Enable DECNLM (ESC [ ? 20 h)
     parser.feed("\x1b[?20h")
 
     # Move cursor to column 5
-    terminal.cursor.x = 5
-    terminal.cursor.y = 1
+    board.cursor.x = 5
+    board.cursor.y = 1
 
     # Send line feed
     parser.feed("\n")
 
     # Should move cursor down AND to column 0 (CR+LF behavior)
-    assert terminal.cursor.x == 0
-    assert terminal.cursor.y == 2
+    assert board.cursor.x == 0
+    assert board.cursor.y == 2
 
 
 def test_decnlm_disabled_lf_only():
     """Test that when DECNLM is disabled, line feed only moves cursor down."""
-    terminal = Board(width=10, height=5)
-    parser = Parser(terminal)
+    board = Board(width=10, height=5)
+    parser = Parser(board)
 
     # Enable DECNLM first
     parser.feed("\x1b[?20h")
@@ -53,128 +53,128 @@ def test_decnlm_disabled_lf_only():
     parser.feed("\x1b[?20l")
 
     # Move cursor to column 5
-    terminal.cursor.x = 5
-    terminal.cursor.y = 1
+    board.cursor.x = 5
+    board.cursor.y = 1
 
     # Send line feed
     parser.feed("\n")
 
     # Should only move cursor down, not affect x position (LF only behavior)
-    assert terminal.cursor.x == 5
-    assert terminal.cursor.y == 2
+    assert board.cursor.x == 5
+    assert board.cursor.y == 2
 
 
 def test_decnlm_multiple_line_feeds():
     """Test DECNLM behavior with multiple line feeds."""
-    terminal = Board(width=10, height=5)
-    parser = Parser(terminal)
+    board = Board(width=10, height=5)
+    parser = Parser(board)
 
     # Enable DECNLM
     parser.feed("\x1b[?20h")
 
     # Move cursor to column 7
-    terminal.cursor.x = 7
-    terminal.cursor.y = 0
+    board.cursor.x = 7
+    board.cursor.y = 0
 
     # Send multiple line feeds
     parser.feed("\n\n\n")
 
     # Should be at column 0, row 3 (each LF does CR+LF)
-    assert terminal.cursor.x == 0
-    assert terminal.cursor.y == 3
+    assert board.cursor.x == 0
+    assert board.cursor.y == 3
 
 
 def test_decnlm_at_bottom_with_scrolling():
     """Test DECNLM behavior when line feed causes scrolling."""
-    terminal = Board(width=10, height=3)
-    parser = Parser(terminal)
+    board = Board(width=10, height=3)
+    parser = Parser(board)
 
     # Enable DECNLM
     parser.feed("\x1b[?20h")
 
     # Move cursor to bottom row and some column
-    terminal.cursor.x = 6
-    terminal.cursor.y = 2  # Bottom row (0-indexed)
+    board.cursor.x = 6
+    board.cursor.y = 2  # Bottom row (0-indexed)
 
     # Send line feed - should scroll and reset cursor to column 0
     parser.feed("\n")
 
     # Should be at column 0, still at bottom row (scrolled)
-    assert terminal.cursor.x == 0
-    assert terminal.cursor.y == 2
+    assert board.cursor.x == 0
+    assert board.cursor.y == 2
 
 
 def test_decnlm_explicit_carriage_return_unaffected():
     """Test that explicit carriage return is unaffected by DECNLM mode."""
-    terminal = Board(width=10, height=5)
-    parser = Parser(terminal)
+    board = Board(width=10, height=5)
+    parser = Parser(board)
 
     # Enable DECNLM
     parser.feed("\x1b[?20h")
 
     # Move cursor to column 5
-    terminal.cursor.x = 5
-    terminal.cursor.y = 1
+    board.cursor.x = 5
+    board.cursor.y = 1
 
     # Send explicit carriage return
     parser.feed("\r")
 
     # Should only move cursor to column 0, not affect y position
-    assert terminal.cursor.x == 0
-    assert terminal.cursor.y == 1
+    assert board.cursor.x == 0
+    assert board.cursor.y == 1
 
 
 def test_decnlm_with_cr_lf_sequence():
     """Test DECNLM with explicit CR+LF sequence."""
-    terminal = Board(width=10, height=5)
-    parser = Parser(terminal)
+    board = Board(width=10, height=5)
+    parser = Parser(board)
 
     # Test with DECNLM disabled first
-    terminal.cursor.x = 5
-    terminal.cursor.y = 1
+    board.cursor.x = 5
+    board.cursor.y = 1
 
     # Send CR+LF sequence
     parser.feed("\r\n")
 
     # Should be at column 0, next row
-    assert terminal.cursor.x == 0
-    assert terminal.cursor.y == 2
+    assert board.cursor.x == 0
+    assert board.cursor.y == 2
 
     # Now test with DECNLM enabled
     parser.feed("\x1b[?20h")
 
-    terminal.cursor.x = 5
-    terminal.cursor.y = 2
+    board.cursor.x = 5
+    board.cursor.y = 2
 
     # Send CR+LF sequence (CR first, then LF with DECNLM)
     parser.feed("\r\n")
 
     # Should still be at column 0, next row (LF with DECNLM also does CR, but cursor already at 0)
-    assert terminal.cursor.x == 0
-    assert terminal.cursor.y == 3
+    assert board.cursor.x == 0
+    assert board.cursor.y == 3
 
 
 def test_decnlm_mode_flag_state():
     """Test that the DECNLM mode flag is correctly set and unset."""
-    terminal = Board(width=10, height=5)
-    parser = Parser(terminal)
+    board = Board(width=10, height=5)
+    parser = Parser(board)
 
     # Initially disabled
-    assert terminal.modes.linefeed_newline_mode is False
+    assert board.modes.linefeed_newline_mode is False
 
     # Enable DECNLM
     parser.feed("\x1b[?20h")
-    assert terminal.modes.linefeed_newline_mode is True
+    assert board.modes.linefeed_newline_mode is True
 
     # Disable DECNLM
     parser.feed("\x1b[?20l")
-    assert terminal.modes.linefeed_newline_mode is False
+    assert board.modes.linefeed_newline_mode is False
 
 
 def test_decnlm_wrapped_line_behavior():
     """Test DECNLM behavior when line wrapping occurs."""
-    terminal = Board(width=5, height=3)
-    parser = Parser(terminal)
+    board = Board(width=5, height=3)
+    parser = Parser(board)
 
     # Enable DECNLM
     parser.feed("\x1b[?20h")
@@ -183,105 +183,105 @@ def test_decnlm_wrapped_line_behavior():
     parser.feed("Hello")  # Fills first line
 
     # Cursor should be at end of line
-    assert terminal.cursor.x == 5
+    assert board.cursor.x == 5
 
     # Send line feed
     parser.feed("\n")
 
     # Should move to column 0 of next line
-    assert terminal.cursor.x == 0
-    assert terminal.cursor.y == 1
+    assert board.cursor.x == 0
+    assert board.cursor.y == 1
 
 
 def test_decnlm_vertical_tab_default():
     """Test that vertical tab moves cursor down by default (DECNLM disabled)."""
-    terminal = Board(width=10, height=5)
-    parser = Parser(terminal)
+    board = Board(width=10, height=5)
+    parser = Parser(board)
 
     # Move cursor to column 5
-    terminal.cursor.x = 5
-    terminal.cursor.y = 1
+    board.cursor.x = 5
+    board.cursor.y = 1
 
     # Send vertical tab (\x0b)
     parser.feed("\x0b")
 
     # Should only move cursor down, not affect x position
-    assert terminal.cursor.x == 5
-    assert terminal.cursor.y == 2
+    assert board.cursor.x == 5
+    assert board.cursor.y == 2
 
 
 def test_decnlm_vertical_tab_enabled():
     """Test that when DECNLM is enabled, vertical tab also performs carriage return."""
-    terminal = Board(width=10, height=5)
-    parser = Parser(terminal)
+    board = Board(width=10, height=5)
+    parser = Parser(board)
 
     # Enable DECNLM (ESC [ ? 20 h)
     parser.feed("\x1b[?20h")
 
     # Move cursor to column 5
-    terminal.cursor.x = 5
-    terminal.cursor.y = 1
+    board.cursor.x = 5
+    board.cursor.y = 1
 
     # Send vertical tab (\x0b)
     parser.feed("\x0b")
 
     # Should move cursor down AND to column 0 (CR+LF behavior)
-    assert terminal.cursor.x == 0
-    assert terminal.cursor.y == 2
+    assert board.cursor.x == 0
+    assert board.cursor.y == 2
 
 
 def test_decnlm_form_feed_default():
     """Test that form feed moves cursor down by default (DECNLM disabled)."""
-    terminal = Board(width=10, height=5)
-    parser = Parser(terminal)
+    board = Board(width=10, height=5)
+    parser = Parser(board)
 
     # Move cursor to column 5
-    terminal.cursor.x = 5
-    terminal.cursor.y = 1
+    board.cursor.x = 5
+    board.cursor.y = 1
 
     # Send form feed (\x0c)
     parser.feed("\x0c")
 
     # Should only move cursor down, not affect x position
-    assert terminal.cursor.x == 5
-    assert terminal.cursor.y == 2
+    assert board.cursor.x == 5
+    assert board.cursor.y == 2
 
 
 def test_decnlm_form_feed_enabled():
     """Test that when DECNLM is enabled, form feed also performs carriage return."""
-    terminal = Board(width=10, height=5)
-    parser = Parser(terminal)
+    board = Board(width=10, height=5)
+    parser = Parser(board)
 
     # Enable DECNLM (ESC [ ? 20 h)
     parser.feed("\x1b[?20h")
 
     # Move cursor to column 5
-    terminal.cursor.x = 5
-    terminal.cursor.y = 1
+    board.cursor.x = 5
+    board.cursor.y = 1
 
     # Send form feed (\x0c)
     parser.feed("\x0c")
 
     # Should move cursor down AND to column 0 (CR+LF behavior)
-    assert terminal.cursor.x == 0
-    assert terminal.cursor.y == 2
+    assert board.cursor.x == 0
+    assert board.cursor.y == 2
 
 
 def test_decnlm_mixed_lf_vt_ff():
     """Test DECNLM behavior with mixed LF, VT, and FF characters."""
-    terminal = Board(width=10, height=5)
-    parser = Parser(terminal)
+    board = Board(width=10, height=5)
+    parser = Parser(board)
 
     # Enable DECNLM
     parser.feed("\x1b[?20h")
 
     # Move cursor to column 5
-    terminal.cursor.x = 5
-    terminal.cursor.y = 0
+    board.cursor.x = 5
+    board.cursor.y = 0
 
     # Send LF, VT, FF sequence
     parser.feed("\n\x0b\x0c")
 
     # All should have moved cursor to column 0 and advanced by 3 rows
-    assert terminal.cursor.x == 0
-    assert terminal.cursor.y == 3
+    assert board.cursor.x == 0
+    assert board.cursor.y == 3
