@@ -233,28 +233,13 @@ class Board:
         return self.blitter.current_buffer.get_content()
 
     def capture_pane(self) -> str:
-        """Capture terminal content.
+        """Capture screen content: a pure pull of video memory as ANSI lines.
 
-        The cursor cell renders only when the child wants it visible (DECTCEM)
-        and the box has focus — an unfocused terminal drops its block the way a
-        real one hollows it.
+        No cursor or pointer is composited in — the chrome renders those from
+        the board's registers (cursor.x/y, modes.cursor_visible, mouse.x/y).
         """
-        show_cursor = self.modes.cursor_visible and self.focused
-        lines = []
-        for y in range(self.height):
-            lines.append(
-                self.blitter.current_buffer.get_line(
-                    y,
-                    width=self.width,
-                    cursor_x=self.cursor.x,
-                    cursor_y=self.cursor.y,
-                    show_cursor=show_cursor,
-                    mouse_x=self.mouse.x,
-                    mouse_y=self.mouse.y,
-                    show_mouse=self.mouse.show,
-                )
-            )
-        return "\n".join(lines)
+        page = self.blitter.current_buffer
+        return "\n".join(page.get_line(y, width=self.width) for y in range(self.height))
 
     # --- terminal wiring --- #
 

@@ -2,8 +2,6 @@
 
 A pure Python terminal emulator.
 
-Almost usable; some scroll region problems, doesn't like textual in textual yet.
-
 ## Demo
 
 Run the standalone demo:
@@ -35,6 +33,7 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
 
 ## Recent changes
 
+* 🏃
 * 🏗️ rewrite architecture
 * 🐛 scroll region: scroll up in `vim` corrupts outside scroll region
 * 🏃 squeeze another 15% performance out of it

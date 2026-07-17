@@ -151,13 +151,23 @@ class StdioTerminal(Terminal):
         logger.info("Display caps: %s", caps)
 
     def render_screen(self) -> None:
-        """Render the current terminal state to stdout."""
-        print("\033[H", end="")
+        """Render the current board state to stdout, then place the host's hardware cursor.
+
+        The cursor is the host terminal's own: position it and show it when the
+        child wants it visible (DECTCEM). The host hollows it on unfocus by
+        itself, exactly like a real terminal.
+        """
+        print("\033[?25l\033[H", end="")
         for i, line in enumerate(self.board.capture_pane().split("\n")):
             if i < self.height:
                 print(f"\033[{i + 1}H{line}\033[K", end="")
         status = f"bittty demo | {self.width}x{self.height} | exit normally to quit"
-        print(f"\033[{self.height + 1}H\033[7m{status:<{self.width}}\033[0m", end="", flush=True)
+        print(f"\033[{self.height + 1}H\033[7m{status:<{self.width}}\033[0m", end="")
+        board = self.board
+        if board.modes.cursor_visible and board.cursor.y < self.height:
+            print(f"\033[{board.cursor.y + 1};{board.cursor.x + 1}H\033[?25h", end="", flush=True)
+        else:
+            print("", end="", flush=True)
 
     def handle_pty_data(self, data: str) -> None:
         """Feed child output into the emulator and mark the screen dirty.

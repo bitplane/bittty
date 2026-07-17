@@ -81,32 +81,17 @@ def test_mouse_device_move_requires_any_tracking():
     assert board.pty.data == ["\x1b[<35;1;2M"]
 
 
-def test_show_mouse_cursor():
-    """Test that the mouse cursor is rendered when show_mouse is True."""
-    # Create a terminal
+def test_mouse_pointer_is_a_register_not_a_composite():
+    """The pointer lives in board registers for the chrome to render; video stays pure."""
     board = Board(width=20, height=10)
 
-    # Enable the mouse cursor
     board.mouse.show = True
-
-    # Set a mouse position
     board.mouse.x = 5
     board.mouse.y = 3
 
-    # Get the content and check for the cursor
-    content = board.capture_pane()
-    # The mouse cursor is at (5,3), which is index 4 of line 2 (0-indexed)
-    # The capture_pane output includes newlines, so we need to split it.
-    lines = content.split("\n")
-    assert lines[2][4] == "↖"
-
-    # Disable the mouse cursor
-    board.mouse.show = False
-
-    # Get the content and check that the cursor is gone
-    content = board.capture_pane()
-    lines = content.split("\n")
-    assert lines[2][4] != "↖"
+    assert (board.mouse.x, board.mouse.y, board.mouse.show) == (5, 3, True)
+    lines = board.capture_pane().split("\n")
+    assert lines[2][4] == " "  # nothing composited into video memory
 
 
 def test_input_mouse_basic():

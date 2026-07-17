@@ -8,7 +8,7 @@ from __future__ import annotations
 from typing import List, Tuple
 
 from . import constants
-from .style import Style, parse_sgr_sequence, CURSOR_CODE, RESET_CODE
+from .style import Style, parse_sgr_sequence, RESET_CODE
 
 
 # Type alias for a cell: (Style, character)
@@ -278,18 +278,12 @@ class Video:
             return "".join(cell[1] for cell in self.grid[y])
         return ""
 
-    def get_line(
-        self,
-        y: int,
-        width: int = None,
-        cursor_x: int = -1,
-        cursor_y: int = -1,
-        show_cursor: bool = False,
-        mouse_x: int = -1,
-        mouse_y: int = -1,
-        show_mouse: bool = False,
-    ) -> str:
-        """Get full ANSI sequence for a line."""
+    def get_line(self, y: int, width: int = None) -> str:
+        """Get full ANSI sequence for a line — a pure read of video memory.
+
+        No cursor or pointer is composited in; those are chrome concerns,
+        rendered by the terminal from the board's registers.
+        """
         if not (0 <= y < self.height):
             return ""
 
@@ -304,26 +298,10 @@ class Video:
         # Process each cell up to specified width
         for x in range(min(len(row), width)):
             cell_style, char = row[x]
-
-            # Handle mouse cursor (convert to 0-based, as original code does mouse_x - 1)
-            if show_mouse and x == (mouse_x - 1) and y == (mouse_y - 1):
-                char = "↖"
-
-            # Handle text cursor position
-            if show_cursor and x == cursor_x and y == cursor_y:
-                # For cursor, we need to apply cursor style on top of cell style
-                transition = current_style.diff(cell_style)
-                parts.append(transition)
-                parts.append(CURSOR_CODE)
-                parts.append(char)
-                parts.append("\033[27m")  # Turn off reverse video only
-                current_style = cell_style  # Update tracking
-            else:
-                # Normal cell - generate diff from current to cell style
-                transition = current_style.diff(cell_style)
-                parts.append(transition)
-                parts.append(char)
-                current_style = cell_style  # Update tracking
+            transition = current_style.diff(cell_style)
+            parts.append(transition)
+            parts.append(char)
+            current_style = cell_style
 
         # Pad to width if needed
         current_width = min(len(row), width)
@@ -340,18 +318,8 @@ class Video:
 
         return "".join(parts)
 
-    def get_line_tuple(
-        self,
-        y: int,
-        width: int = None,
-        cursor_x: int = -1,
-        cursor_y: int = -1,
-        show_cursor: bool = False,
-        mouse_x: int = -1,
-        mouse_y: int = -1,
-        show_mouse: bool = False,
-    ) -> tuple:
-        """Get line as a hashable tuple for caching."""
+    def get_line_tuple(self, y: int, width: int = None) -> tuple:
+        """Get line as a hashable tuple for caching — a pure read of video memory."""
         if not (0 <= y < self.height):
             return tuple()
 
@@ -365,18 +333,7 @@ class Video:
         # Process each cell up to specified width
         for x in range(min(len(row), width)):
             ansi_code, char = row[x]
-
-            # Handle mouse cursor (convert to 0-based, as original code does mouse_x - 1)
-            if show_mouse and x == (mouse_x - 1) and y == (mouse_y - 1):
-                char = "↖"
-
-            # Handle text cursor position
-            if show_cursor and x == cursor_x and y == cursor_y:
-                # Add cursor style
-                parts.extend(("ansi", ansi_code, "cursor", CURSOR_CODE, "char", char, "cursor_end", "\033[27m"))
-            else:
-                # Normal cell
-                parts.extend(("ansi", ansi_code, "char", char))
+            parts.extend(("ansi", ansi_code, "char", char))
 
         # Pad to width if needed
         current_width = min(len(row), width)

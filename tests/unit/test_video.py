@@ -350,18 +350,14 @@ def test_get_line_with_explicit_width():
     assert result  # Should have some content, exact format depends on style processing
 
 
-def test_get_line_with_cursor_display():
-    """Test get_line with cursor display (lines 268-271)."""
+def test_get_line_is_a_pure_video_read():
+    """No cursor or pointer compositing: video memory in, ANSI out."""
     buffer = Video(width=10, height=3)
     buffer.set(0, 0, "Hello")
 
-    # Test cursor display at different positions
-    result = buffer.get_line(0, cursor_x=2, cursor_y=0, show_cursor=True)
-    assert result  # Should contain cursor formatting codes
-
-    # Test padding with cursor beyond content (lines 268-271)
-    result = buffer.get_line(0, width=15, cursor_x=12, cursor_y=0, show_cursor=True)
-    assert result  # Should handle padding when cursor is beyond content
+    result = buffer.get_line(0)
+    assert "Hello" in result
+    assert "\033[7m" not in result  # no software cursor cell
 
 
 def test_get_line_tuple_out_of_bounds():
@@ -387,30 +383,15 @@ def test_get_line_tuple_with_explicit_width():
     assert result  # Should have some content
 
 
-def test_get_line_tuple_with_mouse_cursor():
-    """Test get_line_tuple with mouse cursor display (lines 305-307)."""
+def test_get_line_tuple_is_a_pure_video_read():
+    """No cursor or pointer markers in the cached-line tuple form."""
     buffer = Video(width=10, height=3)
     buffer.set(0, 0, "Hello")
 
-    # Test mouse cursor display
-    result = buffer.get_line_tuple(0, mouse_x=3, mouse_y=1, show_mouse=True)
-
-    # Should contain mouse cursor character at position
+    result = buffer.get_line_tuple(0)
     assert isinstance(result, tuple)
-    assert "↖" in result  # Mouse cursor character should be in tuple
-
-
-def test_get_line_tuple_with_text_cursor():
-    """Test get_line_tuple with text cursor display (lines 310-312)."""
-    buffer = Video(width=10, height=3)
-    buffer.set(0, 0, "Hello")
-
-    # Test text cursor display
-    result = buffer.get_line_tuple(0, cursor_x=2, cursor_y=0, show_cursor=True)
-
-    # Should contain cursor formatting
-    assert isinstance(result, tuple)
-    assert "cursor" in result  # Should have cursor markers
+    assert "cursor" not in result
+    assert "↖" not in result
 
 
 def test_get_line_tuple_with_padding():

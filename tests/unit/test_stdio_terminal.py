@@ -115,22 +115,27 @@ def test_host_focus_events_reach_the_board_and_child():
     assert display.board.focused is True
 
 
-def test_render_hides_software_cursor_when_unfocused(capsys):
+def test_render_places_the_host_hardware_cursor():
+    """The chrome renders the cursor: position + show the host's own cursor."""
     display = StdioTerminal()
     display.board.parser.feed("hello")
 
-    def pane_area():
-        # Everything before the status line (which uses reverse video itself).
-        out = capsys.readouterr().out
-        return out.split(f"\033[{display.height + 1}H")[0]
+    import io
+    from contextlib import redirect_stdout
 
-    display.board.focused = True
-    display.render_screen()
-    assert "\033[7m" in pane_area()  # reverse-video cursor cell
+    def render():
+        out = io.StringIO()
+        with redirect_stdout(out):
+            display.render_screen()
+        return out.getvalue()
 
-    display.board.focused = False
-    display.render_screen()
-    assert "\033[7m" not in pane_area()
+    out = render()
+    assert out.endswith("\033[1;6H\033[?25h")  # after "hello", visible
+    assert "\033[7m" not in out.split(f"\033[{display.height + 1}H")[0]  # no software cursor
+
+    display.board.parser.feed("\x1b[?25l")  # child hides the cursor (DECTCEM)
+    out = render()
+    assert "\033[?25h" not in out
 
 
 def test_handle_resize_tracks_the_outer_terminal():
