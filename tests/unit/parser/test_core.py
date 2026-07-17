@@ -75,7 +75,7 @@ def test_charset_designation_split_across_chunks():
     terminal.parser.feed("0")
     terminal.parser.feed("q")  # DEC special graphics: q is '─'
     assert terminal.board.charset.g0_charset == "0"
-    assert terminal.board.screen.current_buffer.get_line_text(0)[0] == "─"
+    assert terminal.board.blitter.current_buffer.get_line_text(0)[0] == "─"
 
 
 def test_decaln_split_across_chunks():
@@ -85,4 +85,4 @@ def test_decaln_split_across_chunks():
     terminal = Board(width=4, height=2)
     terminal.parser.feed("\x1b#")
     terminal.parser.feed("8")
-    assert terminal.board.screen.current_buffer.get_line_text(0) == "EEEE"
+    assert terminal.board.blitter.current_buffer.get_line_text(0) == "EEEE"

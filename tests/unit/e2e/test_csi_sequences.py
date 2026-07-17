@@ -62,7 +62,7 @@ def test_csi_cub_cursor_backward(standard_terminal: Board):
 def test_csi_ed_erase_in_display(standard_terminal: Board):
     """Test CSI J (ED - Erase in Display) with parameter."""
     parser = Parser(standard_terminal.board)
-    standard_terminal.board.screen.write_text("text")
+    standard_terminal.board.blitter.write_text("text")
     parser.feed("\x1b[2J")  # ESC[2J -> clear entire screen
     content = "".join("".join(char for _, char in line) for line in standard_terminal.get_content())
     assert content.strip() == ""
@@ -74,10 +74,10 @@ def test_csi_ed_erase_in_display(standard_terminal: Board):
 def test_csi_el_erase_in_line(standard_terminal: Board):
     """Test CSI K (EL - Erase in Line) with parameter."""
     parser = Parser(standard_terminal.board)
-    standard_terminal.board.screen.write_text("some text")
+    standard_terminal.board.blitter.write_text("some text")
     standard_terminal.board.cursor.x = 4
     parser.feed("\x1b[0K")  # ESC[0K -> clear from cursor to end of line
-    line = "".join(char for _, char in standard_terminal.board.screen.current_buffer.get_content()[0])
+    line = "".join(char for _, char in standard_terminal.board.blitter.current_buffer.get_content()[0])
     assert line.startswith("some")
     assert line.strip() == "some"
 
@@ -85,29 +85,29 @@ def test_csi_el_erase_in_line(standard_terminal: Board):
 def test_csi_ich_insert_characters(standard_terminal: Board):
     """Test CSI @ (ICH - Insert Characters) with parameter."""
     parser = Parser(standard_terminal.board)
-    standard_terminal.board.screen.write_text("abcdef")
+    standard_terminal.board.blitter.write_text("abcdef")
     standard_terminal.board.cursor.x = 2
     parser.feed("\x1b[3@")  # ESC[3@ -> insert 3 spaces
-    line = "".join(char for _, char in standard_terminal.board.screen.current_buffer.get_content()[0])
+    line = "".join(char for _, char in standard_terminal.board.blitter.current_buffer.get_content()[0])
     assert line.startswith("ab   cde")
 
 
 def test_csi_dch_delete_characters(standard_terminal: Board):
     """Test CSI P (DCH - Delete Characters) with parameter."""
     parser = Parser(standard_terminal.board)
-    standard_terminal.board.screen.write_text("abcdef")
+    standard_terminal.board.blitter.write_text("abcdef")
     standard_terminal.board.cursor.x = 2
     parser.feed("\x1b[2P")  # ESC[2P -> delete 2 characters
-    line = "".join(char for _, char in standard_terminal.board.screen.current_buffer.get_content()[0])
+    line = "".join(char for _, char in standard_terminal.board.blitter.current_buffer.get_content()[0])
     assert line.startswith("abef")
 
 
 def test_csi_il_insert_lines(standard_terminal: Board):
     """Test CSI L (IL - Insert Lines) with parameter."""
     parser = Parser(standard_terminal.board)
-    standard_terminal.board.screen.write_text("line 1")
+    standard_terminal.board.blitter.write_text("line 1")
     standard_terminal.board.cursor.line_feed()
-    standard_terminal.board.screen.write_text("line 2")
+    standard_terminal.board.blitter.write_text("line 2")
     standard_terminal.board.cursor.y = 0
     parser.feed("\x1b[2L")  # ESC[2L -> insert 2 lines
     content = standard_terminal.get_content()
@@ -119,11 +119,11 @@ def test_csi_il_insert_lines(standard_terminal: Board):
 def test_csi_dl_delete_lines(standard_terminal: Board):
     """Test CSI M (DL - Delete Lines) with parameter."""
     parser = Parser(standard_terminal.board)
-    standard_terminal.board.screen.write_text("line 1")
+    standard_terminal.board.blitter.write_text("line 1")
     standard_terminal.board.cursor.line_feed()
-    standard_terminal.board.screen.write_text("line 2")
+    standard_terminal.board.blitter.write_text("line 2")
     standard_terminal.board.cursor.line_feed()
-    standard_terminal.board.screen.write_text("line 3")
+    standard_terminal.board.blitter.write_text("line 3")
     standard_terminal.board.cursor.y = 0
     parser.feed("\x1b[2M")  # ESC[2M -> delete 2 lines
     content = standard_terminal.get_content()
@@ -133,7 +133,7 @@ def test_csi_dl_delete_lines(standard_terminal: Board):
 def test_csi_su_scroll_up(standard_terminal: Board):
     """Test CSI S (SU - Scroll Up) with parameter."""
     parser = Parser(standard_terminal.board)
-    standard_terminal.board.screen.write_text("line 1")
+    standard_terminal.board.blitter.write_text("line 1")
     parser.feed("\x1b[1S")  # ESC[1S -> scroll up 1 line
     content = standard_terminal.get_content()
     assert "".join(char for _, char in content[0]).isspace()
@@ -142,9 +142,9 @@ def test_csi_su_scroll_up(standard_terminal: Board):
 def test_csi_sd_scroll_down(standard_terminal: Board):
     """Test CSI T (SD - Scroll Down) with parameter."""
     parser = Parser(standard_terminal.board)
-    standard_terminal.board.screen.write_text("line 1")
+    standard_terminal.board.blitter.write_text("line 1")
     standard_terminal.board.cursor.line_feed()
-    standard_terminal.board.screen.write_text("line 2")
+    standard_terminal.board.blitter.write_text("line 2")
     parser.feed("\x1b[1T")  # ESC[1T -> scroll down 1 line
     content = standard_terminal.get_content()
     assert "".join(char for _, char in content[0]).isspace()
@@ -155,8 +155,8 @@ def test_csi_decstbm_set_scroll_region(standard_terminal: Board):
     """Test CSI r (DECSTBM - Set Top and Bottom Margins) with parameters."""
     parser = Parser(standard_terminal.board)
     parser.feed("\x1b[5;15r")  # ESC[5;15r -> set scroll region from row 5 to 15
-    assert standard_terminal.board.screen.scroll_top == 4
-    assert standard_terminal.board.screen.scroll_bottom == 14
+    assert standard_terminal.board.blitter.scroll_top == 4
+    assert standard_terminal.board.blitter.scroll_bottom == 14
 
 
 def test_csi_cha_cursor_horizontal_absolute(standard_terminal: Board):
@@ -176,10 +176,10 @@ def test_csi_vpa_vertical_position_absolute(standard_terminal: Board):
 def test_csi_ech_erase_character(standard_terminal: Board):
     """Test CSI X (ECH - Erase Character)."""
     parser = Parser(standard_terminal.board)
-    standard_terminal.board.screen.write_text("before-text-after")
+    standard_terminal.board.blitter.write_text("before-text-after")
     standard_terminal.board.cursor.x = 7
     parser.feed("\x1b[4X")  # Erase 4 characters
-    line = "".join(char for _, char in standard_terminal.board.screen.current_buffer.get_content()[0])
+    line = "".join(char for _, char in standard_terminal.board.blitter.current_buffer.get_content()[0])
     assert "before-    -after" in line
 
 
@@ -194,7 +194,7 @@ def test_csi_ech_erase_character_preserves_background_color(standard_terminal: B
     parser.feed("\x1b[3X")  # Erase 3 characters (ELL)
 
     # Check that erased characters have green background
-    row = standard_terminal.board.screen.current_buffer.get_content()[0]
+    row = standard_terminal.board.blitter.current_buffer.get_content()[0]
     assert row[0] == (parse_sgr_sequence("\x1b[42m"), "H")  # Original H with green background
     assert row[1] == (parse_sgr_sequence("\x1b[42m"), " ")  # Erased E becomes space with green background
     assert row[2] == (parse_sgr_sequence("\x1b[42m"), " ")  # Erased L becomes space with green background
@@ -228,19 +228,19 @@ def test_csi_truly_unhandled_sequences(standard_terminal: Board):
     ]
 
     for seq in unhandled_sequences:
-        standard_terminal.board.screen.write_text("before")
+        standard_terminal.board.blitter.write_text("before")
         parser.feed(seq)
-        standard_terminal.board.screen.write_text("after")
-        line = "".join(char for _, char in standard_terminal.board.screen.current_buffer.get_content()[0])
+        standard_terminal.board.blitter.write_text("after")
+        line = "".join(char for _, char in standard_terminal.board.blitter.current_buffer.get_content()[0])
         assert "beforeafter" in line.strip()
-        standard_terminal.board.screen.clear_screen(2)  # Clear screen for next test
+        standard_terminal.board.blitter.clear_screen(2)  # Clear screen for next test
 
 
 def test_csi_ech_does_not_move_the_cursor(standard_terminal: Board):
     """ECH erases in place; the cursor must not advance."""
     parser = Parser(standard_terminal.board)
-    standard_terminal.board.screen.write_text("abcdefgh")
+    standard_terminal.board.blitter.write_text("abcdefgh")
     standard_terminal.board.cursor.x = 2
     parser.feed("\x1b[3X")
-    assert standard_terminal.board.screen.current_buffer.get_line_text(0).startswith("ab   fgh")
+    assert standard_terminal.board.blitter.current_buffer.get_line_text(0).startswith("ab   fgh")
     assert standard_terminal.board.cursor.x == 2

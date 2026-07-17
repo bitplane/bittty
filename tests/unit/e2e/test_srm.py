@@ -46,11 +46,11 @@ def test_srm_affects_input_echo():
     parser = Parser(terminal.board)
 
     # With echo enabled (default), typing should echo to screen
-    terminal.board.screen.write_text("test")
-    assert terminal.board.screen.current_buffer.get_line_text(0).startswith("test")
+    terminal.board.blitter.write_text("test")
+    assert terminal.board.blitter.current_buffer.get_line_text(0).startswith("test")
 
     # Clear screen
-    terminal.board.screen.clear_screen()
+    terminal.board.blitter.clear_screen()
 
     # Disable echo
     parser.feed("\x1b[12h")
@@ -70,7 +70,7 @@ def test_srm_password_input_scenario():
     parser = Parser(terminal.board)
 
     # Simulate sudo asking for password
-    terminal.board.screen.write_text("Password: ")
+    terminal.board.blitter.write_text("Password: ")
 
     # Application disables echo for password input
     parser.feed("\x1b[12h")

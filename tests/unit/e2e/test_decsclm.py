@@ -14,7 +14,7 @@ def test_decsclm_default_jump_scrolling():
     # Fill the terminal buffer completely
     terminal.board.cursor.y = 0
     for i in range(5):
-        terminal.board.screen.write_text(f"Line {i}")
+        terminal.board.blitter.write_text(f"Line {i}")
         if i < 4:  # Don't add newline on last line
             terminal.board.cursor.line_feed()
             terminal.board.cursor.carriage_return()
@@ -23,11 +23,11 @@ def test_decsclm_default_jump_scrolling():
     terminal.board.cursor.y = 4
     terminal.board.cursor.x = 0
     terminal.board.cursor.line_feed()  # This should scroll
-    terminal.board.screen.write_text("Line 5")
+    terminal.board.blitter.write_text("Line 5")
 
     # With jump scrolling, the scroll should be instant
     # The top line should have moved up
-    assert terminal.board.screen.current_buffer.get_line_text(4) == "Line 5              "
+    assert terminal.board.blitter.current_buffer.get_line_text(4) == "Line 5              "
 
 
 def test_decsclm_set_smooth_scrolling():
@@ -67,7 +67,7 @@ def test_decsclm_affects_scroll_behavior():
     parser.feed("\x1b[?4h")
 
     # Fill screen
-    terminal.board.screen.write_text("Line 1\nLine 2\nLine 3")
+    terminal.board.blitter.write_text("Line 1\nLine 2\nLine 3")
     terminal.board.cursor.y = 2  # Move to last line
 
     # Trigger scroll - in smooth mode this should be gradual

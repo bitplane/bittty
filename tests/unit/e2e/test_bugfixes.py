@@ -29,7 +29,7 @@ def test_origin_mode_makes_cup_relative_to_the_scroll_region():
 def test_decaln_fills_the_screen_and_does_not_leak_an_eight():
     terminal, parser = _term()
     parser.feed("\x1b#8")
-    assert terminal.board.screen.current_buffer.get_line_text(0) == "E" * 20  # filled, not a stray "8"
+    assert terminal.board.blitter.current_buffer.get_line_text(0) == "E" * 20  # filled, not a stray "8"
     assert "8" not in terminal.capture_pane()
 
 
@@ -58,7 +58,7 @@ def test_scroll_region_keeps_content_outside_it():
     parser.feed("\x1b[3;8r")  # region rows 3..8; rows 1,2,9,10 are fixed margins
     parser.feed("\x1b[8;1H")  # bottom of region
     parser.feed("\n\n")  # scroll the region twice
-    buf = terminal.board.screen.current_buffer
+    buf = terminal.board.blitter.current_buffer
     for row in (1, 2, 9, 10):  # margins untouched
         assert buf.get_line_text(row - 1).startswith(f"row{row}")
 

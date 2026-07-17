@@ -114,7 +114,7 @@ def test_ps1_with_colors():
     # Check that styles were applied correctly
     # We expect specific ANSI sequences to be present in the buffer
     # This is a simplified check, as full ANSI parsing is complex
-    line_cells = terminal.board.screen.current_buffer.get_content()[0]
+    line_cells = terminal.board.blitter.current_buffer.get_content()[0]
 
     # Check for bold green for "user@host" - now using Style objects
     from bittty.style import Style, Color

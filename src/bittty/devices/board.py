@@ -29,7 +29,7 @@ from .mouse import MouseDevice
 from .palette import PaletteDevice
 from .printer import PrinterDevice
 from .query import QueryDevice
-from .screen import ScreenDevice
+from .blitter import Blitter
 from .style import StyleDevice
 from .title import TitleDevice
 
@@ -123,7 +123,7 @@ class Board:
         self.mouse = MouseDevice(self)
         self.palette = PaletteDevice(self)
         self.printer = PrinterDevice(self)
-        self.screen = ScreenDevice(self)
+        self.blitter = Blitter(self)
         self.style = StyleDevice(self)
         self.title = TitleDevice(self)
 
@@ -141,7 +141,7 @@ class Board:
             "palette": self.palette,
             "printer": self.printer,
             "query": self.query,
-            "screen": self.screen,
+            "blitter": self.blitter,
             "style": self.style,
             "title": self.title,
         }
@@ -166,7 +166,7 @@ class Board:
             self.mouse,
             self.palette,
             self.printer,
-            self.screen,
+            self.blitter,
             self.style,
             self.query,
             self.title,
@@ -185,11 +185,11 @@ class Board:
         if self.printer.controller_mode:  # MC printer-controller: text goes to paper, not the screen
             self.printer.emit(text)
             return
-        self.screen.write_text(text, self.style.current)
+        self.blitter.write_text(text, self.style.current)
 
     def resize(self, width: int, height: int) -> None:
         """Resize the terminal, including buffers and the attached PTY."""
-        self.screen.resize(width, height)
+        self.blitter.resize(width, height)
         if self.pty is not None:
             self.pty.resize(height, width)
 
@@ -215,7 +215,7 @@ class Board:
         self.style.reset()
         self.modes.reset(hard=hard)
         self.cursor.reset(hard=hard)
-        self.screen.reset(hard=hard)
+        self.blitter.reset(hard=hard)
         self.printer.reset(hard=hard)
         self.keyboard.reset(hard=hard)
         if hard:
@@ -237,7 +237,7 @@ class Board:
 
     def get_content(self):
         """Get current screen content as raw buffer data."""
-        return self.screen.current_buffer.get_content()
+        return self.blitter.current_buffer.get_content()
 
     def capture_pane(self) -> str:
         """Capture terminal content.
@@ -250,7 +250,7 @@ class Board:
         lines = []
         for y in range(self.height):
             lines.append(
-                self.screen.current_buffer.get_line(
+                self.blitter.current_buffer.get_line(
                     y,
                     width=self.width,
                     cursor_x=self.cursor.x,

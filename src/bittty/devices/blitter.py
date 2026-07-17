@@ -1,4 +1,4 @@
-"""Screen and editing operation handlers for the current board state."""
+"""The blitter: writes video memory. Screen and editing operation handlers."""
 
 from __future__ import annotations
 
@@ -16,8 +16,8 @@ if TYPE_CHECKING:
     from .board import Board
 
 
-class ScreenDevice(Device):
-    """Owns screen buffers and applies screen/editing operations."""
+class Blitter(Device):
+    """Owns the video pages and applies screen/editing operations."""
 
     def __init__(self, board: Board) -> None:
         self.board = board

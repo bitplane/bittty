@@ -28,7 +28,7 @@ def _sent(t):
 
 
 def _line(terminal, y=0):
-    return terminal.board.screen.current_buffer.get_line_text(y).rstrip()
+    return terminal.board.blitter.current_buffer.get_line_text(y).rstrip()
 
 
 # --- focus events (mode 1004) --- #
@@ -64,7 +64,7 @@ def test_decslrm_needs_margin_mode_else_saves_cursor():
     # Without DECLRMM, CSI Pl;Pr s is SCOSC (save cursor), not a margin set.
     terminal.board.cursor.set_position(3, 2)
     parser.feed("\x1b[2;6s")
-    assert terminal.board.screen.left_margin == 0  # unchanged
+    assert terminal.board.blitter.left_margin == 0  # unchanged
     terminal.board.cursor.set_position(0, 0)
     parser.feed("\x1b[u")  # restore -> the saved (3, 2)
     assert (terminal.board.cursor.x, terminal.board.cursor.y) == (3, 2)
@@ -74,19 +74,19 @@ def test_decslrm_sets_margins_when_mode_enabled():
     terminal, parser, _ = _term()
     parser.feed("\x1b[?69h")  # DECLRMM on
     parser.feed("\x1b[3;7s")  # margins to columns 3..7 (0-based 2..6)
-    assert (terminal.board.screen.left_margin, terminal.board.screen.right_margin) == (2, 6)
+    assert (terminal.board.blitter.left_margin, terminal.board.blitter.right_margin) == (2, 6)
 
 
 def test_disabling_declrmm_resets_margins():
     terminal, parser, _ = _term()
     parser.feed("\x1b[?69h\x1b[3;7s")
     parser.feed("\x1b[?69l")  # disabling DECLRMM restores full width
-    assert (terminal.board.screen.left_margin, terminal.board.screen.right_margin) == (0, 9)
+    assert (terminal.board.blitter.left_margin, terminal.board.blitter.right_margin) == (0, 9)
 
 
 def test_sl_pans_within_the_left_right_margins():
     terminal, parser, _ = _term()
-    terminal.board.screen.current_buffer.set(0, 0, "ABCDEFGHIJ")
+    terminal.board.blitter.current_buffer.set(0, 0, "ABCDEFGHIJ")
     parser.feed("\x1b[?69h\x1b[3;6s")  # margins columns 3..6 (indices 2..5): C D E F
     parser.feed("\x1b[1 @")  # SL 1 — only cols 2..5 pan left: C D E F -> D E F <blank>
     assert _line(terminal) == "ABDEF GHIJ"  # index 5 blanked, cols outside margins untouched
@@ -134,7 +134,7 @@ def test_decfi_moves_right_then_pans_at_right_margin():
     terminal.board.cursor.set_position(4, 0)
     parser.feed("\x1b9")  # DECFI below the right margin -> just move right
     assert terminal.board.cursor.x == 5
-    terminal.board.screen.current_buffer.set(0, 0, "ABCDEFGHIJ")
+    terminal.board.blitter.current_buffer.set(0, 0, "ABCDEFGHIJ")
     terminal.board.cursor.set_position(9, 0)  # right margin
     parser.feed("\x1b9")  # DECFI at right margin -> pan content left, blank at right
     assert _line(terminal) == "BCDEFGHIJ"
@@ -145,7 +145,7 @@ def test_decbi_moves_left_then_pans_at_left_margin():
     terminal.board.cursor.set_position(3, 0)
     parser.feed("\x1b6")  # DECBI: not at left margin -> move left
     assert terminal.board.cursor.x == 2
-    terminal.board.screen.current_buffer.set(0, 0, "ABCDEFGHIJ")
+    terminal.board.blitter.current_buffer.set(0, 0, "ABCDEFGHIJ")
     terminal.board.cursor.set_position(0, 0)
     parser.feed("\x1b6")  # DECBI at left margin -> pan right, blank at left
     assert _line(terminal) == " ABCDEFGHI"

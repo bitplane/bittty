@@ -137,13 +137,13 @@ def test_decrqm_private_mode_query_alternate_screen():
     terminal, parser, transport = terminal_with_transport()
 
     # Test with primary screen (default)
-    terminal.board.screen.in_alt_screen = False
+    terminal.board.blitter.in_alt_screen = False
     parser.feed("\x1b[?1049$p")  # ESC [ ? 1049 $ p
 
     # Should respond with mode reset (2)
     assert transport.data[-1] == "\033[?1049;2$y"
 
-    terminal.board.screen.in_alt_screen = True
+    terminal.board.blitter.in_alt_screen = True
     parser.feed("\x1b[?1049$p")  # ESC [ ? 1049 $ p
 
     # Should respond with mode set (1)

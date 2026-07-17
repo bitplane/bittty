@@ -30,7 +30,7 @@ def test_sgr_bold_styling(parser, terminal):
 
     # Verify bold is active and text was written
     assert "1" in terminal.board.style.current_ansi_code  # Bold parameter
-    line_text = terminal.board.screen.current_buffer.get_line_text(0).strip()
+    line_text = terminal.board.blitter.current_buffer.get_line_text(0).strip()
     assert "Bold text" in line_text
 
     # Remove bold
@@ -39,7 +39,7 @@ def test_sgr_bold_styling(parser, terminal):
 
     # Write more text
     parser.feed(" Normal text")
-    line_text = terminal.board.screen.current_buffer.get_line_text(0).strip()
+    line_text = terminal.board.blitter.current_buffer.get_line_text(0).strip()
     assert "Bold text Normal text" in line_text
 
 
@@ -56,7 +56,7 @@ def test_sgr_multiple_attributes(parser, terminal):
 
     # Write styled text
     parser.feed("Styled text")
-    line_text = terminal.board.screen.current_buffer.get_line_text(0).strip()
+    line_text = terminal.board.blitter.current_buffer.get_line_text(0).strip()
     assert "Styled text" in line_text
 
 
@@ -69,7 +69,7 @@ def test_sgr_color_codes(parser, terminal):
     assert "44" in terminal.board.style.current_ansi_code  # Blue background
 
     parser.feed("Colored text")
-    line_text = terminal.board.screen.current_buffer.get_line_text(0).strip()
+    line_text = terminal.board.blitter.current_buffer.get_line_text(0).strip()
     assert "Colored text" in line_text
 
     # Reset colors
@@ -88,7 +88,7 @@ def test_sgr_256_color_support(parser, terminal):
     assert "48;5;21" in terminal.board.style.current_ansi_code  # 256-color background
 
     parser.feed("256-color text")
-    line_text = terminal.board.screen.current_buffer.get_line_text(0).strip()
+    line_text = terminal.board.blitter.current_buffer.get_line_text(0).strip()
     assert "256-color text" in line_text
 
 
@@ -102,7 +102,7 @@ def test_sgr_rgb_color_support(parser, terminal):
     assert "48;2;0;0;255" in terminal.board.style.current_ansi_code  # RGB background
 
     parser.feed("RGB text")
-    line_text = terminal.board.screen.current_buffer.get_line_text(0).strip()
+    line_text = terminal.board.blitter.current_buffer.get_line_text(0).strip()
     assert "RGB text" in line_text
 
 
@@ -121,7 +121,7 @@ def test_sgr_style_inheritance(parser, terminal):
     assert "31" in terminal.board.style.current_ansi_code  # Red
     assert "4" in terminal.board.style.current_ansi_code  # Underline
 
-    line_text = terminal.board.screen.current_buffer.get_line_text(0).strip()
+    line_text = terminal.board.blitter.current_buffer.get_line_text(0).strip()
     assert "Red bold underlined" in line_text
 
 

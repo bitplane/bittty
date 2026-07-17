@@ -24,7 +24,7 @@ def test_osc8_stamps_hyperlink_on_cells():
     parser.feed("\x1b]8;;http://example.com\x1b\\link")
     parser.feed("\x1b]8;;\x1b\\X")  # close the link, then a plain char
 
-    buf = terminal.board.screen.current_buffer
+    buf = terminal.board.blitter.current_buffer
     assert buf.get_cell(0, 0)[0].hyperlink == "http://example.com"  # 'l'
     assert buf.get_cell(3, 0)[0].hyperlink == "http://example.com"  # 'k'
     assert buf.get_cell(4, 0)[0].hyperlink is None  # 'X'
@@ -37,7 +37,7 @@ def test_hyperlink_survives_sgr_reset_but_colour_does_not():
     parser.feed("\x1b[31ma")  # red 'a' inside the link
     parser.feed("\x1b[0mb")  # SGR reset, then 'b'
 
-    buf = terminal.board.screen.current_buffer
+    buf = terminal.board.blitter.current_buffer
     a, b = buf.get_cell(0, 0)[0], buf.get_cell(1, 0)[0]
     assert a.hyperlink == "http://x" and a.fg == Color("indexed", 1)
     assert b.hyperlink == "http://x"  # reset kept the link

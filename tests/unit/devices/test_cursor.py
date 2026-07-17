@@ -121,16 +121,16 @@ def test_cursor_device_tabs_and_basic_movement():
 
 def test_cursor_device_line_feed_scrolls_screen_region():
     terminal = Board(width=8, height=3)
-    terminal.board.screen.current_buffer.set(0, 0, "top")
-    terminal.board.screen.current_buffer.set(0, 1, "mid")
-    terminal.board.screen.current_buffer.set(0, 2, "bot")
+    terminal.board.blitter.current_buffer.set(0, 0, "top")
+    terminal.board.blitter.current_buffer.set(0, 1, "mid")
+    terminal.board.blitter.current_buffer.set(0, 2, "bot")
 
     terminal.board.cursor.set_position(0, 2)
     terminal.board.cursor.line_feed()
 
     assert terminal.board.cursor.y == 2
-    assert terminal.board.screen.current_buffer.get_line_text(0).startswith("mid")
-    assert terminal.board.screen.current_buffer.get_line_text(1).startswith("bot")
+    assert terminal.board.blitter.current_buffer.get_line_text(0).startswith("mid")
+    assert terminal.board.blitter.current_buffer.get_line_text(1).startswith("bot")
 
 
 def test_cursor_device_text_write_wrap_preparation():

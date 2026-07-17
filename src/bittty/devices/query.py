@@ -136,7 +136,7 @@ class QueryDevice(Device):
             params = ansi[2:-1] if ansi else "0"
             return f"{params}m"
         if request == "r":  # DECSTBM - top/bottom margins
-            return f"{self.board.screen.scroll_top + 1};{self.board.screen.scroll_bottom + 1}r"
+            return f"{self.board.blitter.scroll_top + 1};{self.board.blitter.scroll_bottom + 1}r"
         if request == " q":  # DECSCUSR - cursor style
             base = {"block": 1, "underline": 3, "bar": 5}.get(self.board.cursor.shape, 1)
             style = base if self.board.modes.cursor_blinking else base + 1
@@ -275,7 +275,7 @@ class QueryDevice(Device):
         left = max(0, min(at(3, 1) - 1, width - 1))
         bottom = max(top, min(at(4, height) - 1, height - 1))
         right = max(left, min(at(5, width) - 1, width - 1))
-        buffer = self.board.screen.current_buffer
+        buffer = self.board.blitter.current_buffer
         total = 0
         for y in range(top, bottom + 1):
             for x in range(left, right + 1):

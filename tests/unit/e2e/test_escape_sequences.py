@@ -6,13 +6,13 @@ def test_bell_character(terminal):
     """Test that the BEL character (0x07) processes without causing visible changes."""
     parser = Parser(terminal.board)
     initial_cursor = (terminal.board.cursor.x, terminal.board.cursor.y)
-    initial_text = terminal.board.screen.current_buffer.get_line_text(0)
+    initial_text = terminal.board.blitter.current_buffer.get_line_text(0)
 
     parser.feed(BEL)
 
     # BEL should not cause visible terminal changes
     assert (terminal.board.cursor.x, terminal.board.cursor.y) == initial_cursor
-    assert terminal.board.screen.current_buffer.get_line_text(0) == initial_text
+    assert terminal.board.blitter.current_buffer.get_line_text(0) == initial_text
 
 
 def test_escape_to_csi_entry(terminal):
@@ -28,7 +28,7 @@ def test_ris_reset_terminal(terminal):
     # Write some content and move cursor
     parser.feed("Hello World")
     parser.feed(f"{ESC}[5;10H")  # Move cursor to 5,10
-    initial_content = terminal.board.screen.current_buffer.get_line_text(0)
+    initial_content = terminal.board.blitter.current_buffer.get_line_text(0)
     assert "Hello World" in initial_content
     assert terminal.board.cursor.y == 4  # 0-indexed
     assert terminal.board.cursor.x == 9  # 0-indexed
@@ -40,7 +40,7 @@ def test_ris_reset_terminal(terminal):
     assert terminal.board.cursor.x == 0
     assert terminal.board.cursor.y == 0
     # Screen should be cleared
-    cleared_content = terminal.board.screen.current_buffer.get_line_text(0)
+    cleared_content = terminal.board.blitter.current_buffer.get_line_text(0)
     assert cleared_content.strip() == ""
 
 

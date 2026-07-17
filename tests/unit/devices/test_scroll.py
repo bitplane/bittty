@@ -5,13 +5,13 @@ def test_scroll_up():
     terminal = Board(width=10, height=5)
     # Fill terminal with content
     for i in range(terminal.height):
-        terminal.board.screen.current_buffer.set(0, i, f"Line {i}")
+        terminal.board.blitter.current_buffer.set(0, i, f"Line {i}")
 
     # Set scroll region to cover entire terminal initially
-    terminal.board.screen.set_scroll_region(0, terminal.height - 1)
+    terminal.board.blitter.set_scroll_region(0, terminal.height - 1)
 
     # Scroll up by 1
-    terminal.board.screen.scroll_up(1)
+    terminal.board.blitter.scroll_up(1)
     expected_lines = [
         "Line 1    ",
         "Line 2    ",
@@ -19,14 +19,14 @@ def test_scroll_up():
         "Line 4    ",
         "          ",
     ]
-    assert [terminal.board.screen.current_buffer.get_line_text(i) for i in range(terminal.height)] == expected_lines
+    assert [terminal.board.blitter.current_buffer.get_line_text(i) for i in range(terminal.height)] == expected_lines
 
     # Scroll up by 2
     terminal = Board(width=10, height=5)
     for i in range(terminal.height):
-        terminal.board.screen.current_buffer.set(0, i, f"Line {i}")
-    terminal.board.screen.set_scroll_region(0, terminal.height - 1)
-    terminal.board.screen.scroll_up(2)
+        terminal.board.blitter.current_buffer.set(0, i, f"Line {i}")
+    terminal.board.blitter.set_scroll_region(0, terminal.height - 1)
+    terminal.board.blitter.scroll_up(2)
     expected_lines = [
         "Line 2    ",
         "Line 3    ",
@@ -34,20 +34,20 @@ def test_scroll_up():
         "          ",
         "          ",
     ]
-    assert [terminal.board.screen.current_buffer.get_line_text(i) for i in range(terminal.height)] == expected_lines
+    assert [terminal.board.blitter.current_buffer.get_line_text(i) for i in range(terminal.height)] == expected_lines
 
 
 def test_scroll_down():
     terminal = Board(width=10, height=5)
     # Fill terminal with content
     for i in range(terminal.height):
-        terminal.board.screen.current_buffer.set(0, i, f"Line {i}")
+        terminal.board.blitter.current_buffer.set(0, i, f"Line {i}")
 
     # Set scroll region to cover entire terminal initially
-    terminal.board.screen.set_scroll_region(0, terminal.height - 1)
+    terminal.board.blitter.set_scroll_region(0, terminal.height - 1)
 
     # Scroll down by 1
-    terminal.board.screen.scroll_down(1)
+    terminal.board.blitter.scroll_down(1)
     expected_lines = [
         "          ",
         "Line 0    ",
@@ -55,14 +55,14 @@ def test_scroll_down():
         "Line 2    ",
         "Line 3    ",
     ]
-    assert [terminal.board.screen.current_buffer.get_line_text(i) for i in range(terminal.height)] == expected_lines
+    assert [terminal.board.blitter.current_buffer.get_line_text(i) for i in range(terminal.height)] == expected_lines
 
     # Scroll down by 2
     terminal = Board(width=10, height=5)
     for i in range(terminal.height):
-        terminal.board.screen.current_buffer.set(0, i, f"Line {i}")
-    terminal.board.screen.set_scroll_region(0, terminal.height - 1)
-    terminal.board.screen.scroll_down(2)
+        terminal.board.blitter.current_buffer.set(0, i, f"Line {i}")
+    terminal.board.blitter.set_scroll_region(0, terminal.height - 1)
+    terminal.board.blitter.scroll_down(2)
     expected_lines = [
         "          ",
         "          ",
@@ -70,34 +70,34 @@ def test_scroll_down():
         "Line 1    ",
         "Line 2    ",
     ]
-    assert [terminal.board.screen.current_buffer.get_line_text(i) for i in range(terminal.height)] == expected_lines
+    assert [terminal.board.blitter.current_buffer.get_line_text(i) for i in range(terminal.height)] == expected_lines
 
 
 def test_set_scroll_region():
     terminal = Board(width=10, height=10)
-    terminal.board.screen.set_scroll_region(2, 7)
-    assert terminal.board.screen.scroll_top == 2
-    assert terminal.board.screen.scroll_bottom == 7
+    terminal.board.blitter.set_scroll_region(2, 7)
+    assert terminal.board.blitter.scroll_top == 2
+    assert terminal.board.blitter.scroll_bottom == 7
 
     # Test clamping
-    terminal.board.screen.set_scroll_region(-1, 12)
-    assert terminal.board.screen.scroll_top == 0
-    assert terminal.board.screen.scroll_bottom == 9  # height - 1
+    terminal.board.blitter.set_scroll_region(-1, 12)
+    assert terminal.board.blitter.scroll_top == 0
+    assert terminal.board.blitter.scroll_bottom == 9  # height - 1
 
-    terminal.board.screen.set_scroll_region(5, 3)  # top > bottom
-    assert terminal.board.screen.scroll_top == 5
-    assert terminal.board.screen.scroll_bottom == 5  # clamped to top
+    terminal.board.blitter.set_scroll_region(5, 3)  # top > bottom
+    assert terminal.board.blitter.scroll_top == 5
+    assert terminal.board.blitter.scroll_bottom == 5  # clamped to top
 
 
 def test_line_feed_with_scrolling():
     terminal = Board(width=10, height=5)
     # Fill terminal up to the last line
     for i in range(terminal.height - 1):
-        terminal.board.screen.current_buffer.set(0, i, f"Line {i}")
+        terminal.board.blitter.current_buffer.set(0, i, f"Line {i}")
     terminal.board.cursor.y = terminal.height - 1  # Cursor on the last line
 
     # Set scroll region to cover entire terminal
-    terminal.board.screen.set_scroll_region(0, terminal.height - 1)
+    terminal.board.blitter.set_scroll_region(0, terminal.height - 1)
 
     # Perform line feed, should scroll up
     terminal.board.cursor.line_feed()
@@ -109,5 +109,5 @@ def test_line_feed_with_scrolling():
         "          ",
         "          ",
     ]
-    assert [terminal.board.screen.current_buffer.get_line_text(i) for i in range(terminal.height)] == expected_lines
+    assert [terminal.board.blitter.current_buffer.get_line_text(i) for i in range(terminal.height)] == expected_lines
     assert terminal.board.cursor.y == terminal.height - 1  # Cursor should remain on the last line

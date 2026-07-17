@@ -66,13 +66,13 @@ class PrinterDevice(Device):
 
     def print_screen(self) -> None:
         """Send the whole current screen to the printer, one line per row."""
-        buffer = self.board.screen.current_buffer
+        buffer = self.board.blitter.current_buffer
         lines = [buffer.get_line_text(y).rstrip() for y in range(self.board.height)]
         self.emit("\n".join(lines) + "\n")
 
     def print_line(self, y: int) -> None:
         """Send a single row to the printer."""
-        self.emit(self.board.screen.current_buffer.get_line_text(y).rstrip() + "\n")
+        self.emit(self.board.blitter.current_buffer.get_line_text(y).rstrip() + "\n")
 
     def reset(self, hard: bool = True) -> None:
         """Leave printer controller/auto-print modes; the attached sink is config, so it stays."""

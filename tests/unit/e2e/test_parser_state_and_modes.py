@@ -79,7 +79,7 @@ def test_unknown_escape_sequences_ignored(terminal):
     parser.feed("End")
 
     # Text should still be processed normally
-    text_content = terminal.board.screen.current_buffer.get_line_text(0).strip()
+    text_content = terminal.board.blitter.current_buffer.get_line_text(0).strip()
     assert "Before" in text_content
     assert "After" in text_content
     assert "End" in text_content
@@ -93,13 +93,13 @@ def test_invalid_csi_sequences_ignored(terminal):
     parser.feed("Hello\x1b[\x01World")  # Invalid control in CSI
 
     # Based on tmux behavior: "Hello" appears, CSI is abandoned, "orld" appears (W consumed)
-    text_content = terminal.board.screen.current_buffer.get_line_text(0).strip()
+    text_content = terminal.board.blitter.current_buffer.get_line_text(0).strip()
     assert "Hello" in text_content
     assert "orld" in text_content
 
     # Test recovery with more text
     parser.feed("More")
-    text_content = terminal.board.screen.current_buffer.get_line_text(0).strip()
+    text_content = terminal.board.blitter.current_buffer.get_line_text(0).strip()
     assert "More" in text_content
 
 
@@ -111,7 +111,7 @@ def test_malformed_csi_recovery(terminal):
     parser.feed("Start\x1b[999;999;999WEnd")  # Unknown CSI sequence
 
     # Should still write the text parts
-    text_content = terminal.board.screen.current_buffer.get_line_text(0).strip()
+    text_content = terminal.board.blitter.current_buffer.get_line_text(0).strip()
     assert "Start" in text_content
     assert "End" in text_content
 
@@ -126,7 +126,7 @@ def test_incomplete_csi_sequences(terminal):
     parser.feed("H")  # CSI final byte - completes as cursor position
 
     # Should have processed "Test" and positioned cursor
-    text_content = terminal.board.screen.current_buffer.get_line_text(0).strip()
+    text_content = terminal.board.blitter.current_buffer.get_line_text(0).strip()
     assert "Test" in text_content
 
     # Test actual incomplete sequences that stay incomplete
@@ -135,7 +135,7 @@ def test_incomplete_csi_sequences(terminal):
     parser.feed("3m")  # Complete with SGR
 
     # "Next" should appear (cursor was moved by H earlier)
-    assert "Next" in terminal.board.screen.current_buffer.get_line_text(4).strip()
+    assert "Next" in terminal.board.blitter.current_buffer.get_line_text(4).strip()
 
 
 def test_parse_byte_csi_entry_intermediate_general(terminal):
@@ -167,7 +167,7 @@ def test_parse_byte_csi_intermediate_param_final(terminal):
     parser = Parser(terminal.board)
 
     # Put some text at cursor position first
-    terminal.board.screen.write_text("ABC")
+    terminal.board.blitter.write_text("ABC")
     terminal.board.cursor.x = 1  # Move cursor to position 1 (between A and B)
 
     # Send ICH (Insert Character) command: ESC [ ? 1 ; 2 @
@@ -175,7 +175,7 @@ def test_parse_byte_csi_intermediate_param_final(terminal):
     parser.feed("\x1b[?1;2@")
 
     # Verify that a space was inserted at position 1
-    line_text = terminal.board.screen.current_buffer.get_line_text(0).rstrip()
+    line_text = terminal.board.blitter.current_buffer.get_line_text(0).rstrip()
     assert line_text == "A BC"  # Space inserted between A and BC
 
 
@@ -262,7 +262,7 @@ def test_csi_sm_rm_decom_origin_mode(terminal):
     parser.feed(f"{ESC}[?{DECOM_ORIGIN_MODE}h")
     assert terminal.board.modes.origin_mode is True
     assert terminal.board.cursor.x == 0  # Cursor should move to origin
-    assert terminal.board.cursor.y == terminal.board.screen.scroll_top
+    assert terminal.board.cursor.y == terminal.board.blitter.scroll_top
 
     # Reset to normal mode (absolute positioning)
     parser.feed(f"{ESC}[?{DECOM_ORIGIN_MODE}l")
@@ -307,6 +307,6 @@ def test_deccolm_clears_the_screen_and_resets_the_region(terminal):
     parser.feed(f"{ESC}[?{DECCOLM_COLUMN_MODE}h")
 
     assert terminal.width == 132
-    assert terminal.board.screen.current_buffer.get_line_text(0).strip() == ""
-    assert terminal.board.screen.scroll_top == 0
-    assert terminal.board.screen.scroll_bottom == terminal.height - 1
+    assert terminal.board.blitter.current_buffer.get_line_text(0).strip() == ""
+    assert terminal.board.blitter.scroll_top == 0
+    assert terminal.board.blitter.scroll_bottom == terminal.height - 1

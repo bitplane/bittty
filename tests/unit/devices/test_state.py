@@ -12,58 +12,58 @@ def test_resize():
     assert terminal.height == 30
     assert terminal.board.cursor.x == 70  # Cursor should remain if within bounds
     assert terminal.board.cursor.y == 20
-    assert terminal.board.screen.scroll_bottom == 29  # Should adjust to new height
+    assert terminal.board.blitter.scroll_bottom == 29  # Should adjust to new height
 
     terminal.resize(50, 10)
     assert terminal.width == 50
     assert terminal.height == 10
     assert terminal.board.cursor.x == 49  # Cursor should clamp to new width
     assert terminal.board.cursor.y == 9  # Cursor should clamp to new height
-    assert terminal.board.screen.scroll_bottom == 9
+    assert terminal.board.blitter.scroll_bottom == 9
 
 
 def test_alternate_terminal_switching():
     terminal = Board(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
-    assert not terminal.board.screen.in_alt_screen
-    assert terminal.board.screen.current_buffer == terminal.board.screen.primary_buffer
+    assert not terminal.board.blitter.in_alt_screen
+    assert terminal.board.blitter.current_buffer == terminal.board.blitter.primary_buffer
 
-    terminal.board.screen.switch_screen(True)
-    assert terminal.board.screen.in_alt_screen
-    assert terminal.board.screen.current_buffer == terminal.board.screen.alt_buffer
-
-    # Calling again should do nothing
-    terminal.board.screen.switch_screen(True)
-    assert terminal.board.screen.in_alt_screen
-    assert terminal.board.screen.current_buffer == terminal.board.screen.alt_buffer
-
-    terminal.board.screen.switch_screen(False)
-    assert not terminal.board.screen.in_alt_screen
-    assert terminal.board.screen.current_buffer == terminal.board.screen.primary_buffer
+    terminal.board.blitter.switch_screen(True)
+    assert terminal.board.blitter.in_alt_screen
+    assert terminal.board.blitter.current_buffer == terminal.board.blitter.alt_buffer
 
     # Calling again should do nothing
-    terminal.board.screen.switch_screen(False)
-    assert not terminal.board.screen.in_alt_screen
-    assert terminal.board.screen.current_buffer == terminal.board.screen.primary_buffer
+    terminal.board.blitter.switch_screen(True)
+    assert terminal.board.blitter.in_alt_screen
+    assert terminal.board.blitter.current_buffer == terminal.board.blitter.alt_buffer
+
+    terminal.board.blitter.switch_screen(False)
+    assert not terminal.board.blitter.in_alt_screen
+    assert terminal.board.blitter.current_buffer == terminal.board.blitter.primary_buffer
+
+    # Calling again should do nothing
+    terminal.board.blitter.switch_screen(False)
+    assert not terminal.board.blitter.in_alt_screen
+    assert terminal.board.blitter.current_buffer == terminal.board.blitter.primary_buffer
 
 
 def test_alignment_test():
     terminal = Board(width=10, height=5)
-    terminal.board.screen.alignment_test()
+    terminal.board.blitter.alignment_test()
 
     expected_char = "E"
     for y in range(terminal.height):
-        line_text = terminal.board.screen.current_buffer.get_line_text(y)
+        line_text = terminal.board.blitter.current_buffer.get_line_text(y)
         assert len(line_text) == terminal.width
         assert all(char == expected_char for char in line_text)
 
 
 def test_alternate_terminal_on_off_restores_lines():
     terminal = Board(width=10, height=5)
-    terminal.board.screen.current_buffer.set(0, 0, "Hello")
-    terminal.board.screen.switch_screen(True)
-    assert terminal.board.screen.current_buffer.get_line_text(0) == "          "
-    terminal.board.screen.switch_screen(False)
-    assert terminal.board.screen.current_buffer.get_line_text(0) == "Hello     "
+    terminal.board.blitter.current_buffer.set(0, 0, "Hello")
+    terminal.board.blitter.switch_screen(True)
+    assert terminal.board.blitter.current_buffer.get_line_text(0) == "          "
+    terminal.board.blitter.switch_screen(False)
+    assert terminal.board.blitter.current_buffer.get_line_text(0) == "Hello     "
 
 
 def test_set_and_clear_modes():

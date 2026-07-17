@@ -26,7 +26,7 @@ def test_linux_set_palette_entry():
     parser.feed("\x1b]P4a0b0c0")  # set colour 4 to #a0b0c0 (no terminator)
     parser.feed("done")  # subsequent text must NOT be swallowed
     assert terminal.board.palette.colors[4] == (0xA0, 0xB0, 0xC0)
-    assert terminal.board.screen.current_buffer.get_line_text(0).startswith("done")
+    assert terminal.board.blitter.current_buffer.get_line_text(0).startswith("done")
 
 
 def test_linux_set_palette_split_across_feeds():
@@ -36,7 +36,7 @@ def test_linux_set_palette_split_across_feeds():
         parser.feed(ch)
     parser.feed("X")
     assert terminal.board.palette.colors[1] == (255, 255, 255)
-    assert terminal.board.screen.current_buffer.get_line_text(0).startswith("X")
+    assert terminal.board.blitter.current_buffer.get_line_text(0).startswith("X")
 
 
 def test_linux_reset_palette():

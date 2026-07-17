@@ -8,7 +8,7 @@ from .keyboard import KeyboardDevice
 from .modes import ModeDevice
 from .mouse import MouseDevice
 from .query import QueryDevice
-from .screen import ScreenDevice
+from .blitter import Blitter
 from .style import StyleDevice
 from .title import TitleDevice
 
@@ -20,7 +20,7 @@ __all__ = [
     "ModeDevice",
     "MouseDevice",
     "QueryDevice",
-    "ScreenDevice",
+    "Blitter",
     "StyleDevice",
     "Board",
     "TitleDevice",

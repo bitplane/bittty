@@ -14,7 +14,7 @@ def test_esc_percent_is_consumed_not_leaked():
     terminal, parser = _term()
     parser.feed("\x1b%GHi")  # enable UTF-8, then "Hi"
     parser.feed("\x1b%@!")  # back to default, then "!"
-    line = terminal.board.screen.current_buffer.get_line_text(0)
+    line = terminal.board.blitter.current_buffer.get_line_text(0)
     assert line.startswith("Hi!")  # no stray "G" or "@" leaked
 
 

@@ -10,7 +10,7 @@ def _term(width=10, height=6):
 
 
 def _line(terminal, y=0):
-    return terminal.board.screen.current_buffer.get_line_text(y).rstrip()
+    return terminal.board.blitter.current_buffer.get_line_text(y).rstrip()
 
 
 def test_decic_inserts_columns_at_cursor():

@@ -42,7 +42,7 @@ def test_selective_erase_keeps_protected_characters():
     parser.feed("\x1b[1;1H")  # home
     parser.feed("\x1b[?2J")  # DECSED: selective erase all
 
-    line = terminal.board.screen.current_buffer.get_line_text(0)
+    line = terminal.board.blitter.current_buffer.get_line_text(0)
     assert line.startswith("KEEP")  # protected text survives
     assert "gone" not in line  # unprotected text erased
 

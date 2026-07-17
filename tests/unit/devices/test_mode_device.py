@@ -56,10 +56,10 @@ def test_mode_device_alt_screen_and_save_restore_side_effects():
     terminal.board.cursor.set_position(3, 4)
 
     terminal.board.modes.set_private_modes((1049,), True)
-    assert terminal.board.screen.in_alt_screen is True
+    assert terminal.board.blitter.in_alt_screen is True
 
     terminal.board.cursor.set_position(9, 9)
     terminal.board.modes.set_private_modes((1049,), False)
 
-    assert terminal.board.screen.in_alt_screen is False
+    assert terminal.board.blitter.in_alt_screen is False
     assert (terminal.board.cursor.x, terminal.board.cursor.y) == (3, 4)

@@ -64,7 +64,7 @@ class CursorDevice(Device):
         column to the left margin, each clamped within its margins.
         """
         if self.board.modes.origin_mode:
-            screen = self.board.screen
+            screen = self.board.blitter
             if y is not None:
                 self.y = max(screen.scroll_top, min(screen.scroll_top + y, screen.scroll_bottom))
             if x is not None:
@@ -97,8 +97,8 @@ class CursorDevice(Device):
         """Move down one line, scrolling the active scroll region if needed."""
         if self.board.printer.auto_print:  # MC auto-print: paper gets the line as we leave it
             self.board.printer.print_line(self.y)
-        if self.y == self.board.screen.scroll_bottom:
-            self.board.screen.scroll(1)
+        if self.y == self.board.blitter.scroll_bottom:
+            self.board.blitter.scroll(1)
         elif self.y < self.board.height - 1:
             # Below the bottom margin the cursor still advances (bounded by the
             # screen); it only scrolls when sitting on the margin itself.
@@ -109,22 +109,22 @@ class CursorDevice(Device):
 
     def forward_index(self) -> None:
         """DECFI — move right; at the right margin, pan the margin box one column left."""
-        if self.x >= self.board.screen.right_margin:
-            self.board.screen.pan(1)
+        if self.x >= self.board.blitter.right_margin:
+            self.board.blitter.pan(1)
         else:
             self.x += 1
 
     def back_index(self) -> None:
         """DECBI — move left; at the left margin, pan the margin box one column right."""
-        if self.x <= self.board.screen.left_margin:
-            self.board.screen.pan(-1)
+        if self.x <= self.board.blitter.left_margin:
+            self.board.blitter.pan(-1)
         else:
             self.x -= 1
 
     def reverse_index(self) -> None:
         """Move up one line, scrolling down at the top of the scroll region."""
-        if self.y <= self.board.screen.scroll_top:
-            self.board.screen.scroll(-1)
+        if self.y <= self.board.blitter.scroll_top:
+            self.board.blitter.scroll(-1)
         else:
             self.y -= 1
 

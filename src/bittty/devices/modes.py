@@ -62,11 +62,11 @@ def _deccolm(device: ModeDevice, value: bool) -> None:
     # xterm ignores DECCOLM unless mode 40 permits it — reset strings carry ?3l,
     # and honouring it ungated shrinks any wider terminal to 80 columns.
     if device.allow_column_mode:
-        device.board.screen.set_column_mode(132 if value else 80)
+        device.board.blitter.set_column_mode(132 if value else 80)
 
 
 def _alt_screen(device: ModeDevice, value: bool) -> None:
-    device.board.screen.switch_screen(value)
+    device.board.blitter.switch_screen(value)
 
 
 def _save_restore_cursor(device: ModeDevice, value: bool) -> None:
@@ -79,9 +79,9 @@ def _save_restore_cursor(device: ModeDevice, value: bool) -> None:
 def _alt_screen_and_cursor(device: ModeDevice, value: bool) -> None:
     if value:
         device.board.cursor.save()
-        device.board.screen.switch_screen(True)
+        device.board.blitter.switch_screen(True)
     else:
-        device.board.screen.switch_screen(False)
+        device.board.blitter.switch_screen(False)
         device.board.cursor.restore()
 
 
@@ -98,7 +98,7 @@ def _mouse_any_tracking(device: ModeDevice, value: bool) -> None:
 def _declrmm(device: ModeDevice, value: bool) -> None:
     # Disabling left/right margin mode resets the margins to the full width.
     if not value:
-        device.board.screen.reset_left_right_margins()
+        device.board.blitter.reset_left_right_margins()
 
 
 def _column_status(device: ModeDevice) -> int:
@@ -106,7 +106,7 @@ def _column_status(device: ModeDevice) -> int:
 
 
 def _alt_screen_status(device: ModeDevice) -> int:
-    return 1 if device.board.screen.in_alt_screen else 2
+    return 1 if device.board.blitter.in_alt_screen else 2
 
 
 def _mouse_button_status(device: ModeDevice) -> int:
