@@ -1,7 +1,7 @@
 """DA3, DECSCA + DECSED/DECSEL (selective erase), and DECUDK."""
 
 from bittty.parser import Parser
-from bittty.personality import VT100
+from bittty.model import VT100
 from bittty import Board
 
 
@@ -28,7 +28,7 @@ def test_da3_answers_on_xterm_and_is_silent_on_vt100():
     parser.feed("\x1b[=c")  # tertiary DA
     assert transport.data == ["\x1bP!|00000000\x1b\\"]
 
-    _, parser, transport = _driver(personality=VT100)
+    _, parser, transport = _driver(model=VT100)
     parser.feed("\x1b[=c")
     assert transport.data == []  # a VT100 predates DA3
 

@@ -52,7 +52,7 @@ def _decode_tcap(reply):
 
 
 def test_xtgettcap_answers_terminal_name():
-    terminal, parser, transport = _term()  # default personality is xterm
+    terminal, parser, transport = _term()  # default model is xterm
     parser.feed("\x1bP+q" + "TN".encode().hex() + "\x1b\\")
     assert _decode_tcap(_reply(transport)) == (True, "TN", "xterm")
 

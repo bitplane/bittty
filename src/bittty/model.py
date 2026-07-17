@@ -1,6 +1,6 @@
-"""Terminal personalities: the emulation profile as data.
+"""Terminal models: the emulation profile as data.
 
-A personality captures the constants that distinguish one real terminal from
+A model captures the constants that distinguish one real terminal from
 another — starting with the Device Attributes (DA) responses used to identify
 the terminal to the host. Over time this grows to carry charset repertoire,
 colour depth, and which capabilities a board assembles.
@@ -23,7 +23,7 @@ from .palette import VGA_PALETTE, XTERM_PALETTE, PaletteDefaults
 
 
 @dataclass(frozen=True)
-class Personality:
+class Model:
     """A terminal type expressed as data."""
 
     name: str
@@ -77,13 +77,13 @@ _XTERM_ERA_MODES = frozenset(
 
 
 # Primary DA responses per vt100.net / xterm ctlseqs.
-XTERM = Personality(
+XTERM = Model(
     name="xterm",
     da1_response="\033[?62;1;6;8;9;15;18;21;22;23c",
     da2_response="\033[>1;10;0c",
 )
 
-VT100 = Personality(
+VT100 = Model(
     name="vt100",
     da1_response="\033[?1;2c",  # VT100 with Advanced Video Option
     da2_response=None,  # secondary DA was introduced with the VT220
@@ -99,7 +99,7 @@ VT100 = Personality(
     keymap=VT100_KEYMAP,
 )
 
-VT220 = Personality(
+VT220 = Model(
     name="vt220",
     da1_response="\033[?62;1;2;6;8;9c",
     da2_response="\033[>1;10;0c",
@@ -132,7 +132,7 @@ VT220 = Personality(
     keymap=VT220_KEYMAP,
 )
 
-LINUX = Personality(
+LINUX = Model(
     name="linux",
     da1_response="\033[?6c",  # the linux console identifies as a VT102
     da2_response=None,
@@ -158,7 +158,7 @@ LINUX = Personality(
 # GNU screen — a VT100+AVO emulator; keymap and colours from terminfo (screen-256color).
 # DA1 is the standard VT100-with-AVO reply; DA2 type 83 = 'S' (the screen/tmux/urxvt S/T/U
 # pattern, with tmux=84 confirmed against a live session). Version field unverified.
-SCREEN = Personality(
+SCREEN = Model(
     name="screen",
     da1_response="\033[?1;2c",
     da2_response="\033[>83;0;0c",
@@ -169,7 +169,7 @@ SCREEN = Personality(
 
 # tmux — live-verified against a running tmux: DA1 ?1;2;4c (VT100+AVO, and it advertises
 # sixel — code 4 — for whatever it fronts), DA2 type 84 = 'T'. Shares screen's keymap.
-TMUX = Personality(
+TMUX = Model(
     name="tmux",
     da1_response="\033[?1;2;4c",
     da2_response="\033[>84;0;0c",
@@ -180,7 +180,7 @@ TMUX = Personality(
 
 # rxvt-unicode — keymap and colours from terminfo (rxvt-unicode-256color). DA1 is VT100+AVO;
 # DA2 type 85 = 'U' (S/T/U pattern). Version field unverified.
-URXVT = Personality(
+URXVT = Model(
     name="rxvt-unicode",
     da1_response="\033[?1;2c",
     da2_response="\033[>85;0;0c",
@@ -192,7 +192,7 @@ URXVT = Personality(
 # GNOME Terminal / VTE — live-verified against gnome-terminal (VTE 0.84): DA1 reports
 # level 61 with ANSI colour (22) and rectangular editing (28); DA2 type 61 carries the
 # VTE version in the firmware field (8400). Truecolour, xterm-family keymap.
-GNOME = Personality(
+GNOME = Model(
     name="gnome",
     da1_response="\033[?61;1;21;22;28c",
     da2_response="\033[>61;8400;1c",
@@ -204,7 +204,7 @@ GNOME = Personality(
 # kitty — live-verified (TERM=xterm-kitty). DA2 firmware field 4000 is the kitty version
 # (0.40). DA1 as captured. Truecolour; xterm-family base keymap, plus the Kitty keyboard
 # protocol handled by the keyboard device.
-KITTY = Personality(
+KITTY = Model(
     name="kitty",
     da1_response="\033[?62;52;c",
     da2_response="\033[>1;4000;45c",
@@ -215,8 +215,8 @@ KITTY = Personality(
 
 DEFAULT = XTERM
 
-# Resolve a $TERM name to a personality (see get_personality).
-PERSONALITIES: dict[str, Personality] = {
+# Resolve a $TERM name to a model (see get_model).
+PERSONALITIES: dict[str, Model] = {
     "xterm": XTERM,
     "xterm-256color": XTERM,
     "vt100": VT100,
@@ -239,8 +239,8 @@ PERSONALITIES: dict[str, Personality] = {
 }
 
 
-def get_personality(term_name: str | None, default: Personality = DEFAULT) -> Personality:
-    """Resolve a $TERM name to a personality, falling back through shorter prefixes.
+def get_model(term_name: str | None, default: Model = DEFAULT) -> Model:
+    """Resolve a $TERM name to a model, falling back through shorter prefixes.
 
     So "xterm-kitty" or "screen.xterm-256color" degrade gracefully to the nearest
     known family, and an unknown or empty TERM yields the default (xterm).

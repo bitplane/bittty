@@ -1,8 +1,8 @@
-"""Emulator personalities grabbed from real terminfo + a live tmux DA query."""
+"""Emulator models grabbed from real terminfo + a live tmux DA query."""
 
 from bittty import constants
 from bittty.parser import Parser
-from bittty.personality import GNOME, KITTY, SCREEN, TMUX, URXVT, XTERM, get_personality
+from bittty.model import GNOME, KITTY, SCREEN, TMUX, URXVT, XTERM, get_model
 from bittty import Board
 
 
@@ -17,8 +17,8 @@ class RecordingTransport:
         pass
 
 
-def _term(personality):
-    terminal = Board(width=80, height=24, personality=personality)
+def _term(model):
+    terminal = Board(width=80, height=24, model=model)
     transport = RecordingTransport()
     terminal.board.host.attach(transport)
     return terminal, Parser(terminal.board), transport
@@ -84,17 +84,17 @@ def test_xterm_now_encodes_the_editing_keypad():
     assert transport.data == [f"{constants.ESC}[3~"]
 
 
-def test_get_personality_resolves_term_names():
-    assert get_personality("tmux-256color") is TMUX
-    assert get_personality("screen-256color") is SCREEN
-    assert get_personality("rxvt-unicode-256color") is URXVT
-    assert get_personality("xterm-256color") is XTERM
-    assert get_personality("gnome-256color") is GNOME
-    assert get_personality("xterm-kitty") is KITTY  # kitty sets a distinctive TERM
+def test_get_model_resolves_term_names():
+    assert get_model("tmux-256color") is TMUX
+    assert get_model("screen-256color") is SCREEN
+    assert get_model("rxvt-unicode-256color") is URXVT
+    assert get_model("xterm-256color") is XTERM
+    assert get_model("gnome-256color") is GNOME
+    assert get_model("xterm-kitty") is KITTY  # kitty sets a distinctive TERM
 
 
-def test_get_personality_falls_back_through_prefixes():
-    assert get_personality("xterm-ghostty") is XTERM  # unknown suffix -> nearest family
-    assert get_personality("totally-unknown") is XTERM  # -> default
-    assert get_personality("") is XTERM
-    assert get_personality(None) is XTERM
+def test_get_model_falls_back_through_prefixes():
+    assert get_model("xterm-ghostty") is XTERM  # unknown suffix -> nearest family
+    assert get_model("totally-unknown") is XTERM  # -> default
+    assert get_model("") is XTERM
+    assert get_model(None) is XTERM

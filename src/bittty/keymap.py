@@ -1,4 +1,4 @@
-"""Keyboard encoding as personality data.
+"""Keyboard encoding as model data.
 
 Function keys are where real terminals diverge most: a VT100 has only PF1-PF4
 and no keyboard-modifier encoding, while xterm sends F1-F12 and folds shift/alt/

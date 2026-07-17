@@ -19,7 +19,7 @@ class PaletteDevice(Device):
 
     def __init__(self, board: Board) -> None:
         self.board = board
-        self._defaults = board.personality.palette
+        self._defaults = board.model.palette
         self._default_colors = build_256(self._defaults.base16)
         self.reset()
         self.handlers = {
@@ -79,7 +79,7 @@ class PaletteDevice(Device):
             pass
 
     def reset(self) -> None:
-        """Restore the personality's default colours plus construction overrides (RIS)."""
+        """Restore the model's default colours plus construction overrides (RIS)."""
         self.colors = list(self._default_colors)
         self.foreground = self._defaults.foreground
         self.background = self._defaults.background
@@ -182,7 +182,7 @@ class PaletteDevice(Device):
                 self.colors[index] = self._default_colors[index]
 
     def reset_special(self, slot: str) -> None:
-        """OSC 110/111/112 — reset the fg/bg/cursor colour to the personality default."""
+        """OSC 110/111/112 — reset the fg/bg/cursor colour to the model default."""
         setattr(self, slot, getattr(self._defaults, slot))
 
     def set_linux_palette(self, operation: Operation) -> None:

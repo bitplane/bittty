@@ -122,7 +122,7 @@ class KeyboardDevice(Device):
 
     def _csi_key(self, body: str, modifier: int) -> str:
         """Build a CSI cursor/nav sequence, folding in a modifier if the terminal supports it."""
-        keymap = self.board.personality.keymap
+        keymap = self.board.model.keymap
         if modifier != constants.KEY_MOD_NONE and keymap.modifiers:
             if body.endswith("~"):  # editing-keypad keys carry the modifier as ESC[n;mod~
                 return f"{constants.ESC}[{body[:-1]};{modifier}~"
@@ -131,7 +131,7 @@ class KeyboardDevice(Device):
 
     def input_key(self, char: str, modifier: int = constants.KEY_MOD_NONE) -> None:
         """Convert key + modifier to standard control codes, then send to input()."""
-        keymap = self.board.personality.keymap
+        keymap = self.board.model.keymap
 
         if char in keymap.cursor_keys:
             self.input(self._csi_key(keymap.cursor_keys[char], modifier))
@@ -169,7 +169,7 @@ class KeyboardDevice(Device):
         if num in self.user_defined_keys:
             self.input(self.user_defined_keys[num])
             return
-        keymap = self.board.personality.keymap
+        keymap = self.board.model.keymap
         sequence = keymap.function_keys.get(num)
         if sequence is None:
             return  # this terminal has no such function key
@@ -179,7 +179,7 @@ class KeyboardDevice(Device):
 
     def input_numpad_key(self, key: str) -> None:
         """Convert numpad key to the sequence for the current keypad mode."""
-        keymap = self.board.personality.keymap
+        keymap = self.board.model.keymap
         table = keymap.numpad_numeric if self.board.modes.numeric_keypad else keymap.numpad_application
         sequence = table.get(key, key)
 

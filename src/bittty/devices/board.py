@@ -17,7 +17,7 @@ from .. import constants
 from ..caps import DisplayCaps
 from ..operations import Operation
 from ..parser import Parser
-from ..personality import DEFAULT, Personality
+from ..model import DEFAULT, Model
 from ..present import Bell, PresentEvent
 from ..transports import DisplayPort, HostPort
 from .charset import CharsetDevice
@@ -67,7 +67,7 @@ class Board:
         height: int = 24,
         stdin=None,
         stdout=None,
-        personality: Personality | None = None,
+        model: Model | None = None,
         palette_overrides: dict | None = None,
     ) -> None:
         self.command = command
@@ -80,7 +80,7 @@ class Board:
         self._pty_reader_task: Optional[asyncio.Task] = None
         self._pty_data_callback: Optional[Callable[[str], None]] = None
 
-        self.personality = personality or DEFAULT
+        self.model = model or DEFAULT
         self.palette_overrides = palette_overrides or {}
         self.clipboard: dict[str, str] = {}  # OSC 52 selections; frontends sync this
         self.cwd: str = ""  # OSC 7 reported working directory

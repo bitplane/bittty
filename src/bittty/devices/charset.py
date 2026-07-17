@@ -40,8 +40,8 @@ class CharsetDevice(Device):
         }
 
     def _recognizes(self, designator: str) -> bool:
-        """Whether the personality's charset repertoire includes this designator."""
-        charsets = self.board.personality.charsets
+        """Whether the model's charset repertoire includes this designator."""
+        charsets = self.board.model.charsets
         return charsets is None or designator in charsets
 
     def designate(self, index: int, designator: str) -> None:

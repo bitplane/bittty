@@ -2,7 +2,7 @@
 
 bittty stores colours symbolically (a `Style` holds an indexed or rgb `Color`);
 the palette is the authoritative map an indexed colour resolves *through*. It is
-seeded from the personality, mutated by OSC colour sequences, and queried by
+seeded from the model, mutated by OSC colour sequences, and queried by
 their `?` forms. Rendering to real pixels stays a frontend concern — the
 frontend calls `PaletteDevice.resolve()` when it wants RGB.
 """

@@ -1,7 +1,7 @@
 """Linux console fidelity: ESC ] P / ESC ] R palette, DECID, and its charset mappings."""
 
 from bittty.parser import Parser
-from bittty.personality import LINUX
+from bittty.model import LINUX
 from bittty import Board
 
 
@@ -22,7 +22,7 @@ def _term(**kwargs):
 
 
 def test_linux_set_palette_entry():
-    terminal, parser = _term(personality=LINUX)
+    terminal, parser = _term(model=LINUX)
     parser.feed("\x1b]P4a0b0c0")  # set colour 4 to #a0b0c0 (no terminator)
     parser.feed("done")  # subsequent text must NOT be swallowed
     assert terminal.board.palette.colors[4] == (0xA0, 0xB0, 0xC0)
@@ -30,7 +30,7 @@ def test_linux_set_palette_entry():
 
 
 def test_linux_set_palette_split_across_feeds():
-    terminal, parser = _term(personality=LINUX)
+    terminal, parser = _term(model=LINUX)
     # Feed the sequence one byte at a time to exercise the wait-for-more path.
     for ch in "\x1b]P1ffffff":
         parser.feed(ch)
@@ -40,7 +40,7 @@ def test_linux_set_palette_split_across_feeds():
 
 
 def test_linux_reset_palette():
-    terminal, parser = _term(personality=LINUX)
+    terminal, parser = _term(model=LINUX)
     parser.feed("\x1b]P200ff00")  # recolour entry 2
     assert terminal.board.palette.colors[2] == (0x00, 0xFF, 0x00)
     parser.feed("\x1b]R")  # reset the whole palette
@@ -56,6 +56,6 @@ def test_decid_answers_like_primary_da():
 
 
 def test_linux_recognises_the_ibm_pc_charset_designator():
-    terminal, parser = _term(personality=LINUX)
+    terminal, parser = _term(model=LINUX)
     parser.feed("\x1b(U")  # designate G0 -> IBM PC ROM
     assert terminal.board.charset.g0_charset == "U"

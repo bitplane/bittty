@@ -20,7 +20,7 @@ class StyleDevice(Device):
         self.current = Style()
         self.default = Style()  # ESC[8]: the attributes SGR 0 resets to
         self.stack: list[Style] = []  # XTPUSHSGR / XTPOPSGR
-        self._monochrome = board.personality.color_depth == "monochrome"
+        self._monochrome = board.model.color_depth == "monochrome"
         self.handlers = {
             "SGR": self._handle_sgr,
             "OSC_HYPERLINK": lambda op: self.set_hyperlink(op.args[0]),

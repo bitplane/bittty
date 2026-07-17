@@ -2,7 +2,7 @@
 
 Each mode is a small `Mode` capability that claims a number (ANSI or DEC
 private), knows how to apply itself and how to report its DECRQM status, and
-can be omitted by a personality (so, e.g., a terminal that predates bracketed
+can be omitted by a model (so, e.g., a terminal that predates bracketed
 paste simply does not recognise mode 2004). The boolean flags themselves stay
 as attributes on the device: they are read widely across the emulator, and
 several modes legitimately share one flag (mode 7 and 1000 both drive
@@ -117,7 +117,7 @@ def _mouse_any_status(device: ModeDevice) -> int:
     return 1 if device.mouse_any_tracking else 2
 
 
-# The full mode repertoire. A personality may omit any of these.
+# The full mode repertoire. A model may omit any of these.
 MODE_SPECS: list[Mode] = [
     # ANSI modes (autowrap and cursor visibility are DEC *private* 7/25, not ANSI)
     Mode(2, False, "keyboard_action_mode", queryable=True),  # KAM
@@ -197,7 +197,7 @@ class ModeDevice(Device):
         self._last_mouse_mode: Optional[tuple[str, bool]] = None
         self._last_cursor_visible: Optional[bool] = None
         self._last_sync: Optional[bool] = None
-        unsupported = board.personality.unsupported_modes
+        unsupported = board.model.unsupported_modes
         self._modes = {mode.key: mode for mode in MODE_SPECS if mode.key not in unsupported}
         self.handlers = {
             "SM": self.apply_mode_operation,

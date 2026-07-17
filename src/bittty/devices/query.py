@@ -103,15 +103,15 @@ class QueryDevice(Device):
         self.board.host.write("\033[0n", flush=True)
 
     def report_primary_device_attributes(self, operation: Operation) -> None:
-        self.board.host.write(self.board.personality.da1_response, flush=True)
+        self.board.host.write(self.board.model.da1_response, flush=True)
 
     def report_secondary_device_attributes(self, operation: Operation) -> None:
-        response = self.board.personality.da2_response
+        response = self.board.model.da2_response
         if response is not None:
             self.board.host.write(response, flush=True)
 
     def report_tertiary_device_attributes(self, operation: Operation) -> None:
-        response = self.board.personality.da3_response
+        response = self.board.model.da3_response
         if response is not None:
             self.board.host.write(response, flush=True)
 
@@ -261,7 +261,7 @@ class QueryDevice(Device):
 
         This is the DEC character-value form: the negated sum of the codepoints in
         the area, masked to 16 bits. (xterm can fold SGR attributes in too; that is a
-        personality detail we can add when a terminal needs it.)
+        model detail we can add when a terminal needs it.)
         """
         params = operation.args[0]
 
@@ -300,10 +300,10 @@ class QueryDevice(Device):
                 self.board.host.write(f"\x1bP1+r{name_hex}={value_hex}\x1b\\", flush=True)
 
     def _termcaps(self) -> dict[str, str]:
-        """The capability strings this personality answers XTGETTCAP with."""
-        personality = self.board.personality
-        colors = {"monochrome": "2", "16": "16", "256": "256", "truecolor": "256"}.get(personality.color_depth, "256")
-        caps = {"TN": personality.name, "Co": colors, "colors": colors}
-        if personality.color_depth == "truecolor":
+        """The capability strings this model answers XTGETTCAP with."""
+        model = self.board.model
+        colors = {"monochrome": "2", "16": "16", "256": "256", "truecolor": "256"}.get(model.color_depth, "256")
+        caps = {"TN": model.name, "Co": colors, "colors": colors}
+        if model.color_depth == "truecolor":
             caps["RGB"] = "8/8/8"
         return caps

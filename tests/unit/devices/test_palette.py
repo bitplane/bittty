@@ -54,7 +54,7 @@ def test_osc10_sets_foreground_then_reset_restores_it():
     parser.feed("\x1b]10;#112233\x07")
     assert terminal.board.palette.foreground == (0x11, 0x22, 0x33)
 
-    parser.feed("\x1b]110\x07")  # reset foreground to the personality default
+    parser.feed("\x1b]110\x07")  # reset foreground to the model default
     assert terminal.board.palette.foreground == (255, 255, 255)
 
 

@@ -1,7 +1,7 @@
-"""Extended xterm private modes: storage, DECRQM self-reporting, and personality gating."""
+"""Extended xterm private modes: storage, DECRQM self-reporting, and model gating."""
 
 from bittty.parser import Parser
-from bittty.personality import VT220
+from bittty.model import VT220
 from bittty import Board
 
 
@@ -16,10 +16,10 @@ class RecordingTransport:
         pass
 
 
-def _term(personality=None):
+def _term(model=None):
     kwargs = {"width": 20, "height": 5}
-    if personality is not None:
-        kwargs["personality"] = personality
+    if model is not None:
+        kwargs["model"] = model
     terminal = Board(**kwargs)
     transport = RecordingTransport()
     terminal.board.host.attach(transport)

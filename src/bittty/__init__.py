@@ -13,7 +13,7 @@ here — import it from bittty.terminals.
 from .devices.board import Board
 from .video import Video
 from .parser import Parser
-from .personality import Personality, XTERM, VT100, VT220, LINUX
+from .model import Model, XTERM, VT100, VT220, LINUX
 from .operations import Operation, OperationSink
 from .transports import DisplayPort, HostPort, Presentable, WritableTransport
 from .caps import DisplayCaps
@@ -32,6 +32,7 @@ except PackageNotFoundError:
 # Compat aliases — remove next release.
 TerminalBoard = Board
 Buffer = Video
+Personality = Model
 
 __all__ = [
     "Board",
@@ -45,6 +46,7 @@ __all__ = [
     "Presentable",
     "DisplayCaps",
     "TerminalBoard",
+    "Model",
     "Personality",
     "XTERM",
     "VT100",
