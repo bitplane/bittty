@@ -333,6 +333,29 @@ class Video:
         self.row_gen = [0] * height
         self._touch_page()
 
+    def link_extent(self, x: int, y: int) -> tuple | None:
+        """The contiguous same-link run containing (x, y) on its row.
+
+        Returns (uri, link_id, x0, x1) with an inclusive column span, or None
+        if the cell isn't a link. Segments split across rows share a link_id;
+        grouping those into one hover is the chrome's job.
+        """
+        if not (0 <= y < self.height and 0 <= x < self.width):
+            return None
+        row = self.grid[y]
+        style = row[x][0]
+        uri = style.hyperlink
+        if uri is None:
+            return None
+        key = (uri, style.hyperlink_id)
+        x0 = x
+        while x0 > 0 and (row[x0 - 1][0].hyperlink, row[x0 - 1][0].hyperlink_id) == key:
+            x0 -= 1
+        x1 = x
+        while x1 + 1 < self.width and (row[x1 + 1][0].hyperlink, row[x1 + 1][0].hyperlink_id) == key:
+            x1 += 1
+        return (uri, style.hyperlink_id, x0, x1)
+
     def get_line_text(self, y: int) -> str:
         """Get plain text content of a line (for debugging/testing)."""
         if 0 <= y < self.height:

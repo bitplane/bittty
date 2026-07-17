@@ -23,7 +23,7 @@ class StyleDevice(Device):
         self._monochrome = board.model.color_depth == "monochrome"
         self.handlers = {
             "SGR": self._handle_sgr,
-            "OSC_HYPERLINK": lambda op: self.set_hyperlink(op.args[0]),
+            "OSC_HYPERLINK": lambda op: self.set_hyperlink(*op.args),
             "DECSCA": lambda op: self.set_protected(op.args[0]),
             "SPA": lambda op: self.set_protected(1),  # start protected area
             "EPA": lambda op: self.set_protected(0),  # end protected area
@@ -78,9 +78,16 @@ class StyleDevice(Device):
         """ESC [ 8 ] — make the current attributes the default (the SGR 0 target)."""
         self.default = self.current
 
-    def set_hyperlink(self, uri: str) -> None:
-        """OSC 8 — start (non-empty URI) or end (empty) the active hyperlink."""
-        self.current = self.current.replace(hyperlink=uri or None)
+    def set_hyperlink(self, uri: str, link_id: str = "") -> None:
+        """OSC 8 — start (non-empty URI) or end (empty) the active hyperlink.
+
+        The id= param groups link segments a layout has split (wrapped lines,
+        columns); the chrome uses it to hover them as one link.
+        """
+        self.current = self.current.replace(
+            hyperlink=uri or None,
+            hyperlink_id=(link_id or None) if uri else None,
+        )
 
     def set_protected(self, mode: int) -> None:
         """DECSCA — 1 protects subsequent characters from selective erase; 0/2 clears it."""

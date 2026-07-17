@@ -241,6 +241,17 @@ class Board:
         page = self.blitter.current_buffer
         return "\n".join(page.get_line(y, width=self.width) for y in range(self.height))
 
+    def link_at(self, x: int, y: int) -> tuple | None:
+        """The hyperlink under a cell: (uri, link_id) or None.
+
+        The chrome pulls this for hover and click arbitration — link data is
+        model state; the hover effect and the click-through are chrome.
+        """
+        style, _ = self.blitter.current_buffer.get_cell(x, y)
+        if style.hyperlink is None:
+            return None
+        return (style.hyperlink, style.hyperlink_id)
+
     # --- terminal wiring --- #
 
     def attach_display(self, display) -> None:

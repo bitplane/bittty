@@ -91,6 +91,7 @@ _FIELD_NAMES = (
     "encircled",
     "ideogram",
     "hyperlink",
+    "hyperlink_id",
     "protected",
 )
 
@@ -109,7 +110,7 @@ class Style:
     per field (None = inherit); internally the tri-state attributes are packed
     so merge/eq/hash cost a couple of int ops instead of a 20-field walk."""
 
-    __slots__ = ("_set", "_val", "fg", "bg", "underline_color", "hyperlink")
+    __slots__ = ("_set", "_val", "fg", "bg", "underline_color", "hyperlink", "hyperlink_id")
 
     def __init__(
         self,
@@ -132,12 +133,14 @@ class Style:
         encircled: Optional[bool] = None,  # SGR 52
         ideogram: Optional[str] = None,  # SGR 60-65 (see _IDEOGRAMS)
         hyperlink: Optional[str] = None,  # OSC 8 target URI (not an SGR attribute)
+        hyperlink_id: Optional[str] = None,  # OSC 8 id= param: groups split link segments
         protected: Optional[bool] = None,  # DECSCA: shielded from selective erase
     ) -> None:
         self.fg = fg
         self.bg = bg
         self.underline_color = underline_color
         self.hyperlink = hyperlink
+        self.hyperlink_id = hyperlink_id
         s = v = 0
         for value, mask in (
             (bold, _BOLD),
@@ -206,6 +209,8 @@ class Style:
         new.bg = other.bg if other.bg is not None else self.bg
         new.underline_color = other.underline_color if other.underline_color is not None else self.underline_color
         new.hyperlink = other.hyperlink if other.hyperlink is not None else self.hyperlink
+        # The id travels with its link: keyed on other.hyperlink, not other.hyperlink_id
+        new.hyperlink_id = other.hyperlink_id if other.hyperlink is not None else self.hyperlink_id
         return new
 
     def replace(self, **kwargs) -> Style:
@@ -228,10 +233,11 @@ class Style:
             and self.bg == other.bg
             and self.underline_color == other.underline_color
             and self.hyperlink == other.hyperlink
+            and self.hyperlink_id == other.hyperlink_id
         )
 
     def __hash__(self) -> int:
-        return hash((self._set, self._val, self.fg, self.bg, self.underline_color, self.hyperlink))
+        return hash((self._set, self._val, self.fg, self.bg, self.underline_color, self.hyperlink, self.hyperlink_id))
 
     def __repr__(self) -> str:
         parts = [f"{name}={getattr(self, name)!r}" for name in _FIELD_NAMES if getattr(self, name) is not None]
@@ -443,6 +449,7 @@ def interpret(tokens: Tuple[str, ...]) -> Style:
     style.bg = colors["bg"]
     style.underline_color = colors["underline_color"]
     style.hyperlink = None
+    style.hyperlink_id = None
     return style
 
 
