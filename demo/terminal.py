@@ -35,24 +35,13 @@ def _signal_handler(signum, frame) -> None:
     sys.exit(0)
 
 
-def _sigwinch_handler(signum, frame) -> None:
-    display = getattr(_sigwinch_handler, "display", None)
-    if display is not None:
-        display.handle_resize()
-
-
 async def main() -> None:
     """Entry point."""
     signal.signal(signal.SIGINT, _signal_handler)
     if hasattr(signal, "SIGTERM"):
         signal.signal(signal.SIGTERM, _signal_handler)
 
-    display = StdioTerminal()
-    if hasattr(signal, "SIGWINCH"):
-        _sigwinch_handler.display = display
-        signal.signal(signal.SIGWINCH, _sigwinch_handler)
-
-    await display.run()
+    await StdioTerminal().run()
 
 
 if __name__ == "__main__":

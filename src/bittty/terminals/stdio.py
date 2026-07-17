@@ -14,6 +14,7 @@ import os
 import platform
 import select
 import shutil
+import signal
 import sys
 
 from ..devices.board import Board
@@ -310,6 +311,9 @@ class StdioTerminal(Terminal):
     async def run(self) -> None:
         """Main loop: start the shell, pump input, render until it exits."""
         logger.info("Starting main loop")
+        loop = asyncio.get_running_loop()
+        if hasattr(signal, "SIGWINCH"):  # venue physics: the hosting tty reports resizes
+            loop.add_signal_handler(signal.SIGWINCH, self.handle_resize)
         try:
             self.setup_terminal()
             self.probe_capabilities()
@@ -344,6 +348,8 @@ class StdioTerminal(Terminal):
             logger.exception("Unhandled passthrough error")
             raise
         finally:
+            if hasattr(signal, "SIGWINCH"):
+                loop.remove_signal_handler(signal.SIGWINCH)
             self.cleanup()
 
     def cleanup(self) -> None:

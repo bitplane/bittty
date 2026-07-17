@@ -131,3 +131,11 @@ def test_render_hides_software_cursor_when_unfocused(capsys):
     display.board.focused = False
     display.render_screen()
     assert "\033[7m" not in pane_area()
+
+
+def test_handle_resize_tracks_the_outer_terminal():
+    """Resize re-reads the venue's size and pushes it down to the board."""
+    display = StdioTerminal()
+    display.board.resize(5, 5)  # knock the board out of sync
+    display.handle_resize()
+    assert (display.board.width, display.board.height) == (display.width, display.height)
