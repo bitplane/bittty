@@ -1,4 +1,4 @@
-"""Capability probing for the passthrough client.
+"""Capability probing for the stdio terminal.
 
 Ask the real outer terminal what it can do, then hand a TerminalCaps up to the
 backend. Uses a DA1-terminated handshake: fire all the queries plus a Primary DA

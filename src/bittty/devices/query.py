@@ -158,7 +158,7 @@ class QueryDevice(Device):
         self.board.present(ClipboardChanged(sel, self.board.clipboard[sel]))
 
     def handle_window_op(self, operation: Operation) -> None:
-        """XTWINOPS — window manipulation requests and reports; a frontend actuates them."""
+        """XTWINOPS — window manipulation requests and reports; a terminal (chrome) actuates them."""
         params = operation.args[0]
 
         def at(i: int) -> int:

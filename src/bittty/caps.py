@@ -1,9 +1,9 @@
 """TerminalCaps: physical facts about the real terminal, pushed *up* by the chrome.
 
 The backend answers the child's physical-fact queries (window/cell pixel size,
-background colour) from these when a frontend has supplied them. Every field
+background colour) from these when a terminal (chrome) has supplied them. Every field
 defaults to "unknown" (None / "unknown"), meaning "change nothing" — so a board
-with no attached frontend behaves exactly as it does today.
+with no attached terminal behaves exactly as it does today.
 
 Graphics-capability flags (sixel / kitty / iTerm images) are deliberately absent
 until graphics modes are on the table; there is nothing to reconcile without them.

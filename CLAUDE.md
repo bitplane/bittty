@@ -23,43 +23,85 @@ make clean
 
 ## Architecture Overview
 
+The hardware metaphor is load-bearing: the **board** is the machine, a **terminal** is the
+chrome a human looks at, and two full-duplex ports connect the board to its outside world.
+
 ### Core Components
 
-**Terminal** (`src/bittty/terminal.py`)
-- Main terminal emulator class that manages state and coordinates other components
-- Handles process management via platform-specific PTY implementations
-- Maintains terminal modes, cursor position, and screen buffers (primary/alternate)
-- No UI dependencies - designed to be subclassed by UI frameworks
+**Board** (`src/bittty/devices/board.py`)
+- The whole emulator: hosts the devices and registers (focus, window state, console
+  registers), owns the child process and its PTY, and routes parser operations to device
+  handlers through a flat `registry` dict
+- No UI dependencies; runs headless. The public emulator API (`input_*`, `resize`,
+  `capture_pane`, `start_process`) lives here
+
+**Devices** (`src/bittty/devices/`)
+- Single-responsibility cards plugged into the board: charset, control, cursor, keyboard,
+  modes, mouse, palette, printer, query, style, title — and the **Blitter**
+  (`devices/blitter.py`), the device that writes video memory
+
+**Video** (`src/bittty/video.py`)
+- Video memory: a 2D cell grid, each cell a (Style, char) pair. The board writes it through
+  the blitter; terminals read it (pull) via `capture_pane()`/`get_line()`. Two pages:
+  primary and alternate
 
 **Parser** (`src/bittty/parser/core.py`)
-- State machine for processing ANSI escape sequences
-- Handles C0 controls, CSI sequences, OSC sequences, and DEC private modes
-- Maintains parsing state and buffers for sequence data
-- Delegates actions to Terminal methods
+- State machine for processing ANSI escape sequences (C0, CSI, OSC, DCS, DEC private modes)
+- One-pass ground scanner with bound fast paths: `print_text` for printable runs and
+  memoized registry-direct CSI dispatch — keep these hot paths intact
 
-**Buffer** (`src/bittty/buffer.py`)
-- 2D grid storage for terminal content
-- Each cell stores a Style object and character
-- Handles scrolling, clearing, and content manipulation
-- Supports both primary and alternate screen buffers
+**Terminal** (`src/bittty/terminals/base.py`)
+- The chrome ABC. Composes a Board (never subclasses it), plugs into its display port,
+  receives present events through typed `on_*` hooks, and pushes physical facts up
+  (caps, focus, resize, input)
+- **StdioTerminal** (`terminals/stdio.py`): the reference terminal, whose venue is this
+  process's stdio/tty
+
+**Ports** (`src/bittty/connections.py`)
+- Full-duplex jacks on the board. **HostPort** carries bytes both ways to the child: a
+  `Connection` (PTY, pipe, socket) plugs in and the port pumps its receive side into the
+  parser. **DisplayPort** carries typed events both ways to the chrome: present events
+  down, input/focus/caps up. Its name is the video-connector pun, kept on purpose
+
+**Model** (`src/bittty/model.py`)
+- The model number: the emulation profile as data (XTERM, VT220, LINUX, ...) — DA
+  responses, keymaps, mode repertoire, charsets
 
 **Style** (`src/bittty/style.py`)
-- Represents text styling (colors, bold, italic, underline, etc.)
-- Parses SGR (Select Graphic Rendition) sequences
-- Handles 16-color, 256-color, and RGB color modes
+- Packed-int text styling (colors, bold, italic, underline, etc.)
+- Parses SGR (Select Graphic Rendition) sequences; 16-color, 256-color, and RGB
 - Provides style diffing for efficient rendering
 
 ### PTY Implementations (`src/bittty/pty/`)
 - **UnixPTY**: Uses os.openpty() for Unix-like systems
 - **WindowsPTY**: Uses Windows ConPTY API
 - **StdioPTY**: For testing with stdin/stdout streams
-- All implement a common interface for process spawning and I/O
+- All implement the `Connection` interface for process spawning and I/O
+
+### Glossary and vocabulary discipline
+
+| Term | Means | Never means |
+|---|---|---|
+| board | the emulator machine | the chrome |
+| terminal | the chrome a human looks at | the emulator core |
+| video | the cell-grid memory (pages) | — |
+| blitter | the device that writes video | a renderer |
+| model | the model number (XTERM, VT220) | MVC-model |
+| renderer | chrome-side output production | anything board-side |
+| connection | a cable implementation (PTY, pipe, socket) | — |
+| port | a full-duplex jack on the board | — |
+
+- "display" survives only in `DisplayPort`, deliberately.
+- `bittty.Terminal` is deliberately not exported at top level; import chrome classes from
+  `bittty.terminals`.
+- Compat aliases (`TerminalBoard`, `Buffer`, `Personality`, `WritableTransport`,
+  `DisplayCaps`, the `Board.board` self-shim) are transitional — remove next release.
 
 ### Key Design Patterns
 
 1. **State Machine Pattern**: Uses regex to parse inputs.
 2. **Platform Abstraction**: PTY implementations hide platform differences behind common interface
-3. **Separation of Concerns**: Terminal logic separate from UI, making it framework-agnostic
+3. **Separation of Concerns**: Board logic separate from UI, making it framework-agnostic
 4. **Style Objects**: Immutable style representation allows efficient diffing and caching
 
 ## CODING STANDARDS

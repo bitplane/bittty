@@ -1,187 +1,73 @@
-# BitTTY Architecture: A Hardware-Inspired Terminal Emulator
+# bittty Architecture: A Hardware-Inspired Terminal Emulator
 
-## Note
+The hardware metaphor is load-bearing. The **board** is the machine; a **terminal** is the
+chrome a human looks at; two full-duplex **ports** connect the board to its outside world.
 
-This is the future plan, not the current state of the project.
-
-## Overview
-
-BitTTY is a modular terminal emulator designed around the hardware metaphor of physical terminals. Components are separated into clear responsibilities that mirror how real terminal hardware was organized.
-
-## Core Philosophy
-
-Instead of abstract "services" and "controllers", BitTTY uses concrete components you can point to:
-- **Parser**: decodes terminal protocol
-- **Codec**: handles character encoding
-- **Screen**: manages display buffers and cursor
-- **Connection**: talks to the child process
-- **Input**: processes keystrokes
-- **Monitor**: shows stuff on screen
-- **Keyboard**: gets keypresses
-
-## Architecture
-
-
-### Component Separation
-
-**Current Issue**: MonitorDevice does too much - it handles display rendering, buffer storage, cursor tracking, character sets, and screen modes all in one class.
-
-**Better Separation**:
 ```
-├── Parser
-│   └── just parses bytes → yields Commands (no dispatch)
-│
-├── Codec
-│   ├── input_encoding / output_encoding
-│   └── shared by Connection, Screen, Printer
-│
-├── Memory Components
-│   ├── Buffer (2D character grid)
-│   ├── Scrollback (line history)
-│   └── CharacterMemory (current line + encoding)
-│
-├── Screen
-│   ├── primary_buffer: Buffer
-│   ├── alt_buffer: Buffer
-│   ├── cursor position (x, y)
-│   ├── current_buffer pointer
-│   └── screen modes (alt screen, scroll regions)
-│
-├── Connection (Multi-layer network stack)
-│   ├── Application Layer: read_text() / write_text()
-│   ├── Session Layer: set_echo() / set_canonical() / terminal modes
-│   ├── Transport Layer: encoding / flow_control
-│   └── Physical Layer: baud_rate / parity / DTR / modem control
-│
-├── Input
-│   ├── key event processing
-│   ├── modifier handling
-│   └── input source abstraction
-│
-└── Devices (hardware interfaces only)
-    ├── Monitor - renders Screen.current_buffer
-    ├── TTYMonitor - ANSI output to sys.stdout
-    ├── Keyboard - sends to Input
-    ├── TTYKeyboard - reads from stdin
-    ├── Bell - audio/visual notifications
-    └── Printer - hard copy output
+ child program                                          human
+      │                                                   │
+   (PTY / pipe / socket = Connection)                 (venue: tty, widget, browser)
+      │                                                   │
+ ┌────┴─────┐    bytes both ways     ┌────────────────────┴───┐
+ │ HostPort ├────────────────────────┤        Terminal        │
+ ├──────────┤                        │        (chrome)        │
+ │          │  present events down   ├────────────────────────┤
+ │  Board   ├──────DisplayPort───────┤ renders Video, arbitr-  │
+ │          │  input/focus/caps up   │ ates hover/click, owns │
+ └────┬─────┘                        │ cursor rendition       │
+      │                              └────────────────────────┘
+   devices + registers + Video (pages)
 ```
 
-### Key Insights Discovered
+## The Board (`bittty.Board`)
 
-1. **Parser vs Dispatcher**: Parser should just parse and yield Commands. Something else should dispatch them.
+The whole emulator: devices, registers, the child process and its PTY. It routes parser
+operations to device handlers through a flat `registry` dict and runs headless — a board
+with nothing plugged into its display port behaves identically.
 
-2. **Input Flow Complexity**: Different input sources (TTY, GUI, WebSocket) need different handling:
-   - TTY: raw byte stream, no key up/down events
-   - GUI: discrete key events with repeat and modifiers
-   - Web: serialized keyboard events
+Devices are single-responsibility cards: charset, control, cursor, keyboard, modes, mouse,
+palette, printer, query, style, title, and the **Blitter** — the device that writes video
+memory. It blits; it does not render.
 
-3. **Connection Abstraction**: SSH, telnet, serial ports all have different terminal mode control mechanisms:
-   - Direct PTY: uses termios() system calls
-   - SSH: uses SSH channel request messages
-   - WebSocket: needs custom protocol for mode changes
-   - Serial: hardware flow control, baud rates, parity
+Registers on the board hold physical facts reported by the chrome (focus, window state,
+caps) and hardware state the child can set (bell pitch, blank timeout, console requests).
 
-4. **OSI Model Relevance**: Connection naturally maps to network layers:
-   - Physical: baud rates, serial settings, TCP socket options
-   - Transport: character encoding, flow control
-   - Session: terminal modes (echo, canonical, etc.)
-   - Application: read_text()/write_text() interface
+## Video (`bittty.Video`)
 
-5. **Device Abstraction**: Should remain for all components that:
-   - Handle Commands and can be queried for capabilities
-   - Can be attached/detached from BitTTY
-   - Represent hardware-like interfaces
+Video memory: a 2D cell grid, each cell a (Style, char) pair, in two pages (primary and
+alternate). The board writes it through the blitter; terminals read it on their own cadence
+(pull) via `capture_pane()` / `get_line()`.
 
-## Commands
+## Terminals (`bittty.terminals`)
 
-Commands are lightweight messages representing terminal operations:
+The chrome. A concrete terminal composes a Board (never subclasses it), plugs into its
+display port, and is named by venue: `StdioTerminal` renders into the tty this process runs
+in; future siblings render into a Textual widget, a browser, a video file.
 
-```python
-from collections import namedtuple
+Present events (bell, title, mouse-mode changes...) arrive as typed `on_*` hooks — discrete
+side-effects are pushed; screen content is pulled. Physical facts flow the other way: the
+venue's resize, focus, input, and capabilities go down to the board through the port.
 
-Command = namedtuple('Command', ['name', 'type', 'args', 'terminator'])
+## Ports and Connections (`bittty.connections`)
 
-# Examples:
-Command('CSI_CUP', 'CSI', ('10', '20'), 'H')      # ESC[10;20H
-Command('SGR', 'CSI', ('1', '31'), 'm')           # ESC[1;31m - bold red
-Command('C0_CR', 'C0', (), None)                  # \r
-Command('TEXT', 'TEXT', ('Hello',), None)         # Regular text
-```
+Ports are full-duplex jacks on the board; connections are the cables that plug in.
 
-## Device Interface
+- **HostPort** carries bytes both ways (a serial line). A `Connection` — PTY, pipe,
+  socket — plugs in; the port's receive pump feeds the child's output into the parser.
+- **DisplayPort** carries typed events both ways: present events down to the chrome,
+  input/focus/caps up from it. Serialize its two event streams and the chrome can live in
+  another process or another machine; the board never notices. The name is the
+  video-connector pun, kept on purpose.
 
-```python
-class Device:
-    """A terminal device - handles specific functionality."""
+## The Model (`bittty.Model`)
 
-    def get_command_handlers(self) -> dict[str, Callable]:
-        """What commands this device wants to handle."""
-        return {}
+The model number: the emulation profile as data (XTERM, VT220, LINUX...). DA responses,
+keymaps, the mode repertoire, charsets. A board is constructed with a model the way a VT220
+ships with its ROMs.
 
-    def query(self, feature_name: str) -> Any:
-        """Query device capabilities."""
-        return None
+## Vocabulary discipline
 
-class Board:
-    """A board that devices attach to."""
-
-    def attach(self, component: Device | Board) -> None:
-        """Attach a device or board."""
-
-    def dispatch(self, command: Command) -> Command | None:
-        """Route command to devices."""
-```
-
-## Data Flow
-
-### Terminal Output (Child Process → Display)
-```
-Child Process → PTY → ConnectionDevice → Parser → Commands →
-Screen/Monitor → Host Terminal Display
-```
-
-### User Input (Keyboard → Child Process)
-```
-Host Keyboard → InputDevice → Input → Connection → PTY → Child Process
-```
-
-## Cross-Platform Considerations
-
-### Terminal Mode Control
-- **Unix**: termios() system calls
-- **Windows**: Console API (SetConsoleMode, GetConsoleMode)
-- **SSH**: SSH channel request messages
-- **WebSocket**: Custom JSON protocol
-
-### Character Encoding
-- Input and output encodings may differ
-- Codec component handles conversion
-- Shared across Connection, Screen, Printer
-
-### Input Models
-- **TTY**: Character stream, OS handles repeat
-- **GUI**: Key events with up/down/repeat
-- **Web**: Serialized keyboard events
-
-## Current Status
-
-The architecture is in active development. We have a working BitTTY implementation with the Command system and Device abstraction, but are refining the component separation to better match the underlying terminal mechanisms.
-
-The goal is to create clean abstractions that:
-1. Map clearly to real terminal hardware concepts
-2. Handle cross-platform differences gracefully
-3. Support different connection types (PTY, SSH, serial, WebSocket)
-4. Remain simple and testable
-
-## Open Questions
-
-1. **Input Architecture**: How should different input sources (TTY, Textual, WebSocket) integrate with the Input component?
-
-2. **Connection Layers**: Should the OSI-style layers be separate classes or methods on Connection?
-
-3. **Device Granularity**: What's the right level of Device separation?
-
-4. **Parser Integration**: How should Parser and Command dispatch coordinate?
-
-These questions are being explored through implementation and will be resolved as the architecture stabilizes.
+- "board" never means the chrome; "terminal" never means the emulator core.
+- "model" only ever means the model number, never MVC.
+- "renderer" only ever means chrome-side output production; nothing board-side renders.
+- "display" survives only in `DisplayPort`.

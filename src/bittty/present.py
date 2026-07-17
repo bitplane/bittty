@@ -1,6 +1,6 @@
-"""Present events: discrete side-effects the board pushes to an attached frontend.
+"""Present events: discrete side-effects the board pushes to the attached terminal (chrome).
 
-Screen content stays *pull* (a frontend reads capture_pane()/get_line on its own
+Screen content stays *pull* (a terminal (chrome) reads capture_pane()/get_line on its own
 cadence). Only these discrete events are *pushed*, through the board's DisplayPort.
 Each is a plain frozen dataclass — pure data, no imports from board/devices — so
 board.py can depend on this module without a cycle.
@@ -111,7 +111,7 @@ class CursorVisibilityChanged:
 
 @dataclass(frozen=True)
 class SyncOutputChanged:
-    """Synchronized-output mode toggled (mode 2026); a frontend gates repaint on it."""
+    """Synchronized-output mode toggled (mode 2026); a terminal (chrome) gates repaint on it."""
 
     enabled: bool
 

@@ -32,7 +32,7 @@ class Connection(Protocol):
 
 @runtime_checkable
 class Presentable(Protocol):
-    """A frontend that receives discrete present events from the board."""
+    """A terminal (chrome) that receives discrete present events from the board."""
 
     def present(self, event: "PresentEvent") -> None:
         """Handle one present event."""
@@ -145,27 +145,27 @@ class DisplayPort:
     present() is a no-op, so the board runs headless exactly as before.
     """
 
-    def __init__(self, board: "Board | None" = None, frontend: Presentable | None = None) -> None:
+    def __init__(self, board: "Board | None" = None, terminal: Presentable | None = None) -> None:
         self.board = board
-        self.frontend = frontend
+        self.terminal = terminal
 
-    def attach(self, frontend: Presentable) -> None:
-        """Attach a frontend to receive present events."""
-        self.frontend = frontend
+    def attach(self, terminal: Presentable) -> None:
+        """Attach a terminal (chrome) to receive present events."""
+        self.terminal = terminal
 
     def detach(self) -> None:
-        """Detach the current frontend."""
-        self.frontend = None
+        """Detach the current terminal."""
+        self.terminal = None
 
     @property
     def connected(self) -> bool:
-        """Whether a frontend is attached."""
-        return self.frontend is not None
+        """Whether a terminal (chrome) is attached."""
+        return self.terminal is not None
 
     def present(self, event: "PresentEvent") -> None:
-        """Forward a present event to the attached frontend, if any."""
-        if self.frontend is not None:
-            self.frontend.present(event)
+        """Forward a present event to the attached terminal, if any."""
+        if self.terminal is not None:
+            self.terminal.present(event)
 
     # --- receive side: events from the terminal (chrome) --- #
 

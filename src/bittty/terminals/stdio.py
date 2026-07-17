@@ -173,7 +173,7 @@ class StdioTerminal(Terminal):
             logger.exception("Error handling PTY data: %r", data[-200:])
             raise
 
-    # --- input: mouse interception + passthrough --- #
+    # --- input: mouse interception + forwarding --- #
 
     def handle_sgr_mouse_sequence(self, sequence: str) -> bool:
         """Parse a host SGR mouse report and re-inject it through bittty."""
@@ -345,7 +345,7 @@ class StdioTerminal(Terminal):
         except KeyboardInterrupt:
             logger.info("Keyboard interrupt")
         except Exception:
-            logger.exception("Unhandled passthrough error")
+            logger.exception("Unhandled stdio terminal error")
             raise
         finally:
             if hasattr(signal, "SIGWINCH"):

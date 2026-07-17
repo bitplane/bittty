@@ -34,6 +34,7 @@ TerminalBoard = Board
 Buffer = Video
 Personality = Model
 WritableTransport = Connection
+DisplayCaps = TerminalCaps
 
 __all__ = [
     "Board",
@@ -46,6 +47,7 @@ __all__ = [
     "DisplayPort",
     "Presentable",
     "TerminalCaps",
+    "DisplayCaps",
     "TerminalBoard",
     "Model",
     "Personality",

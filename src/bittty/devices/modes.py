@@ -151,7 +151,7 @@ MODE_SPECS: list[Mode] = [
     Mode(1047, True, apply_fn=_alt_screen, status_fn=_alt_screen_status),
     Mode(1048, True, apply_fn=_save_restore_cursor),
     Mode(1049, True, apply_fn=_alt_screen_and_cursor, status_fn=_alt_screen_status),
-    # Extended xterm private modes — mostly stored state a frontend actuates.
+    # Extended xterm private modes — mostly stored state a terminal (chrome) actuates.
     Mode(40, True, "allow_column_mode", queryable=True),  # permit DECCOLM 80<->132
     Mode(42, True, "national_charset_mode", queryable=True),  # DECNRCM
     Mode(44, True, "margin_bell", queryable=True),
@@ -171,7 +171,7 @@ MODE_SPECS: list[Mode] = [
     Mode(2027, True, "grapheme_clustering", queryable=True),
     Mode(2028, True, "auto_resize_mode", queryable=True),
     Mode(2031, True, "color_scheme_updates", queryable=True),  # report light/dark changes
-    # Tail: scrollback/keyboard/clipboard/sixel behaviour flags a frontend actuates.
+    # Tail: scrollback/keyboard/clipboard/sixel behaviour flags a terminal (chrome) actuates.
     Mode(1010, True, "scroll_on_output", queryable=True),
     Mode(1011, True, "scroll_on_keypress", queryable=True),
     Mode(1034, True, "eight_bit_input", queryable=True),
@@ -237,7 +237,7 @@ class ModeDevice(Device):
         self.focus_reporting = False
         self.synchronized_output = False
         self.bracketed_paste = False
-        # Extended xterm private modes (stored state; frontend actuates most).
+        # Extended xterm private modes (stored state; terminal actuates most).
         self.keyboard_action_mode = False
         self.allow_column_mode = False
         self.national_charset_mode = False
@@ -277,7 +277,7 @@ class ModeDevice(Device):
             self.insert_mode = False
             self.origin_mode = False
             self.cursor_visible = True
-        # A reset can turn peripheral state off (e.g. RIS with mouse on); tell the frontend.
+        # A reset can turn peripheral state off (e.g. RIS with mouse on); tell the terminal (chrome).
         for peripheral in ("mouse", "cursor", "sync"):
             self._emit_peripheral(peripheral)
 

@@ -23,7 +23,7 @@ class PrinterDevice(Device):
 
     def __init__(self, board: Board) -> None:
         self.board = board
-        self.sink = None  # a frontend attaches a file/StringIO/callable
+        self.sink = None  # a terminal (chrome) attaches a file/StringIO/callable
         self.controller_mode = False  # CSI 5 i: printable output goes to the printer, not the screen
         self.auto_print = False  # CSI ? 5 i: each line prints as the cursor leaves it
         self.handlers = {

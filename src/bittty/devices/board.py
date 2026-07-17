@@ -1,7 +1,7 @@
 """The board: the whole terminal emulator machine.
 
 Hosts the devices and registers, owns the child process and its PTY, and routes
-parser operations to device handlers. A frontend (bittty.terminals) plugs into
+parser operations to device handlers. A terminal (chrome) (bittty.terminals) plugs into
 the display port; the child program is wired to the host port via a PTY.
 """
 
@@ -80,7 +80,7 @@ class Board:
 
         self.model = model or DEFAULT
         self.palette_overrides = palette_overrides or {}
-        self.clipboard: dict[str, str] = {}  # OSC 52 selections; frontends sync this
+        self.clipboard: dict[str, str] = {}  # OSC 52 selections; terminals sync this
         self.cwd: str = ""  # OSC 7 reported working directory
         self.pointer_shape: str = ""  # OSC 22 mouse-pointer shape
         self.font: str = ""  # OSC 50 font selection
@@ -89,9 +89,9 @@ class Board:
         self.conformance_level: int = 62  # DECSCL
         self.c1_eightbit: bool = False  # S7C1T/S8C1T: transmit C1 controls as 8-bit
         self.ansi_conformance_level: int = 1  # ESC SP L/M/N
-        # Physical facts about the box the terminal lives in; a frontend reports these.
+        # Physical facts about the box the terminal lives in; a terminal (chrome) reports these.
         self.focused: bool = True
-        # XTWINOPS window state; a windowing frontend actuates these.
+        # XTWINOPS window state; a windowing terminal actuates these.
         self.window_iconified: bool = False
         self.window_maximized: bool = False
         self.window_fullscreen: bool = False
@@ -107,12 +107,12 @@ class Board:
         self.default_underline_color: int | None = None
         self.default_dim_color: int | None = None
         self.console_requests: list[tuple[str, int]] = []  # ("switch", n) / ("previous", 0)
-        self.answerback: str = ""  # ENQ reply string; a frontend/config sets it
+        self.answerback: str = ""  # ENQ reply string; the chrome or config sets it
         self.warning_bell_volume: int = 8  # DECSWBV (0-8)
         self.margin_bell_volume: int = 0  # DECSMBV (0-8)
         self.host = HostPort()  # duplex jack toward the child (PTY plugs in)
         self.display = DisplayPort(self)  # duplex jack toward the terminal (chrome)
-        self.caps = TerminalCaps.unknown()  # what the real terminal can do (frontend pushes)
+        self.caps = TerminalCaps.unknown()  # what the real terminal can do (terminal pushes)
 
         self.charset = CharsetDevice(self)
         self.cursor = CursorDevice(self)
@@ -192,15 +192,15 @@ class Board:
             self.pty.resize(height, width)
 
     def bell(self) -> None:
-        """Ring the terminal bell: pushed to the frontend as a present event."""
+        """Ring the terminal bell: pushed to the terminal (chrome) as a present event."""
         self.present(Bell())
 
     def present(self, event: PresentEvent) -> None:
-        """Push a discrete side-effect to the attached frontend (no-op if none)."""
+        """Push a discrete side-effect to the attached terminal (no-op if none)."""
         self.display.present(event)
 
     def set_caps(self, caps: TerminalCaps) -> None:
-        """Record what the real terminal can do (a frontend pushes this after probing)."""
+        """Record what the real terminal can do (a terminal (chrome) pushes this after probing)."""
         self.caps = caps
 
     def set_focus(self, focused: bool) -> None:
@@ -261,14 +261,14 @@ class Board:
             )
         return "\n".join(lines)
 
-    # --- frontend wiring --- #
+    # --- terminal wiring --- #
 
     def attach_display(self, display) -> None:
-        """Attach a frontend to receive present events (mirrors the host/PTY cable)."""
+        """Attach a terminal (chrome) to receive present events (mirrors the host/PTY cable)."""
         self.display.attach(display)
 
     def detach_display(self) -> None:
-        """Detach the current frontend."""
+        """Detach the current terminal."""
         self.display.detach()
 
     # --- input: thin pass-through to the input devices --- #
