@@ -62,3 +62,31 @@ def test_construction_time_palette_overrides():
     board, _, _ = _terminal(palette_overrides={2: (1, 2, 3), "background": (9, 9, 9)})
     assert board.palette.resolve(Color("indexed", 2)) == (1, 2, 3)
     assert board.palette.background == (9, 9, 9)
+
+
+def test_generation_bumps_on_colour_changes():
+    board, parser, _ = _terminal()
+    palette = board.palette
+
+    seen = palette.generation
+    parser.feed("\x1b]4;1;#ff0000\x07")  # OSC 4: palette entry
+    assert palette.generation > seen
+
+    seen = palette.generation
+    parser.feed("\x1b]11;#101010\x07")  # OSC 11: default background
+    assert palette.generation > seen
+
+    seen = palette.generation
+    parser.feed("\x1b[#P\x1b[#Q")  # XTPUSHCOLORS / XTPOPCOLORS
+    assert palette.generation > seen
+
+    seen = palette.generation
+    palette.reset()
+    assert palette.generation > seen
+
+
+def test_generation_is_stable_without_colour_operations():
+    board, parser, _ = _terminal()
+    seen = board.palette.generation
+    parser.feed("plain text\x1b[31mred\x1b[0m")  # SGR is not a palette op
+    assert board.palette.generation == seen

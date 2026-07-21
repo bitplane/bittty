@@ -280,6 +280,16 @@ class Board:
         """Translate control codes based on terminal modes and send to the host."""
         self.keyboard.input(data)
 
+    def input_paste(self, text: str) -> None:
+        """Pasted text from the terminal: bracketed when mode 2004 is on, else raw.
+
+        Bypasses keyboard translation — a paste is data, not keystrokes.
+        """
+        if self.modes.bracketed_paste:
+            self.host.write(f"\x1b[200~{text}\x1b[201~")
+        else:
+            self.host.write(text)
+
     def input_mouse(self, x: int, y: int, button: int, event_type: str, modifiers: set[str]) -> None:
         """
         Handle mouse input, cache position, and send appropriate sequence to the host.

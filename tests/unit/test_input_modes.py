@@ -99,3 +99,39 @@ def test_unhandled_keys_fallback():
     # Any other unrecognized character should pass through
     board.input_key("\x1b")  # ESC character
     board.pty.write.assert_called_with("\x1b")
+
+
+class _RecordingTransport:
+    def __init__(self):
+        self.data = []
+
+    def write(self, data):
+        self.data.append(data)
+
+    def flush(self):
+        pass
+
+
+def test_paste_is_raw_without_bracketed_mode():
+    board = Board()
+    transport = _RecordingTransport()
+    board.host.attach(transport)
+    board.input_paste("hello\nworld")
+    assert transport.data == ["hello\nworld"]
+
+
+def test_paste_is_bracketed_when_2004_is_on():
+    board = Board()
+    transport = _RecordingTransport()
+    board.host.attach(transport)
+    board.modes.bracketed_paste = True
+    board.input_paste("hello")
+    assert transport.data == ["\x1b[200~hello\x1b[201~"]
+
+
+def test_display_port_forwards_paste():
+    board = Board()
+    transport = _RecordingTransport()
+    board.host.attach(transport)
+    board.display.input_paste("x")
+    assert transport.data == ["x"]

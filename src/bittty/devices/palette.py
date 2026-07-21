@@ -21,6 +21,9 @@ class PaletteDevice(Device):
         self.board = board
         self._defaults = board.model.palette
         self._default_colors = build_256(self._defaults.base16)
+        # Colour-state version: bumped after every palette operation (and reset),
+        # so chromes can key colour-conversion caches on it and invalidate cheaply.
+        self.generation = 0
         self.reset()
         self.handlers = {
             "OSC_SET_PALETTE": self.set_palette,
@@ -53,6 +56,16 @@ class PaletteDevice(Device):
             "OSC_SPECIAL_COLOR_ENABLE": self.special_color_enable,
             "OSC_RESET_SPECIAL_COLOR": lambda op: self.special_colors.clear(),
         }
+        # Every handler bumps the generation; a query op over-bumps, which only
+        # costs the chrome one spurious cache rebuild — never a stale colour.
+        self.handlers = {name: self._counted(handler) for name, handler in self.handlers.items()}
+
+    def _counted(self, handler):
+        def run(operation: Operation) -> None:
+            handler(operation)
+            self.generation += 1
+
+        return run
 
     def special_color(self, operation: Operation) -> None:
         """OSC 5 — set or (spec == '?') query a special colour (0=bold, 1=underline, …)."""
@@ -80,6 +93,7 @@ class PaletteDevice(Device):
 
     def reset(self) -> None:
         """Restore the model's default colours plus construction overrides (RIS)."""
+        self.generation += 1
         self.colors = list(self._default_colors)
         self.foreground = self._defaults.foreground
         self.background = self._defaults.background

@@ -185,6 +185,10 @@ class DisplayPort:
         """A numpad key from the terminal."""
         self.board.input_numpad_key(key)
 
+    def input_paste(self, text: str) -> None:
+        """Pasted text from the terminal, bracketed per mode 2004."""
+        self.board.input_paste(text)
+
     def input_mouse(self, x: int, y: int, button: int, event_type: str, modifiers: set[str]) -> None:
         """A mouse event from the terminal."""
         self.board.input_mouse(x, y, button, event_type, modifiers)
