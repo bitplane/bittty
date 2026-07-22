@@ -9,6 +9,8 @@ jobs:
   release:
 
     runs-on: ubuntu-latest
+    permissions:
+      contents: write  # mkdocs gh-deploy pushes the gh-pages branch
     steps:
       - uses: actions/checkout@v3
         with:
