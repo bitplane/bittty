@@ -1,8 +1,11 @@
 """Integration test fixtures."""
 
-import subprocess
-import pytest
 import os
+import subprocess
+import sys
+import tempfile
+
+import pytest
 
 
 class DemoTimeoutError(Exception):
@@ -29,21 +32,46 @@ def _run_demo(input_commands, timeout=2.0):
     """Internal function to run demo and return output."""
     demo_path = os.path.join(os.path.dirname(__file__), "..", "..", "demo", "terminal.py")
 
-    try:
-        result = subprocess.run(
-            ["python3", demo_path],
-            input=input_commands,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            cwd=os.path.dirname(demo_path),
-        )
-        return result.stdout
-    except subprocess.TimeoutExpired as e:
-        # Convert to our custom exception with screen debugging
-        stdout = e.stdout.decode("utf-8") if e.stdout else ""
-        stderr = e.stderr.decode("utf-8") if e.stderr else ""
-        raise DemoTimeoutError(f"Demo timed out after {timeout}s", stdout=stdout, stderr=stderr) from e
+    with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as stdout:
+        with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as stderr:
+            process = subprocess.Popen(
+                [sys.executable, demo_path],
+                stdin=subprocess.PIPE,
+                stdout=stdout,
+                stderr=stderr,
+                text=True,
+                cwd=os.path.dirname(demo_path),
+            )
+            try:
+                process.stdin.write(input_commands)
+                process.stdin.flush()
+                returncode = process.wait(timeout=timeout)
+            except subprocess.TimeoutExpired as error:
+                process.terminate()
+                try:
+                    process.wait(timeout=1.0)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+                stdout.seek(0)
+                stderr.seek(0)
+                raise DemoTimeoutError(
+                    f"Demo timed out after {timeout}s",
+                    stdout=stdout.read(),
+                    stderr=stderr.read(),
+                ) from error
+            finally:
+                process.stdin.close()
+
+            stdout.seek(0)
+            stderr.seek(0)
+            output = stdout.read()
+            error_output = stderr.read()
+            if returncode != 0:
+                pytest.fail(
+                    f"Demo exited with status {returncode}\n\n" f"stdout:\n{output}\n\n" f"stderr:\n{error_output}"
+                )
+            return output
 
 
 @pytest.fixture

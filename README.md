@@ -48,32 +48,8 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
 * 🐌 Faster colour/style parser
 * ⛓️‍💥 Split out from `textual-tty` into separate package
 
-## bugs / todo
+## Known limitations
 
-- [ ] Implement [grapheme clustering](https://mitchellh.com/writing/grapheme-clusters-in-terminals)
-  (thanks Xavier G)
-- [ ] `SIGWINCH` handler atomicity + buffer resizes
-- [ ] [architecture](architecture) - pretty big
-- [ ] gui
-  - [ ] make a terminal input class, for standalone input
-  - [ ] make `framebuffer.py`
-  - [ ] choose a display driver
-- [ ] performance improvements
-  - [ ] reconsider CSI end char approach
-  - [ ] line cache for outputs
-  - [.] revisit colours / styles
-- [ ] scrollback buffer
-  - [ ] implement `logloglog` for scrollback with wrapping
-- [ ] add terminal overlay visuals
-  - [ ] bell flash effect
-  - [ ] make cursor an overlay
-  - [ ] make mouse an overlay
-  - [ ] debug overlay for scroll regions
-- [ ] Support themes
-- [ ] bittty-specific escape sequences
-  - [ ] visible mouse on / off
-  - [ ] debugging info
-  - [ ] record
-  - [ ] list sequences + values
-- [ ] Document all the escape sequences
-  - [ ] collect books for a terminal library
+- Wide characters, combining characters and grapheme clusters are treated as one cell.
+- Resizing is not atomic with concurrent PTY output.
+- There is no scrollback buffer or reflow on resize.
