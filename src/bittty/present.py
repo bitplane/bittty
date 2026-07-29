@@ -9,7 +9,6 @@ board.py can depend on this module without a cycle.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Union
 
 
 @dataclass(frozen=True)
@@ -116,19 +115,19 @@ class SyncOutputChanged:
     enabled: bool
 
 
-PresentEvent = Union[
-    Bell,
-    TitleChanged,
-    Notification,
-    ClipboardChanged,
-    PromptMark,
-    PointerShapeChanged,
-    FontChanged,
-    CwdChanged,
-    WindowRequest,
-    WindowStateChanged,
-    ConsoleRequest,
-    MouseModeChanged,
-    CursorVisibilityChanged,
-    SyncOutputChanged,
-]
+PresentEvent = (
+    Bell
+    | TitleChanged
+    | Notification
+    | ClipboardChanged
+    | PromptMark
+    | PointerShapeChanged
+    | FontChanged
+    | CwdChanged
+    | WindowRequest
+    | WindowStateChanged
+    | ConsoleRequest
+    | MouseModeChanged
+    | CursorVisibilityChanged
+    | SyncOutputChanged
+)

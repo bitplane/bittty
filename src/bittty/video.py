@@ -5,14 +5,12 @@ A Board has two pages of it (primary and alternate).
 
 from __future__ import annotations
 
-from typing import List, Tuple
-
 from . import constants
 from .style import Style, parse_sgr_sequence, RESET_CODE
 
 
 # Type alias for a cell: (Style, character)
-Cell = Tuple[Style, str]
+Cell = tuple[Style, str]
 
 
 def _coerce_style(style_or_ansi) -> Style:
@@ -38,12 +36,12 @@ class Video:
         self._empty_cell: Cell = (self._empty_style, " ")
 
         # Initialize grid with empty cells (default style, space character)
-        self.grid: List[List[Cell]] = []
+        self.grid: list[list[Cell]] = []
         for _ in range(height):
             self.grid.append(self._create_empty_row())
 
         # Per-line DECDHL/DECDWL/DECSWL attribute, kept parallel to grid rows.
-        self.line_attributes: List[str] = [constants.LINE_SINGLE] * height
+        self.line_attributes: list[str] = [constants.LINE_SINGLE] * height
 
         # Dirty tracking: readers own the clock. Writes stamp the CURRENT
         # epoch (one store — no increment on the hot path); a renderer calls
@@ -52,7 +50,7 @@ class Video:
         # resize) stamp page_gen instead of touching every row.
         self.generation = 1
         self.page_gen = 0
-        self.row_gen: List[int] = [0] * height
+        self.row_gen: list[int] = [0] * height
 
     def _touch_row(self, y: int) -> None:
         """Stamp a row as changed in the current epoch."""
@@ -81,13 +79,13 @@ class Video:
         self.generation += 1
         return self.generation
 
-    def dirty_rows(self, seen: int) -> List[int]:
+    def dirty_rows(self, seen: int) -> list[int]:
         """Rows changed since `seen` (a value returned by observe())."""
         if self.page_gen >= seen:
             return list(range(self.height))
         return [y for y, g in enumerate(self.row_gen) if g >= seen]
 
-    def _create_empty_row(self, width: int | None = None) -> List[Cell]:
+    def _create_empty_row(self, width: int | None = None) -> list[Cell]:
         """Create a row filled with the shared empty cell (list-multiply, no per-cell build)."""
         return [self._empty_cell] * (self.width if width is None else width)
 
@@ -108,7 +106,7 @@ class Video:
         self.line_attributes = [constants.LINE_SINGLE] * self.height
         self._touch_page()
 
-    def get_content(self) -> List[List[Cell]]:
+    def get_content(self) -> list[list[Cell]]:
         """Get buffer content as a 2D grid."""
         return [row[:] for row in self.grid]
 

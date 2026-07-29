@@ -10,7 +10,7 @@ from __future__ import annotations
 import logging
 import subprocess
 import sys
-from typing import Any, Callable, Optional
+from typing import Any, Callable
 
 from .. import constants
 from ..caps import TerminalCaps
@@ -74,9 +74,9 @@ class Board:
         self.height = height
         self.stdin = stdin
         self.stdout = stdout
-        self._pty: Optional[Any] = None
-        self.process: Optional[subprocess.Popen] = None
-        self._pty_data_callback: Optional[Callable[[str], None]] = None
+        self._pty: Any | None = None
+        self.process: subprocess.Popen | None = None
+        self._pty_data_callback: Callable[[str], None] | None = None
 
         self.model = model or DEFAULT
         self.palette_overrides = palette_overrides or {}
@@ -329,12 +329,12 @@ class Board:
     # --- process / PTY lifecycle --- #
 
     @property
-    def pty(self) -> Optional[Any]:
+    def pty(self) -> Any | None:
         """Attached PTY connection."""
         return self._pty
 
     @pty.setter
-    def pty(self, value: Optional[Any]) -> None:
+    def pty(self, value: Any | None) -> None:
         self._pty = value
         if value is None:
             self.host.detach()

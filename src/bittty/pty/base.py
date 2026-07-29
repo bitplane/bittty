@@ -7,7 +7,7 @@ with platform-specific subclasses overriding only the byte-level I/O methods.
 
 import asyncio
 import os
-from typing import Optional, BinaryIO
+from typing import BinaryIO
 import subprocess
 import codecs
 from io import BytesIO
@@ -32,8 +32,8 @@ class PTY:
 
     def __init__(
         self,
-        from_process: Optional[BinaryIO] = None,
-        to_process: Optional[BinaryIO] = None,
+        from_process: BinaryIO | None = None,
+        to_process: BinaryIO | None = None,
         rows: int = constants.DEFAULT_TERMINAL_HEIGHT,
         cols: int = constants.DEFAULT_TERMINAL_WIDTH,
     ):

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from functools import lru_cache
-from typing import Literal, Tuple, Union, Optional
+from typing import Literal
 
 
 # --- Constants --- #
@@ -17,7 +17,7 @@ RESET_CODE = "\033[0m"  # Reset all formatting
 @dataclass(frozen=True, slots=True)
 class Color:
     mode: Literal["default", "indexed", "rgb"]
-    value: Union[int, Tuple[int, int, int], None] = None
+    value: int | tuple[int, int, int] | None = None
 
     @property
     def ansi(self) -> str:
@@ -114,27 +114,27 @@ class Style:
 
     def __init__(
         self,
-        fg: Optional[Color] = None,
-        bg: Optional[Color] = None,
-        bold: Optional[bool] = None,
-        dim: Optional[bool] = None,
-        italic: Optional[bool] = None,
-        underline: Optional[bool] = None,
-        blink: Optional[bool] = None,
-        reverse: Optional[bool] = None,
-        conceal: Optional[bool] = None,
-        strike: Optional[bool] = None,
-        underline_style: Optional[str] = None,  # None=single / "double" / "curly" / "dotted" / "dashed"
-        overline: Optional[bool] = None,
-        underline_color: Optional[Color] = None,
-        font: Optional[int] = None,  # SGR 10-19: 0 = primary, 1-9 = alternate fonts
-        fraktur: Optional[bool] = None,  # SGR 20 (blackletter)
-        framed: Optional[bool] = None,  # SGR 51
-        encircled: Optional[bool] = None,  # SGR 52
-        ideogram: Optional[str] = None,  # SGR 60-65 (see _IDEOGRAMS)
-        hyperlink: Optional[str] = None,  # OSC 8 target URI (not an SGR attribute)
-        hyperlink_id: Optional[str] = None,  # OSC 8 id= param: groups split link segments
-        protected: Optional[bool] = None,  # DECSCA: shielded from selective erase
+        fg: Color | None = None,
+        bg: Color | None = None,
+        bold: bool | None = None,
+        dim: bool | None = None,
+        italic: bool | None = None,
+        underline: bool | None = None,
+        blink: bool | None = None,
+        reverse: bool | None = None,
+        conceal: bool | None = None,
+        strike: bool | None = None,
+        underline_style: str | None = None,  # None=single / "double" / "curly" / "dotted" / "dashed"
+        overline: bool | None = None,
+        underline_color: Color | None = None,
+        font: int | None = None,  # SGR 10-19: 0 = primary, 1-9 = alternate fonts
+        fraktur: bool | None = None,  # SGR 20 (blackletter)
+        framed: bool | None = None,  # SGR 51
+        encircled: bool | None = None,  # SGR 52
+        ideogram: str | None = None,  # SGR 60-65 (see _IDEOGRAMS)
+        hyperlink: str | None = None,  # OSC 8 target URI (not an SGR attribute)
+        hyperlink_id: str | None = None,  # OSC 8 id= param: groups split link segments
+        protected: bool | None = None,  # DECSCA: shielded from selective erase
     ) -> None:
         self.fg = fg
         self.bg = bg
@@ -188,15 +188,15 @@ class Style:
     protected = _flag(_PROTECTED)
 
     @property
-    def font(self) -> Optional[int]:
+    def font(self) -> int | None:
         return (self._val & _FONT_MASK) >> _FONT_SHIFT if self._set & _FONT_MASK else None
 
     @property
-    def underline_style(self) -> Optional[str]:
+    def underline_style(self) -> str | None:
         return _ULSTYLES[(self._val & _ULSTYLE_MASK) >> _ULSTYLE_SHIFT] if self._set & _ULSTYLE_MASK else None
 
     @property
-    def ideogram(self) -> Optional[str]:
+    def ideogram(self) -> str | None:
         return _IDEOGRAMS[(self._val & _IDEO_MASK) >> _IDEO_SHIFT] if self._set & _IDEO_MASK else None
 
     def merge(self, other: Style) -> Style:
@@ -273,7 +273,7 @@ def parse_sgr_sequence(ansi: str) -> Style:
 _RESET_TOKENS = ("", "0", "00")
 
 
-def _last_reset_index(tokens: Tuple[str, ...]) -> int:
+def _last_reset_index(tokens: tuple[str, ...]) -> int:
     """Index of the last SGR reset token, skipping 38/48/58 colour arguments.
 
     A bare "0" can also be a colour channel (38;2;0;0;0), so the walk consumes
@@ -292,7 +292,7 @@ def _last_reset_index(tokens: Tuple[str, ...]) -> int:
 
 
 @lru_cache(maxsize=10000)
-def parse_sgr_with_reset(ansi: str) -> Tuple[Optional[Style], bool]:
+def parse_sgr_with_reset(ansi: str) -> tuple[Style | None, bool]:
     """Parse an SGR sequence into (style, reset): reset means "clear, then apply style".
 
     A reset token (0, 00, or an empty parameter) anywhere in the sequence discards
@@ -313,7 +313,7 @@ def parse_sgr_with_reset(ansi: str) -> Tuple[Optional[Style], bool]:
 _UNDERLINE_STYLES = {"0": "none", "1": "single", "2": "double", "3": "curly", "4": "dotted", "5": "dashed"}
 
 
-def _colon_color(parts: list[str]) -> Optional[Color]:
+def _colon_color(parts: list[str]) -> Color | None:
     """Parse an ITU colon-form colour: 38:5:n or 38:2[:id]:r:g:b."""
     if len(parts) < 3:
         return None
@@ -364,7 +364,7 @@ _COLOR_SLOTS = {"38": "fg", "48": "bg", "58": "underline_color"}
 
 
 @lru_cache(maxsize=10000)
-def interpret(tokens: Tuple[str, ...]) -> Style:
+def interpret(tokens: tuple[str, ...]) -> Style:
     """Interpret SGR tokens into a Style, accumulating the packed masks directly."""
     s = v = 0
     colors = {"fg": None, "bg": None, "underline_color": None}

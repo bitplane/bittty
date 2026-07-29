@@ -5,7 +5,6 @@ Windows PTY implementation using pywinpty.
 import subprocess
 import logging
 import time
-from typing import Optional, Dict
 
 try:
     import winpty
@@ -124,7 +123,7 @@ class WindowsPTY(PTY):
         super().resize(rows, cols)
         self._pty.set_size(cols, rows)
 
-    def spawn_process(self, command: str, env: Optional[Dict[str, str]] = ENV) -> subprocess.Popen:
+    def spawn_process(self, command: str, env: dict[str, str] | None = ENV) -> subprocess.Popen:
         """Spawn a process attached to this PTY."""
         if self.closed:
             raise OSError("PTY is closed")

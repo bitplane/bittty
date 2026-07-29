@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Callable, Optional, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Callable, Protocol, runtime_checkable
 
 from . import constants
 
@@ -48,10 +48,10 @@ class HostPort:
 
     def __init__(self, connection: Connection | None = None) -> None:
         self.connection = connection
-        self.on_data: Optional[Callable[[str], None]] = None
-        self.on_idle: Optional[Callable[[], bool]] = None
-        self.on_closed: Optional[Callable[[], None]] = None
-        self._reader_task: Optional[asyncio.Task] = None
+        self.on_data: Callable[[str], None] | None = None
+        self.on_idle: Callable[[], bool] | None = None
+        self.on_closed: Callable[[], None] | None = None
+        self._reader_task: asyncio.Task | None = None
 
     def attach(self, connection: Connection) -> None:
         """Attach a connection to this host port (transmit side only)."""
@@ -65,8 +65,8 @@ class HostPort:
         self,
         connection: Connection,
         on_data: Callable[[str], None],
-        on_idle: Optional[Callable[[], bool]] = None,
-        on_closed: Optional[Callable[[], None]] = None,
+        on_idle: Callable[[], bool] | None = None,
+        on_closed: Callable[[], None] | None = None,
     ) -> None:
         """Plug in a duplex connection and start pumping its receive side.
 
