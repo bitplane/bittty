@@ -87,9 +87,9 @@ class Video:
             return list(range(self.height))
         return [y for y, g in enumerate(self.row_gen) if g >= seen]
 
-    def _create_empty_row(self) -> List[Cell]:
+    def _create_empty_row(self, width: int | None = None) -> List[Cell]:
         """Create a row filled with the shared empty cell (list-multiply, no per-cell build)."""
-        return [self._empty_cell] * self.width
+        return [self._empty_cell] * (self.width if width is None else width)
 
     def set_line_attribute(self, y: int, attribute: str) -> None:
         """Set a line's DECDHL/DECDWL/DECSWL attribute."""
@@ -308,7 +308,7 @@ class Video:
         if len(self.grid) < height:
             # Add new rows
             for _ in range(height - len(self.grid)):
-                self.grid.append([(Style(), " ") for _ in range(width)])
+                self.grid.append(self._create_empty_row(width))
             self.line_attributes.extend([constants.LINE_SINGLE] * (height - len(self.line_attributes)))
         elif len(self.grid) > height:
             # Remove excess rows
@@ -320,7 +320,7 @@ class Video:
             row = self.grid[y]
             if len(row) < width:
                 # Extend row
-                row.extend([(Style(), " ")] * (width - len(row)))
+                row.extend([self._empty_cell] * (width - len(row)))
             elif len(row) > width:
                 # Truncate row
                 self.grid[y] = row[:width]

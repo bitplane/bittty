@@ -230,6 +230,16 @@ def test_resize_expand_width():
     assert buffer.get_line_text(1) == "DEF   "
 
 
+def test_resize_expansion_reuses_the_cached_empty_cell():
+    buffer = Video(width=2, height=1)
+    buffer.set(0, 0, "AB")
+
+    buffer.resize(5, 3)
+
+    assert all(cell is buffer._empty_cell for cell in buffer.grid[0][2:])
+    assert all(cell is buffer._empty_cell for row in buffer.grid[1:] for cell in row)
+
+
 def test_resize_shrink_width():
     """Test resize when shrinking width."""
     buffer = Video(width=6, height=2)
