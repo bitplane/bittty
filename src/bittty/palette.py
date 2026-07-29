@@ -88,7 +88,7 @@ def parse_color_spec(spec: str) -> RGB | None:
         parts = spec[4:].split("/")
     elif spec.startswith("#"):
         body = spec[1:]
-        if len(body) == 0 or len(body) % 3 != 0:
+        if not body or len(body) % 3 != 0:
             return None
         n = len(body) // 3
         parts = [body[0:n], body[n : 2 * n], body[2 * n : 3 * n]]

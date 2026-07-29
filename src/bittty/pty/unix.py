@@ -2,12 +2,12 @@
 Unix/Linux/macOS PTY implementation.
 """
 
-import os
-import struct
-import signal
 import asyncio
-import subprocess
 import logging
+import os
+import signal
+import struct
+import subprocess
 
 try:
     import fcntl
@@ -18,8 +18,8 @@ except ImportError:
     pty = None
     termios = None
 
-from .base import PTY, ENV
 from .. import constants
+from .base import ENV, PTY
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +67,7 @@ class UnixPTY(PTY):
                     os.killpg(os.getpgid(self._process.pid), signal.SIGHUP)
                     logger.info(f"Sent SIGHUP to process group {os.getpgid(self._process.pid)}")
                 except (OSError, AttributeError) as e:
-                    logger.info(f"Could not send SIGHUP to process group: {e}")
+                    logger.info("Could not send SIGHUP to process group: %s", e)
 
             # Remove from asyncio event loop first
             try:
@@ -126,7 +126,6 @@ class UnixPTY(PTY):
         For Unix PTYs, data written to the master side appears immediately
         on the slave side, so no explicit flushing is needed.
         """
-        pass
 
     async def read_async(self, size: int = constants.DEFAULT_PTY_BUFFER_SIZE) -> str:
         """

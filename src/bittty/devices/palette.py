@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..operations import Operation
-from .base import Device
 from ..palette import RGB, build_256, format_rgb, parse_color_spec
+from .base import Device
 
 if TYPE_CHECKING:
     from .board import Board

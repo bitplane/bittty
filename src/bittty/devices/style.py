@@ -4,9 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from .base import Device
 from ..operations import Operation
 from ..style import Style, get_background, parse_sgr_sequence, style_to_ansi
+from .base import Device
 
 if TYPE_CHECKING:
     from .board import Board

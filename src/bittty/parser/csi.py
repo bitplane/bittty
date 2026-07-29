@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import logging
 from functools import lru_cache
+
 from ..operations import Operation
 from ..style import parse_sgr_with_reset
-
 
 logger = logging.getLogger(__name__)
 

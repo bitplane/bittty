@@ -41,7 +41,7 @@ if TYPE_CHECKING:
 class Terminal:
     """Abstract base for terminals (chrome). Compose a Board; override the hooks you need."""
 
-    def __init__(self, board: "Board") -> None:
+    def __init__(self, board: Board) -> None:
         self.board = board
 
     # --- wiring --- #

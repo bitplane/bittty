@@ -10,15 +10,17 @@ from __future__ import annotations
 import logging
 import subprocess
 import sys
-from typing import Any, Callable, Optional
+from collections.abc import Callable
+from typing import Any
 
 from .. import constants
 from ..caps import TerminalCaps
+from ..connections import DisplayPort, HostPort
+from ..model import DEFAULT, Model
 from ..operations import Operation
 from ..parser import Parser
-from ..model import DEFAULT, Model
 from ..present import Bell, PresentEvent
-from ..connections import DisplayPort, HostPort
+from .blitter import Blitter
 from .charset import CharsetDevice
 from .control import ControlDevice
 from .cursor import CursorDevice
@@ -28,7 +30,6 @@ from .mouse import MouseDevice
 from .palette import PaletteDevice
 from .printer import PrinterDevice
 from .query import QueryDevice
-from .blitter import Blitter
 from .style import StyleDevice
 from .title import TitleDevice
 
@@ -50,14 +51,13 @@ class Board:
             from ..pty import StdioPTY
 
             return StdioPTY(stdin, stdout, rows, cols)
-        elif sys.platform == "win32":
+        if sys.platform == "win32":
             from ..pty import WindowsPTY
 
             return WindowsPTY(rows, cols)
-        else:
-            from ..pty import UnixPTY
+        from ..pty import UnixPTY
 
-            return UnixPTY(rows, cols)
+        return UnixPTY(rows, cols)
 
     def __init__(
         self,
@@ -74,9 +74,9 @@ class Board:
         self.height = height
         self.stdin = stdin
         self.stdout = stdout
-        self._pty: Optional[Any] = None
-        self.process: Optional[subprocess.Popen] = None
-        self._pty_data_callback: Optional[Callable[[str], None]] = None
+        self._pty: Any | None = None
+        self.process: subprocess.Popen | None = None
+        self._pty_data_callback: Callable[[str], None] | None = None
 
         self.model = model or DEFAULT
         self.palette_overrides = palette_overrides or {}
@@ -329,12 +329,12 @@ class Board:
     # --- process / PTY lifecycle --- #
 
     @property
-    def pty(self) -> Optional[Any]:
+    def pty(self) -> Any | None:
         """Attached PTY connection."""
         return self._pty
 
     @pty.setter
-    def pty(self, value: Optional[Any]) -> None:
+    def pty(self, value: Any | None) -> None:
         self._pty = value
         if value is None:
             self.host.detach()

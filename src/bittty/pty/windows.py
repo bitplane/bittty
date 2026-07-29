@@ -2,18 +2,17 @@
 Windows PTY implementation using pywinpty.
 """
 
-import subprocess
 import logging
+import subprocess
 import time
-from typing import Optional, Dict
 
 try:
     import winpty
 except ImportError:
     winpty = None
 
-from .base import PTY, ENV
 from .. import constants
+from .base import ENV, PTY
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +35,6 @@ class WinptyFileWrapper:
     def close(self) -> None:
         """Close the PTY."""
         # winpty doesn't have explicit close, process death handles it
-        pass
 
     @property
     def closed(self) -> bool:
@@ -49,7 +47,6 @@ class WinptyFileWrapper:
 
     def flush(self) -> None:
         """Flush - no-op for winpty."""
-        pass
 
 
 class WinptyProcessWrapper:
@@ -64,10 +61,9 @@ class WinptyProcessWrapper:
         """Check if process is still running."""
         if self.pty.isalive():
             return None
-        else:
-            if self._returncode is None:
-                self._returncode = constants.DEFAULT_EXIT_CODE
-            return self._returncode
+        if self._returncode is None:
+            self._returncode = constants.DEFAULT_EXIT_CODE
+        return self._returncode
 
     def wait(self):
         """Wait for process to complete."""
@@ -124,7 +120,7 @@ class WindowsPTY(PTY):
         super().resize(rows, cols)
         self._pty.set_size(cols, rows)
 
-    def spawn_process(self, command: str, env: Optional[Dict[str, str]] = ENV) -> subprocess.Popen:
+    def spawn_process(self, command: str, env: dict[str, str] | None = ENV) -> subprocess.Popen:
         """Spawn a process attached to this PTY."""
         if self.closed:
             raise OSError("PTY is closed")

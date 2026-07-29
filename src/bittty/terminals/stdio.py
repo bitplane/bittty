@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import pathlib
 import platform
 import select
 import shutil
@@ -57,7 +58,7 @@ class HostInputSink:
     operation name: on the input direction CSI I is a focus report, never CHT.
     """
 
-    def __init__(self, terminal: "StdioTerminal") -> None:
+    def __init__(self, terminal: StdioTerminal) -> None:
         self.terminal = terminal
 
     def handle_operation(self, op) -> None:
@@ -109,7 +110,7 @@ class StdioTerminal(Terminal):
         if shell and shutil.which(shell):
             return shell
         for shell in ["/bin/bash", "/bin/sh", "/usr/bin/bash"]:
-            if os.path.exists(shell):
+            if pathlib.Path(shell).exists():
                 return shell
         return "sh"
 

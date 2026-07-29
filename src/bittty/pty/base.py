@@ -6,11 +6,11 @@ with platform-specific subclasses overriding only the byte-level I/O methods.
 """
 
 import asyncio
-import os
-from typing import Optional, BinaryIO
-import subprocess
 import codecs
+import os
+import subprocess
 from io import BytesIO
+from typing import BinaryIO
 
 from .. import constants
 
@@ -32,8 +32,8 @@ class PTY:
 
     def __init__(
         self,
-        from_process: Optional[BinaryIO] = None,
-        to_process: Optional[BinaryIO] = None,
+        from_process: BinaryIO | None = None,
+        to_process: BinaryIO | None = None,
         rows: int = constants.DEFAULT_TERMINAL_HEIGHT,
         cols: int = constants.DEFAULT_TERMINAL_WIDTH,
     ):
@@ -71,12 +71,11 @@ class PTY:
             tail, _state = self._dec.getstate()  # tail is bytes of an incomplete seq (if any)
             self._buffer = tail
             return s
-        else:
-            # EOF / no new data: flush any incomplete sequence per 'replace' policy
-            s = self._dec.decode(b"", final=True)
-            self._dec.reset()
-            self._buffer = b""
-            return s
+        # EOF / no new data: flush any incomplete sequence per 'replace' policy
+        s = self._dec.decode(b"", final=True)
+        self._dec.reset()
+        self._buffer = b""
+        return s
 
     def write(self, data: str) -> int:
         """Write string as UTF-8 bytes."""

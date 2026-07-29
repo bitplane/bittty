@@ -12,7 +12,6 @@ until graphics modes are on the table; there is nothing to reconcile without the
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass(frozen=True)
@@ -20,11 +19,11 @@ class TerminalCaps:
     """What the real terminal can actually do (terminal -> board)."""
 
     color_depth: str = "unknown"  # "monochrome" / "16" / "256" / "truecolor" / "unknown"
-    cell_px: Optional[tuple[int, int]] = None  # character cell size in pixels (CSI 16 t)
-    window_px: Optional[tuple[int, int]] = None  # window size in pixels (CSI 14 t)
-    background: Optional[tuple[int, int, int]] = None  # actual background colour (OSC 11)
+    cell_px: tuple[int, int] | None = None  # character cell size in pixels (CSI 16 t)
+    window_px: tuple[int, int] | None = None  # window size in pixels (CSI 14 t)
+    background: tuple[int, int, int] | None = None  # actual background colour (OSC 11)
 
     @classmethod
-    def unknown(cls) -> "TerminalCaps":
+    def unknown(cls) -> TerminalCaps:
         """Caps that assert nothing — the backend keeps its current behaviour."""
         return cls()

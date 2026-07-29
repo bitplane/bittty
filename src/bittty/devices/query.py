@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-
 from typing import TYPE_CHECKING
 
 from ..operations import Operation
@@ -18,8 +17,8 @@ from ..present import (
     WindowRequest,
     WindowStateChanged,
 )
-from .base import Device
 from ..style import style_to_ansi
+from .base import Device
 
 if TYPE_CHECKING:
     from .board import Board

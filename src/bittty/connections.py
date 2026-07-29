@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import TYPE_CHECKING, Callable, Optional, Protocol, runtime_checkable
+from collections.abc import Callable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from . import constants
 
@@ -34,7 +35,7 @@ class Connection(Protocol):
 class Presentable(Protocol):
     """A terminal (chrome) that receives discrete present events from the board."""
 
-    def present(self, event: "PresentEvent") -> None:
+    def present(self, event: PresentEvent) -> None:
         """Handle one present event."""
 
 
@@ -48,10 +49,10 @@ class HostPort:
 
     def __init__(self, connection: Connection | None = None) -> None:
         self.connection = connection
-        self.on_data: Optional[Callable[[str], None]] = None
-        self.on_idle: Optional[Callable[[], bool]] = None
-        self.on_closed: Optional[Callable[[], None]] = None
-        self._reader_task: Optional[asyncio.Task] = None
+        self.on_data: Callable[[str], None] | None = None
+        self.on_idle: Callable[[], bool] | None = None
+        self.on_closed: Callable[[], None] | None = None
+        self._reader_task: asyncio.Task | None = None
 
     def attach(self, connection: Connection) -> None:
         """Attach a connection to this host port (transmit side only)."""
@@ -65,8 +66,8 @@ class HostPort:
         self,
         connection: Connection,
         on_data: Callable[[str], None],
-        on_idle: Optional[Callable[[], bool]] = None,
-        on_closed: Optional[Callable[[], None]] = None,
+        on_idle: Callable[[], bool] | None = None,
+        on_closed: Callable[[], None] | None = None,
     ) -> None:
         """Plug in a duplex connection and start pumping its receive side.
 
@@ -109,7 +110,7 @@ class HostPort:
             except asyncio.CancelledError:
                 break
             except OSError as e:
-                logger.info(f"Host connection read error: {e}")
+                logger.info("Host connection read error: %s", e)
                 if self.on_closed is not None:
                     self.on_closed()
                 break
@@ -145,7 +146,7 @@ class DisplayPort:
     present() is a no-op, so the board runs headless exactly as before.
     """
 
-    def __init__(self, board: "Board | None" = None, terminal: Presentable | None = None) -> None:
+    def __init__(self, board: Board | None = None, terminal: Presentable | None = None) -> None:
         self.board = board
         self.terminal = terminal
 
@@ -162,7 +163,7 @@ class DisplayPort:
         """Whether a terminal (chrome) is attached."""
         return self.terminal is not None
 
-    def present(self, event: "PresentEvent") -> None:
+    def present(self, event: PresentEvent) -> None:
         """Forward a present event to the attached terminal, if any."""
         if self.terminal is not None:
             self.terminal.present(event)
@@ -201,6 +202,6 @@ class DisplayPort:
         """The box lost focus."""
         self.board.focus_out()
 
-    def set_caps(self, caps: "TerminalCaps") -> None:
+    def set_caps(self, caps: TerminalCaps) -> None:
         """The terminal reports what its venue can do."""
         self.board.set_caps(caps)

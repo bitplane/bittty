@@ -11,8 +11,9 @@ several modes legitimately share one flag (mode 7 and 1000 both drive
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Callable, Optional
+from typing import TYPE_CHECKING
 
 from ..operations import Operation
 from ..present import CursorVisibilityChanged, MouseModeChanged, SyncOutputChanged
@@ -28,12 +29,12 @@ class Mode:
 
     number: int
     private: bool
-    attr: Optional[str] = None  # device flag this mode drives, if any
+    attr: str | None = None  # device flag this mode drives, if any
     invert: bool = False  # "set" stores the negation (modes 12, 66)
     queryable: bool = False  # DECRQM reports this mode's state
-    apply_fn: Optional[Callable[["ModeDevice", bool], None]] = None  # side effect
-    status_fn: Optional[Callable[["ModeDevice"], int]] = None  # custom DECRQM status
-    peripheral: Optional[str] = None  # "mouse"/"cursor"/"sync": emit a present event on change
+    apply_fn: Callable[[ModeDevice, bool], None] | None = None  # side effect
+    status_fn: Callable[[ModeDevice], int] | None = None  # custom DECRQM status
+    peripheral: str | None = None  # "mouse"/"cursor"/"sync": emit a present event on change
 
     @property
     def key(self) -> tuple[bool, int]:
@@ -194,9 +195,9 @@ class ModeDevice(Device):
         self.board = board
         self._set_defaults()
         # Edge-trigger caches for peripheral present events (None = not yet emitted).
-        self._last_mouse_mode: Optional[tuple[str, bool]] = None
-        self._last_cursor_visible: Optional[bool] = None
-        self._last_sync: Optional[bool] = None
+        self._last_mouse_mode: tuple[str, bool] | None = None
+        self._last_cursor_visible: bool | None = None
+        self._last_sync: bool | None = None
         unsupported = board.model.unsupported_modes
         self._modes = {mode.key: mode for mode in MODE_SPECS if mode.key not in unsupported}
         self.handlers = {

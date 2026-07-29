@@ -5,10 +5,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .. import constants
-from ..video import Video
 from ..operations import Operation
-from .base import Device
 from ..style import Style, parse_sgr_sequence
+from ..video import Video
+from .base import Device
 
 _REVERSE_ATTRS = {1: "bold", 4: "underline", 5: "blink", 7: "reverse"}
 
