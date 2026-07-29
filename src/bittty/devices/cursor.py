@@ -218,11 +218,13 @@ class CursorDevice(Device):
             self.x = self.board.width - 1
 
     def advance_after_text_write(self, character_count: int) -> None:
-        """Advance after printable text, preserving existing autowrap behavior."""
+        """Advance by terminal columns after printable text."""
         if character_count <= 0:
             return
-        if self.board.modes.auto_wrap or self.x < self.board.width - 1:
+        if self.board.modes.auto_wrap:
             self.x += character_count
+        else:
+            self.x = min(self.board.width - 1, self.x + character_count)
 
     def save(self) -> None:
         """Save cursor position and attributes."""

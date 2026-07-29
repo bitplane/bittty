@@ -31,8 +31,8 @@ def test_unicode_emoji():
     output = render_terminal_to_string(board)
     assert "🏠 Home" in output
 
-    # Check cursor position - counting characters not display width
-    assert board.cursor.x == 6  # 1 char for emoji + 1 space + 4 for "Home"
+    # The emoji occupies two terminal columns.
+    assert board.cursor.x == 7
 
 
 def test_unicode_various():

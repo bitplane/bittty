@@ -17,6 +17,7 @@ from .model import Model, XTERM, VT100, VT220, LINUX
 from .operations import Operation, OperationSink
 from .connections import Connection, DisplayPort, HostPort, Presentable
 from .caps import TerminalCaps
+from .width import WidthPolicy
 from .style import (
     CURSOR_CODE,
     RESET_CODE,
@@ -39,6 +40,7 @@ __all__ = [
     "DisplayPort",
     "Presentable",
     "TerminalCaps",
+    "WidthPolicy",
     "Model",
     "XTERM",
     "VT100",

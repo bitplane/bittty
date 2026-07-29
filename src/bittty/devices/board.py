@@ -19,6 +19,7 @@ from ..parser import Parser
 from ..model import DEFAULT, Model
 from ..present import Bell, PresentEvent
 from ..connections import DisplayPort, HostPort
+from ..width import DEFAULT_WIDTH_POLICY, WidthPolicy
 from .charset import CharsetDevice
 from .control import ControlDevice
 from .cursor import CursorDevice
@@ -68,6 +69,7 @@ class Board:
         stdout=None,
         model: Model | None = None,
         palette_overrides: dict | None = None,
+        width_policy: WidthPolicy | None = None,
     ) -> None:
         self.command = command
         self.width = width
@@ -80,6 +82,7 @@ class Board:
 
         self.model = model or DEFAULT
         self.palette_overrides = palette_overrides or {}
+        self.width_policy = width_policy or DEFAULT_WIDTH_POLICY
         self.clipboard: dict[str, str] = {}  # OSC 52 selections; terminals sync this
         self.cwd: str = ""  # OSC 7 reported working directory
         self.pointer_shape: str = ""  # OSC 22 mouse-pointer shape
@@ -245,8 +248,8 @@ class Board:
         """Capture the active screen as plain text.
 
         By default, trailing spaces are removed from each row and unused rows
-        at the bottom are omitted. Set ``trim=False`` to preserve the screen's
-        exact rectangular dimensions.
+        at the bottom are omitted. Set ``trim=False`` to preserve trailing
+        blank cells and rows; width-2 continuation cells emit no text.
         """
         page = self.blitter.current_buffer
         lines = [page.get_line_text(y) for y in range(self.height)]

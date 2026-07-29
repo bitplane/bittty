@@ -21,8 +21,8 @@ class Blitter(Device):
 
     def __init__(self, board: Board) -> None:
         self.board = board
-        self.primary_buffer = Video(board.width, board.height)
-        self.alt_buffer = Video(board.width, board.height)
+        self.primary_buffer = Video(board.width, board.height, board.width_policy)
+        self.alt_buffer = Video(board.width, board.height, board.width_policy)
         self.current_buffer = self.primary_buffer
         self.in_alt_screen = False
         self.scroll_top = 0
@@ -71,12 +71,11 @@ class Blitter(Device):
         self.current_buffer.set_line_attribute(self.board.cursor.y, attribute)
 
     def write_text(self, text: str, ansi_code: str = "") -> None:
-        """Write printable text at the cursor position, wrapping runs longer than the line.
+        """Write printable text at the cursor, accounting for terminal columns.
 
-        A single PRINT run can be arbitrarily long (a shell line wider than the
-        screen arrives as one chunk), so write it line-sized piece by line-sized
-        piece; prepare_for_text_write supplies the wrap (or the clip, with
-        autowrap off) between pieces.
+        ASCII runs keep the bulk slice path. Non-ASCII code points are measured
+        by the board's width policy and width-2 characters are written
+        atomically.
         """
         board = self.board
         code_to_use = ansi_code if ansi_code else board.style.current
@@ -85,13 +84,44 @@ class Blitter(Device):
         write = self.current_buffer.insert if board.modes.insert_mode else self.current_buffer.set
         width = board.width
 
-        remaining = translated_text
-        while remaining:
-            cursor.prepare_for_text_write()
-            space = width - cursor.x
-            chunk, remaining = remaining[:space], remaining[space:]
-            write(cursor.x, cursor.y, chunk, code_to_use)
-            cursor.advance_after_text_write(len(chunk))
+        def write_ascii_run(run: str) -> None:
+            remaining = run
+            while remaining:
+                cursor.prepare_for_text_write()
+                space = width - cursor.x
+                chunk, remaining = remaining[:space], remaining[space:]
+                write(cursor.x, cursor.y, chunk, code_to_use)
+                cursor.advance_after_text_write(len(chunk))
+
+        if translated_text.isascii():
+            write_ascii_run(translated_text)
+        else:
+            start = 0
+            for index, char in enumerate(translated_text):
+                if char.isascii():
+                    continue
+                if start < index:
+                    write_ascii_run(translated_text[start:index])
+
+                char_width = board.width_policy.width(char)
+                if char_width > width:
+                    start = index + 1
+                    continue
+
+                cursor.prepare_for_text_write()
+                if char_width > width - cursor.x:
+                    if board.modes.auto_wrap:
+                        cursor.x = width
+                        cursor.prepare_for_text_write()
+                    else:
+                        cursor.x = width - char_width
+
+                write(cursor.x, cursor.y, char, code_to_use)
+                cursor.advance_after_text_write(char_width)
+                start = index + 1
+
+            if start < len(translated_text):
+                write_ascii_run(translated_text[start:])
 
         if translated_text:
             self.last_printed_char = translated_text[-1]
@@ -144,9 +174,10 @@ class Blitter(Device):
         self.current_buffer.clear_region(x1, y1, x2, y2, ansi_code)
 
     def _selective_clear(self, x: int, y: int) -> None:
-        """Clear a cell only if it is not DECSCA-protected."""
-        if not self.current_buffer.get_cell(x, y)[0].protected:
-            self.current_buffer.set_cell(x, y, " ", self.board.style.background_ansi())
+        """Clear an intersected glyph only if it is not DECSCA-protected."""
+        owner = self.current_buffer.owner_x(x, y)
+        if not self.current_buffer.get_cell(owner, y)[0].protected:
+            self.current_buffer.set_cell(owner, y, " ", self.board.style.background_ansi())
 
     def selective_erase_display(self, mode: int) -> None:
         """DECSED — erase in display, leaving DECSCA-protected characters."""
@@ -196,9 +227,14 @@ class Blitter(Device):
         """DECFRA — fill a rectangle with a character (Pch;Pt;Pl;Pb;Pr)."""
         char = chr(params[0]) if params and params[0] else " "
         t, left, b, r = self._rectangle(*self._four(params, 1))
+        char_width = self.board.width_policy.width(char)
         for y in range(t, b + 1):
-            for x in range(left, r + 1):
+            x = left
+            while x + char_width - 1 <= r:
                 self.current_buffer.set_cell(x, y, char, self.board.style.current)
+                x += char_width
+            if x <= r:
+                self.current_buffer.set_cell(x, y, " ", self.board.style.current)
 
     def erase_rectangle(self, params) -> None:
         """DECERA — erase a rectangle (Pt;Pl;Pb;Pr)."""
@@ -221,12 +257,20 @@ class Blitter(Device):
         p = list(params) + [None] * 8
         dt = (p[5] - 1) if p[5] else 0
         dl = (p[6] - 1) if p[6] else 0
-        cells = [[self.current_buffer.get_cell(x, y) for x in range(left, r + 1)] for y in range(t, b + 1)]
+        cells = []
+        for y in range(t, b + 1):
+            row = [self.current_buffer.get_cell(x, y) for x in range(left, r + 1)]
+            # A rectangle containing only half of a wide glyph copies blanks
+            # at that edge, never an orphaned fragment.
+            if row and row[0][1] == "":
+                row[0] = (row[0][0], " ")
+            if row and r + 1 < self.board.width and self.current_buffer.get_cell(r + 1, y)[1] == "":
+                row[-1] = (row[-1][0], " ")
+            cells.append(row)
         for dy, row in enumerate(cells):
-            for dx, cell in enumerate(row):
-                ty, tx = dt + dy, dl + dx
-                if 0 <= ty < self.board.height and 0 <= tx < self.board.width:
-                    self.current_buffer.set_cell(tx, ty, cell[1], cell[0])
+            ty = dt + dy
+            if 0 <= ty < self.board.height and 0 <= dl < self.board.width:
+                self.current_buffer.replace_cells(dl, ty, row)
 
     def set_attr_change_extent(self, ps: int) -> None:
         """DECSACE — 1 = stream (wrapping run), else rectangle (default)."""
@@ -256,20 +300,30 @@ class Blitter(Device):
         """DECCARA — merge SGR attributes into every cell of the area (rectangle or stream)."""
         sgr = [str(x) for x in params[4:] if x is not None]
         delta = parse_sgr_sequence("\x1b[" + ";".join(sgr) + "m") if sgr else Style()
+        changed = set()
         for x, y in self._extent_cells(params):
-            cell = self.current_buffer.get_cell(x, y)
-            self.current_buffer.set_cell(x, y, cell[1], cell[0].merge(delta))
+            owner = self.current_buffer.owner_x(x, y)
+            if (owner, y) in changed:
+                continue
+            changed.add((owner, y))
+            cell = self.current_buffer.get_cell(owner, y)
+            self.current_buffer.set_style(owner, y, cell[0].merge(delta))
 
     def reverse_attributes_rectangle(self, params) -> None:
         """DECRARA — toggle the given attributes (1/4/5/7) across the area (rectangle or stream)."""
         requested = [p for p in params[4:] if p in _REVERSE_ATTRS] or list(_REVERSE_ATTRS)
         attrs = [_REVERSE_ATTRS[p] for p in requested]
+        changed = set()
         for x, y in self._extent_cells(params):
-            cell = self.current_buffer.get_cell(x, y)
+            owner = self.current_buffer.owner_x(x, y)
+            if (owner, y) in changed:
+                continue
+            changed.add((owner, y))
+            cell = self.current_buffer.get_cell(owner, y)
             style = cell[0]
             for attr in attrs:
                 style = style.replace(**{attr: not getattr(style, attr)})
-            self.current_buffer.set_cell(x, y, cell[1], style)
+            self.current_buffer.set_style(owner, y, style)
 
     def switch_screen(self, alt: bool) -> None:
         """Switch between primary and alternate screen."""
@@ -351,11 +405,9 @@ class Blitter(Device):
         for y in range(self.scroll_top, self.scroll_bottom + 1):
             seg = [self.current_buffer.get_cell(x, y) for x in range(x0, right + 1)]
             seg = seg[n:] + [None] * n if columns > 0 else [None] * n + seg[: span - n]
-            for i, cell in enumerate(seg):
-                if cell is None:
-                    self.current_buffer.set_cell(x0 + i, y, " ", bg)
-                else:
-                    self.current_buffer.set_cell(x0 + i, y, cell[1], cell[0])
+            style = parse_sgr_sequence(bg) if bg else Style()
+            cells = [(style, " ") if cell is None else cell for cell in seg]
+            self.current_buffer.replace_cells(x0, y, cells, bg)
 
     def pan(self, columns: int) -> None:
         """SL/SR — pan the scroll-region rows horizontally within the left/right margins."""

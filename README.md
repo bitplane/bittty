@@ -50,6 +50,6 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
 
 ## Known limitations
 
-- Wide characters, combining characters and grapheme clusters are treated as one cell.
+- Combining characters and grapheme clusters are not yet joined into one cell.
 - Resizing is not atomic with concurrent PTY output.
 - There is no scrollback buffer or reflow on resize.
