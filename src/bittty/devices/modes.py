@@ -121,6 +121,10 @@ def _ambiguous_width(device: ModeDevice, value: bool) -> None:
     device.board.set_ambiguous_width(2 if value else 1)
 
 
+def _grapheme_clustering(device: ModeDevice, value: bool) -> None:
+    device.board.blitter.set_grapheme_clustering(value)
+
+
 # The full mode repertoire. A model may omit any of these.
 MODE_SPECS: list[Mode] = [
     # ANSI modes (autowrap and cursor visibility are DEC *private* 7/25, not ANSI)
@@ -172,6 +176,7 @@ MODE_SPECS: list[Mode] = [
     Mode(1046, True, "allow_alt_screen", queryable=True),  # permit 1047/1049 switching
     Mode(2004, True, "bracketed_paste", queryable=True),
     Mode(2026, True, "synchronized_output", queryable=True, peripheral="sync"),
+    Mode(2027, True, "grapheme_clustering", queryable=True, apply_fn=_grapheme_clustering),
     Mode(2028, True, "auto_resize_mode", queryable=True),
     Mode(2031, True, "color_scheme_updates", queryable=True),  # report light/dark changes
     # Tail: scrollback/keyboard/clipboard/sixel behaviour flags a terminal (chrome) actuates.
@@ -265,7 +270,7 @@ class ModeDevice(Device):
         self.bell_urgency = False
         self.bell_raise = False
         self.allow_alt_screen = True  # alt-screen switching permitted by default
-        self.grapheme_clustering = False  # mode 2027 is not advertised until it is implemented
+        self.grapheme_clustering = False
         self.ambiguous_width_double = self.board.width_policy.ambiguous_width == 2
         self.color_scheme_updates = False
         self.scroll_on_output = False
@@ -285,6 +290,7 @@ class ModeDevice(Device):
         """Reset modes. hard restores every flag (RIS); soft is the DECSTR subset."""
         if hard:
             self._set_defaults()
+            self.board.blitter.set_grapheme_clustering(False)
             self.board.restore_width_policy()
         else:
             # DECSTR soft reset — the widely-agreed subset (SGR is reset by the style device).

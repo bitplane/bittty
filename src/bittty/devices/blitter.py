@@ -2,19 +2,62 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from wcwidth import iter_graphemes
+
 from .. import constants
-from ..video import Video
 from ..operations import Operation
-from .base import Device
 from ..style import Style, parse_sgr_sequence
+from ..video import Cell, Video
+from .base import Device
 
 _REVERSE_ATTRS = {1: "bold", 4: "underline", 5: "blink", 7: "reverse"}
+_MAX_CLUSTER_CODEPOINTS = 256
+_OVERFLOW_CONTEXT = 32
+_ASCII_KEYCAP_BASES = frozenset("#*0123456789")
 
 if TYPE_CHECKING:
-    from .board import Board
     from ..width import WidthPolicy
+    from .board import Board
+
+
+@dataclass(slots=True)
+class _ClusterTail:
+    page: Video
+    row: list
+    x: int
+    y: int
+    text: str
+    width: int
+    style: Style
+    cursor_x: int
+    cursor_y: int
+    insert_mode: bool
+    auto_wrap: bool
+    width_policy: WidthPolicy
+    board_width: int
+    board_height: int
+    overflow: bool = False
+    context: str = ""
+    restore_start: int = 0
+    restore_cells: tuple[Cell, ...] = ()
+    insert_restore: tuple[Cell, ...] = ()
+
+
+@dataclass(slots=True)
+class _PendingPrefix:
+    text: str
+    page: Video
+    row: list
+    cursor_x: int
+    cursor_y: int
+    insert_mode: bool
+    auto_wrap: bool
+    width_policy: WidthPolicy
+    board_width: int
+    board_height: int
 
 
 class Blitter(Device):
@@ -32,6 +75,8 @@ class Blitter(Device):
         self.right_margin = board.width - 1
         self.attr_change_extent = "rectangle"  # DECSACE: "rectangle" or "stream"
         self.last_printed_char = " "
+        self._cluster_tail: _ClusterTail | None = None
+        self._pending_prefix: _PendingPrefix | None = None
         self.handlers = {
             "DECSLRM": self.apply_left_right_margins,
             "ED": lambda op: self.clear_screen(op.args[0]),
@@ -127,6 +172,408 @@ class Blitter(Device):
         if translated_text:
             self.last_printed_char = translated_text[-1]
 
+    def set_grapheme_clustering(self, enabled: bool) -> None:
+        """Switch the write callable so disabled mode has no per-run branch."""
+        self.reset_grapheme_state()
+        if enabled:
+            self.write_text = self._write_clustered_entry
+        else:
+            self.__dict__.pop("write_text", None)
+
+    def _write_clustered_entry(self, text: str, ansi_code: str = "") -> None:
+        board = self.board
+        code_to_use = ansi_code if ansi_code else board.style.current
+        style = code_to_use if isinstance(code_to_use, Style) else parse_sgr_sequence(code_to_use)
+        self._write_clustered_text(board.charset.translate(text), style)
+
+    def reset_grapheme_state(self) -> None:
+        """Forget streaming state without changing already-written cells."""
+        self._cluster_tail = None
+        self._pending_prefix = None
+
+    def _tail_is_valid(self, tail: _ClusterTail) -> bool:
+        board = self.board
+        if (
+            self.current_buffer is not tail.page
+            or board.width != tail.board_width
+            or board.height != tail.board_height
+            or board.cursor.x != tail.cursor_x
+            or board.cursor.y != tail.cursor_y
+            or board.modes.insert_mode != tail.insert_mode
+            or board.modes.auto_wrap != tail.auto_wrap
+            or board.width_policy != tail.width_policy
+            or not (0 <= tail.y < tail.page.height and 0 <= tail.x < tail.page.width)
+            or tail.page.grid[tail.y] is not tail.row
+        ):
+            return False
+        head = tail.page.get_cell(tail.x, tail.y)
+        if head[0] != tail.style or str(head[1]) != tail.text:
+            return False
+        if tail.width == 2:
+            return tail.x + 1 < tail.page.width and tail.page.get_cell(tail.x + 1, tail.y) == (tail.style, "")
+        return type(head[1]) is str
+
+    def _prefix_is_valid(self, prefix: _PendingPrefix) -> bool:
+        board = self.board
+        return (
+            self.current_buffer is prefix.page
+            and board.width == prefix.board_width
+            and board.height == prefix.board_height
+            and board.cursor.x == prefix.cursor_x
+            and board.cursor.y == prefix.cursor_y
+            and board.modes.insert_mode == prefix.insert_mode
+            and board.modes.auto_wrap == prefix.auto_wrap
+            and board.width_policy == prefix.width_policy
+            and 0 <= prefix.cursor_y < prefix.page.height
+            and prefix.page.grid[prefix.cursor_y] is prefix.row
+        )
+
+    @staticmethod
+    def _is_prepend_cluster(text: str) -> bool:
+        """Whether a trailing cluster joins a following ordinary base."""
+        iterator = iter_graphemes(text + "A")
+        return next(iterator, "") == text + "A"
+
+    def _remember_prefix(self, text: str) -> None:
+        board = self.board
+        y = board.cursor.y
+        self._pending_prefix = _PendingPrefix(
+            text=text[-_MAX_CLUSTER_CODEPOINTS:],
+            page=self.current_buffer,
+            row=self.current_buffer.grid[y],
+            cursor_x=board.cursor.x,
+            cursor_y=y,
+            insert_mode=board.modes.insert_mode,
+            auto_wrap=board.modes.auto_wrap,
+            width_policy=board.width_policy,
+            board_width=board.width,
+            board_height=board.height,
+        )
+
+    def _snapshot_glyph_target(self, x: int, y: int) -> tuple[int, tuple[Cell, ...], tuple[Cell, ...]]:
+        page = self.current_buffer
+        row = page.grid[y]
+        if self.board.modes.insert_mode:
+            return x, (), tuple(row[-2:])
+
+        start = page.owner_x(x, y)
+        end = min(page.width, x + 2)
+        if end < page.width and row[end][1] == "":
+            end += 1
+        return start, tuple(row[start:end]), ()
+
+    def _remember_tail(
+        self,
+        x: int,
+        y: int,
+        text: str,
+        width: int,
+        style: Style,
+        *,
+        overflow=False,
+        previous: _ClusterTail | None = None,
+        restore_start=0,
+        restore_cells=(),
+        insert_restore=(),
+    ) -> None:
+        board = self.board
+        if previous is not None:
+            restore_start = previous.restore_start
+            restore_cells = previous.restore_cells
+            insert_restore = previous.insert_restore
+        tail = self._cluster_tail
+        if tail is None:
+            self._cluster_tail = _ClusterTail(
+                page=self.current_buffer,
+                row=self.current_buffer.grid[y],
+                x=x,
+                y=y,
+                text=text,
+                width=width,
+                style=style,
+                cursor_x=board.cursor.x,
+                cursor_y=board.cursor.y,
+                insert_mode=board.modes.insert_mode,
+                auto_wrap=board.modes.auto_wrap,
+                width_policy=board.width_policy,
+                board_width=board.width,
+                board_height=board.height,
+                overflow=overflow,
+                context=text[-_OVERFLOW_CONTEXT:],
+                restore_start=restore_start,
+                restore_cells=restore_cells,
+                insert_restore=insert_restore,
+            )
+            return
+
+        tail.page = self.current_buffer
+        tail.row = self.current_buffer.grid[y]
+        tail.x = x
+        tail.y = y
+        tail.text = text
+        tail.width = width
+        tail.style = style
+        tail.cursor_x = board.cursor.x
+        tail.cursor_y = board.cursor.y
+        tail.insert_mode = board.modes.insert_mode
+        tail.auto_wrap = board.modes.auto_wrap
+        tail.width_policy = board.width_policy
+        tail.board_width = board.width
+        tail.board_height = board.height
+        tail.overflow = overflow
+        tail.context = text[-_OVERFLOW_CONTEXT:]
+        tail.restore_start = restore_start
+        tail.restore_cells = restore_cells
+        tail.insert_restore = insert_restore
+
+    def _write_ascii_cluster_run(self, run: str, style: Style) -> None:
+        if not run:
+            return
+        board = self.board
+        cursor = board.cursor
+        if board.modes.insert_mode:
+            if len(run) > 1:
+                remaining = run[:-1]
+                while remaining:
+                    cursor.prepare_for_text_write()
+                    space = board.width - cursor.x
+                    chunk, remaining = remaining[:space], remaining[space:]
+                    self.current_buffer.insert(cursor.x, cursor.y, chunk, style)
+                    cursor.advance_after_text_write(len(chunk))
+            self._write_cluster_glyph(run[-1], 1, style)
+            return
+
+        remaining = run
+        while remaining:
+            cursor.prepare_for_text_write()
+            space = board.width - cursor.x
+            chunk, remaining = remaining[:space], remaining[space:]
+            start_x, y = cursor.x, cursor.y
+            final_chunk = not remaining
+            if final_chunk:
+                x = start_x + len(chunk) - 1
+                if run[-1] in _ASCII_KEYCAP_BASES:
+                    restore_start, restore_cells, _ = self._snapshot_glyph_target(x, y)
+                else:
+                    restore_start, restore_cells = x, ()
+                # If this run's prefix overwrites the head of a wide glyph whose
+                # continuation is the candidate cell, record the post-prefix
+                # state rather than resurrecting that old glyph on relocation.
+                if restore_start < x:
+                    adjusted = list(restore_cells)
+                    for column in range(restore_start, x):
+                        offset = column - start_x
+                        if 0 <= offset < len(chunk) - 1:
+                            adjusted[column - restore_start] = (style, chunk[offset])
+                    adjusted[x - restore_start] = (style, " ")
+                    restore_cells = tuple(adjusted)
+            self.current_buffer.set(start_x, y, chunk, style)
+            cursor.advance_after_text_write(len(chunk))
+
+        self._remember_tail(
+            x,
+            y,
+            run[-1],
+            1,
+            style,
+            restore_start=restore_start,
+            restore_cells=restore_cells,
+        )
+        self.last_printed_char = run[-1]
+
+    def _write_cluster_glyph(self, text: str, width: int, style: Style) -> None:
+        board = self.board
+        if width == 0 or width > board.width:
+            return
+        cursor = board.cursor
+        cursor.prepare_for_text_write()
+        if width > board.width - cursor.x:
+            if board.modes.auto_wrap:
+                cursor.x = board.width
+                cursor.prepare_for_text_write()
+            else:
+                cursor.x = board.width - width
+        x, y = cursor.x, cursor.y
+        restore_start, restore_cells, insert_restore = self._snapshot_glyph_target(x, y)
+        self.current_buffer.write_glyph(
+            x,
+            y,
+            text,
+            width,
+            style,
+            insert=board.modes.insert_mode,
+        )
+        cursor.advance_after_text_write(width)
+        self._remember_tail(
+            x,
+            y,
+            text,
+            width,
+            style,
+            restore_start=restore_start,
+            restore_cells=restore_cells,
+            insert_restore=insert_restore,
+        )
+        self.last_printed_char = text
+
+    def _extend_tail(self, tail: _ClusterTail, complete_text: str) -> None:
+        display_text = complete_text[:_MAX_CLUSTER_CODEPOINTS]
+        overflow = len(complete_text) > _MAX_CLUSTER_CODEPOINTS
+        if tail.overflow:
+            display_text = tail.text
+            overflow = True
+
+        new_width = tail.width_policy.grapheme_width(display_text)
+        if new_width == 0:
+            return
+        board = self.board
+        page = tail.page
+
+        if tail.x + new_width <= board.width:
+            page.resize_glyph(
+                tail.x,
+                tail.y,
+                display_text,
+                tail.width,
+                new_width,
+                tail.style,
+                insert=tail.insert_mode,
+                restore_start=tail.restore_start,
+                restore_cells=tail.restore_cells,
+                insert_restore=tail.insert_restore,
+            )
+            if tail.auto_wrap:
+                board.cursor.x = tail.x + new_width
+            else:
+                board.cursor.x = min(board.width - 1, tail.x + new_width)
+            board.cursor.y = tail.y
+            self._remember_tail(
+                tail.x,
+                tail.y,
+                display_text,
+                new_width,
+                tail.style,
+                overflow=overflow,
+                previous=tail,
+            )
+        else:
+            page.remove_glyph(
+                tail.x,
+                tail.y,
+                tail.width,
+                tail.style,
+                inserted=tail.insert_mode,
+                restore_start=tail.restore_start,
+                restore_cells=tail.restore_cells,
+                insert_restore=tail.insert_restore,
+            )
+            if tail.auto_wrap:
+                board.cursor.x = board.width
+                board.cursor.y = tail.y
+            else:
+                board.cursor.x = board.width - new_width
+                board.cursor.y = tail.y
+            self._write_cluster_glyph(display_text, new_width, tail.style)
+            if self._cluster_tail is not None:
+                self._cluster_tail.overflow = overflow
+                self._cluster_tail.context = complete_text[-_OVERFLOW_CONTEXT:]
+        if self._cluster_tail is not None:
+            self._cluster_tail.context = complete_text[-_OVERFLOW_CONTEXT:]
+        self.last_printed_char = display_text
+
+    def _attach_to_tail(self, text: str) -> str:
+        tail = self._cluster_tail
+        if tail is None or not self._tail_is_valid(tail):
+            self._cluster_tail = None
+            return text
+
+        base = tail.context if tail.overflow else tail.text
+        iterator = iter_graphemes(base + text)
+        first = next(iterator, "")
+        if not first.startswith(base) or len(first) == len(base):
+            return text
+
+        consumed = len(first) - len(base)
+        if tail.overflow:
+            complete = tail.text
+        else:
+            complete = first
+        self._extend_tail(tail, complete)
+        if self._cluster_tail is not None and tail.overflow:
+            self._cluster_tail.context = first[-_OVERFLOW_CONTEXT:]
+        return text[consumed:]
+
+    def _write_new_clusters(self, text: str, style: Style) -> None:
+        iterator = iter_graphemes(text)
+        pending = next(iterator, None)
+        if pending is None:
+            return
+
+        ascii_parts: list[str] = []
+
+        def flush_ascii() -> None:
+            if ascii_parts:
+                self._write_ascii_cluster_run("".join(ascii_parts), style)
+                ascii_parts.clear()
+
+        for cluster in iterator:
+            if pending.isascii() and len(pending) == 1:
+                ascii_parts.append(pending)
+            else:
+                flush_ascii()
+                width = self.board.width_policy.grapheme_width(pending)
+                if width:
+                    display = pending[:_MAX_CLUSTER_CODEPOINTS]
+                    self._write_cluster_glyph(display, self.board.width_policy.grapheme_width(display), style)
+                    if self._cluster_tail is not None and len(pending) > _MAX_CLUSTER_CODEPOINTS:
+                        self._cluster_tail.overflow = True
+                        self._cluster_tail.context = pending[-_OVERFLOW_CONTEXT:]
+            pending = cluster
+
+        if self._is_prepend_cluster(pending):
+            flush_ascii()
+            self._remember_prefix(pending)
+        elif pending.isascii() and len(pending) == 1:
+            ascii_parts.append(pending)
+            flush_ascii()
+        else:
+            flush_ascii()
+            width = self.board.width_policy.grapheme_width(pending)
+            if width:
+                display = pending[:_MAX_CLUSTER_CODEPOINTS]
+                self._write_cluster_glyph(display, self.board.width_policy.grapheme_width(display), style)
+                if self._cluster_tail is not None and len(pending) > _MAX_CLUSTER_CODEPOINTS:
+                    self._cluster_tail.overflow = True
+                    self._cluster_tail.context = pending[-_OVERFLOW_CONTEXT:]
+
+    def _write_clustered_text(self, text: str, style: Style) -> None:
+        if not text:
+            return
+
+        prefix = self._pending_prefix
+        if prefix is None and text.isascii():
+            # ASCII always starts a new cluster (the only forward-joining case,
+            # Prepend, is held separately), so avoid invoking the segmenter.
+            self._write_ascii_cluster_run(text, style)
+            return
+
+        if prefix is not None:
+            self._pending_prefix = None
+            if self._prefix_is_valid(prefix):
+                text = prefix.text + text
+            else:
+                prefix = None
+
+        if prefix is None:
+            text = self._attach_to_tail(text)
+            if not text:
+                return
+
+        if text.isascii():
+            self._write_ascii_cluster_run(text, style)
+        else:
+            self._write_new_clusters(text, style)
+
     def repeat_last_character(self, count: int) -> None:
         """Repeat the last printed character count times."""
         if count > 0 and self.last_printed_char:
@@ -134,6 +581,7 @@ class Blitter(Device):
 
     def resize(self, width: int, height: int) -> None:
         """Resize terminal dimensions and screen buffers."""
+        self.reset_grapheme_state()
         self.board.width = width
         self.board.height = height
 
@@ -146,6 +594,7 @@ class Blitter(Device):
 
     def set_width_policy(self, policy: WidthPolicy) -> None:
         """Use a new policy for future writes on both video pages."""
+        self.reset_grapheme_state()
         self.primary_buffer.width_policy = policy
         self.alt_buffer.width_policy = policy
 
@@ -333,6 +782,7 @@ class Blitter(Device):
 
     def switch_screen(self, alt: bool) -> None:
         """Switch between primary and alternate screen."""
+        self.reset_grapheme_state()
         if alt and not self.in_alt_screen:
             self.current_buffer = self.alt_buffer
             self.in_alt_screen = True
@@ -466,6 +916,7 @@ class Blitter(Device):
 
     def reset(self, hard: bool = True) -> None:
         """Restore the full scroll region; a hard reset also clears both buffers to primary."""
+        self.reset_grapheme_state()
         self.set_scroll_region(0, self.board.height - 1)
         self.reset_left_right_margins()
         if not hard:

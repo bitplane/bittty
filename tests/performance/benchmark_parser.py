@@ -325,10 +325,19 @@ def main():
     run_name = args.run_name or "benchmark"
     timestamp = args.timestamp or datetime.now().isoformat()
 
+    test_cases = []
     for ansi_file in gzipped_files:
-        # Extract test case name (remove .gz only)
-        test_case = ansi_file.stem
+        with gzip.open(ansi_file, "rt", encoding="utf-8") as f:
+            test_cases.append((ansi_file.name, ansi_file.stem, f.read()))
+    test_cases.append(
+        (
+            "graphemes.synthetic",
+            "graphemes",
+            "\x1b[?2027h" + ("ASCII e\u0301 🧑\u200d🌾 🇬🇧 1\ufe0f\u20e3\n" * 2000),
+        )
+    )
 
+    for source_name, test_case, ansi_content in test_cases:
         # Create timestamp for this run (include microseconds to avoid collisions)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
 
@@ -336,11 +345,8 @@ def main():
         run_dir = perf_base_dir / run_name / timestamp
         run_dir.mkdir(parents=True, exist_ok=True)
 
-        with gzip.open(ansi_file, "rt", encoding="utf-8") as f:
-            ansi_content = f.read()
-
         report_lines = [
-            f"Benchmark Report for: {ansi_file.name}",
+            f"Benchmark Report for: {source_name}",
             f"Test Case:            {test_case}",
             f"Run Name:             {run_name}",
             f"Timestamp:            {timestamp}",
@@ -393,7 +399,7 @@ def main():
                 f"""
 import pstats
 stats = pstats.Stats('{profile_path}')
-print('Profile Report for: {ansi_file.name}')
+print('Profile Report for: {source_name}')
 print('Test Case: {test_case}')
 print(f'Run Name: {run_name}')
 print(f'Timestamp: {timestamp}')
@@ -416,7 +422,7 @@ stats.sort_stats('tottime').print_stats(20)
         except Exception as e:
             # Fallback: just create basic profile info
             with open(profile_txt_path, "w", encoding="utf-8") as f:
-                f.write(f"Profile Report for: {ansi_file.name}\n")
+                f.write(f"Profile Report for: {source_name}\n")
                 f.write(f"Test Case: {test_case}\n")
                 f.write(f"Run Name: {run_name}\n")
                 f.write(f"Timestamp: {timestamp}\n")

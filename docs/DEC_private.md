@@ -144,7 +144,7 @@
 | 2006 | xterm | Enable readline newline pasting | X |
 | 2026 | Contour | Synchronized Output | X |
 | 2027 | mintty | Rewrap on resize (deprecated) | X |
-| 2027 | Contour | Grapheme cluster processing | X |
+| 2027 | Contour | Grapheme cluster processing | ✅ |
 | 2028 | Contour | Text reflow | X |
 | 2029 | Contour | Passive Mouse Tracking | X |
 | 2030 | Contour | Report grid cell selection | X |

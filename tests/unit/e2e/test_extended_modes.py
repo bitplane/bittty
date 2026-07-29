@@ -52,16 +52,22 @@ def test_decrqm_reports_extended_modes_on_xterm():
     assert transport.data[-1] == "\x1b[?2031;2$y"  # 2 = reset
 
 
-def test_unimplemented_grapheme_mode_is_not_advertised():
+def test_grapheme_mode_reports_and_changes_its_state():
     board, parser, transport = _term()
     parser.feed("\x1b[?2027$p")  # DECRQM for grapheme clustering
-    assert transport.data[-1] == "\x1b[?2027;0$y"  # 0 = not recognised
+    assert transport.data[-1] == "\x1b[?2027;2$y"  # 2 = recognised and reset
     parser.feed("\x1b[?2027h")
+    assert board.modes.grapheme_clustering is True
+    parser.feed("\x1b[?2027$p")
+    assert transport.data[-1] == "\x1b[?2027;1$y"
+    parser.feed("\x1b[?2027l")
     assert board.modes.grapheme_clustering is False
 
 
 def test_vt220_reports_xterm_era_modes_as_unrecognised():
     _, parser, transport = _term(VT220)
+    parser.feed("\x1b[?2027$p")
+    assert transport.data[-1] == "\x1b[?2027;0$y"
     parser.feed("\x1b[?8840$p")
     assert transport.data[-1] == "\x1b[?8840;0$y"
 

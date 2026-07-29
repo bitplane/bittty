@@ -36,6 +36,13 @@ def test_width_policy_rejects_invalid_ambiguous_width():
         WidthPolicy(ambiguous_width=3)
 
 
+def test_width_policy_measures_complete_graphemes():
+    policy = WidthPolicy()
+    assert policy.grapheme_width("\u0301") == 0
+    assert policy.grapheme_width("e\u0301") == 1
+    assert policy.grapheme_width("🧑\u200d🌾") == 2
+
+
 def test_board_uses_its_configured_ambiguous_width():
     board = Board(width=4, height=1, width_policy=WidthPolicy(ambiguous_width=2))
     board.parser.feed("·")
