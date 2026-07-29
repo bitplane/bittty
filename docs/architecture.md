@@ -36,7 +36,7 @@ caps) and hardware state the child can set (bell pitch, blank timeout, console r
 
 Video memory: a 2D cell grid, each cell a (Style, char) pair, in two pages (primary and
 alternate). The board writes it through the blitter; terminals read it on their own cadence
-(pull) via `capture_pane()` / `get_line()`.
+(pull) via `capture_pane()`, `capture_text()`, or `get_line()`.
 
 ## Terminals (`bittty.terminals`)
 

@@ -241,6 +241,21 @@ class Board:
         page = self.blitter.current_buffer
         return "\n".join(page.get_line(y, width=self.width) for y in range(self.height))
 
+    def capture_text(self, *, trim: bool = True) -> str:
+        """Capture the active screen as plain text.
+
+        By default, trailing spaces are removed from each row and unused rows
+        at the bottom are omitted. Set ``trim=False`` to preserve the screen's
+        exact rectangular dimensions.
+        """
+        page = self.blitter.current_buffer
+        lines = [page.get_line_text(y) for y in range(self.height)]
+        if trim:
+            lines = [line.rstrip(" ") for line in lines]
+            while lines and not lines[-1]:
+                lines.pop()
+        return "\n".join(lines)
+
     def link_at(self, x: int, y: int) -> tuple | None:
         """The hyperlink under a cell: (uri, link_id) or None.
 

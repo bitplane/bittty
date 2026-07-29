@@ -1,7 +1,7 @@
 """Present events: discrete side-effects the board pushes to the attached terminal (chrome).
 
-Screen content stays *pull* (a terminal (chrome) reads capture_pane()/get_line on its own
-cadence). Only these discrete events are *pushed*, through the board's DisplayPort.
+Screen content stays *pull* (a terminal (chrome) reads capture_pane()/capture_text()/get_line
+on its own cadence). Only these discrete events are *pushed*, through the board's DisplayPort.
 Each is a plain frozen dataclass — pure data, no imports from board/devices — so
 board.py can depend on this module without a cycle.
 """
