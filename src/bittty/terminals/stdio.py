@@ -92,6 +92,8 @@ class StdioTerminal(Terminal):
         self.running = True
         self.old_termios = None
         self.host_mouse_mode: str | None = None
+        self.initial_ambiguous_width: int | None = None
+        self.host_ambiguous_width: int | None = None
         self.input_parser = Parser(HostInputSink(self))  # host keystrokes/reports in
         self.dirty = False  # PTY data arrived; the run loop repaints on its tick
         self._seen_page = None  # video page rendered last frame
@@ -122,6 +124,14 @@ class StdioTerminal(Terminal):
     def on_title(self, title: str, icon_title: str) -> None:
         """Mirror the window title onto the outer terminal."""
         print(f"\033]2;{title}\007", end="", flush=True)
+
+    def on_ambiguous_width(self, width: int) -> None:
+        """Mirror the child's ambiguous-width policy onto the outer terminal."""
+        if width == self.host_ambiguous_width:
+            return
+        suffix = "h" if width == 2 else "l"
+        print(f"\033[?8840{suffix}", end="", flush=True)
+        self.host_ambiguous_width = width
 
     def on_mouse_mode(self, mode: str, sgr: bool) -> None:
         """Mirror the child's requested mouse-tracking mode onto the outer terminal."""
@@ -161,6 +171,7 @@ class StdioTerminal(Terminal):
         """Restore the host terminal to its original state."""
         logger.info("Restoring terminal")
         self.disable_host_mouse()
+        self.on_ambiguous_width(self.initial_ambiguous_width or 1)
         if HAS_UNIX_TERMIOS and self.old_termios:
             termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, self.old_termios)
         print("\033[?1004l\033[?25h\033[2J\033[H", end="", flush=True)
@@ -180,6 +191,8 @@ class StdioTerminal(Terminal):
             fd = None
         caps = probe_caps(fd, write, os.environ)
         self.set_caps(caps)
+        self.initial_ambiguous_width = caps.ambiguous_width
+        self.host_ambiguous_width = caps.ambiguous_width
         logger.info("Display caps: %s", caps)
 
     def render_screen(self) -> None:

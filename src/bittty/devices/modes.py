@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
 from ..operations import Operation
-from ..present import CursorVisibilityChanged, MouseModeChanged, SyncOutputChanged
+from ..present import AmbiguousWidthChanged, CursorVisibilityChanged, MouseModeChanged, SyncOutputChanged
 from .base import Device
 
 if TYPE_CHECKING:
@@ -117,6 +117,10 @@ def _mouse_any_status(device: ModeDevice) -> int:
     return 1 if device.mouse_any_tracking else 2
 
 
+def _ambiguous_width(device: ModeDevice, value: bool) -> None:
+    device.board.set_ambiguous_width(2 if value else 1)
+
+
 # The full mode repertoire. A model may omit any of these.
 MODE_SPECS: list[Mode] = [
     # ANSI modes (autowrap and cursor visibility are DEC *private* 7/25, not ANSI)
@@ -168,7 +172,6 @@ MODE_SPECS: list[Mode] = [
     Mode(1046, True, "allow_alt_screen", queryable=True),  # permit 1047/1049 switching
     Mode(2004, True, "bracketed_paste", queryable=True),
     Mode(2026, True, "synchronized_output", queryable=True, peripheral="sync"),
-    Mode(2027, True, "grapheme_clustering", queryable=True),
     Mode(2028, True, "auto_resize_mode", queryable=True),
     Mode(2031, True, "color_scheme_updates", queryable=True),  # report light/dark changes
     # Tail: scrollback/keyboard/clipboard/sixel behaviour flags a terminal (chrome) actuates.
@@ -184,6 +187,14 @@ MODE_SPECS: list[Mode] = [
     Mode(7727, True, "application_escape", queryable=True),
     Mode(7786, True, "mousewheel_to_arrows", queryable=True),
     Mode(8452, True, "sixel_cursor_right", queryable=True),
+    Mode(
+        8840,
+        True,
+        "ambiguous_width_double",
+        queryable=True,
+        apply_fn=_ambiguous_width,
+        peripheral="width",
+    ),
 ]
 
 
@@ -197,6 +208,7 @@ class ModeDevice(Device):
         self._last_mouse_mode: tuple[str, bool] | None = None
         self._last_cursor_visible: bool | None = None
         self._last_sync: bool | None = None
+        self._last_ambiguous_width: int | None = None
         unsupported = board.model.unsupported_modes
         self._modes = {mode.key: mode for mode in MODE_SPECS if mode.key not in unsupported}
         self.handlers = {
@@ -253,7 +265,8 @@ class ModeDevice(Device):
         self.bell_urgency = False
         self.bell_raise = False
         self.allow_alt_screen = True  # alt-screen switching permitted by default
-        self.grapheme_clustering = False
+        self.grapheme_clustering = False  # mode 2027 is not advertised until it is implemented
+        self.ambiguous_width_double = self.board.width_policy.ambiguous_width == 2
         self.color_scheme_updates = False
         self.scroll_on_output = False
         self.scroll_on_keypress = False
@@ -272,13 +285,14 @@ class ModeDevice(Device):
         """Reset modes. hard restores every flag (RIS); soft is the DECSTR subset."""
         if hard:
             self._set_defaults()
+            self.board.restore_width_policy()
         else:
             # DECSTR soft reset — the widely-agreed subset (SGR is reset by the style device).
             self.insert_mode = False
             self.origin_mode = False
             self.cursor_visible = True
         # A reset can turn peripheral state off (e.g. RIS with mouse on); tell the terminal (chrome).
-        for peripheral in ("mouse", "cursor", "sync"):
+        for peripheral in ("mouse", "cursor", "sync", "width"):
             self._emit_peripheral(peripheral)
 
     # --- dispatch --- #
@@ -334,6 +348,13 @@ class ModeDevice(Device):
             if self.synchronized_output != self._last_sync:
                 self._last_sync = self.synchronized_output
                 self.board.present(SyncOutputChanged(self.synchronized_output))
+        elif peripheral == "width":
+            if (True, 8840) not in self._modes:
+                return
+            width = 2 if self.ambiguous_width_double else 1
+            if width != self._last_ambiguous_width:
+                self._last_ambiguous_width = width
+                self.board.present(AmbiguousWidthChanged(width))
 
     def set_ansi_modes(self, params: tuple[int | None, ...], set_mode: bool) -> None:
         for param in params:

@@ -115,6 +115,13 @@ class SyncOutputChanged:
     enabled: bool
 
 
+@dataclass(frozen=True)
+class AmbiguousWidthChanged:
+    """The child selected narrow or wide East Asian Ambiguous characters (mode 8840)."""
+
+    width: int
+
+
 PresentEvent = (
     Bell
     | TitleChanged
@@ -130,4 +137,5 @@ PresentEvent = (
     | MouseModeChanged
     | CursorVisibilityChanged
     | SyncOutputChanged
+    | AmbiguousWidthChanged
 )

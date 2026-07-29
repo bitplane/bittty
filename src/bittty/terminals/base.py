@@ -17,6 +17,7 @@ from typing import TYPE_CHECKING
 
 from ..caps import TerminalCaps
 from ..present import (
+    AmbiguousWidthChanged,
     Bell,
     ClipboardChanged,
     ConsoleRequest,
@@ -82,6 +83,7 @@ class Terminal:
     def on_mouse_mode(self, mode: str, sgr: bool) -> None: ...
     def on_cursor_visible(self, visible: bool) -> None: ...
     def on_sync_output(self, enabled: bool) -> None: ...
+    def on_ambiguous_width(self, width: int) -> None: ...
 
 
 # Event type -> adapter unpacking its fields into the corresponding hook.
@@ -100,4 +102,5 @@ _DISPATCH = {
     MouseModeChanged: lambda d, e: d.on_mouse_mode(e.mode, e.sgr),
     CursorVisibilityChanged: lambda d, e: d.on_cursor_visible(e.visible),
     SyncOutputChanged: lambda d, e: d.on_sync_output(e.enabled),
+    AmbiguousWidthChanged: lambda d, e: d.on_ambiguous_width(e.width),
 }

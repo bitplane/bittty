@@ -14,6 +14,7 @@ _REVERSE_ATTRS = {1: "bold", 4: "underline", 5: "blink", 7: "reverse"}
 
 if TYPE_CHECKING:
     from .board import Board
+    from ..width import WidthPolicy
 
 
 class Blitter(Device):
@@ -142,6 +143,11 @@ class Blitter(Device):
         self.reset_left_right_margins()
 
         self.board.cursor.clamp_to_terminal()
+
+    def set_width_policy(self, policy: WidthPolicy) -> None:
+        """Use a new policy for future writes on both video pages."""
+        self.primary_buffer.width_policy = policy
+        self.alt_buffer.width_policy = policy
 
     def clear_screen(self, mode: int = constants.ERASE_FROM_CURSOR_TO_END) -> None:
         """Clear screen."""

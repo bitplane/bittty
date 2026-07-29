@@ -16,6 +16,10 @@ Cell = tuple[Style, str]
 CONTINUATION = ""
 
 
+class WideHead(str):
+    """A string stored as the head of a width-2 glyph."""
+
+
 def _coerce_style(style_or_ansi) -> Style:
     """Normalise a Style | ANSI-string | None argument to a Style."""
     if isinstance(style_or_ansi, Style):
@@ -105,15 +109,17 @@ class Video:
             char_width = self.width_policy.width(char)
             if available is not None and len(cells) + char_width > available:
                 break
-            cells.append((style, char))
             if char_width == 2:
+                cells.append((style, WideHead(char)))
                 cells.append((style, CONTINUATION))
+            else:
+                cells.append((style, char))
         return cells
 
     @staticmethod
     def _owner_in_row(row: list[Cell], x: int) -> int:
         """Return the head column owning x."""
-        if 0 <= x < len(row) and row[x][1] == CONTINUATION and x > 0:
+        if 0 < x < len(row) and row[x][1] == CONTINUATION and isinstance(row[x - 1][1], WideHead):
             return x - 1
         return x
 
@@ -162,11 +168,7 @@ class Video:
         x = 0
         while x < len(row):
             char = row[x][1]
-            if char == CONTINUATION:
-                row[x] = (style, " ")
-                x += 1
-                continue
-            if len(char) == 1 and self.width_policy.width(char) == 2:
+            if isinstance(char, WideHead):
                 if x + 1 >= len(row) or row[x + 1][1] != CONTINUATION:
                     row[x] = (style, " ")
                     x += 1
@@ -175,8 +177,8 @@ class Video:
                 row[x + 1] = (row[x][0], CONTINUATION)
                 x += 2
                 continue
-            if x + 1 < len(row) and row[x + 1][1] == CONTINUATION:
-                row[x + 1] = (style, " ")
+            if char == CONTINUATION:
+                row[x] = (style, " ")
             x += 1
 
     def replace_cells(self, x: int, y: int, cells: list[Cell], style_or_ansi=None) -> None:

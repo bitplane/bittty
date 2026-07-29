@@ -72,6 +72,7 @@ _XTERM_ERA_MODES = frozenset(
         (True, 7727),
         (True, 7786),
         (True, 8452),
+        (True, 8840),
     }
 )
 

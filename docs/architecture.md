@@ -39,6 +39,9 @@ alternate). A width-2 character has an empty continuation cell. The board writes
 the blitter; terminals read it on their own cadence (pull) via `capture_pane()`,
 `capture_text()`, or `get_line()`.
 
+The terminal frontend reports its measured ambiguous-character width through `TerminalCaps`;
+mode 8840 may override that baseline for future writes.
+
 ## Terminals (`bittty.terminals`)
 
 The chrome. A concrete terminal composes a Board (never subclasses it), plugs into its

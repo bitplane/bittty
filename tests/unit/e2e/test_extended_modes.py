@@ -30,10 +30,8 @@ def test_extended_modes_are_stored():
     board, parser, _ = _term()
     modes = board.modes
     parser.feed("\x1b[?45h")  # reverse wraparound on
-    parser.feed("\x1b[?2027h")  # grapheme clustering on
     parser.feed("\x1b[?1042h")  # bell urgency on
     assert modes.reverse_wraparound is True
-    assert modes.grapheme_clustering is True
     assert modes.bell_urgency is True
     parser.feed("\x1b[?45l")
     assert modes.reverse_wraparound is False
@@ -54,13 +52,26 @@ def test_decrqm_reports_extended_modes_on_xterm():
     assert transport.data[-1] == "\x1b[?2031;2$y"  # 2 = reset
 
 
-def test_vt220_reports_xterm_era_modes_as_unrecognised():
-    board, parser, transport = _term(VT220)
+def test_unimplemented_grapheme_mode_is_not_advertised():
+    board, parser, transport = _term()
     parser.feed("\x1b[?2027$p")  # DECRQM for grapheme clustering
     assert transport.data[-1] == "\x1b[?2027;0$y"  # 0 = not recognised
-    # and setting it on a VT220 is a no-op (mode not in its repertoire)
     parser.feed("\x1b[?2027h")
     assert board.modes.grapheme_clustering is False
+
+
+def test_vt220_reports_xterm_era_modes_as_unrecognised():
+    _, parser, transport = _term(VT220)
+    parser.feed("\x1b[?8840$p")
+    assert transport.data[-1] == "\x1b[?8840;0$y"
+
+
+def test_ambiguous_width_mode_reports_its_state():
+    _, parser, transport = _term()
+    parser.feed("\x1b[?8840h\x1b[?8840$p")
+    assert transport.data[-1] == "\x1b[?8840;1$y"
+    parser.feed("\x1b[?8840l\x1b[?8840$p")
+    assert transport.data[-1] == "\x1b[?8840;2$y"
 
 
 def test_decrqm_now_reports_mouse_and_paste_modes():

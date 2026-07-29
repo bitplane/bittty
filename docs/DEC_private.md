@@ -169,7 +169,7 @@
 | 8200 | Tera Term | TTCTH | X |
 | 8452 | xterm/RLogin | Sixel scrolling leaves cursor to right of graphic | X |
 | 8800 | DRCSTerm | enable/disable character mapping service | X |
-| 8840 | Tanasinn | Treat ambiguous width characters as double-width | X |
+| 8840 | Tanasinn | Treat ambiguous width characters as double-width | ✅ |
 | 9001 | conpty | win32-input-mode | X |
 | 19997 | Kitty | Handle Ctrl-C/Ctrl-Z mode | X |
 | 77096 | mintty | BiDi | X |

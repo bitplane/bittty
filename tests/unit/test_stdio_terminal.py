@@ -49,6 +49,26 @@ def test_on_bell_and_on_title(capsys):
     assert "\033]2;my title\007" in capsys.readouterr().out
 
 
+def test_ambiguous_width_mode_is_mirrored_and_deduplicated(capsys):
+    display = StdioTerminal()
+    display.on_ambiguous_width(2)
+    display.on_ambiguous_width(2)
+    display.on_ambiguous_width(1)
+
+    assert capsys.readouterr().out == "\033[?8840h\033[?8840l"
+    assert display.host_ambiguous_width == 1
+
+
+def test_restore_terminal_restores_initial_ambiguous_width(capsys):
+    display = StdioTerminal()
+    display.initial_ambiguous_width = 2
+    display.host_ambiguous_width = 1
+    display.restore_terminal()
+
+    assert "\033[?8840h" in capsys.readouterr().out
+    assert display.host_ambiguous_width == 2
+
+
 def test_handle_sgr_mouse_sequence_reinjects(monkeypatch):
     display = StdioTerminal()
     calls = []

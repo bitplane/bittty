@@ -3,6 +3,7 @@
 from bittty import Board
 from bittty.parser import Parser
 from bittty.present import (
+    AmbiguousWidthChanged,
     Bell,
     ClipboardChanged,
     ConsoleRequest,
@@ -103,6 +104,13 @@ def test_cursor_and_sync_events():
     assert CursorVisibilityChanged(False) in rec.events
     parser.feed("\x1b[?2026h")  # sync output on
     assert SyncOutputChanged(True) in rec.events
+
+
+def test_ambiguous_width_event_is_edge_triggered():
+    _, parser, rec = _term()
+    parser.feed("\x1b[?8840h\x1b[?8840h\x1b[?8840l")
+    width_events = [event for event in rec.events if isinstance(event, AmbiguousWidthChanged)]
+    assert width_events == [AmbiguousWidthChanged(2), AmbiguousWidthChanged(1)]
 
 
 def test_events_are_dropped_with_no_frontend():

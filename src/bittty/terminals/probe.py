@@ -24,14 +24,19 @@ from ..caps import TerminalCaps
 #   OSC 11 ; rgb:RRRR/GGGG/BBBB   (background colour)
 #   CSI 6 ; height ; width t      (cell size in pixels, reply to CSI 16 t)
 #   CSI 4 ; height ; width t      (window size in pixels, reply to CSI 14 t)
+#   CSI row ; column R             (cursor positions around an ambiguous character)
 #   CSI ? ... c                   (Primary DA — the handshake terminator)
 _BG = re.compile(r"\]11;rgb:([0-9a-fA-F]+)/([0-9a-fA-F]+)/([0-9a-fA-F]+)")
 _CELL = re.compile(r"\[6;(\d+);(\d+)t")
 _WINDOW = re.compile(r"\[4;(\d+);(\d+)t")
+_CPR = re.compile(r"\[(\d+);(\d+)R")
 _DA1 = re.compile(r"\[\?[0-9;]*c")
 
-# The queries we send, ending in a Primary DA request as the terminator.
-PROBE_QUERY = "\033]11;?\007\033[16t\033[14t\033[c"
+# Measure U+00A7 SECTION SIGN (East Asian Width=A) on the already-cleared
+# startup screen, then ask the existing physical queries. Primary DA remains
+# last so its reply terminates the handshake after every preceding response.
+_WIDTH_QUERY = "\0337\033[1;1H\033[6n§\033[6n\033[1;1H\033[2K\0338"
+PROBE_QUERY = _WIDTH_QUERY + "\033]11;?\007\033[16t\033[14t\033[c"
 
 
 def color_depth_from_env(env) -> str:
@@ -62,11 +67,19 @@ def parse_probe_replies(buf: str, env) -> TerminalCaps:
     window_px = None
     if (m := _WINDOW.search(buf)) is not None:
         window_px = (int(m.group(2)), int(m.group(1)))
+    ambiguous_width = None
+    positions = [(int(m.group(1)), int(m.group(2))) for m in _CPR.finditer(buf)]
+    if len(positions) >= 2:
+        (before_row, before_col), (after_row, after_col) = positions[:2]
+        delta = after_col - before_col
+        if before_row == after_row and delta in (1, 2):
+            ambiguous_width = delta
     return TerminalCaps(
         color_depth=color_depth_from_env(env),
         cell_px=cell_px,
         window_px=window_px,
         background=background,
+        ambiguous_width=ambiguous_width,
     )
 
 

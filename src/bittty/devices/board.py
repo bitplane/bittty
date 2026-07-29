@@ -82,7 +82,10 @@ class Board:
 
         self.model = model or DEFAULT
         self.palette_overrides = palette_overrides or {}
-        self.width_policy = width_policy or DEFAULT_WIDTH_POLICY
+        self._width_policy_explicit = width_policy is not None
+        self._width_policy_baseline = width_policy or DEFAULT_WIDTH_POLICY
+        self._width_policy_overridden = False
+        self.width_policy = self._width_policy_baseline
         self.clipboard: dict[str, str] = {}  # OSC 52 selections; terminals sync this
         self.cwd: str = ""  # OSC 7 reported working directory
         self.pointer_shape: str = ""  # OSC 22 mouse-pointer shape
@@ -200,6 +203,29 @@ class Board:
     def set_caps(self, caps: TerminalCaps) -> None:
         """Record what the real terminal can do (a terminal (chrome) pushes this after probing)."""
         self.caps = caps
+        if not self._width_policy_explicit and caps.ambiguous_width is not None:
+            self._width_policy_baseline = WidthPolicy(ambiguous_width=caps.ambiguous_width)
+            if not self._width_policy_overridden:
+                self._install_width_policy(self._width_policy_baseline)
+                self.modes.ambiguous_width_double = caps.ambiguous_width == 2
+
+    def _install_width_policy(self, policy: WidthPolicy) -> None:
+        """Make a policy active for future writes on both video pages."""
+        self.width_policy = policy
+        self.blitter.set_width_policy(policy)
+
+    def set_ambiguous_width(self, width: int, *, mode_override: bool = True) -> None:
+        """Set the active ambiguous width without reinterpreting stored cells."""
+        if mode_override:
+            self._width_policy_overridden = True
+        self._install_width_policy(WidthPolicy(ambiguous_width=width))
+        self.modes.ambiguous_width_double = width == 2
+
+    def restore_width_policy(self) -> None:
+        """Clear a runtime override and restore the constructor/detected baseline."""
+        self._width_policy_overridden = False
+        self._install_width_policy(self._width_policy_baseline)
+        self.modes.ambiguous_width_double = self._width_policy_baseline.ambiguous_width == 2
 
     def set_focus(self, focused: bool) -> None:
         """Record the box's focus state and report it to the child (DECSET 1004)."""

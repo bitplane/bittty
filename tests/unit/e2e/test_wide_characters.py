@@ -2,8 +2,9 @@
 
 import pytest
 
-from bittty import Board, Video, WidthPolicy
+from bittty import Board, TerminalCaps, Video, WidthPolicy
 from bittty.style import Style
+from bittty.video import WideHead
 
 
 def row_chars(board: Board, y: int = 0) -> list[str]:
@@ -15,9 +16,9 @@ def assert_valid_rows(board: Board) -> None:
         for x, (_, char) in enumerate(row):
             if char == "":
                 assert x > 0
-                assert board.width_policy.width(row[x - 1][1]) == 2
+                assert isinstance(row[x - 1][1], WideHead)
                 assert row[x - 1][0] == row[x][0]
-            elif board.width_policy.width(char) == 2:
+            elif isinstance(char, WideHead):
                 assert x + 1 < len(row)
                 assert row[x + 1][1] == ""
 
@@ -41,6 +42,61 @@ def test_board_uses_its_configured_ambiguous_width():
 
     assert row_chars(board) == ["·", "", " ", " "]
     assert board.cursor.x == 2
+
+
+def test_stored_width_survives_policy_changes():
+    board = Board(width=8, height=1, width_policy=WidthPolicy(ambiguous_width=2))
+    board.parser.feed("·")
+    board.set_ambiguous_width(1)
+    board.blitter.current_buffer.normalize_row(0)
+    board.parser.feed("·")
+
+    assert row_chars(board)[:3] == ["·", "", "·"]
+    assert isinstance(row_chars(board)[0], WideHead)
+    assert not isinstance(row_chars(board)[2], WideHead)
+    assert_valid_rows(board)
+
+    board.cursor.x = 0
+    board.blitter.insert_characters(1)
+    assert row_chars(board)[:4] == [" ", "·", "", "·"]
+    assert_valid_rows(board)
+
+
+def test_detected_width_sets_automatic_baseline_but_not_explicit_baseline():
+    automatic = Board(width=4, height=1)
+    automatic.set_caps(TerminalCaps(ambiguous_width=2))
+    automatic.parser.feed("·")
+    assert row_chars(automatic)[:2] == ["·", ""]
+
+    explicit = Board(width=4, height=1, width_policy=WidthPolicy(ambiguous_width=1))
+    explicit.set_caps(TerminalCaps(ambiguous_width=2))
+    explicit.parser.feed("·")
+    assert row_chars(explicit)[:2] == ["·", " "]
+
+
+def test_mode_8840_changes_future_writes_and_ris_restores_baseline():
+    board = Board(width=8, height=1, width_policy=WidthPolicy(ambiguous_width=2))
+    board.parser.feed("\x1b[?8840l·")
+    assert board.width_policy.ambiguous_width == 1
+    assert row_chars(board)[0] == "·"
+
+    board.parser.feed("\x1b[!p")  # DECSTR preserves the runtime width mode
+    assert board.width_policy.ambiguous_width == 1
+
+    board.parser.feed("\x1bc")  # RIS restores the constructor baseline
+    assert board.width_policy.ambiguous_width == 2
+    board.parser.feed("·")
+    assert row_chars(board)[:2] == ["·", ""]
+
+
+def test_caps_update_during_mode_override_only_changes_the_next_reset_baseline():
+    board = Board(width=4, height=1)
+    board.parser.feed("\x1b[?8840h")
+    board.set_caps(TerminalCaps(ambiguous_width=1))
+
+    assert board.width_policy.ambiguous_width == 2
+    board.parser.feed("\x1bc")
+    assert board.width_policy.ambiguous_width == 1
 
 
 def test_wide_character_uses_head_and_continuation_cells():
