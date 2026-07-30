@@ -68,9 +68,7 @@ def _run_demo(input_commands, timeout=2.0):
             output = stdout.read()
             error_output = stderr.read()
             if returncode != 0:
-                pytest.fail(
-                    f"Demo exited with status {returncode}\n\n" f"stdout:\n{output}\n\n" f"stderr:\n{error_output}"
-                )
+                pytest.fail(f"Demo exited with status {returncode}\n\nstdout:\n{output}\n\nstderr:\n{error_output}")
             return output
 
 

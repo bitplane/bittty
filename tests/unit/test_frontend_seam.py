@@ -1,5 +1,7 @@
 """The display seam: DisplayPort forwarding, the Terminal ABC, caps push."""
 
+import pytest
+
 from bittty import Board, TerminalCaps
 from bittty.connections import DisplayPort, HostPort
 from bittty.present import Bell, GraphemeClusteringChanged, MouseCaptureChanged, Notification, TitleChanged
@@ -122,6 +124,7 @@ class QueueConnection:
         return self.chunks.pop(0) if self.chunks else ""
 
 
+@pytest.mark.asyncio
 async def test_host_port_receive_side_pumps_into_the_sink():
     port = HostPort()
     seen = []
@@ -130,6 +133,7 @@ async def test_host_port_receive_side_pumps_into_the_sink():
     assert seen == ["ab", "cd"]
 
 
+@pytest.mark.asyncio
 async def test_host_port_pumps_child_output_through_the_parser_into_video():
     board = Board(width=20, height=3)
     board.host.connect(QueueConnection(["hello"]), board._dispatch_pty_data, on_idle=lambda: True)
@@ -137,6 +141,7 @@ async def test_host_port_pumps_child_output_through_the_parser_into_video():
     assert "hello" in board.capture_pane()
 
 
+@pytest.mark.asyncio
 async def test_host_port_accepts_text_from_a_nominal_raw_reader():
     class TextOnlyConnection(QueueConnection):
         async def read_bytes_async(self, size):

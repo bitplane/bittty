@@ -1,5 +1,6 @@
 import asyncio
 import io
+import pytest
 
 from bittty import Board, MemoryPrinter, PrinterPort, PrinterStatus, StreamPrinter
 
@@ -29,6 +30,7 @@ def test_printer_port_reports_connection_status_and_survives_failure():
     assert port.status is PrinterStatus.NOT_READY
 
 
+@pytest.mark.asyncio
 async def test_duplex_memory_printer_pumps_input_to_the_host():
     board = Board()
 
