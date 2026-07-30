@@ -25,7 +25,7 @@ from ..caps import TerminalCaps
 #   OSC 11 ; rgb:RRRR/GGGG/BBBB   (background colour)
 #   CSI 6 ; height ; width t      (cell size in pixels, reply to CSI 16 t)
 #   CSI 4 ; height ; width t      (window size in pixels, reply to CSI 14 t)
-#   CSI row ; column R             (cursor positions around an ambiguous character)
+#   CSI row ; column R             (cursor positions around measured text)
 #   CSI ? 2027 ; state $ y         (Unicode Core mode state)
 #   CSI ? ... c                   (Primary DA — the handshake terminator)
 _BG = re.compile(r"\]11;rgb:([0-9a-fA-F]+)/([0-9a-fA-F]+)/([0-9a-fA-F]+)")
@@ -35,11 +35,14 @@ _CPR = re.compile(r"\[(\d+);(\d+)R")
 _GRAPHEME_MODE = re.compile(r"\[\?2027;([0-4])\$y")
 _DA1 = re.compile(r"\[\?[0-9;]*c")
 
-# Measure U+00A7 SECTION SIGN (East Asian Width=A) on the already-cleared
-# startup screen, then ask the existing physical queries. Primary DA remains
-# last so its reply terminates the handshake after every preceding response.
+# Measure U+00A7 SECTION SIGN (East Asian Width=A), then a complex ZWJ emoji
+# whose grapheme width is 2 but whose legacy codepoint widths sum to more.
+# Each measurement uses the already-cleared startup screen and cleans up after
+# itself. Primary DA remains last so its reply terminates the handshake.
 _WIDTH_QUERY = "\0337\033[1;1H\033[6n§\033[6n\033[1;1H\033[2K\0338"
-PROBE_QUERY = _WIDTH_QUERY + "\033]11;?\007\033[16t\033[14t\033[?2027$p\033[c"
+_GRAPHEME_SAMPLE = "⛓️‍💥"
+_GRAPHEME_WIDTH_QUERY = f"\0337\033[1;1H\033[6n{_GRAPHEME_SAMPLE}\033[6n\033[1;1H\033[2K\0338"
+PROBE_QUERY = _WIDTH_QUERY + _GRAPHEME_WIDTH_QUERY + "\033]11;?\007\033[16t\033[14t\033[?2027$p\033[c"
 
 
 def color_depth_from_env(env) -> str:
@@ -59,6 +62,16 @@ def _high_byte(hex_channel: str) -> int:
     return int(hex_channel[:2].ljust(2, "0"), 16)
 
 
+def _cursor_delta(positions: list[tuple[int, int]], offset: int) -> int | None:
+    """Measured cursor advance for one before/after CPR pair."""
+    if len(positions) < offset + 2:
+        return None
+    (before_row, before_col), (after_row, after_col) = positions[offset : offset + 2]
+    if before_row != after_row:
+        return None
+    return after_col - before_col
+
+
 def parse_probe_replies(buf: str, env) -> TerminalCaps:
     """Build TerminalCaps from a probe-reply buffer, unioned with env (probe wins)."""
     background = None
@@ -72,11 +85,9 @@ def parse_probe_replies(buf: str, env) -> TerminalCaps:
         window_px = (int(m.group(2)), int(m.group(1)))
     ambiguous_width = None
     positions = [(int(m.group(1)), int(m.group(2))) for m in _CPR.finditer(buf)]
-    if len(positions) >= 2:
-        (before_row, before_col), (after_row, after_col) = positions[:2]
-        delta = after_col - before_col
-        if before_row == after_row and delta in (1, 2):
-            ambiguous_width = delta
+    if (delta := _cursor_delta(positions, 0)) in (1, 2):
+        ambiguous_width = delta
+    grapheme_width = _cursor_delta(positions, 2)
     grapheme_mode = None
     if (m := _GRAPHEME_MODE.search(buf)) is not None:
         grapheme_mode = {
@@ -86,6 +97,10 @@ def parse_probe_replies(buf: str, env) -> TerminalCaps:
             "3": "permanently-set",
             "4": "permanently-reset",
         }[m.group(1)]
+    if grapheme_mode in (None, "unsupported") and grapheme_width == 2:
+        # tmux and similar intermediaries may implement always-on grapheme
+        # clustering without implementing mode 2027 itself.
+        grapheme_mode = "permanently-set"
     return TerminalCaps(
         color_depth=color_depth_from_env(env),
         cell_px=cell_px,

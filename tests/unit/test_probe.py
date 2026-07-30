@@ -84,6 +84,26 @@ def test_grapheme_mode_probe_statuses(status, expected):
     assert parse_probe_replies(f"\x1b[?2027;{status}$y", {}).grapheme_mode == expected
 
 
+def test_grapheme_width_probe_detects_always_on_clustering_without_mode_reply():
+    positions = "\x1b[1;1R\x1b[1;2R\x1b[1;1R\x1b[1;3R"
+    assert parse_probe_replies(positions, {}).grapheme_mode == "permanently-set"
+
+
+def test_grapheme_width_probe_overrides_unrecognised_mode_reply():
+    positions = "\x1b[1;1R\x1b[1;2R\x1b[1;1R\x1b[1;3R"
+    assert parse_probe_replies(positions + "\x1b[?2027;0$y", {}).grapheme_mode == "permanently-set"
+
+
+def test_mutable_grapheme_mode_reply_takes_precedence_over_width_probe():
+    positions = "\x1b[1;1R\x1b[1;2R\x1b[1;1R\x1b[1;3R"
+    assert parse_probe_replies(positions + "\x1b[?2027;2$y", {}).grapheme_mode == "reset"
+
+
+def test_legacy_grapheme_width_does_not_claim_clustering():
+    positions = "\x1b[1;1R\x1b[1;2R\x1b[1;1R\x1b[1;6R"
+    assert parse_probe_replies(positions, {}).grapheme_mode is None
+
+
 @pytest.mark.parametrize(
     ("positions", "expected"),
     [
@@ -98,10 +118,11 @@ def test_ambiguous_width_probe_validation(positions, expected):
     assert parse_probe_replies(positions, {}).ambiguous_width == expected
 
 
-def test_probe_query_measures_and_cleans_up_ambiguous_character():
-    assert PROBE_QUERY.count("\x1b[6n") == 2
+def test_probe_query_measures_and_cleans_up_width_samples():
+    assert PROBE_QUERY.count("\x1b[6n") == 4
     assert "§" in PROBE_QUERY
-    assert "\x1b[2K" in PROBE_QUERY
+    assert "⛓️‍💥" in PROBE_QUERY
+    assert PROBE_QUERY.count("\x1b[2K") == 2
     assert "\x1b[?2027$p" in PROBE_QUERY
     assert PROBE_QUERY.endswith("\x1b[c")
 
