@@ -163,6 +163,9 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
     if final_char == "x" and "*" in intermediates:  # DECSACE - Select Attribute Change Extent
         return Operation("DECSACE", (param(params, 0, 0),), raw_csi_data)
 
+    if final_char == "|" and "$" in intermediates:  # DECSCPP - Select Columns Per Page
+        return Operation("DECSCPP", (param(params, 0, 80),), raw_csi_data)
+
     if "#" in intermediates:  # xterm SGR / colour attribute stacks
         stack_op = {
             "{": "XTPUSHSGR",  # push SGR attributes

@@ -133,6 +133,10 @@ class KeyboardDevice(Device):
         """Convert key + modifier to standard control codes, then send to input()."""
         keymap = self.board.model.keymap
 
+        if char == "delete" and self.board.modes.delete_sends_del:
+            self.input(constants.DEL)
+            return
+
         if char in keymap.cursor_keys:
             self.input(self._csi_key(keymap.cursor_keys[char], modifier))
             return

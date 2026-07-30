@@ -192,6 +192,13 @@ class Board:
         if self.pty is not None:
             self.pty.resize(height, width)
 
+    def set_page_columns(self, columns: int) -> None:
+        """Apply DECSCPP and report the resulting page size to the PTY."""
+        old_width = self.width
+        self.blitter.set_page_columns(columns)
+        if self.width != old_width and self.pty is not None:
+            self.pty.resize(self.height, self.width)
+
     def bell(self) -> None:
         """Ring the terminal bell: pushed to the terminal (chrome) as a present event."""
         self.present(Bell())

@@ -58,6 +58,7 @@ _POST_VT220_OR_NON_DEC_MODES = frozenset(
         (True, 1003),
         (True, 1004),
         (True, 1006),
+        (True, 1037),
         (True, 1047),
         (True, 1048),
         (True, 1049),

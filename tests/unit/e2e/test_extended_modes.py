@@ -51,7 +51,6 @@ def _term(model=None):
         (1011, "scroll_on_keypress"),
         (1034, "eight_bit_input"),
         (1035, "special_modifiers"),
-        (1037, "delete_sends_del"),
         (1040, "keep_selection"),
         (1041, "select_to_clipboard"),
         (1044, "reuse_clipboard"),
@@ -117,6 +116,33 @@ def test_restored_private_modes_report_and_change_real_state(mode, attr):
 
     parser.feed(f"\x1b[?{mode}l")
     assert getattr(board.modes, attr) is False
+
+
+def test_printer_private_modes_report_printer_device_state():
+    board, parser, transport = _term()
+
+    parser.feed("\x1b[?18$p\x1b[?19$p")
+    assert transport.data[-2:] == ["\x1b[?18;2$y", "\x1b[?19;1$y"]
+
+    parser.feed("\x1b[?18h\x1b[?19l\x1b[?18$p\x1b[?19$p")
+    assert board.printer.print_form_feed is True
+    assert board.printer.print_extent is False
+    assert transport.data[-2:] == ["\x1b[?18;1$y", "\x1b[?19;2$y"]
+
+
+def test_delete_key_mode_reports_and_changes_structured_input():
+    board, parser, transport = _term()
+
+    parser.feed("\x1b[?1037$p")
+    assert transport.data[-1] == "\x1b[?1037;2$y"
+
+    parser.feed("\x1b[?1037h")
+    board.input_key("delete")
+    assert transport.data[-1] == "\x7f"
+
+    parser.feed("\x1b[?1037l")
+    board.input_key("delete")
+    assert transport.data[-1] == "\x1b[3~"
 
 
 def test_mode_1046_disables_alt_screen_and_gates_alt_screen_modes():
@@ -196,9 +222,11 @@ def test_destination_caps_cannot_add_grapheme_mode_to_old_model():
 
 def test_vt220_reports_xterm_era_modes_as_unrecognised():
     _, parser, transport = _term(VT220)
+    parser.feed("\x1b[?18$p\x1b[?19$p")
+    assert transport.data[-2:] == ["\x1b[?18;2$y", "\x1b[?19;1$y"]
     parser.feed("\x1b[?42$p")
     assert transport.data[-1] == "\x1b[?42;2$y"
-    for mode in (45, 95, 1045):
+    for mode in (45, 95, 1037, 1045):
         parser.feed(f"\x1b[?{mode}$p")
         assert transport.data[-1] == f"\x1b[?{mode};0$y"
     parser.feed("\x1b[?5$p")

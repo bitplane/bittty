@@ -147,6 +147,22 @@ def _grapheme_clustering(device: ModeDevice, value: bool) -> None:
     device.board.blitter.set_grapheme_clustering(value)
 
 
+def _print_form_feed(device: ModeDevice, value: bool) -> None:
+    device.board.printer.print_form_feed = value
+
+
+def _print_form_feed_status(device: ModeDevice) -> int:
+    return 1 if device.board.printer.print_form_feed else 2
+
+
+def _print_extent(device: ModeDevice, value: bool) -> None:
+    device.board.printer.print_extent = value
+
+
+def _print_extent_status(device: ModeDevice) -> int:
+    return 1 if device.board.printer.print_extent else 2
+
+
 # Implemented mode repertoire. A model may omit any of these.
 MODE_SPECS: list[Mode] = [
     # ANSI modes (autowrap and cursor visibility are DEC *private* 7/25, not ANSI)
@@ -160,6 +176,8 @@ MODE_SPECS: list[Mode] = [
     Mode(7, True, "auto_wrap", queryable=True),
     Mode(9, True, "mouse_tracking", queryable=True, peripheral="mouse"),
     Mode(12, True, "cursor_blinking", queryable=True, peripheral="cursor_blink"),
+    Mode(18, True, apply_fn=_print_form_feed, status_fn=_print_form_feed_status),
+    Mode(19, True, apply_fn=_print_extent, status_fn=_print_extent_status),
     Mode(25, True, "cursor_visible", queryable=True, peripheral="cursor"),
     Mode(42, True, "national_charset_mode", queryable=True),
     Mode(45, True, "reverse_wraparound", queryable=True),
@@ -173,13 +191,14 @@ MODE_SPECS: list[Mode] = [
     Mode(1002, True, apply_fn=_mouse_button_tracking, status_fn=_mouse_button_status, peripheral="mouse"),
     Mode(1003, True, apply_fn=_mouse_any_tracking, status_fn=_mouse_any_status, peripheral="mouse"),
     Mode(1006, True, "mouse_sgr_mode", queryable=True, peripheral="mouse"),
+    Mode(1037, True, "delete_sends_del", queryable=True),
     Mode(1047, True, apply_fn=_alt_screen, status_fn=_alt_screen_status),
     Mode(1048, True, apply_fn=_save_restore_cursor),
     Mode(1049, True, apply_fn=_alt_screen_and_cursor, status_fn=_alt_screen_status),
     # Extended modes with implemented board or frontend behaviour.
     Mode(40, True, "allow_column_mode", queryable=True),  # permit DECCOLM 80<->132
-    Mode(1046, True, "allow_alt_screen", queryable=True, apply_fn=_allow_alt_screen),
     Mode(1045, True, "extended_reverse_wraparound", queryable=True),
+    Mode(1046, True, "allow_alt_screen", queryable=True, apply_fn=_allow_alt_screen),
     Mode(2004, True, "bracketed_paste", queryable=True),
     Mode(2026, True, "synchronized_output", queryable=True, peripheral="sync"),
     Mode(

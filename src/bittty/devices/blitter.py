@@ -81,6 +81,7 @@ class Blitter(Device):
         self._pending_prefix: _PendingPrefix | None = None
         self.handlers = {
             "DECSLRM": self.apply_left_right_margins,
+            "DECSCPP": lambda op: self.board.set_page_columns(op.args[0]),
             "ED": lambda op: self.clear_screen(op.args[0]),
             "EL": lambda op: self.clear_line(op.args[0]),
             "DECSED": lambda op: self.selective_erase_display(op.args[0]),
@@ -617,6 +618,29 @@ class Blitter(Device):
         self.scroll_bottom = height - 1
         self.reset_left_right_margins()
 
+        self.board.cursor.clamp_to_terminal()
+
+    def set_page_columns(self, columns: int) -> None:
+        """DECSCPP — change page width without clearing or resetting regions."""
+        if columns not in (80, 132) or columns == self.board.width:
+            return
+
+        old_width = self.board.width
+        old_left = self.left_margin
+        old_right = self.right_margin
+        full_width_region = old_left == 0 and old_right == old_width - 1
+
+        self.reset_grapheme_state()
+        self.board.width = columns
+        self.primary_buffer.resize(columns, self.board.height)
+        self.alt_buffer.resize(columns, self.board.height)
+
+        if full_width_region:
+            self.left_margin = 0
+            self.right_margin = columns - 1
+        else:
+            self.left_margin = min(old_left, columns - 2)
+            self.right_margin = max(self.left_margin + 1, min(old_right, columns - 1))
         self.board.cursor.clamp_to_terminal()
 
     def set_width_policy(self, policy: WidthPolicy) -> None:

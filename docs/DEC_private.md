@@ -24,8 +24,8 @@
 | 14 | DEC | DECTEM - Transmit Execution Mode | X |
 | 14 | xterm | Enable XOR of blinking cursor control sequence and menu. | X |
 | 16 | DEC | DECEKEM - Edit Key Execution Mode | X |
-| 18 | DEC | DECPFF - Print Form Feed | X |
-| 19 | DEC | DECPEX - Printer Extent | X |
+| 18 | DEC | DECPFF - Print Form Feed | ✅ |
+| 19 | DEC | DECPEX - Printer Extent | ✅ |
 | 20 | DEC | OV1 - Overstrike | X |
 | 21 | DEC | BA1 - Local BASIC | X |
 | 22 | DEC | BA2 - Host BASIC | X |
@@ -118,7 +118,7 @@
 | 1034 | xterm | Interpret "meta" key | X |
 | 1035 | xterm | Enable special modifiers for Alt and NumLock keys | X |
 | 1036 | xterm | Send ESC when Meta modifies a key | X |
-| 1037 | xterm | Send DEL from the editing-keypad Delete key | X |
+| 1037 | xterm | Send DEL from the editing-keypad Delete key | ✅ |
 | 1039 | xterm | Send ESC when Alt modifies a key | X |
 | 1040 | xterm | Keep selection even if not highlighted | X |
 | 1041 | xterm | Use the CLIPBOARD selection | X |

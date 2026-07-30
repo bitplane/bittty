@@ -1,5 +1,7 @@
 """DECIC/DECDC column edits, HPB/VPB position-backward, and CTC/DECST8C tab control."""
 
+from unittest.mock import Mock
+
 from bittty.parser import Parser
 from bittty import Board
 
@@ -74,3 +76,50 @@ def test_decst8c_resets_tabs_every_eight_columns():
     assert cursor.tab_stops == set()
     parser.feed("\x1b[?5W")  # DECST8C — restore tabs every 8 columns
     assert cursor.tab_stops == {8, 16, 24}
+
+
+def test_decscpp_changes_width_without_clearing_or_resetting_regions():
+    board = Board(width=80, height=6)
+    parser = Parser(board)
+    parser.feed("hello")
+    parser.feed("\x1b[2;5r\x1b[?69h\x1b[3;70s\x1b[4;5H")
+
+    parser.feed("\x1b[132$|")
+
+    assert board.width == 132
+    assert board.blitter.current_buffer.get_line_text(0).startswith("hello")
+    assert (board.cursor.x, board.cursor.y) == (4, 3)
+    assert (board.blitter.scroll_top, board.blitter.scroll_bottom) == (1, 4)
+    assert (board.blitter.left_margin, board.blitter.right_margin) == (2, 69)
+
+
+def test_decscpp_expands_a_full_width_region_and_clamps_cursor_when_shrinking():
+    board = Board(width=80, height=3)
+    parser = Parser(board)
+
+    parser.feed("\x1b[132$|")
+    assert board.width == 132
+    assert (board.blitter.left_margin, board.blitter.right_margin) == (0, 131)
+
+    board.cursor.set_position(120, 1)
+    parser.feed("\x1b[$|")  # omitted parameter defaults to 80
+    assert board.width == 80
+    assert (board.cursor.x, board.cursor.y) == (79, 1)
+    assert (board.blitter.left_margin, board.blitter.right_margin) == (0, 79)
+
+
+def test_decscpp_ignores_unsupported_column_counts():
+    board, parser = _term()
+
+    parser.feed("\x1b[100$|")
+
+    assert board.width == 10
+
+
+def test_decscpp_reports_changed_dimensions_to_the_pty():
+    board = Board(width=80, height=3)
+    board.pty = Mock()
+
+    Parser(board).feed("\x1b[132$|")
+
+    board.pty.resize.assert_called_once_with(3, 132)

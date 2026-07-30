@@ -104,6 +104,18 @@ def test_parser_emits_semantic_cursor_state_and_screen_operations(board):
     ]
 
 
+def test_parser_emits_decscpp_with_default_and_explicit_widths(board):
+    sink = CollectingSink()
+    parser = Parser(sink)
+
+    parser.feed("\x1b[132$|\x1b[$|")
+
+    assert sink.operations == [
+        Operation("DECSCPP", (132,), "\x1b[132$|"),
+        Operation("DECSCPP", (80,), "\x1b[$|"),
+    ]
+
+
 def test_parser_emits_style_and_query_operations(board):
     sink = CollectingSink()
     parser = Parser(sink)

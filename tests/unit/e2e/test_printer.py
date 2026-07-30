@@ -56,6 +56,47 @@ def test_dec_print_cursor_line():
     assert paper.getvalue() == "XY\n"
 
 
+def test_decpff_appends_form_feed_to_page_prints_only():
+    board, parser = _term()
+    paper = io.StringIO()
+    board.printer.attach(paper)
+    parser.feed("XY\x1b[?18h\x1b[0i")
+    assert paper.getvalue() == "XY\n\n\n\f"
+
+    paper.seek(0)
+    paper.truncate()
+    parser.feed("\x1b[?1i")  # cursor-line printing is not a page print
+    assert paper.getvalue() == "XY\n"
+
+    paper.seek(0)
+    paper.truncate()
+    parser.feed("\x1b[?18l\x1b[0i")
+    assert paper.getvalue() == "XY\n\n\n"
+
+
+def test_decpex_selects_page_or_scrolling_region_for_ansi_print_page():
+    board, parser = _term(height=4)
+    paper = io.StringIO()
+    board.printer.attach(paper)
+    parser.feed("top\r\none\r\ntwo\r\nbottom")
+    parser.feed("\x1b[2;3r\x1b[?19l\x1b[0i")
+    assert paper.getvalue() == "one\ntwo\n"
+
+    paper.seek(0)
+    paper.truncate()
+    parser.feed("\x1b[?19h\x1b[0i")
+    assert paper.getvalue() == "top\none\ntwo\nbottom\n"
+
+
+def test_dec_composed_screen_print_ignores_decpex():
+    board, parser = _term(height=4)
+    paper = io.StringIO()
+    board.printer.attach(paper)
+    parser.feed("top\r\none\r\ntwo\r\nbottom")
+    parser.feed("\x1b[2;3r\x1b[?19l\x1b[?10i")
+    assert paper.getvalue() == "top\none\ntwo\nbottom\n"
+
+
 def test_a_callable_sink_is_supported():
     board, parser = _term()
     captured = []
@@ -80,4 +121,6 @@ def test_ris_clears_printer_modes_but_keeps_the_sink():
     parser.feed("\x1b[5i")  # controller mode on
     parser.feed("\x1bc")  # RIS
     assert board.printer.controller_mode is False
+    assert board.printer.print_form_feed is False
+    assert board.printer.print_extent is True
     assert board.printer.sink is paper  # config survives a reset

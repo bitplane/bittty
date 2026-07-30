@@ -26,6 +26,8 @@ class PrinterDevice(Device):
         self.sink = None  # a terminal (chrome) attaches a file/StringIO/callable
         self.controller_mode = False  # CSI 5 i: printable output goes to the printer, not the screen
         self.auto_print = False  # CSI ? 5 i: each line prints as the cursor leaves it
+        self.print_form_feed = False  # DECPFF: terminate page prints with FF
+        self.print_extent = True  # DECPEX: ANSI print-page covers the full page
         self.handlers = {
             "MC": self.media_copy,
             "DECMC": self.dec_media_copy,
@@ -46,7 +48,7 @@ class PrinterDevice(Device):
         """MC (CSI Ps i) — ANSI media copy."""
         ps = operation.args[0]
         if ps == 0:  # print the screen
-            self.print_screen()
+            self.print_screen(respect_extent=True)
         elif ps == 5:  # enter printer controller mode
             self.controller_mode = True
         elif ps == 4:  # exit printer controller mode
@@ -64,11 +66,18 @@ class PrinterDevice(Device):
         elif ps in (10, 11):  # print screen / all pages (bittty has one page)
             self.print_screen()
 
-    def print_screen(self) -> None:
-        """Send the whole current screen to the printer, one line per row."""
+    def print_screen(self, *, respect_extent: bool = False) -> None:
+        """Send a page to the printer, optionally applying DECPEX."""
         buffer = self.board.blitter.current_buffer
-        lines = [buffer.get_line_text(y).rstrip() for y in range(self.board.height)]
-        self.emit("\n".join(lines) + "\n")
+        if respect_extent and not self.print_extent:
+            top = self.board.blitter.scroll_top
+            bottom = self.board.blitter.scroll_bottom
+        else:
+            top = 0
+            bottom = self.board.height - 1
+        lines = [buffer.get_line_text(y).rstrip() for y in range(top, bottom + 1)]
+        terminator = "\f" if self.print_form_feed else ""
+        self.emit("\n".join(lines) + "\n" + terminator)
 
     def print_line(self, y: int) -> None:
         """Send a single row to the printer."""
@@ -78,3 +87,5 @@ class PrinterDevice(Device):
         """Leave printer controller/auto-print modes; the attached sink is config, so it stays."""
         self.controller_mode = False
         self.auto_print = False
+        self.print_form_feed = False
+        self.print_extent = True
