@@ -47,11 +47,11 @@ def test_backspace():
     assert board.cursor.x == 9
     assert board.cursor.y == 5
 
-    # Test backspace at beginning of line (should wrap)
+    # Backspace stops at the left margin.
     board.cursor.set_position(0, 5)
     board.cursor.backspace()
-    assert board.cursor.x == 79
-    assert board.cursor.y == 4
+    assert board.cursor.x == 0
+    assert board.cursor.y == 5
 
     # Test backspace at 0,0 (should stay at 0,0)
     board.cursor.set_position(0, 0)
@@ -74,13 +74,13 @@ def test_save_restore_cursor():
     assert board.cursor.y == 5
 
 
-def test_backspace_wrap():
+def test_backspace_stops_at_left_margin():
     board = Board(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
     board.cursor.x = 0
     board.cursor.y = 5
     board.cursor.backspace()
-    assert board.cursor.x == 79
-    assert board.cursor.y == 4
+    assert board.cursor.x == 0
+    assert board.cursor.y == 5
 
 
 def test_cursor_device_owns_position_and_save_restore():

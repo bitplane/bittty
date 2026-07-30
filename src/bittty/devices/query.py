@@ -96,7 +96,7 @@ class QueryDevice(Device):
 
     def report_cursor_position(self, operation: Operation) -> None:
         row = self.board.cursor.y + 1
-        col = self.board.cursor.x + 1
+        col = self.board.cursor.display_x + 1
         self.board.host.write(f"\033[{row};{col}R", flush=True)
 
     def report_device_status(self, operation: Operation) -> None:

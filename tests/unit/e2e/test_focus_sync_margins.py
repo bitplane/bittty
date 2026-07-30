@@ -141,23 +141,23 @@ def test_xtpush_xtpop_colors_restores_palette():
 # --- DECBI / DECFI --- #
 
 
-def test_decfi_moves_right_then_pans_at_right_margin():
+def test_decfi_moves_right_but_stops_at_page_border():
     board, parser, _ = _term()
     board.cursor.set_position(4, 0)
     parser.feed("\x1b9")  # DECFI below the right margin -> just move right
     assert board.cursor.x == 5
     board.blitter.current_buffer.set(0, 0, "ABCDEFGHIJ")
-    board.cursor.set_position(9, 0)  # right margin
-    parser.feed("\x1b9")  # DECFI at right margin -> pan content left, blank at right
-    assert _line(board) == "BCDEFGHIJ"
+    board.cursor.set_position(9, 0)
+    parser.feed("\x1b9")  # the physical page border takes precedence over the margin
+    assert _line(board) == "ABCDEFGHIJ"
 
 
-def test_decbi_moves_left_then_pans_at_left_margin():
+def test_decbi_moves_left_but_stops_at_page_border():
     board, parser, _ = _term()
     board.cursor.set_position(3, 0)
     parser.feed("\x1b6")  # DECBI: not at left margin -> move left
     assert board.cursor.x == 2
     board.blitter.current_buffer.set(0, 0, "ABCDEFGHIJ")
     board.cursor.set_position(0, 0)
-    parser.feed("\x1b6")  # DECBI at left margin -> pan right, blank at left
-    assert _line(board) == " ABCDEFGHI"
+    parser.feed("\x1b6")  # the physical page border takes precedence over the margin
+    assert _line(board) == "ABCDEFGHIJ"

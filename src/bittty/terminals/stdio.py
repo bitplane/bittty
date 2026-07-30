@@ -239,7 +239,7 @@ class StdioTerminal(Terminal):
         print(f"\033[{self.height + 1}H\033[7m{status:<{self.width}}\033[0m", end="")
         board = self.board
         if board.modes.cursor_visible and board.cursor.y < self.height:
-            print(f"\033[{board.cursor.y + 1};{board.cursor.x + 1}H\033[?25h", end="", flush=True)
+            print(f"\033[{board.cursor.y + 1};{board.cursor.display_x + 1}H\033[?25h", end="", flush=True)
         else:
             print("", end="", flush=True)
 

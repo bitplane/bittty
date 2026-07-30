@@ -22,6 +22,10 @@ class CursorDevice(Device):
         self.saved_ansi_code = ""
         self.shape = "block"  # block | underline | bar (DECSCUSR)
         self.tab_stops = set(range(8, board.width, 8))
+        self._wrap_pending = False
+        self._wrap_left = 0
+        self._wrap_right = board.width
+        self._wrap_y = 0
         self.handlers = {
             "CUP": lambda op: self.move_to(*op.args),
             "HVP": lambda op: self.move_to(*op.args),
@@ -52,6 +56,7 @@ class CursorDevice(Device):
 
     def set_position(self, x: int | None, y: int | None) -> None:
         """Move cursor to an absolute, clamped terminal position."""
+        self.cancel_pending_wrap()
         if x is not None:
             self.x = max(0, min(x, self.board.width - 1))
         if y is not None:
@@ -63,6 +68,7 @@ class CursorDevice(Device):
         Under origin mode the row is relative to the scroll region's top and the
         column to the left margin, each clamped within its margins.
         """
+        self.cancel_pending_wrap()
         if self.board.modes.origin_mode:
             screen = self.board.blitter
             if y is not None:
@@ -78,20 +84,61 @@ class CursorDevice(Device):
         self.tab_stops = {stop for stop in self.tab_stops if stop < self.board.width}
 
     def move_up(self, count: int) -> None:
-        self.y = max(0, self.y - count)
+        self.cancel_pending_wrap()
+        top = self.board.blitter.scroll_top if self.board.modes.origin_mode else 0
+        self.y = max(top, self.y - count)
 
     def move_down(self, count: int) -> None:
-        self.y = min(self.board.height - 1, self.y + count)
+        self.cancel_pending_wrap()
+        bottom = self.board.blitter.scroll_bottom if self.board.modes.origin_mode else self.board.height - 1
+        self.y = min(bottom, self.y + count)
 
     def move_forward(self, count: int) -> None:
-        self.x = min(self.board.width - 1, self.x + count)
+        self.cancel_pending_wrap()
+        right = self.board.blitter.right_margin if self.board.modes.origin_mode else self.board.width - 1
+        self.x = min(right, self.x + count)
 
     def move_back(self, count: int) -> None:
-        self.x = max(0, self.x - count)
+        self.cancel_pending_wrap()
+        left = self.board.blitter.left_margin if self.board.modes.origin_mode else 0
+        self.x = max(left, self.x - count)
 
     def carriage_return(self) -> None:
         """Move cursor to the beginning of the current line."""
-        self.x = 0
+        self.cancel_pending_wrap()
+        self.x = self.board.blitter.left_margin
+
+    def cancel_pending_wrap(self) -> None:
+        """Clear delayed wrap without changing the physical cursor column."""
+        if self._pending_wrap_is_valid():
+            self.x = self._wrap_right - 1
+        self._wrap_pending = False
+
+    def mark_pending_wrap(self, bounds: tuple[int, int]) -> None:
+        """Record delayed wrap after filling the active right margin."""
+        self._wrap_pending = True
+        self._wrap_left, self._wrap_right = bounds
+        self._wrap_y = self.y
+
+    def _pending_wrap_is_valid(self) -> bool:
+        return self._wrap_pending and self.x == self._wrap_right and self.y == self._wrap_y
+
+    @property
+    def display_x(self) -> int:
+        """Physical cursor column, hiding the internal delayed-wrap sentinel."""
+        if self._pending_wrap_is_valid():
+            return self._wrap_right - 1
+        return min(self.x, self.board.width - 1)
+
+    def write_bounds(self) -> tuple[int, int]:
+        """Return the active printable column interval as ``[left, right)``."""
+        if self._pending_wrap_is_valid():
+            return self._wrap_left, self._wrap_right
+        self._wrap_pending = False
+        screen = self.board.blitter
+        if screen.scroll_top <= self.y <= screen.scroll_bottom and screen.left_margin <= self.x <= screen.right_margin:
+            return screen.left_margin, screen.right_margin + 1
+        return 0, self.board.width
 
     def _within_horizontal_margins(self) -> bool:
         """Whether the cursor belongs to the active column range.
@@ -100,16 +147,16 @@ class CursorDevice(Device):
         column, so it still belongs to a margin ending at that column.
         """
         screen = self.board.blitter
-        return screen.left_margin <= self.x <= screen.right_margin or (
-            self.x == self.board.width and screen.right_margin == self.board.width - 1
-        )
+        return screen.left_margin <= self.x <= screen.right_margin or self._pending_wrap_is_valid()
 
     def line_feed(self, is_wrapped: bool = False) -> None:
         """Move down one line, scrolling the active scroll region if needed."""
         if self.board.printer.auto_print:  # MC auto-print: paper gets the line as we leave it
             self.board.printer.print_line(self.y)
         screen = self.board.blitter
-        if self.y == screen.scroll_bottom and self._within_horizontal_margins():
+        within_columns = self._within_horizontal_margins()
+        self.cancel_pending_wrap()
+        if self.y == screen.scroll_bottom and within_columns:
             screen.scroll(1)
         elif self.y < self.board.height - 1:
             # Below the bottom margin the cursor still advances (bounded by the
@@ -121,33 +168,38 @@ class CursorDevice(Device):
 
     def forward_index(self) -> None:
         """DECFI — move right; at the right margin, pan the margin box one column left."""
-        if self.x >= self.board.blitter.right_margin:
-            self.board.blitter.pan(1)
-        else:
+        self.cancel_pending_wrap()
+        right = self.board.blitter.right_margin
+        if self.x == right and right < self.board.width - 1:
+            self.board.blitter.pan(1, full_page=True)
+        elif self.x < self.board.width - 1:
             self.x += 1
 
     def back_index(self) -> None:
         """DECBI — move left; at the left margin, pan the margin box one column right."""
-        if self.x <= self.board.blitter.left_margin:
-            self.board.blitter.pan(-1)
-        else:
+        self.cancel_pending_wrap()
+        left = self.board.blitter.left_margin
+        if self.x == left and left > 0:
+            self.board.blitter.pan(-1, full_page=True)
+        elif self.x > 0:
             self.x -= 1
 
     def reverse_index(self) -> None:
         """Move up one line, scrolling down at the top of the scroll region."""
         screen = self.board.blitter
-        if self.y == screen.scroll_top and self._within_horizontal_margins():
+        within_columns = self._within_horizontal_margins()
+        self.cancel_pending_wrap()
+        if self.y == screen.scroll_top and within_columns:
             screen.scroll(-1)
         elif self.y > 0:
             self.y -= 1
 
     def backspace(self) -> None:
-        """Move cursor back one position, wrapping to the previous line if needed."""
-        if self.x > 0:
+        """Move cursor back one position, stopping at the active left margin."""
+        self.cancel_pending_wrap()
+        left = self.board.blitter.left_margin if self.x >= self.board.blitter.left_margin else 0
+        if self.x > left:
             self.x -= 1
-        elif self.y > 0:
-            self.y -= 1
-            self.x = self.board.width - 1
 
     def set_tab_stop(self, x: int | None = None) -> None:
         """Set a horizontal tab stop at the given column."""
@@ -157,14 +209,17 @@ class CursorDevice(Device):
             self.tab_stops.add(x)
 
     def next_tab_stop(self) -> int:
-        """Return the next horizontal tab stop, clamped to the last column."""
+        """Return the next horizontal tab stop, clamped to the active boundary."""
+        screen = self.board.blitter
+        right = screen.right_margin if screen.left_margin <= self.x <= screen.right_margin else self.board.width - 1
         for stop in sorted(self.tab_stops):
             if stop > self.x:
-                return min(stop, self.board.width - 1)
-        return self.board.width - 1
+                return min(stop, right)
+        return right
 
     def horizontal_tab(self) -> None:
         """Advance to the next horizontal tab stop."""
+        self.cancel_pending_wrap()
         self.x = self.next_tab_stop()
 
     def previous_tab_stop(self) -> int:
@@ -181,8 +236,11 @@ class CursorDevice(Device):
 
     def backward_tab(self, count: int) -> None:
         """CBT — retreat `count` tab stops."""
+        self.cancel_pending_wrap()
+        screen = self.board.blitter
+        left = screen.left_margin if screen.left_margin <= self.x <= screen.right_margin else 0
         for _ in range(count):
-            self.x = self.previous_tab_stop()
+            self.x = max(left, self.previous_tab_stop())
 
     def clear_tab_stop(self, mode: int) -> None:
         """TBC — clear the tab stop at the cursor (0) or all tab stops (3)."""
@@ -220,33 +278,52 @@ class CursorDevice(Device):
         self.shape = shapes.get(style, "block")
         self.board.modes.cursor_blinking = style in (0, 1, 3, 5)
 
-    def prepare_for_text_write(self) -> None:
-        """Apply wrapping or clipping before writing at the cursor."""
-        if self.x < self.board.width:
-            return
+    def prepare_for_text_write(self) -> tuple[int, int]:
+        """Apply delayed wrapping or clipping and return active ``[left, right)`` bounds."""
+        screen = self.board.blitter
+        if (
+            not self._wrap_pending
+            and screen.left_margin == 0
+            and screen.right_margin == self.board.width - 1
+            and self.x < self.board.width
+        ):
+            # Ordinary full-width output stays on the shortest path.
+            return 0, self.board.width
+        left, right = self.write_bounds()
+        pending = self._pending_wrap_is_valid()
+        if not pending and self.x < right:
+            return left, right
         if self.board.modes.auto_wrap:
             self.line_feed(is_wrapped=True)
-            self.carriage_return()
+            self.x = left
         else:
-            self.x = self.board.width - 1
+            self.cancel_pending_wrap()
+            self.x = right - 1
+        return left, right
 
-    def advance_after_text_write(self, character_count: int) -> None:
+    def advance_after_text_write(self, character_count: int, bounds: tuple[int, int] | None = None) -> None:
         """Advance by terminal columns after printable text."""
         if character_count <= 0:
             return
+        left, right = bounds if bounds is not None else (0, self.board.width)
         if self.board.modes.auto_wrap:
             self.x += character_count
+            if self.x >= right:
+                self.mark_pending_wrap((left, right))
         else:
-            self.x = min(self.board.width - 1, self.x + character_count)
+            self.cancel_pending_wrap()
+            self.x = min(right - 1, self.x + character_count)
 
     def save(self) -> None:
         """Save cursor position and attributes."""
+        self.cancel_pending_wrap()
         self.saved_x = self.x
         self.saved_y = self.y
         self.saved_ansi_code = self.board.style.current_ansi_code
 
     def restore(self) -> None:
         """Restore cursor position and attributes."""
+        self.cancel_pending_wrap()
         self.x = self.saved_x
         self.y = self.saved_y
         self.board.style.current_ansi_code = self.saved_ansi_code

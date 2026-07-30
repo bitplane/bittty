@@ -277,11 +277,13 @@ class Video:
         style_or_ansi=None,
         *,
         insert: bool = False,
+        right: int | None = None,
     ) -> None:
         """Write one already-segmented glyph as an atomic one/two-cell unit."""
+        limit = self.width if right is None else min(right, self.width)
         if not (0 <= y < self.height and 0 <= x < self.width) or not text or cell_width not in (1, 2):
             return
-        if x + cell_width > self.width:
+        if x + cell_width > limit:
             return
 
         style = _coerce_style(style_or_ansi)
@@ -295,7 +297,7 @@ class Video:
         if insert:
             if row[x][1] == CONTINUATION:
                 self._clear_glyph(row, x, style)
-            self.grid[y] = (row[:x] + cells + row[x:])[: self.width]
+            row[x:limit] = (cells + row[x:limit])[: limit - x]
             self.normalize_row(y, style)
         else:
             right = x + cell_width
@@ -313,18 +315,20 @@ class Video:
         style: Style,
         *,
         insert: bool = False,
+        right: int | None = None,
         restore_start: int = 0,
         restore_cells: tuple[Cell, ...] = (),
         insert_restore: tuple[Cell, ...] = (),
     ) -> None:
         """Replace the last glyph and adjust its occupied columns atomically."""
+        limit = self.width if right is None else min(right, self.width)
         if (
             not (0 <= y < self.height and 0 <= x < self.width)
             or not text
             or old_width not in (1, 2)
             or new_width not in (1, 2)
-            or x + old_width > self.width
-            or x + new_width > self.width
+            or x + old_width > limit
+            or x + new_width > limit
         ):
             return
 
@@ -337,17 +341,18 @@ class Video:
             return
 
         if insert:
-            del row[x : x + old_width]
-            row.extend(insert_restore[-old_width:])
-            row.extend([self._empty_cell] * (self.width - len(row)))
-            del row[self.width :]
+            segment = row[x:limit]
+            del segment[:old_width]
+            segment.extend(insert_restore[-old_width:])
+            segment.extend([self._empty_cell] * (limit - x - len(segment)))
+            row[x:limit] = segment[: limit - x]
             self.normalize_row(y, style)
         elif restore_cells:
             row[restore_start : restore_start + len(restore_cells)] = restore_cells
             self.normalize_row(y, style)
         else:
             self._erase_range(row, x, x + old_width, style)
-        self.write_glyph(x, y, text, new_width, style, insert=insert)
+        self.write_glyph(x, y, text, new_width, style, insert=insert, right=limit)
 
     def remove_glyph(
         self,
@@ -357,6 +362,7 @@ class Video:
         style: Style,
         *,
         inserted: bool = False,
+        right: int | None = None,
         restore_start: int = 0,
         restore_cells: tuple[Cell, ...] = (),
         insert_restore: tuple[Cell, ...] = (),
@@ -364,13 +370,14 @@ class Video:
         """Remove a speculative glyph before relocating a changed-width cluster."""
         if not (0 <= y < self.height and 0 <= x < self.width) or cell_width not in (1, 2):
             return
+        limit = self.width if right is None else min(right, self.width)
         row = self.grid[y]
         if inserted:
-            del row[x : min(x + cell_width, self.width)]
-            restored = list(insert_restore[-cell_width:])
-            row.extend(restored)
-            row.extend([self._empty_cell] * (self.width - len(row)))
-            del row[self.width :]
+            segment = row[x:limit]
+            del segment[:cell_width]
+            segment.extend(insert_restore[-cell_width:])
+            segment.extend([self._empty_cell] * (limit - x - len(segment)))
+            row[x:limit] = segment[: limit - x]
             self.normalize_row(y, style)
         elif restore_cells:
             row[restore_start : restore_start + len(restore_cells)] = restore_cells
@@ -378,21 +385,22 @@ class Video:
             self._erase_range(row, x, x + cell_width, style)
         self._touch_row(y)
 
-    def insert(self, x: int, y: int, text: str, style_or_ansi=None) -> None:
+    def insert(self, x: int, y: int, text: str, style_or_ansi=None, *, right: int | None = None) -> None:
         """Insert text at position, shifting existing content right."""
-        if not (0 <= y < self.height) or x >= self.width:
+        limit = self.width if right is None else min(right, self.width)
+        if not (0 <= y < self.height) or x >= limit:
             return
 
         if x < 0 or not text:
             return
         style = _coerce_style(style_or_ansi)
         row = self.grid[y]
-        new_cells = self._text_cells(text, style, self.width - x)
+        new_cells = self._text_cells(text, style, limit - x)
         if not new_cells:
             return
         if row[x][1] == CONTINUATION:
             self._clear_glyph(row, x, style)
-        self.grid[y] = (row[:x] + new_cells + row[x:])[: self.width]
+        row[x:limit] = (new_cells + row[x:limit])[: limit - x]
         self.normalize_row(y, style)
         self._touch_row(y)
 

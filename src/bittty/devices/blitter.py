@@ -39,6 +39,8 @@ class _ClusterTail:
     width_policy: WidthPolicy
     board_width: int
     board_height: int
+    write_left: int
+    write_right: int
     overflow: bool = False
     context: str = ""
     restore_start: int = 0
@@ -114,6 +116,8 @@ class Blitter(Device):
 
     def set_line_attribute(self, attribute: str) -> None:
         """DECDHL/DECDWL/DECSWL — set the cursor line's width/height attribute."""
+        if self.board.modes.left_right_margin_mode:
+            return
         self.current_buffer.set_line_attribute(self.board.cursor.y, attribute)
 
     def write_text(self, text: str, ansi_code: str = "") -> None:
@@ -127,17 +131,19 @@ class Blitter(Device):
         code_to_use = ansi_code if ansi_code else board.style.current
         translated_text = board.charset.translate(text)
         cursor = board.cursor
-        write = self.current_buffer.insert if board.modes.insert_mode else self.current_buffer.set
         width = board.width
 
         def write_ascii_run(run: str) -> None:
             remaining = run
             while remaining:
-                cursor.prepare_for_text_write()
-                space = width - cursor.x
+                bounds = cursor.prepare_for_text_write()
+                space = bounds[1] - cursor.x
                 chunk, remaining = remaining[:space], remaining[space:]
-                write(cursor.x, cursor.y, chunk, code_to_use)
-                cursor.advance_after_text_write(len(chunk))
+                if board.modes.insert_mode:
+                    self.current_buffer.insert(cursor.x, cursor.y, chunk, code_to_use, right=bounds[1])
+                else:
+                    self.current_buffer.set(cursor.x, cursor.y, chunk, code_to_use)
+                cursor.advance_after_text_write(len(chunk), bounds)
 
         if translated_text.isascii():
             write_ascii_run(translated_text)
@@ -154,16 +160,20 @@ class Blitter(Device):
                     start = index + 1
                     continue
 
-                cursor.prepare_for_text_write()
-                if char_width > width - cursor.x:
+                bounds = cursor.prepare_for_text_write()
+                if char_width > bounds[1] - cursor.x:
                     if board.modes.auto_wrap:
-                        cursor.x = width
-                        cursor.prepare_for_text_write()
+                        cursor.x = bounds[1]
+                        cursor.mark_pending_wrap(bounds)
+                        bounds = cursor.prepare_for_text_write()
                     else:
-                        cursor.x = width - char_width
+                        cursor.x = bounds[1] - char_width
 
-                write(cursor.x, cursor.y, char, code_to_use)
-                cursor.advance_after_text_write(char_width)
+                if board.modes.insert_mode:
+                    self.current_buffer.insert(cursor.x, cursor.y, char, code_to_use, right=bounds[1])
+                else:
+                    self.current_buffer.set(cursor.x, cursor.y, char, code_to_use)
+                cursor.advance_after_text_write(char_width, bounds)
                 start = index + 1
 
             if start < len(translated_text):
@@ -250,15 +260,15 @@ class Blitter(Device):
             board_height=board.height,
         )
 
-    def _snapshot_glyph_target(self, x: int, y: int) -> tuple[int, tuple[Cell, ...], tuple[Cell, ...]]:
+    def _snapshot_glyph_target(self, x: int, y: int, right: int) -> tuple[int, tuple[Cell, ...], tuple[Cell, ...]]:
         page = self.current_buffer
         row = page.grid[y]
         if self.board.modes.insert_mode:
-            return x, (), tuple(row[-2:])
+            return x, (), tuple(row[max(x, right - 2) : right])
 
         start = page.owner_x(x, y)
-        end = min(page.width, x + 2)
-        if end < page.width and row[end][1] == "":
+        end = min(right, x + 2)
+        if end < right and row[end][1] == "":
             end += 1
         return start, tuple(row[start:end]), ()
 
@@ -269,6 +279,7 @@ class Blitter(Device):
         text: str,
         width: int,
         style: Style,
+        bounds: tuple[int, int],
         *,
         overflow=False,
         previous: _ClusterTail | None = None,
@@ -298,6 +309,8 @@ class Blitter(Device):
                 width_policy=board.width_policy,
                 board_width=board.width,
                 board_height=board.height,
+                write_left=bounds[0],
+                write_right=bounds[1],
                 overflow=overflow,
                 context=text[-_OVERFLOW_CONTEXT:],
                 restore_start=restore_start,
@@ -320,6 +333,8 @@ class Blitter(Device):
         tail.width_policy = board.width_policy
         tail.board_width = board.width
         tail.board_height = board.height
+        tail.write_left = bounds[0]
+        tail.write_right = bounds[1]
         tail.overflow = overflow
         tail.context = text[-_OVERFLOW_CONTEXT:]
         tail.restore_start = restore_start
@@ -335,25 +350,25 @@ class Blitter(Device):
             if len(run) > 1:
                 remaining = run[:-1]
                 while remaining:
-                    cursor.prepare_for_text_write()
-                    space = board.width - cursor.x
+                    bounds = cursor.prepare_for_text_write()
+                    space = bounds[1] - cursor.x
                     chunk, remaining = remaining[:space], remaining[space:]
-                    self.current_buffer.insert(cursor.x, cursor.y, chunk, style)
-                    cursor.advance_after_text_write(len(chunk))
+                    self.current_buffer.insert(cursor.x, cursor.y, chunk, style, right=bounds[1])
+                    cursor.advance_after_text_write(len(chunk), bounds)
             self._write_cluster_glyph(run[-1], 1, style)
             return
 
         remaining = run
         while remaining:
-            cursor.prepare_for_text_write()
-            space = board.width - cursor.x
+            bounds = cursor.prepare_for_text_write()
+            space = bounds[1] - cursor.x
             chunk, remaining = remaining[:space], remaining[space:]
             start_x, y = cursor.x, cursor.y
             final_chunk = not remaining
             if final_chunk:
                 x = start_x + len(chunk) - 1
                 if run[-1] in _ASCII_KEYCAP_BASES:
-                    restore_start, restore_cells, _ = self._snapshot_glyph_target(x, y)
+                    restore_start, restore_cells, _ = self._snapshot_glyph_target(x, y, bounds[1])
                 else:
                     restore_start, restore_cells = x, ()
                 # If this run's prefix overwrites the head of a wide glyph whose
@@ -368,7 +383,7 @@ class Blitter(Device):
                     adjusted[x - restore_start] = (style, " ")
                     restore_cells = tuple(adjusted)
             self.current_buffer.set(start_x, y, chunk, style)
-            cursor.advance_after_text_write(len(chunk))
+            cursor.advance_after_text_write(len(chunk), bounds)
 
         self._remember_tail(
             x,
@@ -376,6 +391,7 @@ class Blitter(Device):
             run[-1],
             1,
             style,
+            bounds,
             restore_start=restore_start,
             restore_cells=restore_cells,
         )
@@ -386,15 +402,16 @@ class Blitter(Device):
         if width == 0 or width > board.width:
             return
         cursor = board.cursor
-        cursor.prepare_for_text_write()
-        if width > board.width - cursor.x:
+        bounds = cursor.prepare_for_text_write()
+        if width > bounds[1] - cursor.x:
             if board.modes.auto_wrap:
-                cursor.x = board.width
-                cursor.prepare_for_text_write()
+                cursor.x = bounds[1]
+                cursor.mark_pending_wrap(bounds)
+                bounds = cursor.prepare_for_text_write()
             else:
-                cursor.x = board.width - width
+                cursor.x = bounds[1] - width
         x, y = cursor.x, cursor.y
-        restore_start, restore_cells, insert_restore = self._snapshot_glyph_target(x, y)
+        restore_start, restore_cells, insert_restore = self._snapshot_glyph_target(x, y, bounds[1])
         self.current_buffer.write_glyph(
             x,
             y,
@@ -402,14 +419,16 @@ class Blitter(Device):
             width,
             style,
             insert=board.modes.insert_mode,
+            right=bounds[1],
         )
-        cursor.advance_after_text_write(width)
+        cursor.advance_after_text_write(width, bounds)
         self._remember_tail(
             x,
             y,
             text,
             width,
             style,
+            bounds,
             restore_start=restore_start,
             restore_cells=restore_cells,
             insert_restore=insert_restore,
@@ -429,7 +448,7 @@ class Blitter(Device):
         board = self.board
         page = tail.page
 
-        if tail.x + new_width <= board.width:
+        if tail.x + new_width <= tail.write_right:
             page.resize_glyph(
                 tail.x,
                 tail.y,
@@ -438,14 +457,19 @@ class Blitter(Device):
                 new_width,
                 tail.style,
                 insert=tail.insert_mode,
+                right=tail.write_right,
                 restore_start=tail.restore_start,
                 restore_cells=tail.restore_cells,
                 insert_restore=tail.insert_restore,
             )
             if tail.auto_wrap:
                 board.cursor.x = tail.x + new_width
+                if board.cursor.x == tail.write_right:
+                    board.cursor.mark_pending_wrap((tail.write_left, tail.write_right))
+                else:
+                    board.cursor.cancel_pending_wrap()
             else:
-                board.cursor.x = min(board.width - 1, tail.x + new_width)
+                board.cursor.x = min(tail.write_right - 1, tail.x + new_width)
             board.cursor.y = tail.y
             self._remember_tail(
                 tail.x,
@@ -453,6 +477,7 @@ class Blitter(Device):
                 display_text,
                 new_width,
                 tail.style,
+                (tail.write_left, tail.write_right),
                 overflow=overflow,
                 previous=tail,
             )
@@ -463,15 +488,17 @@ class Blitter(Device):
                 tail.width,
                 tail.style,
                 inserted=tail.insert_mode,
+                right=tail.write_right,
                 restore_start=tail.restore_start,
                 restore_cells=tail.restore_cells,
                 insert_restore=tail.insert_restore,
             )
             if tail.auto_wrap:
-                board.cursor.x = board.width
+                board.cursor.x = tail.write_right
                 board.cursor.y = tail.y
+                board.cursor.mark_pending_wrap((tail.write_left, tail.write_right))
             else:
-                board.cursor.x = board.width - new_width
+                board.cursor.x = tail.write_right - new_width
                 board.cursor.y = tail.y
             self._write_cluster_glyph(display_text, new_width, tail.style)
             if self._cluster_tail is not None:
@@ -600,6 +627,7 @@ class Blitter(Device):
 
     def clear_screen(self, mode: int = constants.ERASE_FROM_CURSOR_TO_END) -> None:
         """Clear screen."""
+        self.board.cursor.cancel_pending_wrap()
         bg_ansi = self.board.style.background_ansi()
 
         if mode == constants.ERASE_FROM_CURSOR_TO_END:
@@ -621,6 +649,7 @@ class Blitter(Device):
 
     def clear_line(self, mode: int = constants.ERASE_FROM_CURSOR_TO_END) -> None:
         """Clear line."""
+        self.board.cursor.cancel_pending_wrap()
         bg_ansi = self.board.style.background_ansi()
         self.current_buffer.clear_line(self.board.cursor.y, mode, self.board.cursor.x, bg_ansi)
 
@@ -636,6 +665,7 @@ class Blitter(Device):
 
     def selective_erase_display(self, mode: int) -> None:
         """DECSED — erase in display, leaving DECSCA-protected characters."""
+        self.board.cursor.cancel_pending_wrap()
         cx, cy, w, h = self.board.cursor.x, self.board.cursor.y, self.board.width, self.board.height
         if mode == constants.ERASE_FROM_CURSOR_TO_END:
             rows = [(cx, w, cy)] + [(0, w, y) for y in range(cy + 1, h)]
@@ -649,6 +679,7 @@ class Blitter(Device):
 
     def selective_erase_line(self, mode: int) -> None:
         """DECSEL — erase in line, leaving DECSCA-protected characters."""
+        self.board.cursor.cancel_pending_wrap()
         cx, cy, w = self.board.cursor.x, self.board.cursor.y, self.board.width
         if mode == constants.ERASE_FROM_CURSOR_TO_END:
             span = range(cx, w)
@@ -809,6 +840,7 @@ class Blitter(Device):
     def insert_lines(self, count: int) -> None:
         """Insert blank lines at cursor position."""
         cursor = self.board.cursor
+        cursor.cancel_pending_wrap()
         if count <= 0 or not (
             self.scroll_top <= cursor.y <= self.scroll_bottom and self.left_margin <= cursor.x <= self.right_margin
         ):
@@ -829,6 +861,7 @@ class Blitter(Device):
     def delete_lines(self, count: int) -> None:
         """Delete lines at cursor position."""
         cursor = self.board.cursor
+        cursor.cancel_pending_wrap()
         if count <= 0 or not (
             self.scroll_top <= cursor.y <= self.scroll_bottom and self.left_margin <= cursor.x <= self.right_margin
         ):
@@ -848,16 +881,23 @@ class Blitter(Device):
 
     def insert_characters(self, count: int, ansi_code: str = "") -> None:
         """Insert blank characters at cursor position."""
-        if not (0 <= self.board.cursor.y < self.board.height):
+        cursor = self.board.cursor
+        cursor.cancel_pending_wrap()
+        if count <= 0 or not (
+            self.scroll_top <= cursor.y <= self.scroll_bottom and self.left_margin <= cursor.x <= self.right_margin
+        ):
             return
-        spaces = " " * count
-        self.current_buffer.insert(self.board.cursor.x, self.board.cursor.y, spaces, ansi_code)
+        self._shift_line_segment(cursor.y, cursor.x, self.right_margin, -count, ansi_code)
 
     def delete_characters(self, count: int) -> None:
         """Delete characters at cursor position."""
-        if not (0 <= self.board.cursor.y < self.board.height):
+        cursor = self.board.cursor
+        cursor.cancel_pending_wrap()
+        if count <= 0 or not (
+            self.scroll_top <= cursor.y <= self.scroll_bottom and self.left_margin <= cursor.x <= self.right_margin
+        ):
             return
-        self.current_buffer.delete(self.board.cursor.x, self.board.cursor.y, count)
+        self._shift_line_segment(cursor.y, cursor.x, self.right_margin, count)
 
     def scroll(self, lines: int) -> None:
         """Scroll content within the active scroll region."""
@@ -891,7 +931,28 @@ class Blitter(Device):
                     style_or_ansi=background,
                 )
 
-    def _shift_row_segment(self, x0: int, columns: int) -> None:
+    def _shift_line_segment(self, y: int, x0: int, right: int, columns: int, style_or_ansi=None) -> None:
+        """Shift one inclusive row segment; positive is left, negative is right."""
+        span = right - x0 + 1
+        if columns == 0 or span <= 0:
+            return
+        n = min(abs(columns), span)
+        style = parse_sgr_sequence(style_or_ansi) if isinstance(style_or_ansi, str) else style_or_ansi
+        style = Style() if style is None else style
+        blank = (style, " ")
+        seg = [self.current_buffer.get_cell(x, y) for x in range(x0, right + 1)]
+        cells = seg[n:] + [blank] * n if columns > 0 else [blank] * n + seg[: span - n]
+        self.current_buffer.replace_cells(x0, y, cells, style)
+
+    def _shift_row_segment(
+        self,
+        x0: int,
+        columns: int,
+        *,
+        top: int | None = None,
+        bottom: int | None = None,
+        style_or_ansi=None,
+    ) -> None:
         """Shift the [x0, right_margin] cells of every scroll-region row by columns.
 
         columns > 0 pushes content left (blanks appear on the right of the segment);
@@ -900,27 +961,32 @@ class Blitter(Device):
         if columns == 0 or self.scroll_top > self.scroll_bottom:
             return
         right = self.right_margin
-        span = right - x0 + 1
-        if span <= 0:
-            return
-        n = min(abs(columns), span)
-        bg = self.board.style.background_ansi()
-        for y in range(self.scroll_top, self.scroll_bottom + 1):
-            seg = [self.current_buffer.get_cell(x, y) for x in range(x0, right + 1)]
-            seg = seg[n:] + [None] * n if columns > 0 else [None] * n + seg[: span - n]
-            style = parse_sgr_sequence(bg) if bg else Style()
-            cells = [(style, " ") if cell is None else cell for cell in seg]
-            self.current_buffer.replace_cells(x0, y, cells, bg)
+        if style_or_ansi is None:
+            style_or_ansi = self.board.style.background_ansi()
+        first = self.scroll_top if top is None else top
+        last = self.scroll_bottom if bottom is None else bottom
+        for y in range(first, last + 1):
+            self._shift_line_segment(y, x0, right, columns, style_or_ansi)
 
-    def pan(self, columns: int) -> None:
+    def pan(self, columns: int, *, full_page: bool = False) -> None:
         """SL/SR — pan the scroll-region rows horizontally within the left/right margins."""
-        self._shift_row_segment(self.left_margin, columns)
+        if full_page:
+            self._shift_row_segment(
+                self.left_margin,
+                columns,
+                top=0,
+                bottom=self.board.height - 1,
+                style_or_ansi=Style(),
+            )
+        else:
+            self._shift_row_segment(self.left_margin, columns)
 
     def shift_columns(self, count: int) -> None:
         """DECIC (count > 0) / DECDC (count < 0) — insert/delete columns at the cursor.
 
         Confined to the left/right margin box; a cursor outside it is a no-op.
         """
+        self.board.cursor.cancel_pending_wrap()
         x0 = self.board.cursor.x
         if not (self.left_margin <= x0 <= self.right_margin):
             return
@@ -930,10 +996,12 @@ class Blitter(Device):
     def set_left_right_margins(self, left: int | None, right: int | None) -> None:
         """DECSLRM — set the left/right margins (1-based; None/0 = extremes) and home the cursor."""
         width = self.board.width
-        left0 = (left - 1) if left else 0
-        right0 = (right - 1) if right else (width - 1)
-        left0 = max(0, min(left0, width - 1))
-        right0 = max(left0, min(right0, width - 1))
+        left1 = left or 1
+        right1 = right or width
+        if not (1 <= left1 < right1 <= width):
+            return
+        left0 = left1 - 1
+        right0 = right1 - 1
         self.left_margin = left0
         self.right_margin = right0
         self.board.cursor.move_to(0, 0)
@@ -942,6 +1010,7 @@ class Blitter(Device):
         """Restore the margins to the full screen width."""
         self.left_margin = 0
         self.right_margin = self.board.width - 1
+        self.board.cursor.cancel_pending_wrap()
 
     def apply_left_right_margins(self, operation: Operation) -> None:
         """CSI Pl ; Pr s — DECSLRM when margin mode is on, else SCOSC (save cursor)."""
@@ -989,6 +1058,7 @@ class Blitter(Device):
 
     def erase_characters(self, count: int) -> None:
         """Erase `count` characters from the cursor with the current style; the cursor stays (ECH)."""
+        self.board.cursor.cancel_pending_wrap()
         y = self.board.cursor.y
         style = self.board.style.current
         for x in range(self.board.cursor.x, min(self.board.cursor.x + count, self.board.width)):

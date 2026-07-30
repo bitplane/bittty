@@ -102,8 +102,12 @@ def _mouse_any_tracking(device: ModeDevice, value: bool) -> None:
 
 
 def _declrmm(device: ModeDevice, value: bool) -> None:
-    # Disabling left/right margin mode resets the margins to the full width.
-    if not value:
+    if value:
+        # Horizontal margins and row-wide double-size attributes cannot coexist.
+        device.board.blitter.primary_buffer.reset_line_attributes()
+        device.board.blitter.alt_buffer.reset_line_attributes()
+    else:
+        # Disabling left/right margin mode resets the margins to the full width.
         device.board.blitter.reset_left_right_margins()
 
 
