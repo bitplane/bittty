@@ -1,6 +1,7 @@
 # DEC private modes
 
 ✅ means the mode has implemented behaviour, not merely a parsed or stored flag.
+`DEC PPL` rows are printer-language commands, not terminal modes.
 
 | Mode | Origin | Description | Supported |
 | :--- | :--- | :--- | :--- |
@@ -32,27 +33,27 @@
 | 23 | DEC | PK1 - Programmable Keypad | X |
 | 24 | DEC | AH1 - Auto Hardcopy | X |
 | 25 | DEC | DECTCEM - Text Cursor Enable Mode | ✅ |
-| 27 | DEC | DECPSP - Proportional Spacing | X |
-| 29 | DEC | DECPSM - Pitch Select Mode | X |
+| 27 | DEC PPL | DECPSP - Proportional Spacing | X |
+| 29 | DEC PPL | DECPSM - Pitch Select Mode | X |
 | 30 | rxvt | Show scrollbar | X |
 | 34 | DEC | DECRLM - Cursor Right to Left Mode | X |
 | 35 | DEC | DECHEBM - Hebrew (Keyboard) Mode | X |
 | 35 | rxvt | Enable font-shifting functions | X |
 | 36 | DEC | DECHEM - Hebrew Encoding Mode | X |
 | 38 | DEC | DECTEK - Tektronix 4010/4014 Mode | X |
-| 40 | DEC | DECCRNLM - Carriage Return/New Line Mode | X |
+| 40 | DEC PPL | DECCRNLM - Carriage Return/New Line Mode | X |
 | 40 | xterm | Allow 80 ⇒ 132 mode | ✅ |
-| 41 | DEC | DECUPM - Unidirectional Print Mode | X |
+| 41 | DEC PPL | DECUPM - Unidirectional Print Mode | X |
 | 41 | xterm | more(1) fix | X |
 | 42 | DEC | DECNRCM - National Replacement Character Set Mode | ✅ |
-| 43 | DEC | DECGEPM - Graphics Expanded Print Mode | X |
-| 44 | DEC | DECGPCM - Graphics Print Color Mode | X |
+| 43 | VT340 | DECGEPM - Graphics Expanded Print Mode | X |
+| 44 | VT340 | DECGPCM - Graphics Print Color Mode | X |
 | 44 | xterm | Turn on margin bell | X |
-| 45 | DEC | DECGPCS - Graphics Print Color Syntax | X |
+| 45 | VT340 | DECGPCS - Graphics Print Color Syntax | X |
 | 45 | xterm | Reverse-wraparound mode | ✅ |
-| 46 | DEC | DECGPBM - Graphics Print Background Mode | X |
+| 46 | VT340 | DECGPBM - Graphics Print Background Mode | X |
 | 46 | xterm | Start logging | X |
-| 47 | DEC | DECGRPM - Graphics Rotated Print Mode | X |
+| 47 | VT340 | DECGRPM - Graphics Rotated Print Mode | X |
 | 47 | xterm | Use Alternate Screen Buffer | ✅ |
 | 49 | DEC | DECTHAIM - Thai Input Mode | X |
 | 50 | DEC | DECTHAICM - Thai Cursor Mode | X |
@@ -61,7 +62,7 @@
 | 53 | DEC | DEC131TM - VT131 Transmit Mode | X |
 | 55 | DEC | DECBPM - Bold Page Mode | X |
 | 57 | DEC | DECNAKB - Greek/N-A Keyboard Mapping Mode | X |
-| 58 | DEC | DECIPEM - Enter IBM Proprinter Emulation Mode | X |
+| 58 | DEC PPL | DECIPEM - Enter IBM ProPrinter Emulation Mode | X |
 | 59 | DEC | DECKKDM - Kanji/Katakana Display Mode | X |
 | 60 | DEC | DECHCCM - Horizontal Cursor Coupling | X |
 | 61 | DEC | DECVCCM - Vertical Cursor Coupling Mode | X |

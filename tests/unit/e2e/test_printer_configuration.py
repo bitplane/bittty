@@ -198,3 +198,18 @@ def test_decnulm_is_unrecognised_outside_configurable_models():
     board.host.attach(host)
     Parser(board).feed("\x1b[?102h\x1b[?102$p")
     assert host.data == ["\x1b[?102;0$y"]
+
+
+def test_printer_language_and_vt340_graphics_modes_are_not_vt510_configuration():
+    board = Board(model=VT510)
+    printer = MemoryPrinter()
+    host = RecordingHost()
+    board.printer.attach(printer)
+    board.host.attach(host)
+
+    modes = (27, 29, 40, 41, 43, 44, 45, 46, 47, 58)
+    Parser(board).feed("".join(f"\x1b[?{mode}h\x1b[?{mode}$p" for mode in modes))
+
+    assert board.printer.configuration == PrinterConfiguration()
+    assert printer.configuration_history == [PrinterConfiguration()]
+    assert host.data == [f"\x1b[?{mode};0$y" for mode in modes]
