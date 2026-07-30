@@ -127,6 +127,14 @@ class StdioTerminal(Terminal):
         """Mirror the window title onto the outer terminal."""
         print(f"\033]2;{title}\007", end="", flush=True)
 
+    def on_reverse_screen(self, enabled: bool) -> None:
+        """Mirror the child's normal/reverse screen selection."""
+        print(f"\033[?5{'h' if enabled else 'l'}", end="", flush=True)
+
+    def on_cursor_blink(self, enabled: bool) -> None:
+        """Mirror the child's cursor-blink selection."""
+        print(f"\033[?12{'h' if enabled else 'l'}", end="", flush=True)
+
     def on_ambiguous_width(self, width: int) -> None:
         """Mirror the child's ambiguous-width policy onto the outer terminal."""
         if width == self.host_ambiguous_width:
@@ -175,7 +183,7 @@ class StdioTerminal(Terminal):
                 self.old_termios = None
         # ?1004: the host reports focus in/out (CSI I / CSI O) — drives our own
         # software cursor and is forwarded to a child that enabled 1004 itself.
-        print("\033[?25l\033[?1004h\033[2J\033[H", end="", flush=True)
+        print("\033[?5;12s\033[?5l\033[?12l\033[?25l\033[?1004h\033[2J\033[H", end="", flush=True)
 
     def restore_terminal(self) -> None:
         """Restore the host terminal to its original state."""
@@ -186,7 +194,7 @@ class StdioTerminal(Terminal):
             self.on_grapheme_clustering(self.initial_grapheme_clustering)
         if HAS_UNIX_TERMIOS and self.old_termios:
             termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, self.old_termios)
-        print("\033[?1004l\033[?25h\033[2J\033[H", end="", flush=True)
+        print("\033[?1004l\033[?25h\033[2J\033[H\033[?5;12r", end="", flush=True)
 
     # --- rendering --- #
 

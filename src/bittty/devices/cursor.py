@@ -276,7 +276,7 @@ class CursorDevice(Device):
         """DECSCUSR — set cursor shape and blink from the style parameter."""
         shapes = {0: "block", 1: "block", 2: "block", 3: "underline", 4: "underline", 5: "bar", 6: "bar"}
         self.shape = shapes.get(style, "block")
-        self.board.modes.cursor_blinking = style in (0, 1, 3, 5)
+        self.board.modes.set_cursor_blinking(style in (0, 1, 3, 5))
 
     def prepare_for_text_write(self) -> tuple[int, int]:
         """Apply delayed wrapping or clipping and return active ``[left, right)`` bounds."""

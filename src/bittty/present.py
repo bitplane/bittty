@@ -109,6 +109,20 @@ class CursorVisibilityChanged:
 
 
 @dataclass(frozen=True)
+class CursorBlinkChanged:
+    """Text-cursor blinking changed (private mode 12 or DECSCUSR)."""
+
+    enabled: bool
+
+
+@dataclass(frozen=True)
+class ReverseScreenChanged:
+    """The complete screen changed between normal and reverse video (DECSCNM)."""
+
+    enabled: bool
+
+
+@dataclass(frozen=True)
 class SyncOutputChanged:
     """Synchronized-output mode toggled (mode 2026); a terminal (chrome) gates repaint on it."""
 
@@ -143,6 +157,8 @@ PresentEvent = (
     | ConsoleRequest
     | MouseModeChanged
     | CursorVisibilityChanged
+    | CursorBlinkChanged
+    | ReverseScreenChanged
     | SyncOutputChanged
     | AmbiguousWidthChanged
     | GraphemeClusteringChanged

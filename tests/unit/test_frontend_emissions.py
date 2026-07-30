@@ -7,6 +7,7 @@ from bittty.present import (
     Bell,
     ClipboardChanged,
     ConsoleRequest,
+    CursorBlinkChanged,
     CursorVisibilityChanged,
     CwdChanged,
     FontChanged,
@@ -14,6 +15,7 @@ from bittty.present import (
     MouseModeChanged,
     Notification,
     PointerShapeChanged,
+    ReverseScreenChanged,
     SyncOutputChanged,
     TitleChanged,
     WindowRequest,
@@ -105,6 +107,17 @@ def test_cursor_and_sync_events():
     assert CursorVisibilityChanged(False) in rec.events
     parser.feed("\x1b[?2026h")  # sync output on
     assert SyncOutputChanged(True) in rec.events
+
+
+def test_reverse_screen_and_cursor_blink_events_are_edge_triggered_and_reset():
+    board, parser, rec = _term()
+    parser.feed("\x1b[?5h\x1b[?5h\x1b[?12h\x1b[?12h")
+    board.reset(hard=True)
+
+    reverse_events = [event for event in rec.events if isinstance(event, ReverseScreenChanged)]
+    blink_events = [event for event in rec.events if isinstance(event, CursorBlinkChanged)]
+    assert reverse_events == [ReverseScreenChanged(True), ReverseScreenChanged(False)]
+    assert blink_events == [CursorBlinkChanged(True), CursorBlinkChanged(False)]
 
 
 def test_ambiguous_width_event_is_edge_triggered():

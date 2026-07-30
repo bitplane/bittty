@@ -1,7 +1,10 @@
 # bittty
 
-A pure Python terminal emulator. `Board` is an embeddable, headless emulator core;
-the demo and `textual-tty` provide terminal frontends.
+A pure Python terminal emulator library. `Board` is an embeddable, headless
+emulator core; the demo and `textual-tty` provide terminal frontends.
+
+It was written as an alternative to `pyte`, and currently does not have a
+graphical front-end.
 
 ## Demo
 
@@ -20,8 +23,8 @@ uvx textual-tty
 ## Links
 
 * [🏠 home](https://bitplane.net/dev/python/bittty)
-* [📖 pydoc](https://bitplane.net/dev/python/bittty/pydoc)
-* [🚦 terminal mode support](docs/DEC_private.md)
+  * [📖 pydoc](https://bitplane.net/dev/python/bittty/pydoc)
+  * [🚦 terminal mode support](https://bitplane.net/dev/python/bittty/DEC_private.html)
 * [🐍 pypi](https://pypi.org/project/bittty)
 * [🐱 github](https://github.com/bitplane/bittty)
 

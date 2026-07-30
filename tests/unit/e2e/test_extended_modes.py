@@ -33,9 +33,7 @@ def _term(model=None):
     [
         (2, "ansi_mode"),
         (4, "scroll_mode"),
-        (5, "reverse_screen"),
         (8, "auto_repeat"),
-        (12, "cursor_blinking"),
         (20, "linefeed_newline_mode"),
         (44, "margin_bell"),
         (68, "keyboard_usage_mode"),
@@ -51,7 +49,6 @@ def _term(model=None):
         (1039, "alt_sends_escape"),
         (1042, "bell_urgency"),
         (1043, "bell_raise"),
-        (1046, "allow_alt_screen"),
         (1010, "scroll_on_output"),
         (1011, "scroll_on_keypress"),
         (1034, "eight_bit_input"),
@@ -88,6 +85,46 @@ def test_grapheme_mode_reports_and_changes_its_state():
     assert transport.data[-1] == "\x1b[?2027;1$y"
     parser.feed("\x1b[?2027l")
     assert board.modes.grapheme_clustering is False
+
+
+def test_reverse_screen_and_cursor_blink_modes_report_real_state():
+    board, parser, transport = _term()
+
+    parser.feed("\x1b[?5h\x1b[?5$p\x1b[?12h\x1b[?12$p")
+    assert board.modes.reverse_screen is True
+    assert board.modes.cursor_blinking is True
+    assert transport.data[-2:] == ["\x1b[?5;1$y", "\x1b[?12;1$y"]
+
+    parser.feed("\x1b[?5l\x1b[?5$p\x1b[?12l\x1b[?12$p")
+    assert board.modes.reverse_screen is False
+    assert board.modes.cursor_blinking is False
+    assert transport.data[-2:] == ["\x1b[?5;2$y", "\x1b[?12;2$y"]
+
+
+def test_mode_1046_disables_alt_screen_and_gates_alt_screen_modes():
+    board, parser, transport = _term()
+
+    parser.feed("\x1b[?1049h")
+    assert board.blitter.in_alt_screen is True
+
+    parser.feed("\x1b[?1046l\x1b[?1046$p")
+    assert board.modes.allow_alt_screen is False
+    assert board.blitter.in_alt_screen is False
+    assert transport.data[-1] == "\x1b[?1046;2$y"
+
+    parser.feed("\x1b[?47h\x1b[?1047h\x1b[?1049h")
+    assert board.blitter.in_alt_screen is False
+
+    board.cursor.set_position(3, 2)
+    parser.feed("\x1b[?1048h")
+    board.cursor.set_position(9, 4)
+    parser.feed("\x1b[?1048l")
+    assert (board.cursor.x, board.cursor.y) == (9, 4)
+
+    parser.feed("\x1b[?1046h\x1b[?1046$p\x1b[?1047h")
+    assert board.modes.allow_alt_screen is True
+    assert transport.data[-1] == "\x1b[?1046;1$y"
+    assert board.blitter.in_alt_screen is True
 
 
 def test_destination_can_hide_grapheme_mode():
@@ -141,6 +178,12 @@ def test_destination_caps_cannot_add_grapheme_mode_to_old_model():
 
 def test_vt220_reports_xterm_era_modes_as_unrecognised():
     _, parser, transport = _term(VT220)
+    parser.feed("\x1b[?5$p")
+    assert transport.data[-1] == "\x1b[?5;2$y"
+    parser.feed("\x1b[?12$p")
+    assert transport.data[-1] == "\x1b[?12;0$y"
+    parser.feed("\x1b[?1046$p")
+    assert transport.data[-1] == "\x1b[?1046;0$y"
     parser.feed("\x1b[?2027$p")
     assert transport.data[-1] == "\x1b[?2027;0$y"
     parser.feed("\x1b[?8840$p")

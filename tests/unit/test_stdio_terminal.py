@@ -50,6 +50,25 @@ def test_on_bell_and_on_title(capsys):
     assert "\033]2;my title\007" in capsys.readouterr().out
 
 
+def test_reverse_screen_and_cursor_blink_are_mirrored(capsys):
+    display = StdioTerminal()
+
+    display.on_reverse_screen(True)
+    display.on_reverse_screen(False)
+    display.on_cursor_blink(True)
+    display.on_cursor_blink(False)
+
+    assert capsys.readouterr().out == "\033[?5h\033[?5l\033[?12h\033[?12l"
+
+
+def test_reverse_screen_and_cursor_blink_flow_through_the_seam(capsys):
+    display = StdioTerminal()
+
+    display.board.parser.feed("\x1b[?5h\x1b[?12h")
+
+    assert capsys.readouterr().out == "\033[?5h\033[?12h"
+
+
 def test_ambiguous_width_mode_is_mirrored_and_deduplicated(capsys):
     display = StdioTerminal()
     display.on_ambiguous_width(2)

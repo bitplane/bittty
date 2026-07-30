@@ -1,5 +1,5 @@
-from bittty.operations import Operation
 from bittty import Board
+from bittty.operations import Operation
 
 
 def test_mode_device_applies_implemented_modes_and_ignores_unimplemented_modes():
@@ -13,7 +13,7 @@ def test_mode_device_applies_implemented_modes_and_ignores_unimplemented_modes()
 
     modes.set_private_modes((1, 5, 8, 1000, 1006, 2004), True)
     assert modes.cursor_application_mode is True
-    assert modes.reverse_screen is False
+    assert modes.reverse_screen is True
     assert modes.auto_repeat is True
     assert modes.mouse_tracking is True
     assert modes.mouse_sgr_mode is True

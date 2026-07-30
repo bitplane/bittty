@@ -8,7 +8,7 @@
 | 2 | DEC | DECANM - ANSI/VT52 Mode | X |
 | 3 | DEC | DECCOLM - Column | ✅ |
 | 4 | DEC | DECSCLM - Scrolling | X |
-| 5 | DEC | DECSCNM - Screen Mode (light or dark screen) | X |
+| 5 | DEC | DECSCNM - Screen Mode (light or dark screen) | ✅ |
 | 6 | DEC | DECOM - Origin Mode | ✅ |
 | 7 | DEC | DECAWM - Auto Wrap Mode | ✅ |
 | 8 | DEC | DECARM - Auto Repeat Mode | X |
@@ -18,7 +18,7 @@
 | 10 | rxvt | Show toolbar | X |
 | 11 | DEC | DECLTM - Line Transmit Mode | X |
 | 12 | DEC | DECKANAM - Katakana Shift Mode | X |
-| 12 | xterm | Blinking cursor | X |
+| 12 | xterm | Blinking cursor | ✅ |
 | 13 | DEC | DECSCFDM - Space Compression/Field Delimiter Mode | X |
 | 13 | xterm | Start blinking cursor | X |
 | 14 | DEC | DECTEM - Transmit Execution Mode | X |
@@ -126,7 +126,7 @@
 | 1043 | xterm | Enable raising of the window when Control-G is received | X |
 | 1044 | xterm | Reuse the most recent data copied to CLIPBOARD | X |
 | 1045 | xterm | Extended Reverse-wraparound mode (XTREVWRAP2) | X |
-| 1046 | xterm | Enable switching to/from Alternate Screen Buffer | X |
+| 1046 | xterm | Enable switching to/from Alternate Screen Buffer | ✅ |
 | 1047 | xterm | Use Alternate Screen Buffer | ✅ |
 | 1048 | xterm | Save cursor as in DECSC | ✅ |
 | 1049 | xterm | Save cursor as in DECSC and use alternate screen buffer | ✅ |

@@ -21,6 +21,7 @@ from ..present import (
     Bell,
     ClipboardChanged,
     ConsoleRequest,
+    CursorBlinkChanged,
     CursorVisibilityChanged,
     CwdChanged,
     FontChanged,
@@ -30,6 +31,7 @@ from ..present import (
     PointerShapeChanged,
     PresentEvent,
     PromptMark,
+    ReverseScreenChanged,
     SyncOutputChanged,
     TitleChanged,
     WindowRequest,
@@ -83,6 +85,8 @@ class Terminal:
     def on_console_request(self, kind: str, index: int) -> None: ...
     def on_mouse_mode(self, mode: str, sgr: bool) -> None: ...
     def on_cursor_visible(self, visible: bool) -> None: ...
+    def on_cursor_blink(self, enabled: bool) -> None: ...
+    def on_reverse_screen(self, enabled: bool) -> None: ...
     def on_sync_output(self, enabled: bool) -> None: ...
     def on_ambiguous_width(self, width: int) -> None: ...
     def on_grapheme_clustering(self, enabled: bool) -> None: ...
@@ -103,6 +107,8 @@ _DISPATCH = {
     ConsoleRequest: lambda d, e: d.on_console_request(e.kind, e.index),
     MouseModeChanged: lambda d, e: d.on_mouse_mode(e.mode, e.sgr),
     CursorVisibilityChanged: lambda d, e: d.on_cursor_visible(e.visible),
+    CursorBlinkChanged: lambda d, e: d.on_cursor_blink(e.enabled),
+    ReverseScreenChanged: lambda d, e: d.on_reverse_screen(e.enabled),
     SyncOutputChanged: lambda d, e: d.on_sync_output(e.enabled),
     AmbiguousWidthChanged: lambda d, e: d.on_ambiguous_width(e.width),
     GraphemeClusteringChanged: lambda d, e: d.on_grapheme_clustering(e.enabled),

@@ -17,9 +17,11 @@ from typing import TYPE_CHECKING, Callable
 from ..operations import Operation
 from ..present import (
     AmbiguousWidthChanged,
+    CursorBlinkChanged,
     CursorVisibilityChanged,
     GraphemeClusteringChanged,
     MouseModeChanged,
+    ReverseScreenChanged,
     SyncOutputChanged,
 )
 from .base import Device
@@ -72,10 +74,13 @@ def _deccolm(device: ModeDevice, value: bool) -> None:
 
 
 def _alt_screen(device: ModeDevice, value: bool) -> None:
-    device.board.blitter.switch_screen(value)
+    if device.allow_alt_screen:
+        device.board.blitter.switch_screen(value)
 
 
 def _save_restore_cursor(device: ModeDevice, value: bool) -> None:
+    if not device.allow_alt_screen:
+        return
     if value:
         device.board.cursor.save()
     else:
@@ -83,12 +88,19 @@ def _save_restore_cursor(device: ModeDevice, value: bool) -> None:
 
 
 def _alt_screen_and_cursor(device: ModeDevice, value: bool) -> None:
+    if not device.allow_alt_screen:
+        return
     if value:
         device.board.cursor.save()
         device.board.blitter.switch_screen(True)
     else:
         device.board.blitter.switch_screen(False)
         device.board.cursor.restore()
+
+
+def _allow_alt_screen(device: ModeDevice, value: bool) -> None:
+    if not value:
+        device.board.blitter.switch_screen(False)
 
 
 def _mouse_button_tracking(device: ModeDevice, value: bool) -> None:
@@ -143,9 +155,11 @@ MODE_SPECS: list[Mode] = [
     # DEC private modes
     Mode(1, True, "cursor_application_mode", queryable=True),
     Mode(3, True, apply_fn=_deccolm, status_fn=_column_status),
+    Mode(5, True, "reverse_screen", queryable=True, peripheral="reverse"),
     Mode(6, True, "origin_mode", queryable=True),
     Mode(7, True, "auto_wrap", queryable=True),
     Mode(9, True, "mouse_tracking", queryable=True, peripheral="mouse"),
+    Mode(12, True, "cursor_blinking", queryable=True, peripheral="cursor_blink"),
     Mode(25, True, "cursor_visible", queryable=True, peripheral="cursor"),
     Mode(47, True, apply_fn=_alt_screen, status_fn=_alt_screen_status),
     Mode(66, True, "numeric_keypad", invert=True, queryable=True),
@@ -161,6 +175,7 @@ MODE_SPECS: list[Mode] = [
     Mode(1049, True, apply_fn=_alt_screen_and_cursor, status_fn=_alt_screen_status),
     # Extended modes with implemented board or frontend behaviour.
     Mode(40, True, "allow_column_mode", queryable=True),  # permit DECCOLM 80<->132
+    Mode(1046, True, "allow_alt_screen", queryable=True, apply_fn=_allow_alt_screen),
     Mode(2004, True, "bracketed_paste", queryable=True),
     Mode(2026, True, "synchronized_output", queryable=True, peripheral="sync"),
     Mode(
@@ -191,6 +206,8 @@ class ModeDevice(Device):
         # Edge-trigger caches for peripheral present events (None = not yet emitted).
         self._last_mouse_mode: tuple[str, bool] | None = None
         self._last_cursor_visible: bool | None = None
+        self._last_cursor_blinking: bool | None = None
+        self._last_reverse_screen: bool | None = None
         self._last_sync: bool | None = None
         self._last_ambiguous_width: int | None = None
         self._last_grapheme_clustering: bool | None = None
@@ -284,7 +301,7 @@ class ModeDevice(Device):
             self.origin_mode = False
             self.cursor_visible = True
         # A reset can turn peripheral state off (e.g. RIS with mouse on); tell the terminal (chrome).
-        for peripheral in ("mouse", "cursor", "sync", "width", "grapheme"):
+        for peripheral in ("mouse", "cursor", "cursor_blink", "reverse", "sync", "width", "grapheme"):
             self._emit_peripheral(peripheral)
 
     # --- dispatch --- #
@@ -337,6 +354,14 @@ class ModeDevice(Device):
             if self.cursor_visible != self._last_cursor_visible:
                 self._last_cursor_visible = self.cursor_visible
                 self.board.present(CursorVisibilityChanged(self.cursor_visible))
+        elif peripheral == "cursor_blink":
+            if self.cursor_blinking != self._last_cursor_blinking:
+                self._last_cursor_blinking = self.cursor_blinking
+                self.board.present(CursorBlinkChanged(self.cursor_blinking))
+        elif peripheral == "reverse":
+            if self.reverse_screen != self._last_reverse_screen:
+                self._last_reverse_screen = self.reverse_screen
+                self.board.present(ReverseScreenChanged(self.reverse_screen))
         elif peripheral == "sync":
             if self.synchronized_output != self._last_sync:
                 self._last_sync = self.synchronized_output
@@ -352,6 +377,11 @@ class ModeDevice(Device):
             if self.grapheme_clustering != self._last_grapheme_clustering:
                 self._last_grapheme_clustering = self.grapheme_clustering
                 self.board.present(GraphemeClusteringChanged(self.grapheme_clustering))
+
+    def set_cursor_blinking(self, enabled: bool) -> None:
+        """Set cursor blink state and notify the attached terminal on an edge."""
+        self.cursor_blinking = enabled
+        self._emit_peripheral("cursor_blink")
 
     def set_grapheme_capability(self, capability: str) -> None:
         """Apply the destination's mode-2027 policy without changing the model repertoire."""

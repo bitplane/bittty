@@ -42,11 +42,12 @@ class Model:
     keymap: KeyMap = field(default=XTERM_KEYMAP)
 
 
-# Implemented private modes that postdate the VT220. The DEC hardware profiles
-# must report these as unrecognised (DECRQM status 0).
-_POST_VT220_MODES = frozenset(
+# Implemented private modes that postdate the VT220 or belong to non-DEC
+# terminals. The DEC hardware profiles must report these as unrecognised.
+_POST_VT220_OR_NON_DEC_MODES = frozenset(
     {
         (True, 9),
+        (True, 12),
         (True, 40),
         (True, 47),
         (True, 69),
@@ -58,6 +59,7 @@ _POST_VT220_MODES = frozenset(
         (True, 1047),
         (True, 1048),
         (True, 1049),
+        (True, 1046),
         (True, 2004),
         (True, 2026),
         (True, 2027),
@@ -78,7 +80,7 @@ VT100 = Model(
     da1_response="\033[?1;2c",  # VT100 with Advanced Video Option
     da2_response=None,  # secondary DA was introduced with the VT220
     da3_response=None,
-    unsupported_modes=_POST_VT220_MODES,
+    unsupported_modes=_POST_VT220_OR_NON_DEC_MODES,
     # VT100 knows ASCII, UK, DEC Special Graphics and the alternate ROM sets;
     # DEC Supplemental and the national replacement sets arrived with the VT220.
     charsets=frozenset({"B", "A", "0", "1", "2"}),
@@ -91,7 +93,7 @@ VT220 = Model(
     da1_response="\033[?62;1;2;6;8;9c",
     da2_response="\033[>1;10;0c",
     da3_response=None,
-    unsupported_modes=_POST_VT220_MODES,
+    unsupported_modes=_POST_VT220_OR_NON_DEC_MODES,
     # VT220 adds DEC Supplemental ("<") and the national replacement sets over
     # the VT100, but DEC Technical (">") is a later (VT240/VT330) charset.
     charsets=frozenset(
