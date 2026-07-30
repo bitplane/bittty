@@ -808,17 +808,43 @@ class Blitter(Device):
 
     def insert_lines(self, count: int) -> None:
         """Insert blank lines at cursor position."""
-        if count <= 0 or not (self.scroll_top <= self.board.cursor.y <= self.scroll_bottom):
+        cursor = self.board.cursor
+        if count <= 0 or not (
+            self.scroll_top <= cursor.y <= self.scroll_bottom and self.left_margin <= cursor.x <= self.right_margin
+        ):
             return
 
-        self.current_buffer.scroll_region_down(self.board.cursor.y, self.scroll_bottom, count)
+        if self.left_margin == 0 and self.right_margin == self.board.width - 1 and self.board.style.current.bg is None:
+            self.current_buffer.scroll_region_down(cursor.y, self.scroll_bottom, count)
+        else:
+            self.current_buffer.scroll_rectangle_down(
+                cursor.y,
+                self.scroll_bottom,
+                count,
+                left=self.left_margin,
+                right=self.right_margin,
+                style_or_ansi=self.board.style.background_ansi(),
+            )
 
     def delete_lines(self, count: int) -> None:
         """Delete lines at cursor position."""
-        if count <= 0 or not (self.scroll_top <= self.board.cursor.y <= self.scroll_bottom):
+        cursor = self.board.cursor
+        if count <= 0 or not (
+            self.scroll_top <= cursor.y <= self.scroll_bottom and self.left_margin <= cursor.x <= self.right_margin
+        ):
             return
 
-        self.current_buffer.scroll_region_up(self.board.cursor.y, self.scroll_bottom, count)
+        if self.left_margin == 0 and self.right_margin == self.board.width - 1 and self.board.style.current.bg is None:
+            self.current_buffer.scroll_region_up(cursor.y, self.scroll_bottom, count)
+        else:
+            self.current_buffer.scroll_rectangle_up(
+                cursor.y,
+                self.scroll_bottom,
+                count,
+                left=self.left_margin,
+                right=self.right_margin,
+                style_or_ansi=self.board.style.background_ansi(),
+            )
 
     def insert_characters(self, count: int, ansi_code: str = "") -> None:
         """Insert blank characters at cursor position."""
@@ -839,10 +865,31 @@ class Blitter(Device):
             return
 
         abs_lines = abs(lines)
-        if lines > 0:
-            self.current_buffer.scroll_region_up(self.scroll_top, self.scroll_bottom, abs_lines)
+        if self.left_margin == 0 and self.right_margin == self.board.width - 1 and self.board.style.current.bg is None:
+            if lines > 0:
+                self.current_buffer.scroll_region_up(self.scroll_top, self.scroll_bottom, abs_lines)
+            else:
+                self.current_buffer.scroll_region_down(self.scroll_top, self.scroll_bottom, abs_lines)
         else:
-            self.current_buffer.scroll_region_down(self.scroll_top, self.scroll_bottom, abs_lines)
+            background = self.board.style.background_ansi()
+            if lines > 0:
+                self.current_buffer.scroll_rectangle_up(
+                    self.scroll_top,
+                    self.scroll_bottom,
+                    abs_lines,
+                    left=self.left_margin,
+                    right=self.right_margin,
+                    style_or_ansi=background,
+                )
+            else:
+                self.current_buffer.scroll_rectangle_down(
+                    self.scroll_top,
+                    self.scroll_bottom,
+                    abs_lines,
+                    left=self.left_margin,
+                    right=self.right_margin,
+                    style_or_ansi=background,
+                )
 
     def _shift_row_segment(self, x0: int, columns: int) -> None:
         """Shift the [x0, right_margin] cells of every scroll-region row by columns.

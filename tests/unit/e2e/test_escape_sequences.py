@@ -1,5 +1,5 @@
+from bittty.constants import BEL, ESC
 from bittty.parser import Parser
-from bittty.constants import ESC, BEL
 
 
 def test_bell_character(board):
@@ -88,6 +88,19 @@ def test_ri_reverse_index_with_scroll(board):
 
     # Cursor should remain at top
     assert board.cursor.y == 0
+
+
+def test_ri_above_scroll_region_moves_without_scrolling(board):
+    parser = Parser(board)
+    buffer = board.blitter.current_buffer
+    for y in range(board.height):
+        buffer.set(0, y, str(y % 10))
+    before = [buffer.get_line_text(y) for y in range(board.height)]
+
+    parser.feed("\x1b[3;6r\x1b[2;1H\x1bM")
+
+    assert board.cursor.y == 0
+    assert [buffer.get_line_text(y) for y in range(board.height)] == before
 
 
 def test_desc_save_cursor(board):

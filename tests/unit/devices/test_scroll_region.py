@@ -1,6 +1,8 @@
 """Tests for scroll region functionality."""
 
 from bittty import Board
+from bittty.style import parse_sgr_sequence
+from bittty.video import CONTINUATION, WideHead
 
 
 def test_scroll_up_within_region():
@@ -143,3 +145,102 @@ def test_reset_scroll_region():
     board.blitter.set_scroll_region(0, 9)  # This is what CSI r with no params should do
     assert board.blitter.scroll_top == 0
     assert board.blitter.scroll_bottom == 9
+
+
+def test_tmux_style_scroll_only_moves_the_margin_rectangle():
+    board = Board(width=10, height=6)
+    buffer = board.blitter.current_buffer
+    for y in range(6):
+        buffer.set(0, y, str(y) * 10)
+
+    # Rows 2..5, columns 3..8: the shape tmux uses to scroll one pane
+    # without disturbing its neighbour or status row.
+    board.parser.feed("\x1b[2;5r\x1b[?69h\x1b[3;8s\x1b[S")
+
+    assert [buffer.get_line_text(y) for y in range(6)] == [
+        "0000000000",
+        "1122222211",
+        "2233333322",
+        "3344444433",
+        "44      44",
+        "5555555555",
+    ]
+
+
+def test_rectangular_scroll_down_preserves_cells_outside_margins():
+    board = Board(width=10, height=6)
+    buffer = board.blitter.current_buffer
+    for y in range(6):
+        buffer.set(0, y, str(y) * 10)
+
+    board.parser.feed("\x1b[2;5r\x1b[?69h\x1b[3;8s\x1b[T")
+
+    assert [buffer.get_line_text(y) for y in range(6)] == [
+        "0000000000",
+        "11      11",
+        "2211111122",
+        "3322222233",
+        "4433333344",
+        "5555555555",
+    ]
+
+
+def test_insert_and_delete_lines_honour_left_right_margins():
+    board = Board(width=8, height=5)
+    buffer = board.blitter.current_buffer
+    for y in range(5):
+        buffer.set(0, y, str(y) * 8)
+
+    board.parser.feed("\x1b[?69h\x1b[3;6s\x1b[2;4H\x1b[L")
+    assert [buffer.get_line_text(y) for y in range(5)] == [
+        "00000000",
+        "11    11",
+        "22111122",
+        "33222233",
+        "44333344",
+    ]
+
+    board = Board(width=8, height=5)
+    buffer = board.blitter.current_buffer
+    for y in range(5):
+        buffer.set(0, y, str(y) * 8)
+    board.parser.feed("\x1b[?69h\x1b[3;6s\x1b[2;4H\x1b[M")
+    assert [buffer.get_line_text(y) for y in range(5)] == [
+        "00000000",
+        "11222211",
+        "22333322",
+        "33444433",
+        "44    44",
+    ]
+
+
+def test_rectangular_scroll_uses_current_background_for_vacated_cells():
+    board = Board(width=6, height=3)
+    buffer = board.blitter.current_buffer
+    for y in range(3):
+        buffer.set(0, y, str(y) * 6)
+
+    board.parser.feed("\x1b[?69h\x1b[2;5s\x1b[42m\x1b[S")
+
+    green = parse_sgr_sequence("\x1b[42m")
+    assert buffer.get_line_text(2) == "2    2"
+    assert all(buffer.get_cell(x, 2) == (green, " ") for x in range(1, 5))
+
+
+def test_rectangular_scroll_does_not_leave_split_wide_glyphs():
+    board = Board(width=8, height=3)
+    buffer = board.blitter.current_buffer
+    buffer.set(0, 0, "abcdefgh")
+    buffer.set(0, 1, "abcdefgh")
+    buffer.set(1, 1, "❌")
+    buffer.set(5, 1, "❌")
+
+    # Both glyphs in the source row cross a margin edge.
+    board.parser.feed("\x1b[?69h\x1b[3;6s\x1b[S")
+
+    for row in buffer.grid:
+        for x, (_, char) in enumerate(row):
+            if char == CONTINUATION:
+                assert x > 0 and isinstance(row[x - 1][1], WideHead)
+            if isinstance(char, WideHead):
+                assert x + 1 < board.width and row[x + 1][1] == CONTINUATION

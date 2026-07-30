@@ -93,12 +93,24 @@ class CursorDevice(Device):
         """Move cursor to the beginning of the current line."""
         self.x = 0
 
+    def _within_horizontal_margins(self) -> bool:
+        """Whether the cursor belongs to the active column range.
+
+        ``x == width`` is the delayed-wrap sentinel for the final screen
+        column, so it still belongs to a margin ending at that column.
+        """
+        screen = self.board.blitter
+        return screen.left_margin <= self.x <= screen.right_margin or (
+            self.x == self.board.width and screen.right_margin == self.board.width - 1
+        )
+
     def line_feed(self, is_wrapped: bool = False) -> None:
         """Move down one line, scrolling the active scroll region if needed."""
         if self.board.printer.auto_print:  # MC auto-print: paper gets the line as we leave it
             self.board.printer.print_line(self.y)
-        if self.y == self.board.blitter.scroll_bottom:
-            self.board.blitter.scroll(1)
+        screen = self.board.blitter
+        if self.y == screen.scroll_bottom and self._within_horizontal_margins():
+            screen.scroll(1)
         elif self.y < self.board.height - 1:
             # Below the bottom margin the cursor still advances (bounded by the
             # screen); it only scrolls when sitting on the margin itself.
@@ -123,9 +135,10 @@ class CursorDevice(Device):
 
     def reverse_index(self) -> None:
         """Move up one line, scrolling down at the top of the scroll region."""
-        if self.y <= self.board.blitter.scroll_top:
-            self.board.blitter.scroll(-1)
-        else:
+        screen = self.board.blitter
+        if self.y == screen.scroll_top and self._within_horizontal_margins():
+            screen.scroll(-1)
+        elif self.y > 0:
             self.y -= 1
 
     def backspace(self) -> None:

@@ -6,7 +6,7 @@ A Board has two pages of it (primary and alternate).
 from __future__ import annotations
 
 from . import constants
-from .style import Style, parse_sgr_sequence, RESET_CODE
+from .style import RESET_CODE, Style, parse_sgr_sequence
 from .width import DEFAULT_WIDTH_POLICY, WidthPolicy
 
 
@@ -483,43 +483,161 @@ class Video:
         self.line_attributes[:0] = [constants.LINE_SINGLE] * count
         self._touch_page()
 
-    def scroll_region_up(self, top: int, bottom: int, count: int) -> None:
-        """Scroll a specific region up by count lines. BLAZING FAST bulk operation!"""
+    def scroll_region_up(
+        self,
+        top: int,
+        bottom: int,
+        count: int,
+    ) -> None:
+        """Scroll complete rows within a vertical region using bulk slices."""
         if count <= 0 or top > bottom or bottom >= self.height:
             return
 
-        # Clamp count to region size
-        region_height = bottom - top + 1
-        count = min(count, region_height)
-
-        # Bulk slice operations - move rows up within region
+        count = min(count, bottom - top + 1)
         self.grid[top : bottom + 1 - count] = self.grid[top + count : bottom + 1]
         self.line_attributes[top : bottom + 1 - count] = self.line_attributes[top + count : bottom + 1]
+        for y in range(bottom + 1 - count, bottom + 1):
+            self.grid[y] = self._create_empty_row()
+            self.line_attributes[y] = constants.LINE_SINGLE
+        self._touch_scrolled(top, bottom)
 
-        # Fill bottom of region with empty rows
-        for i in range(bottom + 1 - count, bottom + 1):
-            self.grid[i] = self._create_empty_row()
-            self.line_attributes[i] = constants.LINE_SINGLE
+    def scroll_rectangle_up(
+        self,
+        top: int,
+        bottom: int,
+        count: int,
+        *,
+        left: int = 0,
+        right: int | None = None,
+        style_or_ansi=None,
+    ) -> None:
+        """Scroll an inclusive rectangular region up by ``count`` rows.
+
+        Full-width regions retain the bulk row-slice path used by ordinary
+        terminal scrolling. Partial-width regions copy only their cell slices,
+        leaving neighbouring panes untouched.
+        """
+        if left == 0 and right is None and style_or_ansi is None:
+            self.scroll_region_up(top, bottom, count)
+            return
+
+        right = self.width - 1 if right is None else right
+        if (
+            count <= 0
+            or top < 0
+            or top > bottom
+            or bottom >= self.height
+            or left < 0
+            or left > right
+            or right >= self.width
+        ):
+            return
+
+        region_height = bottom - top + 1
+        count = min(count, region_height)
+        style = self._empty_style if style_or_ansi is None or style_or_ansi == "" else _coerce_style(style_or_ansi)
+        blank = self._empty_cell if style == self._empty_style else (style, " ")
+
+        if left == 0 and right == self.width - 1:
+            # The common path: move complete row objects and their attributes.
+            self.grid[top : bottom + 1 - count] = self.grid[top + count : bottom + 1]
+            self.line_attributes[top : bottom + 1 - count] = self.line_attributes[top + count : bottom + 1]
+
+            for y in range(bottom + 1 - count, bottom + 1):
+                self.grid[y] = [blank] * self.width
+                self.line_attributes[y] = constants.LINE_SINGLE
+        else:
+            end = right + 1
+            for y in range(top, bottom + 1 - count):
+                cells = self.grid[y + count][left:end]
+                # Never move only half of a wide glyph across a rectangle edge.
+                if cells[0][1] == CONTINUATION:
+                    cells[0] = blank
+                if isinstance(cells[-1][1], WideHead):
+                    cells[-1] = blank
+                row = self.grid[y]
+                self._prepare_overwrite(row, left, end, style)
+                row[left:end] = cells
+
+            for y in range(bottom + 1 - count, bottom + 1):
+                self._erase_range(self.grid[y], left, end, style)
+
+            # A partial-row operation cannot move a row-wide DECDWL/DECDHL
+            # attribute without also changing cells outside the rectangle.
 
         self._touch_scrolled(top, bottom)
 
-    def scroll_region_down(self, top: int, bottom: int, count: int) -> None:
-        """Scroll a specific region down by count lines. BLAZING FAST bulk operation!"""
+    def scroll_region_down(
+        self,
+        top: int,
+        bottom: int,
+        count: int,
+    ) -> None:
+        """Scroll complete rows within a vertical region using bulk slices."""
         if count <= 0 or top > bottom or bottom >= self.height:
             return
 
-        # Clamp count to region size
-        region_height = bottom - top + 1
-        count = min(count, region_height)
-
-        # Bulk slice operations - move rows down within region
+        count = min(count, bottom - top + 1)
         self.grid[top + count : bottom + 1] = self.grid[top : bottom + 1 - count]
         self.line_attributes[top + count : bottom + 1] = self.line_attributes[top : bottom + 1 - count]
+        for y in range(top, top + count):
+            self.grid[y] = self._create_empty_row()
+            self.line_attributes[y] = constants.LINE_SINGLE
+        self._touch_scrolled(top, bottom)
 
-        # Fill top of region with empty rows
-        for i in range(top, top + count):
-            self.grid[i] = self._create_empty_row()
-            self.line_attributes[i] = constants.LINE_SINGLE
+    def scroll_rectangle_down(
+        self,
+        top: int,
+        bottom: int,
+        count: int,
+        *,
+        left: int = 0,
+        right: int | None = None,
+        style_or_ansi=None,
+    ) -> None:
+        """Scroll an inclusive rectangular region down by ``count`` rows."""
+        if left == 0 and right is None and style_or_ansi is None:
+            self.scroll_region_down(top, bottom, count)
+            return
+
+        right = self.width - 1 if right is None else right
+        if (
+            count <= 0
+            or top < 0
+            or top > bottom
+            or bottom >= self.height
+            or left < 0
+            or left > right
+            or right >= self.width
+        ):
+            return
+
+        region_height = bottom - top + 1
+        count = min(count, region_height)
+        style = self._empty_style if style_or_ansi is None or style_or_ansi == "" else _coerce_style(style_or_ansi)
+        blank = self._empty_cell if style == self._empty_style else (style, " ")
+
+        if left == 0 and right == self.width - 1:
+            self.grid[top + count : bottom + 1] = self.grid[top : bottom + 1 - count]
+            self.line_attributes[top + count : bottom + 1] = self.line_attributes[top : bottom + 1 - count]
+
+            for y in range(top, top + count):
+                self.grid[y] = [blank] * self.width
+                self.line_attributes[y] = constants.LINE_SINGLE
+        else:
+            end = right + 1
+            for y in range(bottom, top + count - 1, -1):
+                cells = self.grid[y - count][left:end]
+                if cells[0][1] == CONTINUATION:
+                    cells[0] = blank
+                if isinstance(cells[-1][1], WideHead):
+                    cells[-1] = blank
+                row = self.grid[y]
+                self._prepare_overwrite(row, left, end, style)
+                row[left:end] = cells
+
+            for y in range(top, top + count):
+                self._erase_range(self.grid[y], left, end, style)
 
         self._touch_scrolled(top, bottom)
 
