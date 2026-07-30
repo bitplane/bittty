@@ -214,6 +214,14 @@ def _print_extent_status(device: ModeDevice) -> int:
     return 1 if device.board.printer.print_extent else 2
 
 
+def _ignore_null(device: ModeDevice, value: bool) -> None:
+    device.board.printer.set_ignore_null(value)
+
+
+def _ignore_null_status(device: ModeDevice) -> int:
+    return 1 if device.board.printer.configuration.ignore_null else 2
+
+
 def _ambiguous_width_default(device: ModeDevice) -> bool:
     return device.board.width_policy.ambiguous_width == 2
 
@@ -297,6 +305,15 @@ MODE_SPECS: tuple[ModeSpec, ...] = (
         apply_fn=_declrmm,
     ),
     ModeSpec(mp.DEC_NO_CLEAR_COLUMN, 95, True, "no_clear_column_mode", queryable=True),
+    ModeSpec(
+        mp.DEC_IGNORE_NULL,
+        102,
+        True,
+        "ignore_null",
+        queryable=True,
+        apply_fn=_ignore_null,
+        status_fn=_ignore_null_status,
+    ),
     ModeSpec(
         mp.XTERM_MOUSE_NORMAL,
         1000,
@@ -535,6 +552,7 @@ class ModeDevice(Device):
             self.insert_mode = False
             self.origin_mode = False
             self.cursor_visible = True
+            self.ignore_null = False
         if reconcile:
             self.reconcile_all()
 

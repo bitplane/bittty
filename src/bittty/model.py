@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .connections import PrinterStatus
 from .keymap import (
     LINUX_KEYMAP,
     SCREEN_KEYMAP,
@@ -28,10 +29,25 @@ from .mode_profiles import (
     URXVT_MODE_CAPABILITIES,
     VT100_MODE_CAPABILITIES,
     VT220_MODE_CAPABILITIES,
+    VT510_MODE_CAPABILITIES,
     VTE_MODE_CAPABILITIES,
     XTERM_MODE_CAPABILITIES,
 )
 from .palette import VGA_PALETTE, XTERM_PALETTE, PaletteDefaults
+
+
+@dataclass(frozen=True)
+class PrinterCapabilities:
+    """Printer protocol repertoire implemented by a terminal model."""
+
+    media_copy: bool = True
+    configuration: bool = True
+    disconnected_status: PrinterStatus = PrinterStatus.OFFLINE
+
+
+NO_PRINTER = PrinterCapabilities(media_copy=False, configuration=False)
+DEC_MEDIA_COPY = PrinterCapabilities(configuration=False)
+XTERM_MEDIA_COPY = PrinterCapabilities(configuration=False, disconnected_status=PrinterStatus.NOT_READY)
 
 
 @dataclass(frozen=True)
@@ -57,6 +73,9 @@ class Model:
     mode_capabilities: frozenset[str] = BITTTY_MODE_CAPABILITIES
     # TERM-compatible name reported by XTGETTCAP; defaults to the model name.
     term_name: str | None = None
+    printer_capabilities: PrinterCapabilities = field(default_factory=PrinterCapabilities)
+    # DEC hardware uses 0 for a valid DECRQSS request; modern emulators use 1.
+    decrqss_valid_is_one: bool = True
 
 
 # Primary DA responses per vt100.net / xterm ctlseqs.
@@ -65,11 +84,12 @@ XTERM = Model(
     da1_response="\033[?62;1;6;8;9;15;18;21;22;23c",
     da2_response="\033[>1;10;0c",
     mode_capabilities=XTERM_MODE_CAPABILITIES,
+    printer_capabilities=XTERM_MEDIA_COPY,
 )
 
 BITTTY = Model(
     name="bittty",
-    da1_response=XTERM.da1_response,
+    da1_response="\033[?62;1;2;6;8;9;15;18;21;22;23c",
     term_name="xterm",
     da2_response=XTERM.da2_response,
     mode_capabilities=BITTTY_MODE_CAPABILITIES,
@@ -81,6 +101,7 @@ VT100 = Model(
     da2_response=None,  # secondary DA was introduced with the VT220
     da3_response=None,
     mode_capabilities=VT100_MODE_CAPABILITIES,
+    printer_capabilities=NO_PRINTER,
     # VT100 knows ASCII, UK, DEC Special Graphics and the alternate ROM sets;
     # DEC Supplemental and the national replacement sets arrived with the VT220.
     charsets=frozenset({"B", "A", "0", "1", "2"}),
@@ -101,6 +122,19 @@ VT220 = Model(
     ),
     color_depth="monochrome",
     keymap=VT220_KEYMAP,
+    printer_capabilities=DEC_MEDIA_COPY,
+)
+
+VT510 = Model(
+    name="vt510",
+    da1_response="\033[?64;1;2;7;8;9;15;18;21;44;45;46c",
+    da2_response="\033[>61;10;0c",
+    da3_response=None,
+    mode_capabilities=VT510_MODE_CAPABILITIES,
+    charsets=VT220.charsets,
+    color_depth="monochrome",
+    keymap=VT220_KEYMAP,
+    decrqss_valid_is_one=False,
 )
 
 LINUX = Model(
@@ -113,6 +147,7 @@ LINUX = Model(
     color_depth="256",
     palette=VGA_PALETTE,
     keymap=LINUX_KEYMAP,
+    printer_capabilities=NO_PRINTER,
 )
 
 # GNU screen — a VT100+AVO emulator; keymap and colours from terminfo (screen-256color).
@@ -126,6 +161,7 @@ SCREEN = Model(
     mode_capabilities=SCREEN_MODE_CAPABILITIES,
     color_depth="256",
     keymap=SCREEN_KEYMAP,
+    printer_capabilities=NO_PRINTER,
 )
 
 # tmux — live-verified against a running tmux: DA1 ?1;2;4c (VT100+AVO, and it advertises
@@ -138,6 +174,7 @@ TMUX = Model(
     mode_capabilities=TMUX_MODE_CAPABILITIES,
     color_depth="256",
     keymap=SCREEN_KEYMAP,
+    printer_capabilities=NO_PRINTER,
 )
 
 # rxvt-unicode — keymap and colours from terminfo (rxvt-unicode-256color). DA1 is VT100+AVO;
@@ -150,6 +187,7 @@ URXVT = Model(
     mode_capabilities=URXVT_MODE_CAPABILITIES,
     color_depth="256",
     keymap=URXVT_KEYMAP,
+    printer_capabilities=NO_PRINTER,
 )
 
 # GNOME Terminal / VTE — live-verified against gnome-terminal (VTE 0.84): DA1 reports
@@ -163,6 +201,7 @@ GNOME = Model(
     mode_capabilities=VTE_MODE_CAPABILITIES,
     color_depth="truecolor",
     keymap=XTERM_KEYMAP,
+    printer_capabilities=NO_PRINTER,
 )
 
 # kitty — live-verified (TERM=xterm-kitty). DA2 firmware field 4000 is the kitty version
@@ -176,6 +215,7 @@ KITTY = Model(
     mode_capabilities=KITTY_MODE_CAPABILITIES,
     color_depth="truecolor",
     keymap=XTERM_KEYMAP,
+    printer_capabilities=NO_PRINTER,
 )
 
 DEFAULT = BITTTY
@@ -188,6 +228,7 @@ PERSONALITIES: dict[str, Model] = {
     "vt100": VT100,
     "vt102": VT100,
     "vt220": VT220,
+    "vt510": VT510,
     "linux": LINUX,
     "screen": SCREEN,
     "screen-256color": SCREEN,
@@ -209,7 +250,7 @@ def get_model(term_name: str | None, default: Model = DEFAULT) -> Model:
     """Resolve a $TERM name to a model, falling back through shorter prefixes.
 
     So "xterm-kitty" or "screen.xterm-256color" degrade gracefully to the nearest
-    known family, and an unknown or empty TERM yields the default (xterm).
+    known family, and an unknown or empty TERM yields the native BITTTY model.
     """
     name = term_name or ""
     while name:

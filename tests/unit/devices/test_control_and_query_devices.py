@@ -1,6 +1,5 @@
-from bittty import constants
+from bittty import Board, constants
 from bittty.operations import Operation
-from bittty import Board
 
 
 class RecordingTransport:
@@ -64,7 +63,7 @@ def test_query_device_reports_cursor_and_device_status():
     assert transport.data == [
         "\x1b[6;11R",
         "\x1b[0n",
-        "\x1b[?62;1;6;8;9;15;18;21;22;23c",
+        "\x1b[?62;1;2;6;8;9;15;18;21;22;23c",
     ]
     assert transport.flush_count == 3
 

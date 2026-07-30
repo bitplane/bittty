@@ -59,7 +59,8 @@ Ports are full-duplex jacks on the board; connections are the cables that plug i
 - **HostPort** carries bytes both ways (a serial line). A `Connection` — PTY, pipe,
   socket — plugs in; the port's receive pump feeds the child's output into the parser.
 - **PrinterPort** carries raw bytes both ways to a virtual printer, binary stream, serial
-  adapter, or historical-hardware bridge. Controller mode is routed before text decoding.
+  adapter, or historical-hardware bridge. Controller mode is routed before text decoding;
+  VT510-capable adapters may also accept immutable `PrinterConfiguration` snapshots.
 - **DisplayPort** carries typed events both ways: present events down to the chrome,
   input/focus/caps up from it. Serialize its two event streams and the chrome can live in
   another process or another machine; the board never notices. The name is the
@@ -67,9 +68,9 @@ Ports are full-duplex jacks on the board; connections are the cables that plug i
 
 ## The Model (`bittty.Model`)
 
-The model number: the emulation profile as data (XTERM, VT220, LINUX...). DA responses,
-keymaps, the mode repertoire, charsets. A board is constructed with a model the way a VT220
-ships with its ROMs.
+The model number: the emulation profile as data (XTERM, VT220, VT510, LINUX...). DA
+responses, keymaps, mode and printer repertoires, charsets. A board is constructed with a
+model the way a VT220 ships with its ROMs.
 
 The default BITTTY model is the native superset; named compatibility models expose only their audited repertoires.
 

@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from .caps import TerminalCaps
     from .devices.board import Board
     from .present import PresentEvent
+    from .printers import PrinterConfiguration
 
 logger = logging.getLogger(__name__)
 
@@ -215,7 +216,9 @@ class PrinterPort:
     @property
     def status(self) -> PrinterStatus:
         """Return the connection's reported status, or a conservative default."""
-        if self.connection is None or self._failed:
+        if self.connection is None:
+            return PrinterStatus.OFFLINE
+        if self._failed:
             return PrinterStatus.NOT_READY
         value = getattr(self.connection, "status", PrinterStatus.READY)
         if callable(value):
@@ -240,6 +243,22 @@ class PrinterPort:
             self._failed = True
             logger.info("Printer connection write failed", exc_info=True)
             return None
+
+    def configure(self, configuration: PrinterConfiguration) -> bool:
+        """Offer a complete configuration snapshot to a capable adapter."""
+        if self.connection is None:
+            return False
+        configure = getattr(self.connection, "configure", None)
+        if not callable(configure):
+            return True
+        try:
+            configure(configuration)
+            self._failed = False
+            return True
+        except Exception:
+            self._failed = True
+            logger.info("Printer connection configuration failed", exc_info=True)
+            return False
 
     async def _pump(self, reader) -> None:
         connection = self.connection

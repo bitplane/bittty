@@ -1,5 +1,6 @@
 import asyncio
 import io
+
 import pytest
 
 from bittty import Board, MemoryPrinter, PrinterPort, PrinterStatus, StreamPrinter
@@ -48,7 +49,7 @@ async def test_duplex_memory_printer_pumps_input_to_the_host():
     board.host.attach(host)
     printer = MemoryPrinter()
     board.printer.connect(printer)
-    board.parser.feed("\x1b[7i")
+    board.parser.feed("\x1b[6i")
     printer.send_bytes(b"reply")
 
     for _ in range(10):

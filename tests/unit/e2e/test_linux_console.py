@@ -1,8 +1,8 @@
 """Linux console fidelity: ESC ] P / ESC ] R palette, DECID, and its charset mappings."""
 
-from bittty.parser import Parser
-from bittty.model import LINUX
 from bittty import Board
+from bittty.model import LINUX
+from bittty.parser import Parser
 
 
 class RecordingTransport:
@@ -52,7 +52,7 @@ def test_decid_answers_like_primary_da():
     transport = RecordingTransport()
     board.host.attach(transport)
     parser.feed("\x1bZ")  # DECID
-    assert transport.data == ["\033[?62;1;6;8;9;15;18;21;22;23c"]  # xterm's DA1
+    assert transport.data == ["\033[?62;1;2;6;8;9;15;18;21;22;23c"]  # bittty's DA1
 
 
 def test_linux_recognises_the_ibm_pc_charset_designator():

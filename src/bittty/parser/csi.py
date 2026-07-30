@@ -157,6 +157,20 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
     if final_char == "p" and '"' in intermediates:  # DECSCL - Set Conformance Level
         return Operation("DECSCL", (tuple(params),), raw_csi_data)
 
+    # VT510 printer configuration. Keep exact intermediate matching here:
+    # several finals also name older cursor, margin, and rectangular functions.
+    printer_configuration = {
+        ("$", "s"): "DECSPRTT",
+        (")", "p"): "DECSDPT",
+        ("*", "p"): "DECSPPCS",
+        ("*", "u"): "DECSCP",
+        ("*", "r"): "DECSCS",
+        ("*", "s"): "DECSFC",
+        ("+", "w"): "DECSPP",
+    }.get(("".join(intermediates), final_char))
+    if printer_configuration is not None:
+        return Operation(printer_configuration, (tuple(params),), raw_csi_data)
+
     if final_char == "q" and '"' in intermediates:  # DECSCA - Select Character Protection
         mode = param(params, 0, 0)
         return Operation("DECSCA", (mode,), raw_csi_data)

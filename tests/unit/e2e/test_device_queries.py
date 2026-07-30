@@ -59,7 +59,7 @@ def test_device_attributes_primary():
     parser.feed("\x1b[c")  # ESC [ c
 
     # Should respond with VT220 capabilities
-    assert transport.data == ["\033[?62;1;6;8;9;15;18;21;22;23c"]
+    assert transport.data == ["\033[?62;1;2;6;8;9;15;18;21;22;23c"]
     assert transport.flush_count == 1
 
 
@@ -71,7 +71,7 @@ def test_device_attributes_with_param():
     parser.feed("\x1b[0c")  # ESC [ 0 c
 
     # Should respond with VT220 capabilities
-    assert transport.data == ["\033[?62;1;6;8;9;15;18;21;22;23c"]
+    assert transport.data == ["\033[?62;1;2;6;8;9;15;18;21;22;23c"]
     assert transport.flush_count == 1
 
 
@@ -212,7 +212,7 @@ def test_multiple_device_queries():
     assert transport.data == [
         "\033[11;16R",
         "\033[0n",
-        "\033[?62;1;6;8;9;15;18;21;22;23c",
+        "\033[?62;1;2;6;8;9;15;18;21;22;23c",
     ]
     assert transport.flush_count == 3
 
@@ -231,7 +231,7 @@ def test_vim_compatibility_queries():
     assert len(transport.data) == 4  # DA, secondary DA, DECRQM for mode 1, DECRQM for mode 25
 
     # Check specific responses
-    assert "\033[?62;1;6;8;9;15;18;21;22;23c" in transport.data  # Device Attributes (appears twice)
+    assert "\033[?62;1;2;6;8;9;15;18;21;22;23c" in transport.data
     assert "\033[?1;2$y" in transport.data  # Cursor keys mode (reset by default)
     assert "\033[?25;1$y" in transport.data  # Cursor visibility (set by default)
     assert transport.flush_count == 4

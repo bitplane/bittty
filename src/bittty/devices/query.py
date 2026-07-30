@@ -124,10 +124,17 @@ class QueryDevice(Device):
         """DECRQSS — answer a request for the current value of a setting."""
         request = operation.args[0]
         setting = self._status_string(request)
-        if setting is not None:
-            self.board.host.write(f"\x1bP1$r{setting}\x1b\\", flush=True)  # 1 = valid request
-        else:
-            self.board.host.write(f"\x1bP0$r{request}\x1b\\", flush=True)  # 0 = unsupported
+        settings = (setting,) if setting is not None else self.board.printer.status_strings(request)
+        valid = "1" if self.board.model.decrqss_valid_is_one else "0"
+        invalid = "0" if self.board.model.decrqss_valid_is_one else "1"
+        if settings is not None:
+            for value in settings:
+                self.board.host.write(f"\x1bP{valid}$r{value}\x1b\\", flush=True)
+            return
+        # Modern emulators echo the unsupported request. DEC hardware emits no
+        # setting data in the invalid response.
+        suffix = request if self.board.model.decrqss_valid_is_one else ""
+        self.board.host.write(f"\x1bP{invalid}$r{suffix}\x1b\\", flush=True)
 
     def _status_string(self, request: str) -> str | None:
         if request == "m":  # SGR

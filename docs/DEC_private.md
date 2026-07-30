@@ -87,7 +87,7 @@
 | 99 | DEC | DECMCM - Modem Control Mode | X |
 | 100 | DEC | DECAAM - Auto Answerback Mode | X |
 | 101 | DEC | DECCANSM - Conceal Answerback Message Mode | X |
-| 102 | DEC | DECNULM - Ignore Null Mode | X |
+| 102 | DEC | DECNULM - Ignore Null Mode | ✅ |
 | 103 | DEC | DECHDPXM - Half Duplex Mode | X |
 | 104 | DEC | DECESKM - Secondary Keyboard Language Mode | X |
 | 106 | DEC | DECOSCNM - Overscan Mode | X |

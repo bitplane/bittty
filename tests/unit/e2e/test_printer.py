@@ -133,7 +133,7 @@ def test_raw_controller_mode_preserves_bytes_and_filters_flow_control():
 
     board.feed_host_data(b"screen\x1b[5i\xff\x00raw\x11\x13\x1b[4iafter")
 
-    assert bytes(printer.data) == b"\xffraw"
+    assert bytes(printer.data) == b"\xff\x00raw"
     assert board.capture_text() == "screenafter"
 
 
@@ -205,7 +205,7 @@ def test_printer_status_dsr_and_detached_status():
     board.host.attach(host)
 
     parser.feed("\x1b[?15n")
-    assert host.data[-1] == "\x1b[?11n"
+    assert host.data[-1] == "\x1b[?13n"
 
     printer = MemoryPrinter(status=PrinterStatus.BUSY)
     board.printer.attach(printer)
@@ -219,15 +219,15 @@ def test_printer_to_host_modes_and_filtering():
     board.host.attach(host)
 
     board.printer.receive_bytes(b"ignored")
-    parser.feed("\x1b[7i")
-    board.printer.receive_bytes(b"A\x00\x11\x13B")
     parser.feed("\x1b[6i")
+    board.printer.receive_bytes(b"A\x00\x11\x13B")
+    parser.feed("\x1b[7i")
     board.printer.receive_bytes(b"ignored")
     parser.feed("\x1b[?9i")
     board.printer.receive_bytes(b"C")
     parser.feed("\x1b[?8i")
 
-    assert host.data == [b"AB", b"C"]
+    assert host.data == [b"A\x00B", b"C"]
 
 
 def test_mc2_sends_composed_screen_data_to_host():

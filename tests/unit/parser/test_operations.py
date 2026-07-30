@@ -133,6 +133,25 @@ def test_parser_emits_style_and_query_operations(board):
     ]
 
 
+def test_parser_emits_vt510_printer_configuration_operations(board):
+    sink = CollectingSink()
+    parser = Parser(sink)
+
+    parser.feed("\x1b[2$s\x1b[3)p\x1b[850*p\x1b[2;1*u\x1b[3;6*r\x1b[2;3;4;1*s\x1b[2;2;3;2+w")
+    parser.feed("\x9b3*p")
+
+    assert sink.operations == [
+        Operation("DECSPRTT", ((2,),), "\x1b[2$s"),
+        Operation("DECSDPT", ((3,),), "\x1b[3)p"),
+        Operation("DECSPPCS", ((850,),), "\x1b[850*p"),
+        Operation("DECSCP", ((2, 1),), "\x1b[2;1*u"),
+        Operation("DECSCS", ((3, 6),), "\x1b[3;6*r"),
+        Operation("DECSFC", ((2, 3, 4, 1),), "\x1b[2;3;4;1*s"),
+        Operation("DECSPP", ((2, 2, 3, 2),), "\x1b[2;2;3;2+w"),
+        Operation("DECSPPCS", ((3,),), "\x9b3*p"),
+    ]
+
+
 def test_parser_emits_reset_sgr_operation(board):
     sink = CollectingSink()
     parser = Parser(sink)

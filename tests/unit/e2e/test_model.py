@@ -1,7 +1,7 @@
 """Model-driven behaviour: the same board answers as different terminals."""
 
 from bittty import Board, constants
-from bittty.model import LINUX, VT100, VT220, XTERM
+from bittty.model import LINUX, VT100, VT220, VT510, XTERM
 from bittty.parser import Parser
 from bittty.style import Color
 
@@ -32,6 +32,7 @@ def test_primary_da_response_differs_by_model():
     assert _replies(XTERM, "\x1b[c") == ["\033[?62;1;6;8;9;15;18;21;22;23c"]
     assert _replies(VT100, "\x1b[c") == ["\033[?1;2c"]
     assert _replies(VT220, "\x1b[c") == ["\033[?62;1;2;6;8;9c"]
+    assert _replies(VT510, "\x1b[c") == ["\033[?64;1;2;7;8;9;15;18;21;44;45;46c"]
 
 
 def test_vt100_does_not_answer_secondary_da():
@@ -41,8 +42,25 @@ def test_vt100_does_not_answer_secondary_da():
 
 
 def test_default_model_is_native_bittty_with_xterm_compatible_identity():
-    assert _replies(None, "\x1b[c") == ["\033[?62;1;6;8;9;15;18;21;22;23c"]
+    assert _replies(None, "\x1b[c") == ["\033[?62;1;2;6;8;9;15;18;21;22;23c"]
     assert Board().model.name == "bittty"
+
+
+def test_vt510_identity_and_audited_private_modes():
+    assert _replies(VT510, "\x1b[>c") == ["\033[>61;10;0c"]
+    board = Board(model=VT510)
+    parser = Parser(board)
+    transport = RecordingTransport()
+    board.host.attach(transport)
+    for mode in (66, 67, 69, 95, 102):
+        parser.feed(f"\x1b[?{mode}$p")
+    assert transport.data == [
+        "\x1b[?66;2$y",
+        "\x1b[?67;2$y",
+        "\x1b[?69;2$y",
+        "\x1b[?95;2$y",
+        "\x1b[?102;2$y",
+    ]
 
 
 def test_model_can_omit_a_mode():

@@ -21,10 +21,21 @@ from .connections import (
     PrinterStatus,
 )
 from .devices.board import Board
-from .model import BITTTY, LINUX, VT100, VT220, XTERM, Model
+from .model import BITTTY, LINUX, VT100, VT220, VT510, XTERM, Model, PrinterCapabilities
 from .operations import Operation, OperationSink
 from .parser import Parser
-from .printers import MemoryPrinter, StreamPrinter
+from .printers import (
+    MemoryPrinter,
+    PrintedDataType,
+    PrinterConfiguration,
+    PrinterFlowControl,
+    PrinterFlowThreshold,
+    PrinterParity,
+    PrinterPortSelection,
+    PrinterType,
+    ProPrinterCodePage,
+    StreamPrinter,
+)
 from .style import (
     CURSOR_CODE,
     RESET_CODE,
@@ -44,6 +55,7 @@ __all__ = [
     "RESET_CODE",
     "VT100",
     "VT220",
+    "VT510",
     "XTERM",
     "Board",
     "Connection",
@@ -56,8 +68,17 @@ __all__ = [
     "Parser",
     "Presentable",
     "PrinterConnection",
+    "PrinterCapabilities",
+    "PrinterConfiguration",
+    "PrinterFlowControl",
+    "PrinterFlowThreshold",
+    "PrinterParity",
     "PrinterPort",
+    "PrinterPortSelection",
     "PrinterStatus",
+    "PrinterType",
+    "PrintedDataType",
+    "ProPrinterCodePage",
     "StreamPrinter",
     "TerminalCaps",
     "Video",
