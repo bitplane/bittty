@@ -58,6 +58,8 @@ Ports are full-duplex jacks on the board; connections are the cables that plug i
 
 - **HostPort** carries bytes both ways (a serial line). A `Connection` — PTY, pipe,
   socket — plugs in; the port's receive pump feeds the child's output into the parser.
+- **PrinterPort** carries raw bytes both ways to a virtual printer, binary stream, serial
+  adapter, or historical-hardware bridge. Controller mode is routed before text decoding.
 - **DisplayPort** carries typed events both ways: present events down to the chrome,
   input/focus/caps up from it. Serialize its two event streams and the chrome can live in
   another process or another machine; the board never notices. The name is the

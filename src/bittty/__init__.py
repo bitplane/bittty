@@ -11,11 +11,20 @@ here — import it from bittty.terminals.
 from importlib.metadata import PackageNotFoundError, version
 
 from .caps import TerminalCaps
-from .connections import Connection, DisplayPort, HostPort, Presentable
+from .connections import (
+    Connection,
+    DisplayPort,
+    HostPort,
+    Presentable,
+    PrinterConnection,
+    PrinterPort,
+    PrinterStatus,
+)
 from .devices.board import Board
 from .model import BITTTY, LINUX, VT100, VT220, XTERM, Model
 from .operations import Operation, OperationSink
 from .parser import Parser
+from .printers import MemoryPrinter, StreamPrinter
 from .style import (
     CURSOR_CODE,
     RESET_CODE,
@@ -41,10 +50,15 @@ __all__ = [
     "DisplayPort",
     "HostPort",
     "Model",
+    "MemoryPrinter",
     "Operation",
     "OperationSink",
     "Parser",
     "Presentable",
+    "PrinterConnection",
+    "PrinterPort",
+    "PrinterStatus",
+    "StreamPrinter",
     "TerminalCaps",
     "Video",
     "WidthPolicy",

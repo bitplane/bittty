@@ -2,12 +2,12 @@
 Unix/Linux/macOS PTY implementation.
 """
 
-import os
-import struct
-import signal
 import asyncio
-import subprocess
 import logging
+import os
+import signal
+import struct
+import subprocess
 
 try:
     import fcntl
@@ -18,8 +18,8 @@ except ImportError:
     pty = None
     termios = None
 
-from .base import PTY, ENV
 from .. import constants
+from .base import ENV, PTY
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +128,7 @@ class UnixPTY(PTY):
         """
         pass
 
-    async def read_async(self, size: int = constants.DEFAULT_PTY_BUFFER_SIZE) -> str:
+    async def read_bytes_async(self, size: int = constants.DEFAULT_PTY_BUFFER_SIZE) -> bytes:
         """
         Async read from PTY using efficient file descriptor monitoring.
 
@@ -136,7 +136,7 @@ class UnixPTY(PTY):
         This is the most performant approach since Unix supports select/poll on PTY fds.
         """
         if self.closed:
-            return ""
+            return b""
 
         loop = asyncio.get_running_loop()
         try:
@@ -163,10 +163,13 @@ class UnixPTY(PTY):
                     if e.errno in (constants.EBADF, constants.EINVAL):
                         # Mark as closed by closing the file
                         self.master_file.close()
-                # The incremental decoder holds split UTF-8 sequences across reads.
-                future.set_result(self._dec.decode(b"".join(parts), final=False))
+                future.set_result(b"".join(parts))
 
             loop.add_reader(self.master_fd, read_ready)
             return await future
         except Exception:
-            return ""
+            return b""
+
+    async def read_async(self, size: int = constants.DEFAULT_PTY_BUFFER_SIZE) -> str:
+        """Compatibility text read; the board's host port uses the raw method."""
+        return self._dec.decode(await self.read_bytes_async(size), final=False)

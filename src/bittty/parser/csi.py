@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import logging
 from functools import lru_cache
+
 from ..operations import Operation
 from ..style import parse_sgr_with_reset
-
 
 logger = logging.getLogger(__name__)
 
@@ -26,10 +26,12 @@ def parse_csi_params(data):
     Returns:
         tuple: (params_list, intermediate_chars, final_char)
     """
-    if len(data) < 3 or not data.startswith("\x1b["):
+    if data.startswith("\x1b["):
+        content = data[2:]
+    elif data.startswith("\x9b"):
+        content = data[1:]
+    else:
         return [], [], ""
-
-    content = data[2:]
     if not content:
         return [], [], ""
 
@@ -91,7 +93,7 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
     TUI session uses a few hundred distinct sequences), and Operation is frozen
     with immutable args, so one instance per distinct sequence is safe to share.
     """
-    if len(raw_csi_data) < 3:
+    if len(raw_csi_data) < 2:
         return None
 
     params, intermediates, final_char = parse_csi_params(raw_csi_data)
@@ -121,6 +123,8 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
 
     if final_char == "n":  # DSR/CPR - Device Status Report / Cursor Position Report
         code = param(params, 0, 0)
+        if intermediates == ["?"] and code == 15:
+            return Operation("DSR_PRINTER", (code,), raw_csi_data)
         if code == 5:
             return Operation("DSR", (code,), raw_csi_data)
         if code == 6:

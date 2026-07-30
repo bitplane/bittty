@@ -134,7 +134,7 @@ def test_printer_private_modes_report_printer_device_state():
     board, parser, transport = _term()
 
     parser.feed("\x1b[?18$p\x1b[?19$p")
-    assert transport.data[-2:] == ["\x1b[?18;2$y", "\x1b[?19;1$y"]
+    assert transport.data[-2:] == ["\x1b[?18;2$y", "\x1b[?19;2$y"]
 
     parser.feed("\x1b[?18h\x1b[?19l\x1b[?18$p\x1b[?19$p")
     assert board.printer.print_form_feed is True
@@ -235,7 +235,7 @@ def test_destination_caps_cannot_add_grapheme_mode_to_old_model():
 def test_vt220_reports_xterm_era_modes_as_unrecognised():
     _, parser, transport = _term(VT220)
     parser.feed("\x1b[?18$p\x1b[?19$p")
-    assert transport.data[-2:] == ["\x1b[?18;2$y", "\x1b[?19;1$y"]
+    assert transport.data[-2:] == ["\x1b[?18;2$y", "\x1b[?19;2$y"]
     parser.feed("\x1b[?42$p")
     assert transport.data[-1] == "\x1b[?42;2$y"
     for mode in (45, 95, 1005, 1007, 1015, 1034, 1035, 1036, 1037, 1039, 1045):

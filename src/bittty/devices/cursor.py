@@ -186,10 +186,10 @@ class CursorDevice(Device):
         screen = self.board.blitter
         return screen.left_margin <= self.x <= screen.right_margin or self._pending_wrap_is_valid()
 
-    def line_feed(self, is_wrapped: bool = False) -> None:
+    def line_feed(self, is_wrapped: bool = False, print_trigger: str | None = None) -> None:
         """Move down one line, scrolling the active scroll region if needed."""
-        if self.board.printer.auto_print:  # MC auto-print: paper gets the line as we leave it
-            self.board.printer.print_line(self.y)
+        if self.board.printer.auto_print and print_trigger is not None:
+            self.board.printer.auto_print_line(self.y, print_trigger)
         screen = self.board.blitter
         within_columns = self._within_horizontal_margins()
         if is_wrapped:
@@ -330,7 +330,7 @@ class CursorDevice(Device):
         if not pending and self.x < right:
             return left, right
         if self.board.modes.auto_wrap:
-            self.line_feed(is_wrapped=True)
+            self.line_feed(is_wrapped=True, print_trigger="\n")
             self.x = left
         else:
             self.cancel_pending_wrap()

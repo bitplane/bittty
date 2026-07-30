@@ -14,12 +14,13 @@ from typing import Any, Callable
 
 from .. import constants
 from ..caps import TerminalCaps
+from ..connections import DisplayPort, HostPort
+from ..model import DEFAULT, Model
 from ..operations import Operation
 from ..parser import Parser
-from ..model import DEFAULT, Model
 from ..present import Bell, PresentEvent
-from ..connections import DisplayPort, HostPort
 from ..width import DEFAULT_WIDTH_POLICY, WidthPolicy
+from .blitter import Blitter
 from .charset import CharsetDevice
 from .control import ControlDevice
 from .cursor import CursorDevice
@@ -29,7 +30,6 @@ from .mouse import MouseDevice
 from .palette import PaletteDevice
 from .printer import PrinterDevice
 from .query import QueryDevice
-from .blitter import Blitter
 from .style import StyleDevice
 from .title import TitleDevice
 
@@ -185,6 +185,11 @@ class Board:
             self.printer.emit(text)
             return
         self.blitter.write_text(text, self.style.current)
+
+    def feed_host_data(self, data: bytes | str) -> None:
+        """Canonical host-output entry point, preserving raw printer-controller bytes."""
+        sink = self._pty_data_callback or self.parser.feed
+        self.printer.feed_host_data(data, sink)
 
     def resize(self, width: int, height: int) -> None:
         """Resize the terminal, including buffers and the attached PTY."""
@@ -384,9 +389,9 @@ class Board:
         """Swap the host port's receive sink (a terminal uses this to add render throttling)."""
         self._pty_data_callback = callback
 
-    def _dispatch_pty_data(self, data: str) -> None:
+    def _dispatch_pty_data(self, data: bytes | str) -> None:
         """The host port's receive sink: the callback if set, else straight into the parser."""
-        (self._pty_data_callback or self.parser.feed)(data)
+        self.feed_host_data(data)
 
     def _pty_idle(self) -> bool:
         """Nothing to read this wakeup: reap the child if it has exited."""

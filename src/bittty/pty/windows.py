@@ -2,8 +2,9 @@
 Windows PTY implementation using pywinpty.
 """
 
-import subprocess
+import asyncio
 import logging
+import subprocess
 import time
 
 try:
@@ -11,8 +12,8 @@ try:
 except ImportError:
     winpty = None
 
-from .base import PTY, ENV
 from .. import constants
+from .base import ENV, PTY
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +122,14 @@ class WindowsPTY(PTY):
     def write_bytes(self, data: bytes) -> int:
         """Pass protocol bytes through winpty's text-only input interface."""
         return self.write(data.decode("latin-1"))
+
+    async def read_bytes_async(self, size: int = constants.DEFAULT_PTY_BUFFER_SIZE) -> str:
+        """Best-effort receive path: pywinpty exposes decoded text, not raw bytes."""
+        loop = asyncio.get_running_loop()
+        try:
+            return await loop.run_in_executor(None, self.read, size)
+        except Exception:
+            return ""
 
     def resize(self, rows: int, cols: int) -> None:
         """Resize the terminal."""

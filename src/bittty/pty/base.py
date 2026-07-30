@@ -6,11 +6,11 @@ with platform-specific subclasses overriding only the byte-level I/O methods.
 """
 
 import asyncio
-import os
-from typing import BinaryIO
-import subprocess
 import codecs
+import os
+import subprocess
 from io import BytesIO
+from typing import BinaryIO
 
 from .. import constants
 
@@ -117,6 +117,14 @@ class PTY:
             return await loop.run_in_executor(None, self.read, size)
         except Exception:
             return ""
+
+    async def read_bytes_async(self, size: int = constants.DEFAULT_PTY_BUFFER_SIZE) -> bytes:
+        """Read raw bytes asynchronously without passing through the text decoder."""
+        loop = asyncio.get_running_loop()
+        try:
+            return await loop.run_in_executor(None, self.read_bytes, size)
+        except Exception:
+            return b""
 
     def flush(self) -> None:
         """Flush output."""

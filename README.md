@@ -40,3 +40,4 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
 
 - Resizing is not atomic with concurrent PTY output.
 - There is no scrollback buffer or reflow on resize.
+- Printer-language modes and historical baud/buffer timing are not emulated yet.

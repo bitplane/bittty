@@ -22,9 +22,9 @@ class ControlDevice(Device):
             "C0_BEL": lambda op: self.board.bell(),
             "C0_BS": lambda op: self.cursor.backspace(),
             "C0_HT": lambda op: self.cursor.horizontal_tab(),
-            "C0_LF": lambda op: self.cursor.line_feed(),
-            "C0_VT": lambda op: self.cursor.line_feed(),
-            "C0_FF": lambda op: self.cursor.line_feed(),
+            "C0_LF": lambda op: self.cursor.line_feed(print_trigger="\n"),
+            "C0_VT": lambda op: self.cursor.line_feed(print_trigger="\x0b"),
+            "C0_FF": lambda op: self.cursor.line_feed(print_trigger="\x0c"),
             "C0_CR": lambda op: self.cursor.carriage_return(),
             "C0_CRLF": lambda op: self.carriage_return_line_feed(),
             "C0_SO": lambda op: self.charset.shift_out(),
@@ -43,7 +43,7 @@ class ControlDevice(Device):
     def carriage_return_line_feed(self) -> None:
         """CR+LF as one fused token (the parser batches the pair)."""
         self.cursor.carriage_return()
-        self.cursor.line_feed()
+        self.cursor.line_feed(print_trigger="\n")
 
     def next_line(self) -> None:
         """NEL — carriage return followed by line feed."""

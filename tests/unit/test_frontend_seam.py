@@ -137,6 +137,17 @@ async def test_host_port_pumps_child_output_through_the_parser_into_video():
     assert "hello" in board.capture_pane()
 
 
+async def test_host_port_accepts_text_from_a_nominal_raw_reader():
+    class TextOnlyConnection(QueueConnection):
+        async def read_bytes_async(self, size):
+            return self.chunks.pop(0) if self.chunks else ""
+
+    board = Board(width=20, height=3)
+    board.host.connect(TextOnlyConnection(["hello"]), board._dispatch_pty_data, on_idle=lambda: True)
+    await board.host._reader_task
+    assert board.capture_text() == "hello"
+
+
 def test_display_port_receive_side_reaches_the_devices():
     """The upward pins: input, mouse, and focus flow from the chrome to the board."""
     board = Board(width=20, height=3)

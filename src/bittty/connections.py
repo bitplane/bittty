@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from enum import IntEnum
 from typing import TYPE_CHECKING, Callable, Protocol, runtime_checkable
 
 from . import constants
@@ -31,6 +32,24 @@ class Connection(Protocol):
 
 
 @runtime_checkable
+class PrinterConnection(Protocol):
+    """A byte-oriented cable plugged into the terminal's printer port."""
+
+    def write_bytes(self, data: bytes):
+        """Write bytes from the terminal to the printer."""
+
+
+class PrinterStatus(IntEnum):
+    """DEC printer-status values returned by DSR (CSI ? 15 n)."""
+
+    READY = 10
+    NOT_READY = 11
+    OFFLINE = 13
+    BUSY = 18
+    ASSIGNED = 19
+
+
+@runtime_checkable
 class Presentable(Protocol):
     """A terminal (chrome) that receives discrete present events from the board."""
 
@@ -48,7 +67,7 @@ class HostPort:
 
     def __init__(self, connection: Connection | None = None) -> None:
         self.connection = connection
-        self.on_data: Callable[[str], None] | None = None
+        self.on_data: Callable[[bytes | str], None] | None = None
         self.on_idle: Callable[[], bool] | None = None
         self.on_closed: Callable[[], None] | None = None
         self._reader_task: asyncio.Task | None = None
@@ -64,7 +83,7 @@ class HostPort:
     def connect(
         self,
         connection: Connection,
-        on_data: Callable[[str], None],
+        on_data: Callable[[bytes | str], None],
         on_idle: Callable[[], bool] | None = None,
         on_closed: Callable[[], None] | None = None,
     ) -> None:
@@ -93,7 +112,11 @@ class HostPort:
             try:
                 # A big buffer so a flooding child drains in few wakeups
                 # instead of blocking on the PTY.
-                data = await self.connection.read_async(65536)
+                raw_reader = getattr(self.connection, "read_bytes_async", None)
+                if callable(raw_reader):
+                    data = await raw_reader(65536)
+                else:
+                    data = await self.connection.read_async(65536)
 
                 if not data:
                     if self.on_idle is not None and self.on_idle():
@@ -148,6 +171,99 @@ class HostPort:
         if flush and hasattr(self.connection, "flush"):
             self.connection.flush()
         return result
+
+
+class PrinterPort:
+    """The board's byte-oriented, full-duplex auxiliary-printer jack."""
+
+    def __init__(
+        self,
+        connection: PrinterConnection | None = None,
+        on_data: Callable[[bytes], None] | None = None,
+    ) -> None:
+        self.connection = connection
+        self.on_data = on_data
+        self._reader_task: asyncio.Task | None = None
+        self._failed = False
+
+    def attach(self, connection: PrinterConnection) -> None:
+        """Attach a transmit-only connection without starting a read pump."""
+        self.disconnect()
+        self.connection = connection
+        self._failed = False
+
+    def connect(self, connection: PrinterConnection) -> None:
+        """Attach a connection and pump its optional receive side."""
+        self.attach(connection)
+        reader = getattr(connection, "read_bytes_async", None)
+        if not callable(reader):
+            reader = getattr(connection, "read_async", None)
+        if callable(reader):
+            self._reader_task = asyncio.create_task(self._pump(reader))
+
+    def disconnect(self) -> None:
+        """Stop inbound reads and detach the printer cable."""
+        if self._reader_task and not self._reader_task.done():
+            self._reader_task.cancel()
+        self._reader_task = None
+        self.connection = None
+
+    @property
+    def connected(self) -> bool:
+        return self.connection is not None
+
+    @property
+    def status(self) -> PrinterStatus:
+        """Return the connection's reported status, or a conservative default."""
+        if self.connection is None or self._failed:
+            return PrinterStatus.NOT_READY
+        value = getattr(self.connection, "status", PrinterStatus.READY)
+        if callable(value):
+            value = value()
+        try:
+            return PrinterStatus(value)
+        except (TypeError, ValueError):
+            return PrinterStatus.NOT_READY
+
+    def write_bytes(self, data: bytes, *, flush: bool = False):
+        """Send bytes to the printer; connection failures do not damage terminal state."""
+        if self.connection is None:
+            return None
+        try:
+            result = self.connection.write_bytes(data)
+            if flush:
+                flusher = getattr(self.connection, "flush", None)
+                if callable(flusher):
+                    flusher()
+            return result
+        except Exception:
+            self._failed = True
+            logger.info("Printer connection write failed", exc_info=True)
+            return None
+
+    async def _pump(self, reader) -> None:
+        connection = self.connection
+        while self.connection is connection and not getattr(connection, "closed", False):
+            try:
+                data = await reader(65536)
+                if not data:
+                    await asyncio.sleep(0.01)
+                    continue
+                if isinstance(data, str):
+                    data = data.encode("utf-8", errors="replace")
+                if self.on_data is not None:
+                    self.on_data(data)
+                await asyncio.sleep(0)
+            except asyncio.CancelledError:
+                break
+            except (OSError, ValueError):
+                self._failed = True
+                logger.info("Printer connection read failed", exc_info=True)
+                break
+            except Exception:
+                self._failed = True
+                logger.exception("Error reading from printer connection")
+                break
 
 
 class DisplayPort:
