@@ -1,8 +1,6 @@
-"""
-bittty: A fast, pure Python terminal emulator library.
+"""A fast, pure Python terminal emulator library.
 
-bittty (bitplane-tty) is a high-performance terminal emulator engine
-that provides comprehensive ANSI sequence parsing and terminal state management.
+bittty provides ANSI/DEC sequence parsing, terminal state, and a headless cell grid.
 
 Vocabulary: the `Board` is the machine (devices, registers, video memory, the
 child process). A terminal (bittty.terminals) is the chrome a human looks at,

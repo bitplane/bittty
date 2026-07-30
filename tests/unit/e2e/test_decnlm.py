@@ -26,8 +26,8 @@ def test_decnlm_enabled_cr_lf():
     board = Board(width=10, height=5)
     parser = Parser(board)
 
-    # Enable DECNLM (ESC [ ? 20 h)
-    parser.feed("\x1b[?20h")
+    # Enable LNM (CSI 20 h)
+    parser.feed("\x1b[20h")
 
     # Move cursor to column 5
     board.cursor.x = 5
@@ -47,10 +47,10 @@ def test_decnlm_disabled_lf_only():
     parser = Parser(board)
 
     # Enable DECNLM first
-    parser.feed("\x1b[?20h")
+    parser.feed("\x1b[20h")
 
-    # Then disable DECNLM (ESC [ ? 20 l)
-    parser.feed("\x1b[?20l")
+    # Then disable LNM (CSI 20 l)
+    parser.feed("\x1b[20l")
 
     # Move cursor to column 5
     board.cursor.x = 5
@@ -70,7 +70,7 @@ def test_decnlm_multiple_line_feeds():
     parser = Parser(board)
 
     # Enable DECNLM
-    parser.feed("\x1b[?20h")
+    parser.feed("\x1b[20h")
 
     # Move cursor to column 7
     board.cursor.x = 7
@@ -90,7 +90,7 @@ def test_decnlm_at_bottom_with_scrolling():
     parser = Parser(board)
 
     # Enable DECNLM
-    parser.feed("\x1b[?20h")
+    parser.feed("\x1b[20h")
 
     # Move cursor to bottom row and some column
     board.cursor.x = 6
@@ -110,7 +110,7 @@ def test_decnlm_explicit_carriage_return_unaffected():
     parser = Parser(board)
 
     # Enable DECNLM
-    parser.feed("\x1b[?20h")
+    parser.feed("\x1b[20h")
 
     # Move cursor to column 5
     board.cursor.x = 5
@@ -141,7 +141,7 @@ def test_decnlm_with_cr_lf_sequence():
     assert board.cursor.y == 2
 
     # Now test with DECNLM enabled
-    parser.feed("\x1b[?20h")
+    parser.feed("\x1b[20h")
 
     board.cursor.x = 5
     board.cursor.y = 2
@@ -163,11 +163,11 @@ def test_decnlm_mode_flag_state():
     assert board.modes.linefeed_newline_mode is False
 
     # Enable DECNLM
-    parser.feed("\x1b[?20h")
+    parser.feed("\x1b[20h")
     assert board.modes.linefeed_newline_mode is True
 
     # Disable DECNLM
-    parser.feed("\x1b[?20l")
+    parser.feed("\x1b[20l")
     assert board.modes.linefeed_newline_mode is False
 
 
@@ -177,7 +177,7 @@ def test_decnlm_wrapped_line_behavior():
     parser = Parser(board)
 
     # Enable DECNLM
-    parser.feed("\x1b[?20h")
+    parser.feed("\x1b[20h")
 
     # Write text that will wrap
     parser.feed("Hello")  # Fills first line
@@ -215,8 +215,8 @@ def test_decnlm_vertical_tab_enabled():
     board = Board(width=10, height=5)
     parser = Parser(board)
 
-    # Enable DECNLM (ESC [ ? 20 h)
-    parser.feed("\x1b[?20h")
+    # Enable LNM (CSI 20 h)
+    parser.feed("\x1b[20h")
 
     # Move cursor to column 5
     board.cursor.x = 5
@@ -252,8 +252,8 @@ def test_decnlm_form_feed_enabled():
     board = Board(width=10, height=5)
     parser = Parser(board)
 
-    # Enable DECNLM (ESC [ ? 20 h)
-    parser.feed("\x1b[?20h")
+    # Enable LNM (CSI 20 h)
+    parser.feed("\x1b[20h")
 
     # Move cursor to column 5
     board.cursor.x = 5
@@ -273,7 +273,7 @@ def test_decnlm_mixed_lf_vt_ff():
     parser = Parser(board)
 
     # Enable DECNLM
-    parser.feed("\x1b[?20h")
+    parser.feed("\x1b[20h")
 
     # Move cursor to column 5
     board.cursor.x = 5

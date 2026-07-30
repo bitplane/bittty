@@ -1,4 +1,6 @@
-"""Extended xterm private modes: storage, DECRQM self-reporting, and model gating."""
+"""Extended private modes: implemented capabilities, honest DECRQM, and model gating."""
+
+import pytest
 
 from bittty import Board, TerminalCaps
 from bittty.model import VT220
@@ -26,30 +28,54 @@ def _term(model=None):
     return board, Parser(board), transport
 
 
-def test_extended_modes_are_stored():
-    board, parser, _ = _term()
-    modes = board.modes
-    parser.feed("\x1b[?45h")  # reverse wraparound on
-    parser.feed("\x1b[?1042h")  # bell urgency on
-    assert modes.reverse_wraparound is True
-    assert modes.bell_urgency is True
-    parser.feed("\x1b[?45l")
-    assert modes.reverse_wraparound is False
-
-
-def test_allow_alt_screen_defaults_on():
-    board, _, _ = _term()
-    assert board.modes.allow_alt_screen is True
-
-
-def test_decrqm_reports_extended_modes_on_xterm():
+@pytest.mark.parametrize(
+    "mode, attr",
+    [
+        (2, "ansi_mode"),
+        (4, "scroll_mode"),
+        (5, "reverse_screen"),
+        (8, "auto_repeat"),
+        (12, "cursor_blinking"),
+        (20, "linefeed_newline_mode"),
+        (44, "margin_bell"),
+        (68, "keyboard_usage_mode"),
+        (42, "national_charset_mode"),
+        (45, "reverse_wraparound"),
+        (80, "sixel_display_mode"),
+        (1001, "mouse_highlight_tracking"),
+        (1005, "mouse_utf8_mode"),
+        (1007, "alternate_scroll_mode"),
+        (1015, "urxvt_mouse"),
+        (1016, "mouse_pixel_mode"),
+        (1036, "meta_sends_escape"),
+        (1039, "alt_sends_escape"),
+        (1042, "bell_urgency"),
+        (1043, "bell_raise"),
+        (1046, "allow_alt_screen"),
+        (1010, "scroll_on_output"),
+        (1011, "scroll_on_keypress"),
+        (1034, "eight_bit_input"),
+        (1035, "special_modifiers"),
+        (1037, "delete_sends_del"),
+        (1040, "keep_selection"),
+        (1041, "select_to_clipboard"),
+        (1044, "reuse_clipboard"),
+        (1070, "sixel_private_registers"),
+        (2028, "auto_resize_mode"),
+        (2031, "color_scheme_updates"),
+        (7727, "application_escape"),
+        (7786, "mousewheel_to_arrows"),
+        (8452, "sixel_cursor_right"),
+    ],
+)
+def test_unimplemented_private_modes_are_unrecognised_and_ignored(mode, attr):
     board, parser, transport = _term()
-    parser.feed("\x1b[?2031h")  # colour-scheme-change reporting on
-    parser.feed("\x1b[?2031$p")  # DECRQM
-    assert transport.data[-1] == "\x1b[?2031;1$y"  # 1 = set
-    parser.feed("\x1b[?2031l")
-    parser.feed("\x1b[?2031$p")
-    assert transport.data[-1] == "\x1b[?2031;2$y"  # 2 = reset
+    before = getattr(board.modes, attr)
+
+    parser.feed(f"\x1b[?{mode}h\x1b[?{mode}$p")
+
+    assert getattr(board.modes, attr) == before
+    assert transport.data[-1] == f"\x1b[?{mode};0$y"
 
 
 def test_grapheme_mode_reports_and_changes_its_state():
@@ -142,9 +168,12 @@ def test_decrqm_now_reports_mouse_and_paste_modes():
     assert transport.data[-1] == "\x1b[?2004;2$y"
 
 
-def test_ansi_keyboard_action_mode():
-    board, parser, _ = _term()
-    parser.feed("\x1b[2h")  # KAM (non-private ANSI mode 2)
-    assert board.modes.keyboard_action_mode is True
-    parser.feed("\x1b[2l")
-    assert board.modes.keyboard_action_mode is False
+@pytest.mark.parametrize("mode, attr", [(2, "keyboard_action_mode"), (12, "local_echo")])
+def test_unimplemented_ansi_modes_are_unrecognised_and_ignored(mode, attr):
+    board, parser, transport = _term()
+    before = getattr(board.modes, attr)
+
+    parser.feed(f"\x1b[{mode}h\x1b[{mode}$p")
+
+    assert getattr(board.modes, attr) == before
+    assert transport.data[-1] == f"\x1b[{mode};0$y"

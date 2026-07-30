@@ -42,36 +42,25 @@ class Model:
     keymap: KeyMap = field(default=XTERM_KEYMAP)
 
 
-# xterm-era private modes that postdate the DEC hardware terminals modelled here, so a
-# VT100/VT220 must report them as unrecognised (DECRQM status 0).
-_XTERM_ERA_MODES = frozenset(
+# Implemented private modes that postdate the VT220. The DEC hardware profiles
+# must report these as unrecognised (DECRQM status 0).
+_POST_VT220_MODES = frozenset(
     {
+        (True, 9),
         (True, 40),
-        (True, 45),
-        (True, 80),
-        (True, 1001),
-        (True, 1005),
-        (True, 1007),
-        (True, 1016),
-        (True, 1036),
-        (True, 1039),
-        (True, 1042),
-        (True, 1043),
-        (True, 1046),
+        (True, 47),
+        (True, 69),
+        (True, 1000),
+        (True, 1002),
+        (True, 1003),
+        (True, 1004),
+        (True, 1006),
+        (True, 1047),
+        (True, 1048),
+        (True, 1049),
+        (True, 2004),
+        (True, 2026),
         (True, 2027),
-        (True, 2031),
-        (True, 1010),
-        (True, 1011),
-        (True, 1034),
-        (True, 1035),
-        (True, 1037),
-        (True, 1040),
-        (True, 1041),
-        (True, 1044),
-        (True, 1070),
-        (True, 7727),
-        (True, 7786),
-        (True, 8452),
         (True, 8840),
     }
 )
@@ -89,10 +78,7 @@ VT100 = Model(
     da1_response="\033[?1;2c",  # VT100 with Advanced Video Option
     da2_response=None,  # secondary DA was introduced with the VT220
     da3_response=None,
-    # A VT100 predates xterm-era private modes such as bracketed paste (2004)
-    # and SGR mouse reporting (1006), and has no notion of bittty's auto-resize
-    # (2028); it does not recognise any of them.
-    unsupported_modes=frozenset({(True, 2004), (True, 1006), (True, 2028)}) | _XTERM_ERA_MODES,
+    unsupported_modes=_POST_VT220_MODES,
     # VT100 knows ASCII, UK, DEC Special Graphics and the alternate ROM sets;
     # DEC Supplemental and the national replacement sets arrived with the VT220.
     charsets=frozenset({"B", "A", "0", "1", "2"}),
@@ -105,25 +91,7 @@ VT220 = Model(
     da1_response="\033[?62;1;2;6;8;9c",
     da2_response="\033[>1;10;0c",
     da3_response=None,
-    # The VT220 predates mouse tracking, the alternate screen buffer, bracketed
-    # paste, and bittty's auto-resize; none of those private modes exist for it.
-    unsupported_modes=frozenset(
-        {
-            (True, 9),
-            (True, 1000),
-            (True, 1002),
-            (True, 1003),
-            (True, 1006),
-            (True, 1015),
-            (True, 47),
-            (True, 1047),
-            (True, 1048),
-            (True, 1049),
-            (True, 2004),
-            (True, 2028),
-        }
-    )
-    | _XTERM_ERA_MODES,
+    unsupported_modes=_POST_VT220_MODES,
     # VT220 adds DEC Supplemental ("<") and the national replacement sets over
     # the VT100, but DEC Technical (">") is a later (VT240/VT330) charset.
     charsets=frozenset(

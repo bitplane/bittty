@@ -1,4 +1,4 @@
-"""Inert-select cluster (raw 8-bit C1, SPA/EPA, S7C1T/S8C1T, ANSI level) + the mode tail."""
+"""Inert-select cluster: raw 8-bit C1, SPA/EPA, S7C1T/S8C1T, and ANSI level."""
 
 from bittty.parser import Parser
 from bittty import Board
@@ -64,46 +64,3 @@ def test_ansi_conformance_level():
     assert board.ansi_conformance_level == 2
     parser.feed("\x1b L")  # ESC SP L — level 1
     assert board.ansi_conformance_level == 1
-
-
-# --- mode tail --- #
-
-
-def test_mode_tail_flags_store_and_report():
-    board, parser = _term()
-    modes = board.modes
-    parser.feed("\x1b[?1010h")  # scroll on output
-    parser.feed("\x1b[?1037h")  # delete sends DEL
-    assert modes.scroll_on_output is True
-    assert modes.delete_sends_del is True
-
-
-def test_mode_tail_defaults():
-    board, _ = _term()
-    modes = board.modes
-    # xterm-default-on flags
-    assert modes.special_modifiers is True
-    assert modes.sixel_private_registers is True
-    # default-off
-    assert modes.scroll_on_keypress is False
-
-
-def test_mode_tail_reports_via_decrqm():
-    board, parser = _term()
-
-    class Rec:
-        def __init__(self):
-            self.data = []
-
-        def write(self, d):
-            self.data.append(d)
-
-        def flush(self):
-            pass
-
-    rec = Rec()
-    board.host.attach(rec)
-    parser.feed("\x1b[?1035$p")  # special_modifiers, default on
-    assert rec.data[-1] == "\x1b[?1035;1$y"
-    parser.feed("\x1b[?1010$p")  # scroll_on_output, default off
-    assert rec.data[-1] == "\x1b[?1010;2$y"

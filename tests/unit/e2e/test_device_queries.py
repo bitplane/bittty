@@ -151,13 +151,13 @@ def test_decrqm_private_mode_query_alternate_screen():
     assert transport.flush_count == 2
 
 
-def test_decrqm_private_mode_query_ansi_mode_default():
-    """DECANM status query should not require prior mode initialization by parser."""
+def test_decrqm_private_mode_query_unimplemented_ansi_mode():
+    """DECANM is not implemented, so it must not be advertised."""
     _terminal, parser, transport = terminal_with_transport()
 
     parser.feed("\x1b[?2$p")
 
-    assert transport.data == ["\033[?2;1$y"]
+    assert transport.data == ["\033[?2;0$y"]
 
 
 def test_decrqm_ansi_mode_query_insert_mode():

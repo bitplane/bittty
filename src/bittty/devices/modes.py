@@ -131,55 +131,32 @@ def _grapheme_clustering(device: ModeDevice, value: bool) -> None:
     device.board.blitter.set_grapheme_clustering(value)
 
 
-# The full mode repertoire. A model may omit any of these.
+# Implemented mode repertoire. A model may omit any of these.
 MODE_SPECS: list[Mode] = [
     # ANSI modes (autowrap and cursor visibility are DEC *private* 7/25, not ANSI)
-    Mode(2, False, "keyboard_action_mode", queryable=True),  # KAM
     Mode(4, False, "insert_mode", queryable=True),
-    Mode(12, False, "local_echo", invert=True, queryable=True),
     Mode(20, False, "linefeed_newline_mode", queryable=True),
     # DEC private modes
     Mode(1, True, "cursor_application_mode", queryable=True),
-    Mode(2, True, "ansi_mode", queryable=True),
     Mode(3, True, apply_fn=_deccolm, status_fn=_column_status),
-    Mode(4, True, "scroll_mode", queryable=True),
-    Mode(5, True, "reverse_screen", queryable=True),
     Mode(6, True, "origin_mode", queryable=True),
     Mode(7, True, "auto_wrap", queryable=True),
-    Mode(8, True, "auto_repeat", queryable=True),
     Mode(9, True, "mouse_tracking", queryable=True, peripheral="mouse"),
-    Mode(12, True, "cursor_blinking", queryable=True),
-    Mode(20, True, "linefeed_newline_mode", queryable=True),
     Mode(25, True, "cursor_visible", queryable=True, peripheral="cursor"),
     Mode(47, True, apply_fn=_alt_screen, status_fn=_alt_screen_status),
     Mode(66, True, "numeric_keypad", invert=True, queryable=True),
     Mode(67, True, "backarrow_key_sends_bs", queryable=True),
-    Mode(68, True, "keyboard_usage_mode", queryable=True),  # DECKBUM
     Mode(69, True, "left_right_margin_mode", queryable=True, apply_fn=_declrmm),  # DECLRMM
     Mode(1000, True, "mouse_tracking", queryable=True, peripheral="mouse"),
     Mode(1004, True, "focus_reporting", queryable=True),
     Mode(1002, True, apply_fn=_mouse_button_tracking, status_fn=_mouse_button_status, peripheral="mouse"),
     Mode(1003, True, apply_fn=_mouse_any_tracking, status_fn=_mouse_any_status, peripheral="mouse"),
     Mode(1006, True, "mouse_sgr_mode", queryable=True, peripheral="mouse"),
-    Mode(1015, True, "urxvt_mouse", queryable=True),
     Mode(1047, True, apply_fn=_alt_screen, status_fn=_alt_screen_status),
     Mode(1048, True, apply_fn=_save_restore_cursor),
     Mode(1049, True, apply_fn=_alt_screen_and_cursor, status_fn=_alt_screen_status),
-    # Extended xterm private modes — mostly stored state a terminal (chrome) actuates.
+    # Extended modes with implemented board or frontend behaviour.
     Mode(40, True, "allow_column_mode", queryable=True),  # permit DECCOLM 80<->132
-    Mode(42, True, "national_charset_mode", queryable=True),  # DECNRCM
-    Mode(44, True, "margin_bell", queryable=True),
-    Mode(45, True, "reverse_wraparound", queryable=True),  # xterm reverse-wraparound
-    Mode(80, True, "sixel_display_mode", queryable=True),  # DECSDM
-    Mode(1001, True, "mouse_highlight_tracking", queryable=True),  # VT200 hilite tracking
-    Mode(1005, True, "mouse_utf8_mode", queryable=True),
-    Mode(1007, True, "alternate_scroll_mode", queryable=True),
-    Mode(1016, True, "mouse_pixel_mode", queryable=True),  # SGR-pixels
-    Mode(1036, True, "meta_sends_escape", queryable=True),
-    Mode(1039, True, "alt_sends_escape", queryable=True),
-    Mode(1042, True, "bell_urgency", queryable=True),  # urgency hint on bell
-    Mode(1043, True, "bell_raise", queryable=True),  # raise window on bell
-    Mode(1046, True, "allow_alt_screen", queryable=True),  # permit 1047/1049 switching
     Mode(2004, True, "bracketed_paste", queryable=True),
     Mode(2026, True, "synchronized_output", queryable=True, peripheral="sync"),
     Mode(
@@ -190,21 +167,6 @@ MODE_SPECS: list[Mode] = [
         apply_fn=_grapheme_clustering,
         peripheral="grapheme",
     ),
-    Mode(2028, True, "auto_resize_mode", queryable=True),
-    Mode(2031, True, "color_scheme_updates", queryable=True),  # report light/dark changes
-    # Tail: scrollback/keyboard/clipboard/sixel behaviour flags a terminal (chrome) actuates.
-    Mode(1010, True, "scroll_on_output", queryable=True),
-    Mode(1011, True, "scroll_on_keypress", queryable=True),
-    Mode(1034, True, "eight_bit_input", queryable=True),
-    Mode(1035, True, "special_modifiers", queryable=True),
-    Mode(1037, True, "delete_sends_del", queryable=True),
-    Mode(1040, True, "keep_selection", queryable=True),
-    Mode(1041, True, "select_to_clipboard", queryable=True),
-    Mode(1044, True, "reuse_clipboard", queryable=True),
-    Mode(1070, True, "sixel_private_registers", queryable=True),
-    Mode(7727, True, "application_escape", queryable=True),
-    Mode(7786, True, "mousewheel_to_arrows", queryable=True),
-    Mode(8452, True, "sixel_cursor_right", queryable=True),
     Mode(
         8840,
         True,
@@ -271,7 +233,8 @@ class ModeDevice(Device):
         self.focus_reporting = False
         self.synchronized_output = False
         self.bracketed_paste = False
-        # Extended xterm private modes (stored state; terminal actuates most).
+        # Reserved defaults for modes outside the implemented repertoire.
+        # DECSET ignores these until the corresponding behaviour is added.
         self.keyboard_action_mode = False
         self.allow_column_mode = False
         self.national_charset_mode = False

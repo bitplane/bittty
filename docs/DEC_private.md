@@ -1,23 +1,26 @@
+# DEC private modes
+
+✅ means the mode has implemented behaviour, not merely a parsed or stored flag.
 
 | Mode | Origin | Description | Supported |
 | :--- | :--- | :--- | :--- |
 | 1 | DEC | DECCKM - Cursor Keys Mode | ✅ |
 | 2 | DEC | DECANM - ANSI/VT52 Mode | X |
 | 3 | DEC | DECCOLM - Column | ✅ |
-| 4 | DEC | DECSCLM - Scrolling | ✅ |
-| 5 | DEC | DECSCNM - Screen Mode (light or dark screen) | ✅ |
+| 4 | DEC | DECSCLM - Scrolling | X |
+| 5 | DEC | DECSCNM - Screen Mode (light or dark screen) | X |
 | 6 | DEC | DECOM - Origin Mode | ✅ |
 | 7 | DEC | DECAWM - Auto Wrap Mode | ✅ |
-| 8 | DEC | DECARM - Auto Repeat Mode | ✅ |
+| 8 | DEC | DECARM - Auto Repeat Mode | X |
 | 9 | DEC | DECINLM - Interlace Mode | X |
 | 9 | xterm | Mouse Tracking | ✅ |
 | 10 | DEC | DECEDM - Editing Mode | X |
 | 10 | rxvt | Show toolbar | X |
 | 11 | DEC | DECLTM - Line Transmit Mode | X |
 | 12 | DEC | DECKANAM - Katakana Shift Mode | X |
-| 12 | xterm | Blinking cursor | ✅ |
+| 12 | xterm | Blinking cursor | X |
 | 13 | DEC | DECSCFDM - Space Compression/Field Delimiter Mode | X |
-| 13 | xterm | Start blinking cursor | ✅ |
+| 13 | xterm | Start blinking cursor | X |
 | 14 | DEC | DECTEM - Transmit Execution Mode | X |
 | 14 | xterm | Enable XOR of blinking cursor control sequence and menu. | X |
 | 16 | DEC | DECEKEM - Edit Key Execution Mode | X |
@@ -37,7 +40,7 @@
 | 35 | rxvt | Enable font-shifting functions | X |
 | 36 | DEC | DECHEM - Hebrew Encoding Mode | X |
 | 38 | DEC | DECTEK - Tektronix 4010/4014 Mode | X |
-| 40 | DEC | DECCRNLM - Carriage Return/New Line Mode | ✅ |
+| 40 | DEC | DECCRNLM - Carriage Return/New Line Mode | X |
 | 40 | xterm | Allow 80 ⇒ 132 mode | ✅ |
 | 41 | DEC | DECUPM - Unidirectional Print Mode | X |
 | 41 | xterm | more(1) fix | X |
@@ -66,9 +69,9 @@
 | 65 | DEC | DECBCMM - Business Color Matching Mode | X |
 | 66 | DEC | DECNKM - Numeric Keypad Mode | ✅ |
 | 67 | DEC | DECBKM - Backarrow Key Mode | ✅ |
-| 68 | DEC | DECKBUM - Keyboard Usage Mode | ✅ |
+| 68 | DEC | DECKBUM - Keyboard Usage Mode | X |
 | 69 | DEC | DECVSSM - Vertical Split Screen Mode | X |
-| 69 | DEC | DECLRMM - Left Right Margin Mode | X |
+| 69 | DEC | DECLRMM - Left Right Margin Mode | ✅ |
 | 70 | DEC | DECFPM - Force Plot Mode | X |
 | 73 | DEC | DECXRLM - Transmission Rate Limiting | X |
 | 80 | DEC | DECSDM - Sixel Display Mode | X |
@@ -80,7 +83,7 @@
 | 95 | DEC | DECNCSM - No Clearing Screen on Column Change Mode | X |
 | 96 | DEC | DECRLCM - Right to Left Copy Mode | X |
 | 97 | DEC | DECCRTSM - CRT Save Mode | X |
-| 98 | DEC | DECARSM - Auto Resize Mode | ✅ |
+| 98 | DEC | DECARSM - Auto Resize Mode | X |
 | 99 | DEC | DECMCM - Modem Control Mode | X |
 | 100 | DEC | DECAAM - Auto Answerback Mode | X |
 | 101 | DEC | DECCANSM - Conceal Answerback Message Mode | X |
@@ -99,13 +102,13 @@
 | 116 | DEC | DECBBSM - Bold and Blink Style Mode | X |
 | 117 | DEC | DECECM - Erase Color Mode | X |
 | 1000 | xterm | Send Mouse X & Y on button press | ✅ |
-| 1001 | xterm | Use Hilite Mouse Tracking | ✅ |
+| 1001 | xterm | Use Hilite Mouse Tracking | X |
 | 1002 | xterm | Use Cell Motion Mouse Tracking | ✅ |
 | 1003 | xterm | Use All Motion Mouse Tracking | ✅ |
 | 1004 | xterm | Send FocusIn/FocusOut events | ✅ |
-| 1005 | xterm | Enable UTF-8 Mouse Mode | ✅ |
+| 1005 | xterm | Enable UTF-8 Mouse Mode | X |
 | 1006 | xterm | Enable SGR Mouse Mode | ✅ |
-| 1007 | xterm | Enable Alternate Scroll Mode | ✅ |
+| 1007 | xterm | Enable Alternate Scroll Mode | X |
 | 1010 | rxvt | Scroll to bottom on tty output | X |
 | 1011 | rxvt | Scroll to bottom on key press | X |
 | 1014 | xterm | Enable fastScroll resource | X |
@@ -123,7 +126,7 @@
 | 1043 | xterm | Enable raising of the window when Control-G is received | X |
 | 1044 | xterm | Reuse the most recent data copied to CLIPBOARD | X |
 | 1045 | xterm | Extended Reverse-wraparound mode (XTREVWRAP2) | X |
-| 1046 | xterm | Enable switching to/from Alternate Screen Buffer | ✅ |
+| 1046 | xterm | Enable switching to/from Alternate Screen Buffer | X |
 | 1047 | xterm | Use Alternate Screen Buffer | ✅ |
 | 1048 | xterm | Save cursor as in DECSC | ✅ |
 | 1049 | xterm | Save cursor as in DECSC and use alternate screen buffer | ✅ |
@@ -142,7 +145,7 @@
 | 2004 | xterm | Set bracketed paste mode | ✅ |
 | 2005 | xterm | Enable readline character-quoting | X |
 | 2006 | xterm | Enable readline newline pasting | X |
-| 2026 | Contour | Synchronized Output | X |
+| 2026 | Contour | Synchronized Output (frontend event) | ✅ |
 | 2027 | mintty | Rewrap on resize (deprecated) | X |
 | 2027 | Contour | Grapheme cluster processing (stdio destination-gated) | ✅ |
 | 2028 | Contour | Text reflow | X |

@@ -99,7 +99,7 @@ chrome a human looks at, and two full-duplex ports connect the board to its outs
 
 ### Key Design Patterns
 
-1. **State Machine Pattern**: Uses regex to parse inputs.
+1. **Streaming parser**: Preserves parser state across input chunks and dispatches completed operations.
 2. **Platform Abstraction**: PTY implementations hide platform differences behind common interface
 3. **Separation of Concerns**: Board logic separate from UI, making it framework-agnostic
 4. **Style Objects**: Immutable style representation allows efficient diffing and caching
@@ -121,14 +121,10 @@ chrome a human looks at, and two full-duplex ports connect the board to its outs
 
 ### Terminal Modes and Features
 
-- Aim to support all modes in future. Even the really obscure ones. Eventually we will add our own
-  private modes.
-- DEC private modes (DECARM, DECBKM, DECSCLM, DECNKM, etc.)
-- Mouse tracking (basic, button, any, SGR, extended)
-- Character sets (ASCII, DEC Special Graphics, UK, etc.)
-- Scroll regions and origin mode
-- Primary and alternate screen buffers
-- Tab stops and margins
+- `docs/DEC_private.md` is the capability inventory. A mode is supported only when it
+  has observable behaviour, not merely a parser entry or stored flag.
+- Character sets, scroll regions, origin mode, alternate buffers, tab stops, margins,
+  focus reporting, bracketed paste, and basic/button/any SGR mouse reporting are implemented.
 
 ### Testing Approach
 
@@ -136,16 +132,7 @@ Tests use pytest with functional style (no unittest classes). Key test categorie
 - **Parser tests**: Verify escape sequence parsing and state transitions
 - **Terminal tests**: Test terminal operations (cursor, scrolling, clearing, etc.)
 - **Integration tests**: End-to-end parsing with real terminal instances
-- **Performance tests**: Benchmarking parser performance. More perf tests will be added over time.
-
-### Known Issues
-
-From README.md
-- Scroll region bugs (vim scrolling corrupts outside region)
-
-From user
-- We need to keep tidying up. The code is too long and looks like a procedural fizzbuzz enterprise
-  edition.
+- **Performance tests**: Benchmarking parser performance.
 
 ### Development Notes
 

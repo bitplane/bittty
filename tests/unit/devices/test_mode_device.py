@@ -2,18 +2,18 @@ from bittty.operations import Operation
 from bittty import Board
 
 
-def test_mode_device_owns_ansi_and_private_mode_state():
+def test_mode_device_applies_implemented_modes_and_ignores_unimplemented_modes():
     board = Board(width=80, height=24)
     modes = board.modes
 
     modes.set_ansi_modes((4, 12, 20), True)
     assert modes.insert_mode is True
-    assert modes.local_echo is False
+    assert modes.local_echo is True
     assert modes.linefeed_newline_mode is True
 
     modes.set_private_modes((1, 5, 8, 1000, 1006, 2004), True)
     assert modes.cursor_application_mode is True
-    assert modes.reverse_screen is True
+    assert modes.reverse_screen is False
     assert modes.auto_repeat is True
     assert modes.mouse_tracking is True
     assert modes.mouse_sgr_mode is True

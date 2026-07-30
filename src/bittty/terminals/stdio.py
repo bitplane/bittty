@@ -1,9 +1,8 @@
 """StdioTerminal: the reference terminal, whose venue is this process's stdio.
 
 Composes a Board (never subclasses it) and drives the real outer terminal:
-raw-mode stdin, ANSI rendering to stdout, resize handling, and mouse mirroring.
-Discrete side-effects arrive through the Terminal hooks (on_bell/on_title/
-on_mouse_mode).
+raw-mode stdin, ANSI rendering to stdout, resize handling, and mouse and Unicode-policy
+mirroring. Discrete side-effects arrive through the Terminal hooks.
 """
 
 from __future__ import annotations

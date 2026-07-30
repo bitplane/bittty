@@ -3,10 +3,7 @@ from bittty.parser import Parser
 from bittty.constants import (
     DECAWM_AUTOWRAP,
     DECCOLM_COLUMN_MODE,
-    DECSCNM_SCREEN_MODE,
     DECOM_ORIGIN_MODE,
-    DECARSM_AUTO_RESIZE,
-    DECKBUM_KEYBOARD_USAGE,
     ESC,
 )
 
@@ -241,19 +238,6 @@ def test_csi_sm_rm_deccolm_column_mode(board):
     assert board.cursor.y == 0
 
 
-def test_csi_sm_rm_decscnm_screen_mode(board):
-    """Test CSI ? 5 h (Reverse Screen Mode) and CSI ? 5 l (Normal Screen Mode)."""
-    parser = Parser(board)
-
-    # Set reverse screen mode
-    parser.feed(f"{ESC}[?{DECSCNM_SCREEN_MODE}h")
-    assert board.modes.reverse_screen is True
-
-    # Reset to normal screen mode
-    parser.feed(f"{ESC}[?{DECSCNM_SCREEN_MODE}l")
-    assert board.modes.reverse_screen is False
-
-
 def test_csi_sm_rm_decom_origin_mode(board):
     """Test CSI ? 6 h (Origin Mode) and CSI ? 6 l (Normal Mode)."""
     parser = Parser(board)
@@ -269,32 +253,6 @@ def test_csi_sm_rm_decom_origin_mode(board):
     assert board.modes.origin_mode is False
     assert board.cursor.x == 0  # Cursor should move to home position
     assert board.cursor.y == 0
-
-
-def test_csi_sm_rm_decarsm_auto_resize_mode(board):
-    """Test CSI ? 2028 h (Auto-Resize Mode) and CSI ? 2028 l (Disable Auto-Resize Mode)."""
-    parser = Parser(board)
-
-    # Enable auto-resize mode
-    parser.feed(f"{ESC}[?{DECARSM_AUTO_RESIZE}h")
-    assert board.modes.auto_resize_mode is True
-
-    # Disable auto-resize mode
-    parser.feed(f"{ESC}[?{DECARSM_AUTO_RESIZE}l")
-    assert board.modes.auto_resize_mode is False
-
-
-def test_csi_sm_rm_deckbum_keyboard_usage_mode(board):
-    """Test CSI ? 69 h (Keyboard Usage Mode) and CSI ? 69 l (Normal Keyboard Mode)."""
-    parser = Parser(board)
-
-    # Enable keyboard usage mode (typewriter keys send functions)
-    parser.feed(f"{ESC}[?{DECKBUM_KEYBOARD_USAGE}h")
-    assert board.modes.keyboard_usage_mode is True
-
-    # Reset to normal keyboard mode
-    parser.feed(f"{ESC}[?{DECKBUM_KEYBOARD_USAGE}l")
-    assert board.modes.keyboard_usage_mode is False
 
 
 def test_deccolm_clears_the_screen_and_resets_the_region(board):

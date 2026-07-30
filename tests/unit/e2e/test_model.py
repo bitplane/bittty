@@ -197,11 +197,11 @@ def test_decrqm_reports_unrecognised_for_omitted_mode():
     transport_xterm = RecordingTransport()
     xterm = Board(width=80, height=24)
     xterm.host.attach(transport_xterm)
-    Parser(xterm).feed("\x1b[?2028$p")  # DECRQM for auto-resize mode
-    assert transport_xterm.data == ["\033[?2028;2$y"]  # 2 = reset (recognised)
+    Parser(xterm).feed("\x1b[?2027$p")  # DECRQM for grapheme clustering
+    assert transport_xterm.data == ["\033[?2027;2$y"]  # 2 = reset (recognised)
 
     transport_vt100 = RecordingTransport()
     vt100 = Board(width=80, height=24, model=VT100)
     vt100.host.attach(transport_vt100)
-    Parser(vt100).feed("\x1b[?2028$p")
-    assert transport_vt100.data == ["\033[?2028;0$y"]  # 0 = not recognised
+    Parser(vt100).feed("\x1b[?2027$p")
+    assert transport_vt100.data == ["\033[?2027;0$y"]  # 0 = not recognised

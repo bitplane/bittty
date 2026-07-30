@@ -56,6 +56,12 @@ def test_synchronized_output_flag_tracks_mode_2026():
     assert board.modes.synchronized_output is False
 
 
+def test_synchronized_output_reports_supported():
+    _, parser, transport = _term()
+    parser.feed("\x1b[?2026$p")
+    assert transport.data[-1] == "\x1b[?2026;2$y"
+
+
 # --- left/right margins (mode 69 DECLRMM + DECSLRM) --- #
 
 
@@ -82,6 +88,12 @@ def test_disabling_declrmm_resets_margins():
     parser.feed("\x1b[?69h\x1b[3;7s")
     parser.feed("\x1b[?69l")  # disabling DECLRMM restores full width
     assert (board.blitter.left_margin, board.blitter.right_margin) == (0, 9)
+
+
+def test_declrmm_reports_supported():
+    _, parser, transport = _term()
+    parser.feed("\x1b[?69$p")
+    assert transport.data[-1] == "\x1b[?69;2$y"
 
 
 def test_sl_pans_within_the_left_right_margins():

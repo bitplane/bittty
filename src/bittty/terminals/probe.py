@@ -6,9 +6,9 @@ request, then read until the (universally answered) DA reply arrives, so optiona
 queries that go unanswered never make us hang. Non-tty or timeout ⇒ env/config
 caps only.
 
-Nothing here reads capabilities the backend then trusts blindly — TerminalCaps is
-purely physical facts (colour depth, pixel geometry, background). Graphics-mode
-reconciliation is deferred with the graphics families.
+The probe measures colour and geometry facts plus the outer terminal's ambiguous-width
+and grapheme-clustering behaviour. The board uses the latter two to keep its cell grid
+aligned with the destination.
 """
 
 from __future__ import annotations
