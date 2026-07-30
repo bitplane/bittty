@@ -76,6 +76,7 @@ def _deccolm(device: ModeDevice, value: bool) -> None:
 def _alt_screen(device: ModeDevice, value: bool) -> None:
     if device.allow_alt_screen:
         device.board.blitter.switch_screen(value)
+        device._emit_peripheral("mouse")
 
 
 def _save_restore_cursor(device: ModeDevice, value: bool) -> None:
@@ -96,11 +97,13 @@ def _alt_screen_and_cursor(device: ModeDevice, value: bool) -> None:
     else:
         device.board.blitter.switch_screen(False)
         device.board.cursor.restore()
+    device._emit_peripheral("mouse")
 
 
 def _allow_alt_screen(device: ModeDevice, value: bool) -> None:
     if not value:
         device.board.blitter.switch_screen(False)
+        device._emit_peripheral("mouse")
 
 
 def _mouse_button_tracking(device: ModeDevice, value: bool) -> None:
@@ -192,7 +195,11 @@ MODE_SPECS: list[Mode] = [
     Mode(1003, True, apply_fn=_mouse_any_tracking, status_fn=_mouse_any_status, peripheral="mouse"),
     Mode(1005, True, "mouse_utf8_mode", queryable=True),
     Mode(1006, True, "mouse_sgr_mode", queryable=True, peripheral="mouse"),
+    Mode(1007, True, "alternate_scroll_mode", queryable=True, peripheral="mouse"),
     Mode(1015, True, "urxvt_mouse", queryable=True),
+    Mode(1034, True, "eight_bit_input", queryable=True),
+    Mode(1035, True, "special_modifiers", queryable=True),
+    Mode(1036, True, "meta_sends_escape", queryable=True),
     Mode(1037, True, "delete_sends_del", queryable=True),
     Mode(1039, True, "alt_sends_escape", queryable=True),
     Mode(1047, True, apply_fn=_alt_screen, status_fn=_alt_screen_status),
@@ -365,7 +372,7 @@ class ModeDevice(Device):
             mode = "any"
         elif self.mouse_button_tracking:
             mode = "button"
-        elif self.mouse_tracking:
+        elif self.mouse_tracking or (self.alternate_scroll_mode and self.board.blitter.in_alt_screen):
             mode = "basic"
         else:
             mode = "off"

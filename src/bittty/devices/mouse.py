@@ -127,6 +127,19 @@ class MouseDevice(Device):
         elif event_type == "release":
             self._pressed.discard(button)
 
+        # With no application mouse protocol active, xterm's alternate-scroll
+        # mode turns wheel presses into cursor keys while the alternate screen
+        # is displayed. Application mouse tracking always takes precedence.
+        if (
+            not modes.mouse_tracking
+            and modes.alternate_scroll_mode
+            and self.board.blitter.in_alt_screen
+            and event_type == "press"
+            and button in (constants.MOUSE_BUTTON_WHEEL_UP, constants.MOUSE_BUTTON_WHEEL_DOWN)
+        ):
+            self.board.keyboard.input_key("up" if button == constants.MOUSE_BUTTON_WHEEL_UP else "down")
+            return
+
         # Motion reports need any-motion tracking (1003), or button tracking (1002)
         # with a button held (a drag). Press/release need any tracking mode at all.
         if is_move and not (modes.mouse_any_tracking or (modes.mouse_button_tracking and self._pressed)):

@@ -76,6 +76,50 @@ def test_modern_keyboard_encoding_takes_precedence_over_alt_sends_escape():
     assert board.pty.data == ["\x1b[27;3;120~"]
 
 
+def test_meta_can_set_the_eighth_bit_as_a_raw_byte():
+    output = io.BytesIO()
+    board = Board()
+    board.pty = PTY(to_process=output)
+    board.modes.eight_bit_input = True
+
+    board.keyboard.input_key("x", constants.KEY_MOD_META)
+
+    assert output.getvalue() == b"\xf8"
+
+
+def test_meta_sends_escape_takes_precedence_over_eight_bit_input():
+    board = board_with_pty()
+    board.modes.eight_bit_input = True
+    board.modes.meta_sends_escape = True
+
+    board.keyboard.input_key("x", constants.KEY_MOD_META)
+
+    assert board.pty.data == ["\x1bx"]
+
+
+def test_modern_keyboard_encoding_takes_precedence_over_meta_policy():
+    board = board_with_pty()
+    board.modes.eight_bit_input = True
+    board.modes.meta_sends_escape = True
+    board.keyboard.modify_other_keys = 1
+
+    board.keyboard.input_key("x", constants.KEY_MOD_META)
+
+    assert board.pty.data == ["\x1b[27;9;120~"]
+
+
+def test_special_modifier_mode_controls_alt_on_cursor_keys():
+    board = board_with_pty()
+
+    board.keyboard.input_key("up", constants.KEY_MOD_ALT)
+    board.modes.special_modifiers = False
+    board.keyboard.input_key("up", constants.KEY_MOD_ALT)
+    board.modes.alt_sends_escape = True
+    board.keyboard.input_key("up", constants.KEY_MOD_ALT)
+
+    assert board.pty.data == ["\x1b[1;3A", "\x1b[A", "\x1b\x1b[A"]
+
+
 def test_mouse_device_caches_position_and_gates_tracking():
     board = board_with_pty()
     mouse = board.mouse
@@ -301,6 +345,30 @@ def test_sgr_mouse_takes_precedence_over_other_coordinate_encodings():
     board.mouse.input_mouse(300, 400, 0, "press", set())
 
     assert board.pty.data == ["\x1b[<0;300;400M"]
+
+
+def test_alternate_scroll_sends_cursor_keys_only_on_the_alternate_screen():
+    board = board_with_pty()
+    board.modes.alternate_scroll_mode = True
+
+    board.mouse.input_mouse(5, 5, constants.MOUSE_BUTTON_WHEEL_UP, "press", set())
+    board.blitter.switch_screen(True)
+    board.mouse.input_mouse(5, 5, constants.MOUSE_BUTTON_WHEEL_UP, "press", set())
+    board.mouse.input_mouse(5, 5, constants.MOUSE_BUTTON_WHEEL_DOWN, "press", set())
+
+    assert board.pty.data == ["\x1b[A", "\x1b[B"]
+
+
+def test_mouse_tracking_takes_precedence_over_alternate_scroll():
+    board = board_with_pty()
+    board.blitter.switch_screen(True)
+    board.modes.alternate_scroll_mode = True
+    board.modes.mouse_tracking = True
+    board.modes.mouse_sgr_mode = True
+
+    board.mouse.input_mouse(5, 5, constants.MOUSE_BUTTON_WHEEL_UP, "press", set())
+
+    assert board.pty.data == ["\x1b[<64;5;5M"]
 
 
 def test_mouse_device_button_tracking_reports_drag_motion():

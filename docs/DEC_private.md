@@ -108,16 +108,16 @@
 | 1004 | xterm | Send FocusIn/FocusOut events | ✅ |
 | 1005 | xterm | Enable UTF-8 Mouse Mode | ✅ |
 | 1006 | xterm | Enable SGR Mouse Mode | ✅ |
-| 1007 | xterm | Enable Alternate Scroll Mode | X |
+| 1007 | xterm | Enable Alternate Scroll Mode | ✅ |
 | 1010 | rxvt | Scroll to bottom on tty output | X |
 | 1011 | rxvt | Scroll to bottom on key press | X |
 | 1014 | xterm | Enable fastScroll resource | X |
 | 1015 | urxvt | Enable urxvt Mouse Mode | ✅ |
 | 1016 | xterm | Enable SGR Mouse PixelMode | X |
 | 1021 | rxvt | Bold/italic implies high intensity | X |
-| 1034 | xterm | Interpret "meta" key | X |
-| 1035 | xterm | Enable special modifiers for Alt and NumLock keys | X |
-| 1036 | xterm | Send ESC when Meta modifies a key | X |
+| 1034 | xterm | Interpret "meta" key | ✅ |
+| 1035 | xterm | Enable special modifiers for Alt and NumLock keys | ✅ |
+| 1036 | xterm | Send ESC when Meta modifies a key | ✅ |
 | 1037 | xterm | Send DEL from the editing-keypad Delete key | ✅ |
 | 1039 | xterm | Send ESC when Alt modifies a key | ✅ |
 | 1040 | xterm | Keep selection even if not highlighted | X |

@@ -42,6 +42,21 @@ def test_mouse_mode_flows_from_the_parser_through_the_seam(capsys):
     assert display.host_mouse_mode == "basic"
 
 
+def test_alternate_scroll_captures_mouse_only_while_alt_screen_is_active(capsys):
+    display = StdioTerminal()
+
+    display.board.parser.feed("\x1b[?1007h")
+    assert capsys.readouterr().out == ""
+
+    display.board.parser.feed("\x1b[?1049h")
+    assert "\033[?1000h\033[?1006h" in capsys.readouterr().out
+    assert display.host_mouse_mode == "basic"
+
+    display.board.parser.feed("\x1b[?1049l")
+    assert "\033[?1000l" in capsys.readouterr().out
+    assert display.host_mouse_mode is None
+
+
 def test_on_bell_and_on_title(capsys):
     display = StdioTerminal()
     display.on_bell()

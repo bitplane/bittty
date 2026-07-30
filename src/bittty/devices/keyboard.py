@@ -129,6 +129,30 @@ class KeyboardDevice(Device):
             return f"{constants.ESC}[1;{modifier}{body}"
         return f"{constants.ESC}[{body}"
 
+    @staticmethod
+    def _modifier_bits(modifier: int) -> int:
+        """Decode xterm's one-plus-bitmask modifier parameter."""
+        return max(0, modifier - 1)
+
+    def _special_modifier(self, modifier: int) -> tuple[int, int]:
+        """Return the modifier encoded on a special key and any legacy-only bits."""
+        bits = self._modifier_bits(modifier)
+        if self.board.modes.special_modifiers:
+            return modifier, 0
+        legacy_bits = bits & (2 | 8)  # Alt / Meta
+        return (bits & ~(2 | 8)) + 1, legacy_bits
+
+    def _legacy_escape_prefix(self, bits: int) -> bool:
+        """Whether legacy Alt/Meta policy prefixes this input with ESC."""
+        modes = self.board.modes
+        return bool((bits & 2 and modes.alt_sends_escape) or (bits & 8 and modes.meta_sends_escape))
+
+    def _input_special(self, sequence: str, legacy_bits: int) -> None:
+        """Send a cursor/function sequence after legacy Alt/Meta handling."""
+        if self._legacy_escape_prefix(legacy_bits):
+            sequence = constants.ESC + sequence
+        self.input(sequence)
+
     def input_key(self, char: str, modifier: int = constants.KEY_MOD_NONE) -> None:
         """Convert key + modifier to standard control codes, then send to input()."""
         keymap = self.board.model.keymap
@@ -138,11 +162,13 @@ class KeyboardDevice(Device):
             return
 
         if char in keymap.cursor_keys:
-            self.input(self._csi_key(keymap.cursor_keys[char], modifier))
+            special_modifier, legacy_bits = self._special_modifier(modifier)
+            self._input_special(self._csi_key(keymap.cursor_keys[char], special_modifier), legacy_bits)
             return
 
         if char in keymap.nav_keys:
-            self.input(self._csi_key(keymap.nav_keys[char], modifier))
+            special_modifier, legacy_bits = self._special_modifier(modifier)
+            self._input_special(self._csi_key(keymap.nav_keys[char], special_modifier), legacy_bits)
             return
 
         if char == constants.BS:
@@ -160,9 +186,10 @@ class KeyboardDevice(Device):
         # xterm modifier numbers are one plus a shift/alt/control bit mask.
         # Apply the legacy control and Alt transformations only after the
         # negotiated modern encodings above have had first refusal.
-        modifier_bits = max(0, modifier - 1)
+        modifier_bits = self._modifier_bits(modifier)
         control = bool(modifier_bits & 4)
         alt = bool(modifier_bits & 2)
+        meta = bool(modifier_bits & 8)
 
         if control and len(char) == 1:
             upper_char = char.upper()
@@ -170,10 +197,14 @@ class KeyboardDevice(Device):
                 char = chr(ord(upper_char) - ord("A") + 1)
 
         if len(char) == 1:
-            # A single character (printable or control) is sent as-is.
-            if alt and self.board.modes.alt_sends_escape:
+            # Escape-prefix policy wins over the older eighth-bit Meta form.
+            if (alt and self.board.modes.alt_sends_escape) or (meta and self.board.modes.meta_sends_escape):
                 char = constants.ESC + char
-            self.input(char)
+                self.input(char)
+            elif meta and self.board.modes.eight_bit_input and ord(char) < 128:
+                self.board.host.write_bytes(bytes((ord(char) | 0x80,)))
+            else:
+                self.input(char)
         # A multi-character key name this terminal's keymap does not define is ignored.
 
     def input_fkey(self, num: int, modifier: int = constants.KEY_MOD_NONE) -> None:
@@ -185,9 +216,10 @@ class KeyboardDevice(Device):
         sequence = keymap.function_keys.get(num)
         if sequence is None:
             return  # this terminal has no such function key
-        if modifier != constants.KEY_MOD_NONE and keymap.modifiers:
-            sequence = apply_modifier(sequence, modifier)
-        self.input(sequence)
+        special_modifier, legacy_bits = self._special_modifier(modifier)
+        if special_modifier != constants.KEY_MOD_NONE and keymap.modifiers:
+            sequence = apply_modifier(sequence, special_modifier)
+        self._input_special(sequence, legacy_bits)
 
     def input_numpad_key(self, key: str) -> None:
         """Convert numpad key to the sequence for the current keypad mode."""
