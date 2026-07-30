@@ -203,6 +203,8 @@ class Board:
     def set_caps(self, caps: TerminalCaps) -> None:
         """Record what the real terminal can do (a terminal (chrome) pushes this after probing)."""
         self.caps = caps
+        if caps.grapheme_mode is not None:
+            self.modes.set_grapheme_capability(caps.grapheme_mode)
         if not self._width_policy_explicit and caps.ambiguous_width is not None:
             self._width_policy_baseline = WidthPolicy(ambiguous_width=caps.ambiguous_width)
             if not self._width_policy_overridden:

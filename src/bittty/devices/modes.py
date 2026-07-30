@@ -15,7 +15,13 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Callable
 
 from ..operations import Operation
-from ..present import AmbiguousWidthChanged, CursorVisibilityChanged, MouseModeChanged, SyncOutputChanged
+from ..present import (
+    AmbiguousWidthChanged,
+    CursorVisibilityChanged,
+    GraphemeClusteringChanged,
+    MouseModeChanged,
+    SyncOutputChanged,
+)
 from .base import Device
 
 if TYPE_CHECKING:
@@ -33,7 +39,7 @@ class Mode:
     queryable: bool = False  # DECRQM reports this mode's state
     apply_fn: Callable[["ModeDevice", bool], None] | None = None  # side effect
     status_fn: Callable[["ModeDevice"], int] | None = None  # custom DECRQM status
-    peripheral: str | None = None  # "mouse"/"cursor"/"sync": emit a present event on change
+    peripheral: str | None = None  # emit a corresponding present event on change
 
     @property
     def key(self) -> tuple[bool, int]:
@@ -176,7 +182,14 @@ MODE_SPECS: list[Mode] = [
     Mode(1046, True, "allow_alt_screen", queryable=True),  # permit 1047/1049 switching
     Mode(2004, True, "bracketed_paste", queryable=True),
     Mode(2026, True, "synchronized_output", queryable=True, peripheral="sync"),
-    Mode(2027, True, "grapheme_clustering", queryable=True, apply_fn=_grapheme_clustering),
+    Mode(
+        2027,
+        True,
+        "grapheme_clustering",
+        queryable=True,
+        apply_fn=_grapheme_clustering,
+        peripheral="grapheme",
+    ),
     Mode(2028, True, "auto_resize_mode", queryable=True),
     Mode(2031, True, "color_scheme_updates", queryable=True),  # report light/dark changes
     # Tail: scrollback/keyboard/clipboard/sixel behaviour flags a terminal (chrome) actuates.
@@ -214,8 +227,12 @@ class ModeDevice(Device):
         self._last_cursor_visible: bool | None = None
         self._last_sync: bool | None = None
         self._last_ambiguous_width: int | None = None
+        self._last_grapheme_clustering: bool | None = None
         unsupported = board.model.unsupported_modes
         self._modes = {mode.key: mode for mode in MODE_SPECS if mode.key not in unsupported}
+        # Runtime destination policy. Only fixed DECRQM states live here:
+        # 0=unsupported, 3=permanently set, 4=permanently reset.
+        self._runtime_mode_status: dict[tuple[bool, int], int] = {}
         self.handlers = {
             "SM": self.apply_mode_operation,
             "RM": self.apply_mode_operation,
@@ -290,7 +307,9 @@ class ModeDevice(Device):
         """Reset modes. hard restores every flag (RIS); soft is the DECSTR subset."""
         if hard:
             self._set_defaults()
-            self.board.blitter.set_grapheme_clustering(False)
+            fixed_grapheme = self._runtime_mode_status.get((True, 2027))
+            self.grapheme_clustering = fixed_grapheme == 3
+            self.board.blitter.set_grapheme_clustering(self.grapheme_clustering)
             self.board.restore_width_policy()
         else:
             # DECSTR soft reset — the widely-agreed subset (SGR is reset by the style device).
@@ -298,7 +317,7 @@ class ModeDevice(Device):
             self.origin_mode = False
             self.cursor_visible = True
         # A reset can turn peripheral state off (e.g. RIS with mouse on); tell the terminal (chrome).
-        for peripheral in ("mouse", "cursor", "sync", "width"):
+        for peripheral in ("mouse", "cursor", "sync", "width", "grapheme"):
             self._emit_peripheral(peripheral)
 
     # --- dispatch --- #
@@ -321,8 +340,9 @@ class ModeDevice(Device):
     def _apply(self, private: bool, param: int | None, value: bool) -> None:
         if param is None:
             return
-        mode = self._modes.get((private, param))
-        if mode is not None:
+        key = (private, param)
+        mode = self._modes.get(key)
+        if mode is not None and self._runtime_mode_status.get(key) not in (0, 3, 4):
             mode.apply(self, value)
             if mode.peripheral is not None:
                 self._emit_peripheral(mode.peripheral)
@@ -361,6 +381,39 @@ class ModeDevice(Device):
             if width != self._last_ambiguous_width:
                 self._last_ambiguous_width = width
                 self.board.present(AmbiguousWidthChanged(width))
+        elif peripheral == "grapheme":
+            if self.grapheme_clustering != self._last_grapheme_clustering:
+                self._last_grapheme_clustering = self.grapheme_clustering
+                self.board.present(GraphemeClusteringChanged(self.grapheme_clustering))
+
+    def set_grapheme_capability(self, capability: str) -> None:
+        """Apply the destination's mode-2027 policy without changing the model repertoire."""
+        key = (True, 2027)
+        mode = self._modes.get(key)
+        if mode is None:
+            return
+
+        status = {
+            "unsupported": 0,
+            "reset": 2,
+            "set": 1,
+            "permanently-reset": 4,
+            "permanently-set": 3,
+        }[capability]
+        if status in (0, 3, 4):
+            self._runtime_mode_status[key] = status
+        else:
+            self._runtime_mode_status.pop(key, None)
+
+        if status in (0, 4):
+            mode.apply(self, False)
+        elif status == 3:
+            mode.apply(self, True)
+
+        # A newly attached/reprobed destination must receive the current state
+        # even when the logical mode itself did not change.
+        self._last_grapheme_clustering = None
+        self._emit_peripheral("grapheme")
 
     def set_ansi_modes(self, params: tuple[int | None, ...], set_mode: bool) -> None:
         for param in params:
@@ -381,7 +434,10 @@ class ModeDevice(Device):
     # --- DECRQM status --- #
 
     def get_private_mode_status(self, mode: int) -> int:
-        entry = self._modes.get((True, mode))
+        key = (True, mode)
+        if key in self._runtime_mode_status:
+            return self._runtime_mode_status[key]
+        entry = self._modes.get(key)
         return entry.status(self) if entry is not None else 0
 
     def get_ansi_mode_status(self, mode: int) -> int:

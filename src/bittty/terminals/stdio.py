@@ -94,6 +94,9 @@ class StdioTerminal(Terminal):
         self.host_mouse_mode: str | None = None
         self.initial_ambiguous_width: int | None = None
         self.host_ambiguous_width: int | None = None
+        self.host_grapheme_mutable = False
+        self.initial_grapheme_clustering: bool | None = None
+        self.host_grapheme_clustering: bool | None = None
         self.input_parser = Parser(HostInputSink(self))  # host keystrokes/reports in
         self.dirty = False  # PTY data arrived; the run loop repaints on its tick
         self._seen_page = None  # video page rendered last frame
@@ -132,6 +135,14 @@ class StdioTerminal(Terminal):
         suffix = "h" if width == 2 else "l"
         print(f"\033[?8840{suffix}", end="", flush=True)
         self.host_ambiguous_width = width
+
+    def on_grapheme_clustering(self, enabled: bool) -> None:
+        """Mirror mutable Unicode Core mode onto the outer terminal."""
+        if not self.host_grapheme_mutable or enabled == self.host_grapheme_clustering:
+            return
+        suffix = "h" if enabled else "l"
+        print(f"\033[?2027{suffix}", end="", flush=True)
+        self.host_grapheme_clustering = enabled
 
     def on_mouse_mode(self, mode: str, sgr: bool) -> None:
         """Mirror the child's requested mouse-tracking mode onto the outer terminal."""
@@ -172,6 +183,8 @@ class StdioTerminal(Terminal):
         logger.info("Restoring terminal")
         self.disable_host_mouse()
         self.on_ambiguous_width(self.initial_ambiguous_width or 1)
+        if self.initial_grapheme_clustering is not None:
+            self.on_grapheme_clustering(self.initial_grapheme_clustering)
         if HAS_UNIX_TERMIOS and self.old_termios:
             termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, self.old_termios)
         print("\033[?1004l\033[?25h\033[2J\033[H", end="", flush=True)
@@ -190,9 +203,18 @@ class StdioTerminal(Terminal):
         except (OSError, ValueError):
             fd = None
         caps = probe_caps(fd, write, os.environ)
-        self.set_caps(caps)
         self.initial_ambiguous_width = caps.ambiguous_width
         self.host_ambiguous_width = caps.ambiguous_width
+        self.host_grapheme_mutable = caps.grapheme_mode in ("set", "reset")
+        if caps.grapheme_mode in ("set", "reset"):
+            self.initial_grapheme_clustering = caps.grapheme_mode == "set"
+            self.host_grapheme_clustering = self.initial_grapheme_clustering
+        else:
+            self.initial_grapheme_clustering = None
+            self.host_grapheme_clustering = None
+        # This may synchronously emit GraphemeClusteringChanged back through
+        # the display seam, so host state must be recorded first.
+        self.set_caps(caps)
         logger.info("Display caps: %s", caps)
 
     def render_screen(self) -> None:

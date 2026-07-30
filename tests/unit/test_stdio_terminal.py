@@ -4,8 +4,9 @@ Construction allocates no PTY and spawns no process (that happens in start_proce
 so these exercise the composition and the Display hooks in isolation.
 """
 
-from bittty.terminals import StdioTerminal, Terminal
+from bittty import TerminalCaps
 from bittty.parser import Parser
+from bittty.terminals import StdioTerminal, Terminal
 
 
 def test_is_a_terminal_composing_a_board():
@@ -67,6 +68,53 @@ def test_restore_terminal_restores_initial_ambiguous_width(capsys):
 
     assert "\033[?8840h" in capsys.readouterr().out
     assert display.host_ambiguous_width == 2
+
+
+def test_grapheme_mode_is_mirrored_and_deduplicated(capsys):
+    display = StdioTerminal()
+    display.host_grapheme_mutable = True
+    display.host_grapheme_clustering = False
+    display.on_grapheme_clustering(True)
+    display.on_grapheme_clustering(True)
+    display.on_grapheme_clustering(False)
+
+    assert capsys.readouterr().out == "\033[?2027h\033[?2027l"
+    assert display.host_grapheme_clustering is False
+
+
+def test_probe_synchronizes_initially_set_grapheme_mode(monkeypatch, capsys):
+    display = StdioTerminal()
+    monkeypatch.setattr(
+        "bittty.terminals.stdio.probe_caps",
+        lambda *args, **kwargs: TerminalCaps(grapheme_mode="set"),
+    )
+
+    display.probe_capabilities()
+
+    assert capsys.readouterr().out == "\033[?2027l"
+    assert display.initial_grapheme_clustering is True
+    assert display.host_grapheme_clustering is False
+    assert display.board.modes.get_private_mode_status(2027) == 2
+
+
+def test_restore_terminal_restores_initial_grapheme_mode(capsys):
+    display = StdioTerminal()
+    display.host_grapheme_mutable = True
+    display.initial_grapheme_clustering = True
+    display.host_grapheme_clustering = False
+    display.restore_terminal()
+
+    assert "\033[?2027h" in capsys.readouterr().out
+    assert display.host_grapheme_clustering is True
+
+
+def test_unsupported_grapheme_mode_is_not_mirrored(capsys):
+    display = StdioTerminal()
+    display.set_caps(TerminalCaps(grapheme_mode="unsupported"))
+    display.on_grapheme_clustering(True)
+
+    assert "\033[?2027" not in capsys.readouterr().out
+    assert display.board.modes.get_private_mode_status(2027) == 0
 
 
 def test_handle_sgr_mouse_sequence_reinjects(monkeypatch):

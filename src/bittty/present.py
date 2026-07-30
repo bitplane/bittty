@@ -122,6 +122,13 @@ class AmbiguousWidthChanged:
     width: int
 
 
+@dataclass(frozen=True)
+class GraphemeClusteringChanged:
+    """Grapheme-cluster processing toggled (mode 2027)."""
+
+    enabled: bool
+
+
 PresentEvent = (
     Bell
     | TitleChanged
@@ -138,4 +145,5 @@ PresentEvent = (
     | CursorVisibilityChanged
     | SyncOutputChanged
     | AmbiguousWidthChanged
+    | GraphemeClusteringChanged
 )

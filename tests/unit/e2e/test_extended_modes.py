@@ -1,8 +1,8 @@
 """Extended xterm private modes: storage, DECRQM self-reporting, and model gating."""
 
-from bittty.parser import Parser
+from bittty import Board, TerminalCaps
 from bittty.model import VT220
-from bittty import Board
+from bittty.parser import Parser
 
 
 class RecordingTransport:
@@ -62,6 +62,55 @@ def test_grapheme_mode_reports_and_changes_its_state():
     assert transport.data[-1] == "\x1b[?2027;1$y"
     parser.feed("\x1b[?2027l")
     assert board.modes.grapheme_clustering is False
+
+
+def test_destination_can_hide_grapheme_mode():
+    board, parser, transport = _term()
+    board.set_caps(TerminalCaps(grapheme_mode="unsupported"))
+
+    parser.feed("\x1b[?2027h\x1b[?2027$p")
+
+    assert board.modes.grapheme_clustering is False
+    assert transport.data[-1] == "\x1b[?2027;0$y"
+
+
+def test_mutable_destination_keeps_live_grapheme_mode_status():
+    board, parser, transport = _term()
+    board.set_caps(TerminalCaps(grapheme_mode="reset"))
+
+    parser.feed("\x1b[?2027h\x1b[?2027$p")
+
+    assert board.modes.grapheme_clustering is True
+    assert transport.data[-1] == "\x1b[?2027;1$y"
+
+
+def test_permanently_set_grapheme_mode_survives_reset():
+    board, parser, transport = _term()
+    board.set_caps(TerminalCaps(grapheme_mode="permanently-set"))
+
+    parser.feed("\x1b[?2027l\x1bc\x1b[?2027$p")
+
+    assert board.modes.grapheme_clustering is True
+    assert transport.data[-1] == "\x1b[?2027;3$y"
+
+
+def test_permanently_reset_grapheme_mode_ignores_set():
+    board, parser, transport = _term()
+    board.set_caps(TerminalCaps(grapheme_mode="permanently-reset"))
+
+    parser.feed("\x1b[?2027h\x1b[?2027$p")
+
+    assert board.modes.grapheme_clustering is False
+    assert transport.data[-1] == "\x1b[?2027;4$y"
+
+
+def test_destination_caps_cannot_add_grapheme_mode_to_old_model():
+    board, parser, transport = _term(VT220)
+    board.set_caps(TerminalCaps(grapheme_mode="set"))
+
+    parser.feed("\x1b[?2027$p")
+
+    assert transport.data[-1] == "\x1b[?2027;0$y"
 
 
 def test_vt220_reports_xterm_era_modes_as_unrecognised():

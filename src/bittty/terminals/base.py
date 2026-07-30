@@ -24,6 +24,7 @@ from ..present import (
     CursorVisibilityChanged,
     CwdChanged,
     FontChanged,
+    GraphemeClusteringChanged,
     MouseModeChanged,
     Notification,
     PointerShapeChanged,
@@ -84,6 +85,7 @@ class Terminal:
     def on_cursor_visible(self, visible: bool) -> None: ...
     def on_sync_output(self, enabled: bool) -> None: ...
     def on_ambiguous_width(self, width: int) -> None: ...
+    def on_grapheme_clustering(self, enabled: bool) -> None: ...
 
 
 # Event type -> adapter unpacking its fields into the corresponding hook.
@@ -103,4 +105,5 @@ _DISPATCH = {
     CursorVisibilityChanged: lambda d, e: d.on_cursor_visible(e.visible),
     SyncOutputChanged: lambda d, e: d.on_sync_output(e.enabled),
     AmbiguousWidthChanged: lambda d, e: d.on_ambiguous_width(e.width),
+    GraphemeClusteringChanged: lambda d, e: d.on_grapheme_clustering(e.enabled),
 }

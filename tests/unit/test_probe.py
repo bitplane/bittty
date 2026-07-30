@@ -18,13 +18,14 @@ def test_color_depth_from_env():
 
 def test_parse_probe_replies_full():
     # Two CPRs measure § as width 2; the other physical replies follow.
-    buf = "\x1b[1;1R\x1b[1;3R\x1b]11;rgb:1a1a/2b2b/3c3c\x1b\\\x1b[6;32;16t\x1b[4;800;600t\x1b[?62;c"
+    buf = "\x1b[1;1R\x1b[1;3R\x1b]11;rgb:1a1a/2b2b/3c3c\x1b\\\x1b[6;32;16t\x1b[4;800;600t\x1b[?2027;1$y\x1b[?62;c"
     caps = parse_probe_replies(buf, {"COLORTERM": "truecolor"})
     assert caps.color_depth == "truecolor"
     assert caps.background == (0x1A, 0x2B, 0x3C)
     assert caps.cell_px == (16, 32)  # (width, height); reply was 6;height;width
     assert caps.window_px == (600, 800)
     assert caps.ambiguous_width == 2
+    assert caps.grapheme_mode == "set"
 
 
 def test_parse_probe_replies_empty_is_env_only():
@@ -39,6 +40,7 @@ def test_probe_non_tty_returns_env_caps():
     assert caps.color_depth == "truecolor"
     assert caps.cell_px is None and caps.background is None
     assert caps.ambiguous_width is None
+    assert caps.grapheme_mode is None
     assert written == []  # no query emitted on a non-tty
 
 
@@ -52,6 +54,7 @@ def test_probe_reads_width_replies_until_da(monkeypatch):
     caps = probe_caps(7, written.append, {}, timeout=0.1)
 
     assert caps.ambiguous_width == 2
+    assert caps.grapheme_mode == "unsupported"
     assert written == [PROBE_QUERY]
 
 
@@ -63,7 +66,22 @@ def test_probe_timeout_keeps_width_unknown(monkeypatch):
     caps = probe_caps(7, written.append, {}, timeout=0.1)
 
     assert caps.ambiguous_width is None
+    assert caps.grapheme_mode == "unsupported"
     assert written == [PROBE_QUERY]
+
+
+@pytest.mark.parametrize(
+    ("status", "expected"),
+    [
+        (0, "unsupported"),
+        (1, "set"),
+        (2, "reset"),
+        (3, "permanently-set"),
+        (4, "permanently-reset"),
+    ],
+)
+def test_grapheme_mode_probe_statuses(status, expected):
+    assert parse_probe_replies(f"\x1b[?2027;{status}$y", {}).grapheme_mode == expected
 
 
 @pytest.mark.parametrize(
@@ -84,9 +102,15 @@ def test_probe_query_measures_and_cleans_up_ambiguous_character():
     assert PROBE_QUERY.count("\x1b[6n") == 2
     assert "§" in PROBE_QUERY
     assert "\x1b[2K" in PROBE_QUERY
+    assert "\x1b[?2027$p" in PROBE_QUERY
     assert PROBE_QUERY.endswith("\x1b[c")
 
 
 def test_terminal_caps_rejects_invalid_ambiguous_width():
     with pytest.raises(ValueError):
         TerminalCaps(ambiguous_width=3)
+
+
+def test_terminal_caps_rejects_invalid_grapheme_mode():
+    with pytest.raises(ValueError):
+        TerminalCaps(grapheme_mode="maybe")

@@ -17,6 +17,7 @@ import os
 import re
 import select
 import time
+from dataclasses import replace
 
 from ..caps import TerminalCaps
 
@@ -25,18 +26,20 @@ from ..caps import TerminalCaps
 #   CSI 6 ; height ; width t      (cell size in pixels, reply to CSI 16 t)
 #   CSI 4 ; height ; width t      (window size in pixels, reply to CSI 14 t)
 #   CSI row ; column R             (cursor positions around an ambiguous character)
+#   CSI ? 2027 ; state $ y         (Unicode Core mode state)
 #   CSI ? ... c                   (Primary DA — the handshake terminator)
 _BG = re.compile(r"\]11;rgb:([0-9a-fA-F]+)/([0-9a-fA-F]+)/([0-9a-fA-F]+)")
 _CELL = re.compile(r"\[6;(\d+);(\d+)t")
 _WINDOW = re.compile(r"\[4;(\d+);(\d+)t")
 _CPR = re.compile(r"\[(\d+);(\d+)R")
+_GRAPHEME_MODE = re.compile(r"\[\?2027;([0-4])\$y")
 _DA1 = re.compile(r"\[\?[0-9;]*c")
 
 # Measure U+00A7 SECTION SIGN (East Asian Width=A) on the already-cleared
 # startup screen, then ask the existing physical queries. Primary DA remains
 # last so its reply terminates the handshake after every preceding response.
 _WIDTH_QUERY = "\0337\033[1;1H\033[6n§\033[6n\033[1;1H\033[2K\0338"
-PROBE_QUERY = _WIDTH_QUERY + "\033]11;?\007\033[16t\033[14t\033[c"
+PROBE_QUERY = _WIDTH_QUERY + "\033]11;?\007\033[16t\033[14t\033[?2027$p\033[c"
 
 
 def color_depth_from_env(env) -> str:
@@ -74,12 +77,22 @@ def parse_probe_replies(buf: str, env) -> TerminalCaps:
         delta = after_col - before_col
         if before_row == after_row and delta in (1, 2):
             ambiguous_width = delta
+    grapheme_mode = None
+    if (m := _GRAPHEME_MODE.search(buf)) is not None:
+        grapheme_mode = {
+            "0": "unsupported",
+            "1": "set",
+            "2": "reset",
+            "3": "permanently-set",
+            "4": "permanently-reset",
+        }[m.group(1)]
     return TerminalCaps(
         color_depth=color_depth_from_env(env),
         cell_px=cell_px,
         window_px=window_px,
         background=background,
         ambiguous_width=ambiguous_width,
+        grapheme_mode=grapheme_mode,
     )
 
 
@@ -105,4 +118,9 @@ def probe_caps(stdin_fd, write, env=None, timeout: float = 0.5) -> TerminalCaps:
         buf += chunk.decode("utf-8", errors="replace")
         if _DA1.search(buf):  # the DA reply terminates the handshake
             break
-    return parse_probe_replies(buf, env)
+    caps = parse_probe_replies(buf, env)
+    if caps.grapheme_mode is None:
+        # The query was sent on a real tty. No reply before the DA terminator
+        # (or timeout) is a conservative "not supported", not "no opinion".
+        caps = replace(caps, grapheme_mode="unsupported")
+    return caps

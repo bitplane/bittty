@@ -1,6 +1,6 @@
 """Phase 2: devices emit present events alongside (never instead of) their register writes."""
 
-from bittty import Board
+from bittty import Board, TerminalCaps
 from bittty.parser import Parser
 from bittty.present import (
     AmbiguousWidthChanged,
@@ -10,6 +10,7 @@ from bittty.present import (
     CursorVisibilityChanged,
     CwdChanged,
     FontChanged,
+    GraphemeClusteringChanged,
     MouseModeChanged,
     Notification,
     PointerShapeChanged,
@@ -111,6 +112,24 @@ def test_ambiguous_width_event_is_edge_triggered():
     parser.feed("\x1b[?8840h\x1b[?8840h\x1b[?8840l")
     width_events = [event for event in rec.events if isinstance(event, AmbiguousWidthChanged)]
     assert width_events == [AmbiguousWidthChanged(2), AmbiguousWidthChanged(1)]
+
+
+def test_grapheme_mode_event_is_edge_triggered_and_reset():
+    board, parser, rec = _term()
+    parser.feed("\x1b[?2027h\x1b[?2027h")
+    board.reset(hard=True)
+    events = [event for event in rec.events if isinstance(event, GraphemeClusteringChanged)]
+    assert events == [GraphemeClusteringChanged(True), GraphemeClusteringChanged(False)]
+
+
+def test_destination_removal_disables_active_grapheme_mode():
+    board, parser, rec = _term()
+    parser.feed("\x1b[?2027h")
+    board.set_caps(TerminalCaps(grapheme_mode="unsupported"))
+
+    events = [event for event in rec.events if isinstance(event, GraphemeClusteringChanged)]
+    assert board.modes.grapheme_clustering is False
+    assert events == [GraphemeClusteringChanged(True), GraphemeClusteringChanged(False)]
 
 
 def test_events_are_dropped_with_no_frontend():

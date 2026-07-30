@@ -1,9 +1,9 @@
 """The display seam: DisplayPort forwarding, the Terminal ABC, caps push."""
 
 from bittty import Board, TerminalCaps
-from bittty.terminals import Terminal
-from bittty.present import Bell, MouseModeChanged, Notification, TitleChanged
 from bittty.connections import DisplayPort, HostPort
+from bittty.present import Bell, GraphemeClusteringChanged, MouseModeChanged, Notification, TitleChanged
+from bittty.terminals import Terminal
 
 
 class RecordingTerminal(Terminal):
@@ -21,6 +21,9 @@ class RecordingTerminal(Terminal):
 
     def on_mouse_mode(self, mode, sgr):
         self.events.append(("mouse", mode, sgr))
+
+    def on_grapheme_clustering(self, enabled):
+        self.events.append(("grapheme", enabled))
 
     # on_notify deliberately NOT overridden -> should be a safe no-op
 
@@ -94,6 +97,14 @@ def test_mouse_mode_event_dispatch():
     display.attach()
     board.present(MouseModeChanged("any", True))
     assert display.events == [("mouse", "any", True)]
+
+
+def test_grapheme_mode_event_dispatch():
+    board = _term()
+    display = RecordingTerminal(board)
+    display.attach()
+    board.present(GraphemeClusteringChanged(True))
+    assert display.events == [("grapheme", True)]
 
 
 class QueueConnection:
