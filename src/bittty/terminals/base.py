@@ -26,7 +26,7 @@ from ..present import (
     CwdChanged,
     FontChanged,
     GraphemeClusteringChanged,
-    MouseModeChanged,
+    MouseCaptureChanged,
     Notification,
     PointerShapeChanged,
     PresentEvent,
@@ -83,7 +83,7 @@ class Terminal:
     def on_window_request(self, kind: str) -> None: ...
     def on_window_state(self, event: WindowStateChanged) -> None: ...
     def on_console_request(self, kind: str, index: int) -> None: ...
-    def on_mouse_mode(self, mode: str, sgr: bool) -> None: ...
+    def on_mouse_capture(self, mode: str) -> None: ...
     def on_cursor_visible(self, visible: bool) -> None: ...
     def on_cursor_blink(self, enabled: bool) -> None: ...
     def on_reverse_screen(self, enabled: bool) -> None: ...
@@ -105,7 +105,7 @@ _DISPATCH = {
     WindowRequest: lambda d, e: d.on_window_request(e.kind),
     WindowStateChanged: lambda d, e: d.on_window_state(e),
     ConsoleRequest: lambda d, e: d.on_console_request(e.kind, e.index),
-    MouseModeChanged: lambda d, e: d.on_mouse_mode(e.mode, e.sgr),
+    MouseCaptureChanged: lambda d, e: d.on_mouse_capture(e.mode),
     CursorVisibilityChanged: lambda d, e: d.on_cursor_visible(e.visible),
     CursorBlinkChanged: lambda d, e: d.on_cursor_blink(e.enabled),
     ReverseScreenChanged: lambda d, e: d.on_reverse_screen(e.enabled),

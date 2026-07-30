@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .. import constants
+from .modes import MouseEncoding, MouseProtocol
 
 if TYPE_CHECKING:
     from .board import Board
@@ -45,8 +46,18 @@ class MouseDevice(Device):
         ps1, ps2 = operation.args
         self.locator_enabled = ps1 if ps1 in (0, 1, 2) else 0
         self.locator_pixels = ps2 == 1
-        if self.locator_enabled == 0:
-            self.locator_filter = None
+        if self.locator_enabled:
+            self.board.modes.select_mouse_protocol(MouseProtocol.LOCATOR)
+        else:
+            self._disable_locator_state()
+            self.board.modes.clear_locator_protocol()
+
+    def _disable_locator_state(self) -> None:
+        """Clear DEC locator registers without feeding back into mode selection."""
+        self.locator_enabled = 0
+        self.locator_filter = None
+        self.locator_report_down = False
+        self.locator_report_up = False
 
     def select_locator_events(self, operation: Operation) -> None:
         """DECSLE — choose whether button presses/releases trigger reports."""
@@ -80,7 +91,8 @@ class MouseDevice(Device):
 
     def _maybe_one_shot(self) -> None:
         if self.locator_enabled == 2:
-            self.locator_enabled = 0
+            self._disable_locator_state()
+            self.board.modes.clear_locator_protocol()
 
     def _report_locator_event(self, button: int, event_type: str) -> None:
         if event_type == "press":
@@ -120,6 +132,7 @@ class MouseDevice(Device):
             self._report_locator_event(button, event_type)
 
         modes = self.board.modes
+        protocol = modes.mouse_protocol
         is_move = event_type == "move"
         if event_type == "press":
             if button < 3:  # wheel "presses" (64/65) have no release and are not drags
@@ -131,7 +144,7 @@ class MouseDevice(Device):
         # mode turns wheel presses into cursor keys while the alternate screen
         # is displayed. Application mouse tracking always takes precedence.
         if (
-            not modes.mouse_tracking
+            protocol is MouseProtocol.OFF
             and modes.alternate_scroll_mode
             and self.board.blitter.in_alt_screen
             and event_type == "press"
@@ -140,27 +153,30 @@ class MouseDevice(Device):
             self.board.keyboard.input_key("up" if button == constants.MOUSE_BUTTON_WHEEL_UP else "down")
             return
 
-        # Motion reports need any-motion tracking (1003), or button tracking (1002)
-        # with a button held (a drag). Press/release need any tracking mode at all.
-        if is_move and not (modes.mouse_any_tracking or (modes.mouse_button_tracking and self._pressed)):
+        if protocol is MouseProtocol.LOCATOR:
             return
-        if not is_move and not modes.mouse_tracking:
+        if protocol is MouseProtocol.OFF:
+            return
+        if protocol is MouseProtocol.X10 and event_type != "press":
+            return
+        if is_move and not (protocol is MouseProtocol.ANY or (protocol is MouseProtocol.BUTTON and self._pressed)):
             return
 
         mods = 0
-        if "shift" in modifiers:
-            mods |= constants.MOUSE_MOD_SHIFT
-        if "meta" in modifiers:
-            mods |= constants.MOUSE_MOD_META
-        if "ctrl" in modifiers:
-            mods |= constants.MOUSE_MOD_CTRL
+        if protocol is not MouseProtocol.X10:
+            if "shift" in modifiers:
+                mods |= constants.MOUSE_MOD_SHIFT
+            if "meta" in modifiers:
+                mods |= constants.MOUSE_MOD_META
+            if "ctrl" in modifiers:
+                mods |= constants.MOUSE_MOD_CTRL
 
         if is_move:  # motion flag + the dragged button (3 = none)
             bits = 32 | (min(self._pressed) if self._pressed else 3) | mods
         else:
             bits = button | mods
 
-        if modes.mouse_sgr_mode:
+        if modes.mouse_encoding is MouseEncoding.SGR:
             final_char = "m" if event_type == "release" else "M"
             self.board.host.write(f"{constants.ESC}[<{bits};{x};{y}{final_char}")
             return
@@ -170,13 +186,12 @@ class MouseDevice(Device):
         if event_type == "release":
             bits = (bits & ~3) | 3
 
-        # SGR wins above; urxvt's decimal encoding wins over the older UTF-8
-        # extension when applications happen to leave several modes enabled.
-        if modes.urxvt_mouse:
+        # The encoding selector is mutually exclusive; legacy is the default.
+        if modes.mouse_encoding is MouseEncoding.URXVT:
             self.board.host.write(f"{constants.ESC}[{32 + bits};{x};{y}M")
             return
 
-        if modes.mouse_utf8_mode:
+        if modes.mouse_encoding is MouseEncoding.UTF8:
             # Mode 1005 UTF-8-encodes the three X10 values and extends the
             # coordinate ceiling from 223 to 2015.
             self.board.host.write(

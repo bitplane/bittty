@@ -2,7 +2,7 @@
 
 from bittty import Board, TerminalCaps
 from bittty.connections import DisplayPort, HostPort
-from bittty.present import Bell, GraphemeClusteringChanged, MouseModeChanged, Notification, TitleChanged
+from bittty.present import Bell, GraphemeClusteringChanged, MouseCaptureChanged, Notification, TitleChanged
 from bittty.terminals import Terminal
 
 
@@ -19,8 +19,8 @@ class RecordingTerminal(Terminal):
     def on_title(self, title, icon_title):
         self.events.append(("title", title, icon_title))
 
-    def on_mouse_mode(self, mode, sgr):
-        self.events.append(("mouse", mode, sgr))
+    def on_mouse_capture(self, mode):
+        self.events.append(("mouse", mode))
 
     def on_grapheme_clustering(self, enabled):
         self.events.append(("grapheme", enabled))
@@ -91,12 +91,12 @@ def test_caps_default_and_push():
     assert board.caps is caps
 
 
-def test_mouse_mode_event_dispatch():
+def test_mouse_capture_event_dispatch():
     board = _term()
     display = RecordingTerminal(board)
     display.attach()
-    board.present(MouseModeChanged("any", True))
-    assert display.events == [("mouse", "any", True)]
+    board.present(MouseCaptureChanged("any"))
+    assert display.events == [("mouse", "any")]
 
 
 def test_grapheme_mode_event_dispatch():

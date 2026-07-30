@@ -1,26 +1,19 @@
-"""Terminal modes as a declarative capability table.
-
-Each mode is a small `Mode` capability that claims a number (ANSI or DEC
-private), knows how to apply itself and how to report its DECRQM status, and
-can be omitted by a model (so, e.g., a terminal that predates bracketed
-paste simply does not recognise mode 2004). The boolean flags themselves stay
-as attributes on the device: they are read widely across the emulator, and
-several modes legitimately share one flag (mode 7 and 1000 both drive
-`mouse_tracking`).
-"""
+"""Declarative ANSI/DEC modes resolved through model capability profiles."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum
 from typing import TYPE_CHECKING, Callable
 
+from .. import mode_profiles as mp
 from ..operations import Operation
 from ..present import (
     AmbiguousWidthChanged,
     CursorBlinkChanged,
     CursorVisibilityChanged,
     GraphemeClusteringChanged,
-    MouseModeChanged,
+    MouseCaptureChanged,
     ReverseScreenChanged,
     SyncOutputChanged,
 )
@@ -30,25 +23,66 @@ if TYPE_CHECKING:
     from .board import Board
 
 
-@dataclass(frozen=True)
-class Mode:
-    """One terminal mode: which flag it backs and how it answers DECRQM."""
+class ModeEffect(Enum):
+    """Derived frontend state that may need reconciliation after a mode change."""
 
+    MOUSE_CAPTURE = "mouse-capture"
+    CURSOR = "cursor"
+    CURSOR_BLINK = "cursor-blink"
+    REVERSE = "reverse"
+    SYNC = "sync"
+    WIDTH = "width"
+    GRAPHEME = "grapheme"
+
+
+class MouseProtocol(Enum):
+    """Mutually exclusive application mouse protocols."""
+
+    OFF = "off"
+    X10 = "x10"
+    NORMAL = "normal"
+    BUTTON = "button"
+    ANY = "any"
+    LOCATOR = "locator"
+
+
+class MouseEncoding(Enum):
+    """Mutually exclusive encodings for xterm-family mouse reports."""
+
+    LEGACY = "legacy"
+    UTF8 = "utf8"
+    SGR = "sgr"
+    URXVT = "urxvt"
+
+
+DefaultValue = bool | Callable[["ModeDevice"], bool]
+
+
+@dataclass(frozen=True)
+class ModeSpec:
+    """One semantic capability and its numbered representation."""
+
+    capability: str
     number: int
     private: bool
     attr: str | None = None  # device flag this mode drives, if any
+    default: DefaultValue = False  # underlying attr value at power-on
     invert: bool = False  # "set" stores the negation (modes 12, 66)
     queryable: bool = False  # DECRQM reports this mode's state
     apply_fn: Callable[["ModeDevice", bool], None] | None = None  # side effect
     status_fn: Callable[["ModeDevice"], int] | None = None  # custom DECRQM status
-    peripheral: str | None = None  # emit a corresponding present event on change
+    group: str | None = None
+    group_value: MouseProtocol | MouseEncoding | None = None
+    effects: frozenset[ModeEffect] = frozenset()
 
     @property
     def key(self) -> tuple[bool, int]:
         return (self.private, self.number)
 
     def apply(self, device: ModeDevice, value: bool) -> None:
-        if self.attr is not None:
+        if self.group is not None:
+            device._set_group_member(self.group, self.group_value, value)
+        elif self.attr is not None:
             setattr(device, self.attr, (not value) if self.invert else value)
         if self.apply_fn is not None:
             self.apply_fn(device, value)
@@ -57,6 +91,8 @@ class Mode:
         """DECRQM status: 1 = set, 2 = reset, 0 = not recognised."""
         if self.status_fn is not None:
             return self.status_fn(device)
+        if self.group is not None:
+            return 1 if getattr(device, self.group) == self.group_value else 2
         if self.queryable and self.attr is not None:
             state = getattr(device, self.attr)
             return 1 if ((not state) if self.invert else state) else 2
@@ -76,7 +112,6 @@ def _deccolm(device: ModeDevice, value: bool) -> None:
 def _alt_screen(device: ModeDevice, value: bool) -> None:
     if device.allow_alt_screen:
         device.board.blitter.switch_screen(value)
-        device._emit_peripheral("mouse")
 
 
 def _save_restore_cursor(device: ModeDevice, value: bool) -> None:
@@ -97,23 +132,11 @@ def _alt_screen_and_cursor(device: ModeDevice, value: bool) -> None:
     else:
         device.board.blitter.switch_screen(False)
         device.board.cursor.restore()
-    device._emit_peripheral("mouse")
 
 
 def _allow_alt_screen(device: ModeDevice, value: bool) -> None:
     if not value:
         device.board.blitter.switch_screen(False)
-        device._emit_peripheral("mouse")
-
-
-def _mouse_button_tracking(device: ModeDevice, value: bool) -> None:
-    device.mouse_tracking = value
-    device.mouse_button_tracking = value
-
-
-def _mouse_any_tracking(device: ModeDevice, value: bool) -> None:
-    device.mouse_tracking = value
-    device.mouse_any_tracking = value
 
 
 def _declrmm(device: ModeDevice, value: bool) -> None:
@@ -132,14 +155,6 @@ def _column_status(device: ModeDevice) -> int:
 
 def _alt_screen_status(device: ModeDevice) -> int:
     return 1 if device.board.blitter.in_alt_screen else 2
-
-
-def _mouse_button_status(device: ModeDevice) -> int:
-    return 1 if device.mouse_button_tracking else 2
-
-
-def _mouse_any_status(device: ModeDevice) -> int:
-    return 1 if device.mouse_any_tracking else 2
 
 
 def _ambiguous_width(device: ModeDevice, value: bool) -> None:
@@ -166,68 +181,241 @@ def _print_extent_status(device: ModeDevice) -> int:
     return 1 if device.board.printer.print_extent else 2
 
 
-# Implemented mode repertoire. A model may omit any of these.
-MODE_SPECS: list[Mode] = [
+def _ambiguous_width_default(device: ModeDevice) -> bool:
+    return device.board.width_policy.ambiguous_width == 2
+
+
+_MOUSE_EFFECT = frozenset({ModeEffect.MOUSE_CAPTURE})
+
+# Every implemented semantic capability. Models select these by capability ID.
+MODE_SPECS: tuple[ModeSpec, ...] = (
     # ANSI modes (autowrap and cursor visibility are DEC *private* 7/25, not ANSI)
-    Mode(4, False, "insert_mode", queryable=True),
-    Mode(20, False, "linefeed_newline_mode", queryable=True),
+    ModeSpec(mp.ANSI_INSERT, 4, False, "insert_mode", queryable=True),
+    ModeSpec(mp.ANSI_NEWLINE, 20, False, "linefeed_newline_mode", queryable=True),
     # DEC private modes
-    Mode(1, True, "cursor_application_mode", queryable=True),
-    Mode(3, True, apply_fn=_deccolm, status_fn=_column_status),
-    Mode(5, True, "reverse_screen", queryable=True, peripheral="reverse"),
-    Mode(6, True, "origin_mode", queryable=True),
-    Mode(7, True, "auto_wrap", queryable=True),
-    Mode(9, True, "mouse_tracking", queryable=True, peripheral="mouse"),
-    Mode(12, True, "cursor_blinking", queryable=True, peripheral="cursor_blink"),
-    Mode(18, True, apply_fn=_print_form_feed, status_fn=_print_form_feed_status),
-    Mode(19, True, apply_fn=_print_extent, status_fn=_print_extent_status),
-    Mode(25, True, "cursor_visible", queryable=True, peripheral="cursor"),
-    Mode(42, True, "national_charset_mode", queryable=True),
-    Mode(45, True, "reverse_wraparound", queryable=True),
-    Mode(47, True, apply_fn=_alt_screen, status_fn=_alt_screen_status),
-    Mode(66, True, "numeric_keypad", invert=True, queryable=True),
-    Mode(67, True, "backarrow_key_sends_bs", queryable=True),
-    Mode(69, True, "left_right_margin_mode", queryable=True, apply_fn=_declrmm),  # DECLRMM
-    Mode(95, True, "no_clear_column_mode", queryable=True),
-    Mode(1000, True, "mouse_tracking", queryable=True, peripheral="mouse"),
-    Mode(1004, True, "focus_reporting", queryable=True),
-    Mode(1002, True, apply_fn=_mouse_button_tracking, status_fn=_mouse_button_status, peripheral="mouse"),
-    Mode(1003, True, apply_fn=_mouse_any_tracking, status_fn=_mouse_any_status, peripheral="mouse"),
-    Mode(1005, True, "mouse_utf8_mode", queryable=True),
-    Mode(1006, True, "mouse_sgr_mode", queryable=True, peripheral="mouse"),
-    Mode(1007, True, "alternate_scroll_mode", queryable=True, peripheral="mouse"),
-    Mode(1015, True, "urxvt_mouse", queryable=True),
-    Mode(1034, True, "eight_bit_input", queryable=True),
-    Mode(1035, True, "special_modifiers", queryable=True),
-    Mode(1036, True, "meta_sends_escape", queryable=True),
-    Mode(1037, True, "delete_sends_del", queryable=True),
-    Mode(1039, True, "alt_sends_escape", queryable=True),
-    Mode(1047, True, apply_fn=_alt_screen, status_fn=_alt_screen_status),
-    Mode(1048, True, apply_fn=_save_restore_cursor),
-    Mode(1049, True, apply_fn=_alt_screen_and_cursor, status_fn=_alt_screen_status),
+    ModeSpec(mp.DEC_CURSOR_APPLICATION, 1, True, "cursor_application_mode", queryable=True),
+    ModeSpec(mp.DEC_COLUMN_MODE, 3, True, apply_fn=_deccolm, status_fn=_column_status),
+    ModeSpec(
+        mp.DEC_REVERSE_SCREEN,
+        5,
+        True,
+        "reverse_screen",
+        queryable=True,
+        effects=frozenset({ModeEffect.REVERSE}),
+    ),
+    ModeSpec(mp.DEC_ORIGIN, 6, True, "origin_mode", queryable=True),
+    ModeSpec(mp.DEC_AUTOWRAP, 7, True, "auto_wrap", default=True, queryable=True),
+    ModeSpec(
+        mp.XTERM_MOUSE_X10,
+        9,
+        True,
+        queryable=True,
+        group="mouse_protocol",
+        group_value=MouseProtocol.X10,
+        effects=_MOUSE_EFFECT,
+    ),
+    ModeSpec(
+        mp.XTERM_CURSOR_BLINK,
+        12,
+        True,
+        "cursor_blinking",
+        queryable=True,
+        effects=frozenset({ModeEffect.CURSOR_BLINK}),
+    ),
+    ModeSpec(mp.DEC_PRINT_FORM_FEED, 18, True, apply_fn=_print_form_feed, status_fn=_print_form_feed_status),
+    ModeSpec(mp.DEC_PRINT_EXTENT, 19, True, apply_fn=_print_extent, status_fn=_print_extent_status),
+    ModeSpec(
+        mp.DEC_CURSOR_VISIBLE,
+        25,
+        True,
+        "cursor_visible",
+        default=True,
+        queryable=True,
+        effects=frozenset({ModeEffect.CURSOR}),
+    ),
+    ModeSpec(mp.DEC_NATIONAL_CHARSET, 42, True, "national_charset_mode", queryable=True),
+    ModeSpec(mp.XTERM_REVERSE_WRAP, 45, True, "reverse_wraparound", queryable=True),
+    ModeSpec(
+        mp.XTERM_ALT_SCREEN_47,
+        47,
+        True,
+        apply_fn=_alt_screen,
+        status_fn=_alt_screen_status,
+        effects=_MOUSE_EFFECT,
+    ),
+    ModeSpec(mp.DEC_NUMERIC_KEYPAD, 66, True, "numeric_keypad", default=True, invert=True, queryable=True),
+    ModeSpec(mp.DEC_BACKARROW, 67, True, "backarrow_key_sends_bs", queryable=True),
+    ModeSpec(
+        mp.DEC_LEFT_RIGHT_MARGINS,
+        69,
+        True,
+        "left_right_margin_mode",
+        queryable=True,
+        apply_fn=_declrmm,
+    ),
+    ModeSpec(mp.DEC_NO_CLEAR_COLUMN, 95, True, "no_clear_column_mode", queryable=True),
+    ModeSpec(
+        mp.XTERM_MOUSE_NORMAL,
+        1000,
+        True,
+        queryable=True,
+        group="mouse_protocol",
+        group_value=MouseProtocol.NORMAL,
+        effects=_MOUSE_EFFECT,
+    ),
+    ModeSpec(mp.XTERM_FOCUS, 1004, True, "focus_reporting", queryable=True),
+    ModeSpec(
+        mp.XTERM_MOUSE_BUTTON,
+        1002,
+        True,
+        queryable=True,
+        group="mouse_protocol",
+        group_value=MouseProtocol.BUTTON,
+        effects=_MOUSE_EFFECT,
+    ),
+    ModeSpec(
+        mp.XTERM_MOUSE_ANY,
+        1003,
+        True,
+        queryable=True,
+        group="mouse_protocol",
+        group_value=MouseProtocol.ANY,
+        effects=_MOUSE_EFFECT,
+    ),
+    ModeSpec(
+        mp.XTERM_MOUSE_UTF8,
+        1005,
+        True,
+        queryable=True,
+        group="mouse_encoding",
+        group_value=MouseEncoding.UTF8,
+    ),
+    ModeSpec(
+        mp.XTERM_MOUSE_SGR,
+        1006,
+        True,
+        queryable=True,
+        group="mouse_encoding",
+        group_value=MouseEncoding.SGR,
+    ),
+    ModeSpec(
+        mp.XTERM_ALTERNATE_SCROLL,
+        1007,
+        True,
+        "alternate_scroll_mode",
+        queryable=True,
+        effects=_MOUSE_EFFECT,
+    ),
+    ModeSpec(
+        mp.URXVT_MOUSE,
+        1015,
+        True,
+        queryable=True,
+        group="mouse_encoding",
+        group_value=MouseEncoding.URXVT,
+    ),
+    ModeSpec(mp.XTERM_EIGHT_BIT_INPUT, 1034, True, "eight_bit_input", queryable=True),
+    ModeSpec(
+        mp.XTERM_SPECIAL_MODIFIERS,
+        1035,
+        True,
+        "special_modifiers",
+        default=True,
+        queryable=True,
+    ),
+    ModeSpec(mp.XTERM_META_ESCAPE, 1036, True, "meta_sends_escape", queryable=True),
+    ModeSpec(mp.XTERM_DELETE, 1037, True, "delete_sends_del", queryable=True),
+    ModeSpec(mp.XTERM_ALT_ESCAPE, 1039, True, "alt_sends_escape", queryable=True),
+    ModeSpec(
+        mp.XTERM_ALT_SCREEN_1047,
+        1047,
+        True,
+        apply_fn=_alt_screen,
+        status_fn=_alt_screen_status,
+        effects=_MOUSE_EFFECT,
+    ),
+    ModeSpec(mp.XTERM_SAVE_CURSOR_1048, 1048, True, apply_fn=_save_restore_cursor),
+    ModeSpec(
+        mp.XTERM_ALT_SCREEN_1049,
+        1049,
+        True,
+        apply_fn=_alt_screen_and_cursor,
+        status_fn=_alt_screen_status,
+        effects=_MOUSE_EFFECT,
+    ),
     # Extended modes with implemented board or frontend behaviour.
-    Mode(40, True, "allow_column_mode", queryable=True),  # permit DECCOLM 80<->132
-    Mode(1045, True, "extended_reverse_wraparound", queryable=True),
-    Mode(1046, True, "allow_alt_screen", queryable=True, apply_fn=_allow_alt_screen),
-    Mode(2004, True, "bracketed_paste", queryable=True),
-    Mode(2026, True, "synchronized_output", queryable=True, peripheral="sync"),
-    Mode(
+    ModeSpec(mp.XTERM_ALLOW_COLUMN, 40, True, "allow_column_mode", queryable=True),
+    ModeSpec(mp.XTERM_EXTENDED_REVERSE_WRAP, 1045, True, "extended_reverse_wraparound", queryable=True),
+    ModeSpec(
+        mp.XTERM_ALLOW_ALT_SCREEN,
+        1046,
+        True,
+        "allow_alt_screen",
+        default=True,
+        queryable=True,
+        apply_fn=_allow_alt_screen,
+        effects=_MOUSE_EFFECT,
+    ),
+    ModeSpec(mp.XTERM_BRACKETED_PASTE, 2004, True, "bracketed_paste", queryable=True),
+    ModeSpec(
+        mp.XTERM_SYNC_OUTPUT,
+        2026,
+        True,
+        "synchronized_output",
+        queryable=True,
+        effects=frozenset({ModeEffect.SYNC}),
+    ),
+    ModeSpec(
+        mp.UNICODE_GRAPHEME_CLUSTERING,
         2027,
         True,
         "grapheme_clustering",
         queryable=True,
         apply_fn=_grapheme_clustering,
-        peripheral="grapheme",
+        effects=frozenset({ModeEffect.GRAPHEME}),
     ),
-    Mode(
+    ModeSpec(
+        mp.UNICODE_AMBIGUOUS_WIDTH,
         8840,
         True,
         "ambiguous_width_double",
+        default=_ambiguous_width_default,
         queryable=True,
         apply_fn=_ambiguous_width,
-        peripheral="width",
+        effects=frozenset({ModeEffect.WIDTH}),
     ),
-]
+)
+
+
+MODE_BY_CAPABILITY = {mode.capability: mode for mode in MODE_SPECS}
+if len(MODE_BY_CAPABILITY) != len(MODE_SPECS):
+    raise RuntimeError("duplicate mode capability ID")
+if frozenset(MODE_BY_CAPABILITY) != mp.ALL_MODE_CAPABILITIES:
+    raise RuntimeError("mode capability profile and implementation registry differ")
+
+
+def resolve_mode_specs(
+    capabilities: frozenset[str],
+    unsupported: frozenset[tuple[bool, int]] = frozenset(),
+    *,
+    specs: tuple[ModeSpec, ...] = MODE_SPECS,
+) -> dict[tuple[bool, int], ModeSpec]:
+    """Resolve semantic capabilities to one collision-free numbered repertoire."""
+    registry = {mode.capability: mode for mode in specs}
+    if len(registry) != len(specs):
+        raise ValueError("duplicate mode capability ID")
+    unknown = capabilities.difference(registry)
+    if unknown:
+        raise ValueError(f"unknown mode capabilities: {', '.join(sorted(unknown))}")
+    resolved: dict[tuple[bool, int], ModeSpec] = {}
+    for spec in specs:
+        if spec.capability not in capabilities or spec.key in unsupported:
+            continue
+        previous = resolved.get(spec.key)
+        if previous is not None:
+            raise ValueError(f"mode {spec.key} is claimed by both {previous.capability!r} and {spec.capability!r}")
+        resolved[spec.key] = spec
+    return resolved
 
 
 class ModeDevice(Device):
@@ -235,20 +423,19 @@ class ModeDevice(Device):
 
     def __init__(self, board: Board) -> None:
         self.board = board
-        self._set_defaults()
-        # Edge-trigger caches for peripheral present events (None = not yet emitted).
-        self._last_mouse_mode: tuple[str, bool] | None = None
+        self._modes = resolve_mode_specs(board.model.mode_capabilities, board.model.unsupported_modes)
+        self._runtime_mode_status: dict[tuple[bool, int], int] = {}
+        self._batch_depth = 0
+        self._pending_effects: set[ModeEffect] = set()
+        # Edge-trigger caches for frontend present events (None = not yet emitted).
+        self._last_mouse_capture: str | None = None
         self._last_cursor_visible: bool | None = None
         self._last_cursor_blinking: bool | None = None
         self._last_reverse_screen: bool | None = None
         self._last_sync: bool | None = None
         self._last_ambiguous_width: int | None = None
         self._last_grapheme_clustering: bool | None = None
-        unsupported = board.model.unsupported_modes
-        self._modes = {mode.key: mode for mode in MODE_SPECS if mode.key not in unsupported}
-        # Runtime destination policy. Only fixed DECRQM states live here:
-        # 0=unsupported, 3=permanently set, 4=permanently reset.
-        self._runtime_mode_status: dict[tuple[bool, int], int] = {}
+        self._set_defaults()
         self.handlers = {
             "SM": self.apply_mode_operation,
             "RM": self.apply_mode_operation,
@@ -259,73 +446,29 @@ class ModeDevice(Device):
         }
 
     def _set_defaults(self) -> None:
-        """Set every mode flag to its power-on default."""
-        self.auto_wrap = True
-        self.insert_mode = False
-        self.application_keypad = False
-        self.ansi_mode = True
-        self.cursor_application_mode = False
-        self.cursor_visible = True
-        self.cursor_blinking = False
-        self.scroll_mode = False
-        self.mouse_tracking = False
-        self.mouse_button_tracking = False
-        self.mouse_any_tracking = False
-        self.mouse_sgr_mode = False
-        self.mouse_extended_mode = False
-        self.urxvt_mouse = False
-        self.backarrow_key_sends_bs = False
-        self.auto_repeat = True
-        self.numeric_keypad = True
-        self.local_echo = True
-        self.reverse_screen = False
-        self.linefeed_newline_mode = False
-        self.origin_mode = False
-        self.auto_resize_mode = False
-        self.keyboard_usage_mode = False
-        self.left_right_margin_mode = False
-        self.focus_reporting = False
-        self.synchronized_output = False
-        self.bracketed_paste = False
-        # Reserved defaults for modes outside the implemented repertoire.
-        # DECSET ignores these until the corresponding behaviour is added.
-        self.keyboard_action_mode = False
-        self.allow_column_mode = False
-        self.national_charset_mode = False
-        self.margin_bell = False
-        self.reverse_wraparound = False
-        self.extended_reverse_wraparound = False
-        self.no_clear_column_mode = False
-        self.sixel_display_mode = False
-        self.mouse_highlight_tracking = False
-        self.mouse_utf8_mode = False
-        self.alternate_scroll_mode = False
-        self.mouse_pixel_mode = False
-        self.meta_sends_escape = False
-        self.alt_sends_escape = False
-        self.bell_urgency = False
-        self.bell_raise = False
-        self.allow_alt_screen = True  # alt-screen switching permitted by default
-        self.grapheme_clustering = False
-        self.ambiguous_width_double = self.board.width_policy.ambiguous_width == 2
-        self.color_scheme_updates = False
-        self.scroll_on_output = False
-        self.scroll_on_keypress = False
-        self.eight_bit_input = False
-        self.special_modifiers = True  # xterm default: Alt/NumLock modifiers active
-        self.delete_sends_del = False
-        self.keep_selection = False
-        self.select_to_clipboard = False
-        self.reuse_clipboard = False
-        self.sixel_private_registers = True  # xterm default: per-sixel private colour registers
-        self.application_escape = False
-        self.mousewheel_to_arrows = False
-        self.sixel_cursor_right = False
+        """Restore declared mode defaults and the non-mode keypad registers."""
+        self.mouse_protocol = MouseProtocol.OFF
+        self.mouse_encoding = MouseEncoding.LEGACY
+        initialized: set[str] = set()
+        for spec in MODE_SPECS:
+            if spec.attr is None or spec.attr in initialized:
+                continue
+            default = spec.default(self) if callable(spec.default) else spec.default
+            setattr(self, spec.attr, default)
+            initialized.add(spec.attr)
 
-    def reset(self, hard: bool = True) -> None:
+        # DECKPAM/DECKPNM are escape controls, not SM/RM modes.
+        self.application_keypad = False
+        # These hardware defaults are retained for unimplemented KAM/SRM/ARM.
+        self.auto_repeat = True
+        self.local_echo = True
+
+    def reset(self, hard: bool = True, *, reconcile: bool = True) -> None:
         """Reset modes. hard restores every flag (RIS); soft is the DECSTR subset."""
         if hard:
             self._set_defaults()
+            if hasattr(self.board, "mouse"):
+                self.board.mouse._disable_locator_state()
             fixed_grapheme = self._runtime_mode_status.get((True, 2027))
             self.grapheme_clustering = fixed_grapheme == 3
             self.board.blitter.set_grapheme_clustering(self.grapheme_clustering)
@@ -335,9 +478,8 @@ class ModeDevice(Device):
             self.insert_mode = False
             self.origin_mode = False
             self.cursor_visible = True
-        # A reset can turn peripheral state off (e.g. RIS with mouse on); tell the terminal (chrome).
-        for peripheral in ("mouse", "cursor", "cursor_blink", "reverse", "sync", "width", "grapheme"):
-            self._emit_peripheral(peripheral)
+        if reconcile:
+            self.reconcile_all()
 
     # --- dispatch --- #
 
@@ -356,67 +498,184 @@ class ModeDevice(Device):
 
     # --- applying modes --- #
 
-    def _apply(self, private: bool, param: int | None, value: bool) -> None:
+    def _set_group(self, group: str, value: MouseProtocol | MouseEncoding | None) -> None:
+        if group == "mouse_protocol":
+            protocol = MouseProtocol.OFF if value is None else value
+            if protocol is not MouseProtocol.LOCATOR and hasattr(self.board, "mouse"):
+                self.board.mouse._disable_locator_state()
+            self.mouse_protocol = protocol
+        elif group == "mouse_encoding":
+            self.mouse_encoding = MouseEncoding.LEGACY if value is None else value
+        else:
+            raise ValueError(f"unknown exclusive mode group {group!r}")
+
+    def _set_group_member(
+        self,
+        group: str,
+        member: MouseProtocol | MouseEncoding | None,
+        enabled: bool,
+    ) -> None:
+        """Set a group member, or clear it only when that member is selected."""
+        if enabled:
+            self._set_group(group, member)
+        elif getattr(self, group) is member:
+            self._set_group(group, None)
+
+    def select_mouse_protocol(self, protocol: MouseProtocol) -> None:
+        """Select a protocol from DEC locator or a compatibility caller."""
+        self._set_group("mouse_protocol", protocol)
+        self.reconcile(ModeEffect.MOUSE_CAPTURE)
+
+    def clear_locator_protocol(self) -> None:
+        """Turn tracking off only when DEC locator currently owns the protocol."""
+        if self.mouse_protocol is MouseProtocol.LOCATOR:
+            self.mouse_protocol = MouseProtocol.OFF
+            self.reconcile(ModeEffect.MOUSE_CAPTURE)
+
+    def _apply(self, private: bool, param: int | None, value: bool) -> frozenset[ModeEffect]:
         if param is None:
-            return
+            return frozenset()
         key = (private, param)
         mode = self._modes.get(key)
         if mode is not None and self._runtime_mode_status.get(key) not in (0, 3, 4):
             mode.apply(self, value)
-            if mode.peripheral is not None:
-                self._emit_peripheral(mode.peripheral)
+            return mode.effects
+        return frozenset()
 
-    def _mouse_mode(self) -> tuple[str, bool]:
-        """Derive the requested mouse-tracking mode from the flags (any > button > basic > off)."""
-        if self.mouse_any_tracking:
-            mode = "any"
-        elif self.mouse_button_tracking:
-            mode = "button"
-        elif self.mouse_tracking or (self.alternate_scroll_mode and self.board.blitter.in_alt_screen):
-            mode = "basic"
-        else:
-            mode = "off"
-        return mode, self.mouse_sgr_mode
+    def _apply_many(self, private: bool, params: tuple[int | None, ...], value: bool) -> None:
+        self._batch_depth += 1
+        try:
+            for param in params:
+                self._pending_effects.update(self._apply(private, param, value))
+        finally:
+            self._batch_depth -= 1
+        if self._batch_depth == 0 and self._pending_effects:
+            pending = frozenset(self._pending_effects)
+            self._pending_effects.clear()
+            self.reconcile(*pending)
 
-    def _emit_peripheral(self, peripheral: str) -> None:
-        """Present a peripheral event, edge-triggered on the derived state changing."""
-        if peripheral == "mouse":
-            state = self._mouse_mode()
-            if state != self._last_mouse_mode:
-                self._last_mouse_mode = state
-                self.board.present(MouseModeChanged(*state))
-        elif peripheral == "cursor":
-            if self.cursor_visible != self._last_cursor_visible:
+    def _mouse_capture(self) -> str:
+        """Derive the physical events the attached frontend must capture."""
+        protocol = self.mouse_protocol
+        if protocol in (MouseProtocol.ANY, MouseProtocol.LOCATOR):
+            return "any"
+        if protocol is MouseProtocol.BUTTON:
+            return "button"
+        if protocol in (MouseProtocol.X10, MouseProtocol.NORMAL):
+            return "basic"
+        if self.alternate_scroll_mode and self.board.blitter.in_alt_screen:
+            return "basic"
+        return "off"
+
+    def reconcile(self, *effects: ModeEffect, force: bool = False) -> None:
+        """Reconcile typed derived frontend state, batching during mode lists."""
+        if self._batch_depth:
+            self._pending_effects.update(effects)
+            return
+        requested = frozenset(effects)
+        for effect in ModeEffect:
+            if effect in requested:
+                self._emit_effect(effect, force=force)
+
+    def reconcile_all(self, *, force: bool = False) -> None:
+        """Reconcile every frontend-facing mode effect."""
+        self.reconcile(*ModeEffect, force=force)
+
+    def _emit_effect(self, effect: ModeEffect, *, force: bool = False) -> None:
+        if effect is ModeEffect.MOUSE_CAPTURE:
+            state = self._mouse_capture()
+            if force or state != self._last_mouse_capture:
+                self._last_mouse_capture = state
+                self.board.present(MouseCaptureChanged(state))
+        elif effect is ModeEffect.CURSOR:
+            if force or self.cursor_visible != self._last_cursor_visible:
                 self._last_cursor_visible = self.cursor_visible
                 self.board.present(CursorVisibilityChanged(self.cursor_visible))
-        elif peripheral == "cursor_blink":
-            if self.cursor_blinking != self._last_cursor_blinking:
+        elif effect is ModeEffect.CURSOR_BLINK:
+            if force or self.cursor_blinking != self._last_cursor_blinking:
                 self._last_cursor_blinking = self.cursor_blinking
                 self.board.present(CursorBlinkChanged(self.cursor_blinking))
-        elif peripheral == "reverse":
-            if self.reverse_screen != self._last_reverse_screen:
+        elif effect is ModeEffect.REVERSE:
+            if force or self.reverse_screen != self._last_reverse_screen:
                 self._last_reverse_screen = self.reverse_screen
                 self.board.present(ReverseScreenChanged(self.reverse_screen))
-        elif peripheral == "sync":
-            if self.synchronized_output != self._last_sync:
+        elif effect is ModeEffect.SYNC:
+            if force or self.synchronized_output != self._last_sync:
                 self._last_sync = self.synchronized_output
                 self.board.present(SyncOutputChanged(self.synchronized_output))
-        elif peripheral == "width":
+        elif effect is ModeEffect.WIDTH:
             if (True, 8840) not in self._modes:
                 return
             width = 2 if self.ambiguous_width_double else 1
-            if width != self._last_ambiguous_width:
+            if force or width != self._last_ambiguous_width:
                 self._last_ambiguous_width = width
                 self.board.present(AmbiguousWidthChanged(width))
-        elif peripheral == "grapheme":
-            if self.grapheme_clustering != self._last_grapheme_clustering:
+        elif effect is ModeEffect.GRAPHEME:
+            if force or self.grapheme_clustering != self._last_grapheme_clustering:
                 self._last_grapheme_clustering = self.grapheme_clustering
                 self.board.present(GraphemeClusteringChanged(self.grapheme_clustering))
 
     def set_cursor_blinking(self, enabled: bool) -> None:
         """Set cursor blink state and notify the attached terminal on an edge."""
         self.cursor_blinking = enabled
-        self._emit_peripheral("cursor_blink")
+        self.reconcile(ModeEffect.CURSOR_BLINK)
+
+    # Compatibility properties for callers that used the former mouse booleans.
+
+    @property
+    def mouse_tracking(self) -> bool:
+        return self.mouse_protocol in {
+            MouseProtocol.X10,
+            MouseProtocol.NORMAL,
+            MouseProtocol.BUTTON,
+            MouseProtocol.ANY,
+        }
+
+    @mouse_tracking.setter
+    def mouse_tracking(self, enabled: bool) -> None:
+        self.select_mouse_protocol(MouseProtocol.NORMAL if enabled else MouseProtocol.OFF)
+
+    @property
+    def mouse_button_tracking(self) -> bool:
+        return self.mouse_protocol is MouseProtocol.BUTTON
+
+    @mouse_button_tracking.setter
+    def mouse_button_tracking(self, enabled: bool) -> None:
+        self._set_group_member("mouse_protocol", MouseProtocol.BUTTON, enabled)
+        self.reconcile(ModeEffect.MOUSE_CAPTURE)
+
+    @property
+    def mouse_any_tracking(self) -> bool:
+        return self.mouse_protocol is MouseProtocol.ANY
+
+    @mouse_any_tracking.setter
+    def mouse_any_tracking(self, enabled: bool) -> None:
+        self._set_group_member("mouse_protocol", MouseProtocol.ANY, enabled)
+        self.reconcile(ModeEffect.MOUSE_CAPTURE)
+
+    @property
+    def mouse_utf8_mode(self) -> bool:
+        return self.mouse_encoding is MouseEncoding.UTF8
+
+    @mouse_utf8_mode.setter
+    def mouse_utf8_mode(self, enabled: bool) -> None:
+        self._set_group_member("mouse_encoding", MouseEncoding.UTF8, enabled)
+
+    @property
+    def mouse_sgr_mode(self) -> bool:
+        return self.mouse_encoding is MouseEncoding.SGR
+
+    @mouse_sgr_mode.setter
+    def mouse_sgr_mode(self, enabled: bool) -> None:
+        self._set_group_member("mouse_encoding", MouseEncoding.SGR, enabled)
+
+    @property
+    def urxvt_mouse(self) -> bool:
+        return self.mouse_encoding is MouseEncoding.URXVT
+
+    @urxvt_mouse.setter
+    def urxvt_mouse(self, enabled: bool) -> None:
+        self._set_group_member("mouse_encoding", MouseEncoding.URXVT, enabled)
 
     def set_grapheme_capability(self, capability: str) -> None:
         """Apply the destination's mode-2027 policy without changing the model repertoire."""
@@ -444,20 +703,17 @@ class ModeDevice(Device):
 
         # A newly attached/reprobed destination must receive the current state
         # even when the logical mode itself did not change.
-        self._last_grapheme_clustering = None
-        self._emit_peripheral("grapheme")
+        self.reconcile(ModeEffect.GRAPHEME, force=True)
 
     def set_ansi_modes(self, params: tuple[int | None, ...], set_mode: bool) -> None:
-        for param in params:
-            self._apply(False, param, set_mode)
+        self._apply_many(False, params, set_mode)
 
     def set_private_modes(self, params: tuple[int | None, ...], set_mode: bool) -> None:
-        for param in params:
-            self._apply(True, param, set_mode)
+        self._apply_many(True, params, set_mode)
 
     def set_mode(self, mode: int, value: bool = True, private: bool = False) -> None:
         """Set a single terminal mode."""
-        self._apply(private, mode, value)
+        self._apply_many(private, (mode,), value)
 
     def recognizes(self, private: bool, mode: int) -> bool:
         """Whether this model implements a mode."""
@@ -465,7 +721,7 @@ class ModeDevice(Device):
 
     def clear_mode(self, mode: int, private: bool = False) -> None:
         """Clear a single terminal mode."""
-        self._apply(private, mode, False)
+        self._apply_many(private, (mode,), False)
 
     # --- DECRQM status --- #
 

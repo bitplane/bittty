@@ -12,6 +12,7 @@ from ..operations import Operation
 from ..style import Style, parse_sgr_sequence
 from ..video import Cell, Video
 from .base import Device
+from .modes import ModeEffect
 
 _REVERSE_ATTRS = {1: "bold", 4: "underline", 5: "blink", 7: "reverse"}
 _MAX_CLUSTER_CODEPOINTS = 256
@@ -838,12 +839,15 @@ class Blitter(Device):
     def switch_screen(self, alt: bool) -> None:
         """Switch between primary and alternate screen."""
         self.reset_grapheme_state()
+        changed = alt != self.in_alt_screen
         if alt and not self.in_alt_screen:
             self.current_buffer = self.alt_buffer
             self.in_alt_screen = True
         elif not alt and self.in_alt_screen:
             self.current_buffer = self.primary_buffer
             self.in_alt_screen = False
+        if changed:
+            self.board.modes.reconcile(ModeEffect.MOUSE_CAPTURE)
 
     def alignment_test(self) -> None:
         """Fill the screen with 'E' characters for alignment testing."""

@@ -48,7 +48,7 @@ The chrome. A concrete terminal composes a Board (never subclasses it), plugs in
 display port, and is named by venue: `StdioTerminal` renders into the tty this process runs
 in; future siblings render into a Textual widget, a browser, a video file.
 
-Present events (bell, title, mouse-mode changes...) arrive as typed `on_*` hooks — discrete
+Present events (bell, title, mouse-capture changes...) arrive as typed `on_*` hooks — discrete
 side-effects are pushed; screen content is pulled. Physical facts flow the other way: the
 venue's resize, focus, input, and capabilities go down to the board through the port.
 

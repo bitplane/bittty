@@ -94,11 +94,10 @@ class ConsoleRequest:
 
 
 @dataclass(frozen=True)
-class MouseModeChanged:
-    """The requested mouse-tracking mode changed (derived from modes 9/1000/1002/1003)."""
+class MouseCaptureChanged:
+    """The physical mouse-event capture required by the board changed."""
 
     mode: str  # "off" / "basic" / "button" / "any"
-    sgr: bool  # SGR (1006) encoding requested
 
 
 @dataclass(frozen=True)
@@ -155,7 +154,7 @@ PresentEvent = (
     | WindowRequest
     | WindowStateChanged
     | ConsoleRequest
-    | MouseModeChanged
+    | MouseCaptureChanged
     | CursorVisibilityChanged
     | CursorBlinkChanged
     | ReverseScreenChanged

@@ -12,7 +12,7 @@ from bittty.present import (
     CwdChanged,
     FontChanged,
     GraphemeClusteringChanged,
-    MouseModeChanged,
+    MouseCaptureChanged,
     Notification,
     PointerShapeChanged,
     ReverseScreenChanged,
@@ -87,17 +87,16 @@ def test_console_switch_event():
     assert ConsoleRequest("switch", 3) in rec.events
 
 
-def test_mouse_mode_is_edge_triggered():
+def test_mouse_capture_is_edge_triggered_and_ignores_child_encoding():
     board, parser, rec = _term()
     parser.feed("\x1b[?1000h")  # basic tracking on
     parser.feed("\x1b[?1000h")  # again -> no new event (edge-triggered)
     parser.feed("\x1b[?1006h")  # add SGR encoding
     parser.feed("\x1b[?1000l")  # tracking off
-    mouse_events = [e for e in rec.events if isinstance(e, MouseModeChanged)]
+    mouse_events = [e for e in rec.events if isinstance(e, MouseCaptureChanged)]
     assert mouse_events == [
-        MouseModeChanged("basic", False),
-        MouseModeChanged("basic", True),
-        MouseModeChanged("off", True),
+        MouseCaptureChanged("basic"),
+        MouseCaptureChanged("off"),
     ]
 
 

@@ -151,8 +151,8 @@ class StdioTerminal(Terminal):
         print(f"\033[?2027{suffix}", end="", flush=True)
         self.host_grapheme_clustering = enabled
 
-    def on_mouse_mode(self, mode: str, sgr: bool) -> None:
-        """Mirror the child's requested mouse-tracking mode onto the outer terminal."""
+    def on_mouse_capture(self, mode: str) -> None:
+        """Capture the physical mouse events requested by the board."""
         if mode == "off":
             self.disable_host_mouse()
             return

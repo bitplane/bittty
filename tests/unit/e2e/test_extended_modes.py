@@ -29,39 +29,38 @@ def _term(model=None):
 
 
 @pytest.mark.parametrize(
-    "mode, attr",
+    "mode",
     [
-        (2, "ansi_mode"),
-        (4, "scroll_mode"),
-        (8, "auto_repeat"),
-        (20, "linefeed_newline_mode"),
-        (44, "margin_bell"),
-        (68, "keyboard_usage_mode"),
-        (80, "sixel_display_mode"),
-        (1001, "mouse_highlight_tracking"),
-        (1016, "mouse_pixel_mode"),
-        (1042, "bell_urgency"),
-        (1043, "bell_raise"),
-        (1010, "scroll_on_output"),
-        (1011, "scroll_on_keypress"),
-        (1040, "keep_selection"),
-        (1041, "select_to_clipboard"),
-        (1044, "reuse_clipboard"),
-        (1070, "sixel_private_registers"),
-        (2028, "auto_resize_mode"),
-        (2031, "color_scheme_updates"),
-        (7727, "application_escape"),
-        (7786, "mousewheel_to_arrows"),
-        (8452, "sixel_cursor_right"),
+        2,
+        4,
+        8,
+        20,
+        44,
+        68,
+        80,
+        1001,
+        1016,
+        1042,
+        1043,
+        1010,
+        1011,
+        1040,
+        1041,
+        1044,
+        1070,
+        2028,
+        2031,
+        7727,
+        7786,
+        8452,
     ],
 )
-def test_unimplemented_private_modes_are_unrecognised_and_ignored(mode, attr):
+def test_unimplemented_private_modes_are_unrecognised_and_ignored(mode):
     board, parser, transport = _term()
-    before = getattr(board.modes, attr)
 
     parser.feed(f"\x1b[?{mode}h\x1b[?{mode}$p")
 
-    assert getattr(board.modes, attr) == before
+    assert board.modes.recognizes(True, mode) is False
     assert transport.data[-1] == f"\x1b[?{mode};0$y"
 
 
@@ -275,12 +274,11 @@ def test_decrqm_now_reports_mouse_and_paste_modes():
     assert transport.data[-1] == "\x1b[?2004;2$y"
 
 
-@pytest.mark.parametrize("mode, attr", [(2, "keyboard_action_mode"), (12, "local_echo")])
-def test_unimplemented_ansi_modes_are_unrecognised_and_ignored(mode, attr):
+@pytest.mark.parametrize("mode", [2, 12])
+def test_unimplemented_ansi_modes_are_unrecognised_and_ignored(mode):
     board, parser, transport = _term()
-    before = getattr(board.modes, attr)
 
     parser.feed(f"\x1b[{mode}h\x1b[{mode}$p")
 
-    assert getattr(board.modes, attr) == before
+    assert board.modes.recognizes(False, mode) is False
     assert transport.data[-1] == f"\x1b[{mode};0$y"

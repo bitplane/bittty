@@ -20,6 +20,12 @@ from .keymap import (
     KeyMap,
 )
 from .palette import VGA_PALETTE, XTERM_PALETTE, PaletteDefaults
+from .mode_profiles import (
+    LINUX_MODE_CAPABILITIES,
+    VT100_MODE_CAPABILITIES,
+    VT220_MODE_CAPABILITIES,
+    XTERM_MODE_CAPABILITIES,
+)
 
 
 @dataclass(frozen=True)
@@ -30,7 +36,7 @@ class Model:
     da1_response: str  # Primary Device Attributes (answer to CSI c)
     da2_response: str | None = None  # Secondary DA (CSI > c); None if unsupported
     da3_response: str | None = "\033P!|00000000\033\\"  # Tertiary DA (CSI = c); None if unsupported
-    # Modes this terminal does not recognise, as (private, number) keys.
+    # Backward-compatible subtractive override for custom Model callers.
     unsupported_modes: frozenset[tuple[bool, int]] = frozenset()
     # Default colours (16 ANSI + fg/bg/cursor) this terminal presents.
     palette: PaletteDefaults = field(default=XTERM_PALETTE)
@@ -40,45 +46,9 @@ class Model:
     color_depth: str = "truecolor"
     # How this terminal encodes function keys and keyboard modifiers.
     keymap: KeyMap = field(default=XTERM_KEYMAP)
-
-
-# Implemented private modes that postdate the VT220 or belong to non-DEC
-# terminals. The DEC hardware profiles must report these as unrecognised.
-_POST_VT220_OR_NON_DEC_MODES = frozenset(
-    {
-        (True, 9),
-        (True, 12),
-        (True, 40),
-        (True, 45),
-        (True, 47),
-        (True, 69),
-        (True, 95),
-        (True, 1000),
-        (True, 1002),
-        (True, 1003),
-        (True, 1004),
-        (True, 1005),
-        (True, 1006),
-        (True, 1007),
-        (True, 1015),
-        (True, 1034),
-        (True, 1035),
-        (True, 1036),
-        (True, 1037),
-        (True, 1039),
-        (True, 1047),
-        (True, 1048),
-        (True, 1049),
-        (True, 1046),
-        (True, 1045),
-        (True, 2004),
-        (True, 2026),
-        (True, 2027),
-        (True, 8840),
-    }
-)
-
-_POST_VT100_MODES = _POST_VT220_OR_NON_DEC_MODES | {(True, 42)}
+    # Semantic mode implementations this model assembles. Positive profiles
+    # allow different terminal families to give the same number different meanings.
+    mode_capabilities: frozenset[str] = XTERM_MODE_CAPABILITIES
 
 
 # Primary DA responses per vt100.net / xterm ctlseqs.
@@ -86,6 +56,7 @@ XTERM = Model(
     name="xterm",
     da1_response="\033[?62;1;6;8;9;15;18;21;22;23c",
     da2_response="\033[>1;10;0c",
+    mode_capabilities=XTERM_MODE_CAPABILITIES,
 )
 
 VT100 = Model(
@@ -93,7 +64,7 @@ VT100 = Model(
     da1_response="\033[?1;2c",  # VT100 with Advanced Video Option
     da2_response=None,  # secondary DA was introduced with the VT220
     da3_response=None,
-    unsupported_modes=_POST_VT100_MODES,
+    mode_capabilities=VT100_MODE_CAPABILITIES,
     # VT100 knows ASCII, UK, DEC Special Graphics and the alternate ROM sets;
     # DEC Supplemental and the national replacement sets arrived with the VT220.
     charsets=frozenset({"B", "A", "0", "1", "2"}),
@@ -106,7 +77,7 @@ VT220 = Model(
     da1_response="\033[?62;1;2;6;8;9c",
     da2_response="\033[>1;10;0c",
     da3_response=None,
-    unsupported_modes=_POST_VT220_OR_NON_DEC_MODES,
+    mode_capabilities=VT220_MODE_CAPABILITIES,
     # VT220 adds DEC Supplemental ("<") and the national replacement sets over
     # the VT100, but DEC Technical (">") is a later (VT240/VT330) charset.
     charsets=frozenset(
@@ -121,25 +92,7 @@ LINUX = Model(
     da1_response="\033[?6c",  # the linux console identifies as a VT102
     da2_response=None,
     da3_response=None,
-    # No mouse tracking or bracketed paste on the bare console.
-    unsupported_modes=frozenset(
-        {
-            (True, 9),
-            (True, 1000),
-            (True, 1002),
-            (True, 1003),
-            (True, 1005),
-            (True, 1006),
-            (True, 1007),
-            (True, 1015),
-            (True, 1034),
-            (True, 1035),
-            (True, 1036),
-            (True, 1037),
-            (True, 1039),
-            (True, 2004),
-        }
-    ),
+    mode_capabilities=LINUX_MODE_CAPABILITIES,
     charsets=frozenset({"B", "A", "0", "U"}),
     color_depth="256",
     palette=VGA_PALETTE,
@@ -154,6 +107,7 @@ SCREEN = Model(
     da1_response="\033[?1;2c",
     da2_response="\033[>83;0;0c",
     da3_response=None,
+    mode_capabilities=XTERM_MODE_CAPABILITIES,
     color_depth="256",
     keymap=SCREEN_KEYMAP,
 )
@@ -165,6 +119,7 @@ TMUX = Model(
     da1_response="\033[?1;2;4c",
     da2_response="\033[>84;0;0c",
     da3_response=None,
+    mode_capabilities=XTERM_MODE_CAPABILITIES,
     color_depth="256",
     keymap=SCREEN_KEYMAP,
 )
@@ -176,6 +131,7 @@ URXVT = Model(
     da1_response="\033[?1;2c",
     da2_response="\033[>85;0;0c",
     da3_response=None,
+    mode_capabilities=XTERM_MODE_CAPABILITIES,
     color_depth="256",
     keymap=URXVT_KEYMAP,
 )
@@ -188,6 +144,7 @@ GNOME = Model(
     da1_response="\033[?61;1;21;22;28c",
     da2_response="\033[>61;8400;1c",
     da3_response=None,
+    mode_capabilities=XTERM_MODE_CAPABILITIES,
     color_depth="truecolor",
     keymap=XTERM_KEYMAP,
 )
@@ -200,6 +157,7 @@ KITTY = Model(
     da1_response="\033[?62;52;c",
     da2_response="\033[>1;4000;45c",
     da3_response=None,
+    mode_capabilities=XTERM_MODE_CAPABILITIES,
     color_depth="truecolor",
     keymap=XTERM_KEYMAP,
 )

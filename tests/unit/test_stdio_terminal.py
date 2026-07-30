@@ -17,27 +17,27 @@ def test_is_a_terminal_composing_a_board():
     assert display.board.pty is None  # no PTY until start_process
 
 
-def test_on_mouse_mode_mirrors_onto_the_host(capsys):
+def test_on_mouse_capture_mirrors_onto_the_host(capsys):
     display = StdioTerminal()
-    display.on_mouse_mode("basic", False)
+    display.on_mouse_capture("basic")
     assert "\033[?1000h\033[?1006h" in capsys.readouterr().out
     assert display.host_mouse_mode == "basic"
 
-    display.on_mouse_mode("any", True)
+    display.on_mouse_capture("any")
     out = capsys.readouterr().out
     assert "\033[?1003h\033[?1006h" in out  # switched up to any-motion
     assert display.host_mouse_mode == "any"
 
-    display.on_mouse_mode("off", False)
+    display.on_mouse_capture("off")
     assert "\033[?1000l" in capsys.readouterr().out  # disabled
     assert display.host_mouse_mode is None
 
 
-def test_mouse_mode_flows_from_the_parser_through_the_seam(capsys):
+def test_mouse_capture_flows_from_the_parser_through_the_seam(capsys):
     display = StdioTerminal()
     parser = Parser(display.board)
     parser.feed("\x1b[?1000h")  # child turns on mouse tracking
-    # the modes device emits MouseModeChanged -> on_mouse_mode -> host enable printed
+    # the modes device emits MouseCaptureChanged -> on_mouse_capture -> host enable printed
     assert "\033[?1000h\033[?1006h" in capsys.readouterr().out
     assert display.host_mouse_mode == "basic"
 

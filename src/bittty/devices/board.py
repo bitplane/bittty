@@ -244,7 +244,7 @@ class Board:
     def reset(self, hard: bool = True) -> None:
         """Reset the terminal. hard is RIS (full power-on); soft is DECSTR."""
         self.style.reset()
-        self.modes.reset(hard=hard)
+        self.modes.reset(hard=hard, reconcile=False)
         self.cursor.reset(hard=hard)
         self.blitter.reset(hard=hard)
         self.printer.reset(hard=hard)
@@ -252,6 +252,7 @@ class Board:
         if hard:
             self.charset.reset()
             self.palette.reset()
+        self.modes.reconcile_all()
 
     def get_device(self, name: str):
         """Return a plugged-in device by slot name."""
