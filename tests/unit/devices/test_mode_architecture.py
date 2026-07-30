@@ -190,3 +190,60 @@ def test_declared_defaults_restore_on_hard_reset():
     assert board.modes.allow_alt_screen is True
     assert board.modes.mouse_protocol is MouseProtocol.OFF
     assert board.modes.mouse_encoding is MouseEncoding.LEGACY
+
+
+def test_private_mode_save_restore_is_independent_and_ignores_unsaved_modes():
+    board, parser, _ = _board()
+    parser.feed("\x1b[?5h\x1b[?25l\x1b[?5s")
+    parser.feed("\x1b[?5l\x1b[?25h\x1b[?25s")
+    parser.feed("\x1b[?5l\x1b[?25l\x1b[?2004h")
+
+    parser.feed("\x1b[?5;25;2004r")
+
+    assert board.modes.reverse_screen is True
+    assert board.modes.cursor_visible is True
+    assert board.modes.bracketed_paste is True
+
+
+def test_private_mode_restore_reconstructs_exclusive_mouse_groups():
+    board, parser, _ = _board()
+    parser.feed("\x1b[?1000;1006h")
+    parser.feed("\x1b[?1000;1002;1003;1005;1006;1015s")
+    parser.feed("\x1b[?1003h\x1b[?1006l")
+
+    parser.feed("\x1b[?1000;1002;1003;1005;1006;1015r")
+
+    assert board.modes.mouse_protocol is MouseProtocol.NORMAL
+    assert board.modes.mouse_encoding is MouseEncoding.SGR
+
+
+def test_private_mode_restore_batches_frontend_reconciliation():
+    board, parser, _ = _board()
+    recorder = Recorder()
+    board.display.attach(recorder)
+    parser.feed("\x1b[?1000h\x1b[?1000;1002;1003s\x1b[?1003h")
+    recorder.events.clear()
+
+    parser.feed("\x1b[?1000;1002;1003r")
+
+    assert recorder.events == [MouseCaptureChanged("basic")]
+
+
+def test_private_mode_1048_save_restore_uses_the_cursor_cache():
+    board, parser, _ = _board()
+    board.cursor.set_position(3, 2)
+
+    parser.feed("\x1b[?1048s")
+    board.cursor.set_position(9, 4)
+    parser.feed("\x1b[?1048r")
+
+    assert (board.cursor.x, board.cursor.y) == (3, 2)
+
+
+def test_ris_clears_private_mode_cache_but_soft_reset_preserves_it():
+    board, parser, _ = _board()
+    parser.feed("\x1b[?5h\x1b[?5s\x1b[!p\x1b[?5l\x1b[?5r")
+    assert board.modes.reverse_screen is True
+
+    parser.feed("\x1bc\x1b[?5l\x1b[?5r")
+    assert board.modes.reverse_screen is False

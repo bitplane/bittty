@@ -239,6 +239,11 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
         name = ("DECSET" if set_mode else "DECRST") if private else ("SM" if set_mode else "RM")
         return Operation(name, (tuple(params), set_mode, private), raw_csi_data)
 
+    if intermediates == ["?"] and final_char in ("s", "r"):
+        # XTSAVE / XTRESTORE — save or restore the listed DEC private modes.
+        name = "XTSAVE" if final_char == "s" else "XTRESTORE"
+        return Operation(name, (tuple(params),), raw_csi_data)
+
     if any(intermediate != "?" for intermediate in intermediates):
         return None
 

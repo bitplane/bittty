@@ -162,6 +162,20 @@ def test_parser_emits_mode_operations(board):
     ]
 
 
+def test_parser_emits_private_mode_save_restore_operations(board):
+    sink = CollectingSink()
+    parser = Parser(sink)
+
+    parser.feed("\x1b[?5;25s\x1b[?5;25r\x1b[?s\x1b[?r")
+
+    assert sink.operations == [
+        Operation("XTSAVE", ((5, 25),), "\x1b[?5;25s"),
+        Operation("XTRESTORE", ((5, 25),), "\x1b[?5;25r"),
+        Operation("XTSAVE", ((),), "\x1b[?s"),
+        Operation("XTRESTORE", ((),), "\x1b[?r"),
+    ]
+
+
 def test_parser_emits_string_sequence_content_and_raw_data(board):
     sink = CollectingSink()
     parser = Parser(sink)

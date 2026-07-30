@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Callable
@@ -74,6 +75,8 @@ class ModeSpec:
     group: str | None = None
     group_value: MouseProtocol | MouseEncoding | None = None
     effects: frozenset[ModeEffect] = frozenset()
+    save_fn: Callable[["ModeDevice"], None] | None = None
+    restore_fn: Callable[["ModeDevice"], None] | None = None
 
     @property
     def key(self) -> tuple[bool, int]:
@@ -121,6 +124,14 @@ def _save_restore_cursor(device: ModeDevice, value: bool) -> None:
         device.board.cursor.save()
     else:
         device.board.cursor.restore()
+
+
+def _save_cursor_mode(device: ModeDevice) -> None:
+    device.board.cursor.save()
+
+
+def _restore_cursor_mode(device: ModeDevice) -> None:
+    device.board.cursor.restore()
 
 
 def _alt_screen_and_cursor(device: ModeDevice, value: bool) -> None:
@@ -334,7 +345,14 @@ MODE_SPECS: tuple[ModeSpec, ...] = (
         status_fn=_alt_screen_status,
         effects=_MOUSE_EFFECT,
     ),
-    ModeSpec(mp.XTERM_SAVE_CURSOR_1048, 1048, True, apply_fn=_save_restore_cursor),
+    ModeSpec(
+        mp.XTERM_SAVE_CURSOR_1048,
+        1048,
+        True,
+        apply_fn=_save_restore_cursor,
+        save_fn=_save_cursor_mode,
+        restore_fn=_restore_cursor_mode,
+    ),
     ModeSpec(
         mp.XTERM_ALT_SCREEN_1049,
         1049,
@@ -392,6 +410,8 @@ if len(MODE_BY_CAPABILITY) != len(MODE_SPECS):
     raise RuntimeError("duplicate mode capability ID")
 if frozenset(MODE_BY_CAPABILITY) != mp.ALL_MODE_CAPABILITIES:
     raise RuntimeError("mode capability profile and implementation registry differ")
+if any((mode.save_fn is None) != (mode.restore_fn is None) for mode in MODE_SPECS):
+    raise RuntimeError("mode save and restore hooks must be declared together")
 
 
 def resolve_mode_specs(
@@ -425,6 +445,8 @@ class ModeDevice(Device):
         self.board = board
         self._modes = resolve_mode_specs(board.model.mode_capabilities, board.model.unsupported_modes)
         self._runtime_mode_status: dict[tuple[bool, int], int] = {}
+        # None marks an action-mode whose save/restore hooks own the snapshot.
+        self._saved_private_modes: dict[int, bool | None] = {}
         self._batch_depth = 0
         self._pending_effects: set[ModeEffect] = set()
         # Edge-trigger caches for frontend present events (None = not yet emitted).
@@ -441,6 +463,8 @@ class ModeDevice(Device):
             "RM": self.apply_mode_operation,
             "DECSET": self.apply_mode_operation,
             "DECRST": self.apply_mode_operation,
+            "XTSAVE": self.save_private_mode_operation,
+            "XTRESTORE": self.restore_private_mode_operation,
             "DECKPAM": self.enter_application_keypad,
             "DECKPNM": self.enter_numeric_keypad,
         }
@@ -466,6 +490,7 @@ class ModeDevice(Device):
     def reset(self, hard: bool = True, *, reconcile: bool = True) -> None:
         """Reset modes. hard restores every flag (RIS); soft is the DECSTR subset."""
         if hard:
+            self._saved_private_modes.clear()
             self._set_defaults()
             if hasattr(self.board, "mouse"):
                 self.board.mouse._disable_locator_state()
@@ -487,6 +512,12 @@ class ModeDevice(Device):
         params, set_mode, private = operation.args
         modes = self.set_private_modes if private else self.set_ansi_modes
         modes(params, set_mode)
+
+    def save_private_mode_operation(self, operation: Operation) -> None:
+        self.save_private_modes(operation.args[0])
+
+    def restore_private_mode_operation(self, operation: Operation) -> None:
+        self.restore_private_modes(operation.args[0])
 
     def enter_application_keypad(self, operation: Operation) -> None:
         self.application_keypad = True
@@ -542,10 +573,10 @@ class ModeDevice(Device):
             return mode.effects
         return frozenset()
 
-    def _apply_many(self, private: bool, params: tuple[int | None, ...], value: bool) -> None:
+    def _apply_values(self, private: bool, values: Iterable[tuple[int | None, bool]]) -> None:
         self._batch_depth += 1
         try:
-            for param in params:
+            for param, value in values:
                 self._pending_effects.update(self._apply(private, param, value))
         finally:
             self._batch_depth -= 1
@@ -553,6 +584,9 @@ class ModeDevice(Device):
             pending = frozenset(self._pending_effects)
             self._pending_effects.clear()
             self.reconcile(*pending)
+
+    def _apply_many(self, private: bool, params: tuple[int | None, ...], value: bool) -> None:
+        self._apply_values(private, ((param, value) for param in params))
 
     def _mouse_capture(self) -> str:
         """Derive the physical events the attached frontend must capture."""
@@ -710,6 +744,40 @@ class ModeDevice(Device):
 
     def set_private_modes(self, params: tuple[int | None, ...], set_mode: bool) -> None:
         self._apply_many(True, params, set_mode)
+
+    def save_private_modes(self, params: tuple[int | None, ...]) -> None:
+        """XTSAVE — cache the current value of each recognised private mode."""
+        for param in params:
+            if not isinstance(param, int):
+                continue
+            entry = self._modes.get((True, param))
+            if entry is None or self._runtime_mode_status.get((True, param)) == 0:
+                continue
+            if entry.save_fn is not None:
+                entry.save_fn(self)
+                self._saved_private_modes[param] = None
+                continue
+            status = self.get_private_mode_status(param)
+            if status in (1, 2, 3, 4):
+                self._saved_private_modes[param] = status in (1, 3)
+
+    def restore_private_modes(self, params: tuple[int | None, ...]) -> None:
+        """XTRESTORE — restore only listed modes that have a cached value."""
+        saved = self._saved_private_modes
+
+        def saved_values() -> Iterable[tuple[int, bool]]:
+            for param in params:
+                if not isinstance(param, int) or param not in saved:
+                    continue
+                value = saved[param]
+                if value is None:
+                    restore = self._modes[(True, param)].restore_fn
+                    assert restore is not None
+                    restore(self)
+                else:
+                    yield param, value
+
+        self._apply_values(True, saved_values())
 
     def set_mode(self, mode: int, value: bool = True, private: bool = False) -> None:
         """Set a single terminal mode."""
