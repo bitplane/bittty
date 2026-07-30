@@ -157,14 +157,22 @@ class KeyboardDevice(Device):
             self.input(enhanced)
             return
 
-        if modifier == constants.KEY_MOD_CTRL and len(char) == 1:
+        # xterm modifier numbers are one plus a shift/alt/control bit mask.
+        # Apply the legacy control and Alt transformations only after the
+        # negotiated modern encodings above have had first refusal.
+        modifier_bits = max(0, modifier - 1)
+        control = bool(modifier_bits & 4)
+        alt = bool(modifier_bits & 2)
+
+        if control and len(char) == 1:
             upper_char = char.upper()
             if "A" <= upper_char <= "Z":
-                self.input(chr(ord(upper_char) - ord("A") + 1))
-                return
+                char = chr(ord(upper_char) - ord("A") + 1)
 
         if len(char) == 1:
             # A single character (printable or control) is sent as-is.
+            if alt and self.board.modes.alt_sends_escape:
+                char = constants.ESC + char
             self.input(char)
         # A multi-character key name this terminal's keymap does not define is ignored.
 

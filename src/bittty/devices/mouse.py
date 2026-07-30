@@ -156,4 +156,29 @@ class MouseDevice(Device):
         # cannot name its button here, so its low bits are 3.
         if event_type == "release":
             bits = (bits & ~3) | 3
-        self.board.host.write(f"{constants.ESC}[M{chr(32 + bits)}{chr(32 + min(x, 223))}{chr(32 + min(y, 223))}")
+
+        # SGR wins above; urxvt's decimal encoding wins over the older UTF-8
+        # extension when applications happen to leave several modes enabled.
+        if modes.urxvt_mouse:
+            self.board.host.write(f"{constants.ESC}[{32 + bits};{x};{y}M")
+            return
+
+        if modes.mouse_utf8_mode:
+            # Mode 1005 UTF-8-encodes the three X10 values and extends the
+            # coordinate ceiling from 223 to 2015.
+            self.board.host.write(
+                f"{constants.ESC}[M"
+                f"{chr(32 + bits)}"
+                f"{chr(32 + min(max(x, 0), 2015))}"
+                f"{chr(32 + min(max(y, 0), 2015))}"
+            )
+            return
+
+        report = b"\x1b[M" + bytes(
+            (
+                min(32 + bits, 255),
+                32 + min(max(x, 0), 223),
+                32 + min(max(y, 0), 223),
+            )
+        )
+        self.board.host.write_bytes(report)

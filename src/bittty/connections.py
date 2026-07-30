@@ -134,6 +134,21 @@ class HostPort:
             self.connection.flush()
         return result
 
+    def write_bytes(self, data: bytes, flush: bool = False):
+        """Write protocol bytes without passing them through UTF-8 encoding.
+
+        Real byte-oriented connections provide write_bytes(). The latin-1
+        fallback keeps one byte per character for lightweight text transports.
+        """
+        if self.connection is None:
+            return None
+
+        writer = getattr(self.connection, "write_bytes", None)
+        result = writer(data) if callable(writer) else self.connection.write(data.decode("latin-1"))
+        if flush and hasattr(self.connection, "flush"):
+            self.connection.flush()
+        return result
+
 
 class DisplayPort:
     """The board's jack toward the terminal (chrome); mirrors HostPort.

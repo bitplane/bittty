@@ -118,6 +118,10 @@ class WindowsPTY(PTY):
             return 0
         return self.to_process.write(data)
 
+    def write_bytes(self, data: bytes) -> int:
+        """Pass protocol bytes through winpty's text-only input interface."""
+        return self.write(data.decode("latin-1"))
+
     def resize(self, rows: int, cols: int) -> None:
         """Resize the terminal."""
         super().resize(rows, cols)

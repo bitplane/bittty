@@ -1,5 +1,8 @@
+import io
+
 from bittty import constants
 from bittty import Board
+from bittty.pty import PTY
 
 
 class RecordingPTY:
@@ -51,6 +54,26 @@ def test_keyboard_device_backarrow_mode():
     board.keyboard.input_key(constants.BS)
 
     assert board.pty.data == [constants.DEL, constants.BS]
+
+
+def test_alt_sends_escape_for_plain_and_control_characters():
+    board = board_with_pty()
+    board.modes.alt_sends_escape = True
+
+    board.keyboard.input_key("x", constants.KEY_MOD_ALT)
+    board.keyboard.input_key("c", constants.KEY_MOD_ALT_CTRL)
+
+    assert board.pty.data == ["\x1bx", "\x1b\x03"]
+
+
+def test_modern_keyboard_encoding_takes_precedence_over_alt_sends_escape():
+    board = board_with_pty()
+    board.modes.alt_sends_escape = True
+    board.keyboard.modify_other_keys = 1
+
+    board.keyboard.input_key("x", constants.KEY_MOD_ALT)
+
+    assert board.pty.data == ["\x1b[27;3;120~"]
 
 
 def test_mouse_device_caches_position_and_gates_tracking():
@@ -232,6 +255,52 @@ def test_mouse_device_legacy_encoding_without_sgr():
     board.mouse.input_mouse(10, 5, 0, "release", set())
     # A legacy release cannot name its button: low bits are 3.
     assert board.pty.data == ["\x1b[M" + chr(32 + 3) + chr(32 + 10) + chr(32 + 5)]
+
+
+def test_legacy_mouse_uses_raw_bytes_on_a_real_pty_connection():
+    output = io.BytesIO()
+    board = Board(width=300, height=20)
+    board.pty = PTY(to_process=output)
+    board.modes.mouse_tracking = True
+
+    board.mouse.input_mouse(200, 5, 0, "press", set())
+
+    assert output.getvalue() == b"\x1b[M " + bytes((232, 37))
+
+
+def test_utf8_mouse_encoding_extends_coordinates():
+    board = board_with_pty()
+    board.modes.mouse_tracking = True
+    board.modes.mouse_utf8_mode = True
+
+    board.mouse.input_mouse(200, 300, 0, "press", set())
+
+    expected = "\x1b[M" + chr(32) + chr(232) + chr(332)
+    assert board.pty.data == [expected]
+    assert expected.encode() == b"\x1b[M \xc3\xa8\xc5\x8c"
+
+
+def test_urxvt_mouse_uses_decimal_parameters_and_x10_button_offset():
+    board = board_with_pty()
+    board.modes.mouse_tracking = True
+    board.modes.urxvt_mouse = True
+
+    board.mouse.input_mouse(300, 400, 0, "press", set())
+    board.mouse.input_mouse(300, 400, 0, "release", set())
+
+    assert board.pty.data == ["\x1b[32;300;400M", "\x1b[35;300;400M"]
+
+
+def test_sgr_mouse_takes_precedence_over_other_coordinate_encodings():
+    board = board_with_pty()
+    board.modes.mouse_tracking = True
+    board.modes.mouse_utf8_mode = True
+    board.modes.urxvt_mouse = True
+    board.modes.mouse_sgr_mode = True
+
+    board.mouse.input_mouse(300, 400, 0, "press", set())
+
+    assert board.pty.data == ["\x1b[<0;300;400M"]
 
 
 def test_mouse_device_button_tracking_reports_drag_motion():

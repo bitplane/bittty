@@ -39,12 +39,9 @@ def _term(model=None):
         (68, "keyboard_usage_mode"),
         (80, "sixel_display_mode"),
         (1001, "mouse_highlight_tracking"),
-        (1005, "mouse_utf8_mode"),
         (1007, "alternate_scroll_mode"),
-        (1015, "urxvt_mouse"),
         (1016, "mouse_pixel_mode"),
         (1036, "meta_sends_escape"),
-        (1039, "alt_sends_escape"),
         (1042, "bell_urgency"),
         (1043, "bell_raise"),
         (1010, "scroll_on_output"),
@@ -104,6 +101,9 @@ def test_reverse_screen_and_cursor_blink_modes_report_real_state():
         (42, "national_charset_mode"),
         (45, "reverse_wraparound"),
         (95, "no_clear_column_mode"),
+        (1005, "mouse_utf8_mode"),
+        (1015, "urxvt_mouse"),
+        (1039, "alt_sends_escape"),
         (1045, "extended_reverse_wraparound"),
     ],
 )
@@ -226,7 +226,7 @@ def test_vt220_reports_xterm_era_modes_as_unrecognised():
     assert transport.data[-2:] == ["\x1b[?18;2$y", "\x1b[?19;1$y"]
     parser.feed("\x1b[?42$p")
     assert transport.data[-1] == "\x1b[?42;2$y"
-    for mode in (45, 95, 1037, 1045):
+    for mode in (45, 95, 1005, 1015, 1037, 1039, 1045):
         parser.feed(f"\x1b[?{mode}$p")
         assert transport.data[-1] == f"\x1b[?{mode};0$y"
     parser.feed("\x1b[?5$p")
