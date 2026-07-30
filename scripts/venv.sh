@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 
+# create the python virtual environment
 if [[ ! -d .venv ]]; then
-  python3 -m venv .venv
+    if command -v uv >/dev/null 2>&1; then
+        uv venv
+    else
+        python3 -m venv .venv
+    fi
 fi
-source .venv/bin/activate
 
-if command -v uv >/dev/null 2>&1; then
-    export PIP="uv pip"
-else
-    export PIP="python3 -m pip"
-fi
+# activate it
+source .venv/bin/activate

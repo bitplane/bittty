@@ -4,6 +4,7 @@ set -e
 
 # Variables
 PROJECT_NAME=$(basename "$(pwd)")
+MODULE_NAME=$(echo "$PROJECT_NAME" | tr '-' '_')
 REPO_URL="ssh://git@github.com/bitplane/bitplane.net.git"
 SRC_PATH="docs"
 DEST_PATH="dev/python/$PROJECT_NAME"
@@ -14,7 +15,7 @@ COMMIT_MSG="Update $PROJECT_NAME docs"
 
 mkdir -p docs/pydoc
 cd src
-pydoc-markdown -p "$PROJECT_NAME" > ../docs/pydoc/index.md
+pydoc-markdown -p "$MODULE_NAME" > ../docs/pydoc/index.md
 cd ..
 
 # Check out the main website repo
