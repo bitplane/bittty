@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 from .. import mode_profiles as mp
 from ..operations import Operation
@@ -70,13 +70,13 @@ class ModeSpec:
     default: DefaultValue = False  # underlying attr value at power-on
     invert: bool = False  # "set" stores the negation (modes 12, 66)
     queryable: bool = False  # DECRQM reports this mode's state
-    apply_fn: Callable[["ModeDevice", bool], None] | None = None  # side effect
-    status_fn: Callable[["ModeDevice"], int] | None = None  # custom DECRQM status
+    apply_fn: Callable[[ModeDevice, bool], None] | None = None  # side effect
+    status_fn: Callable[[ModeDevice], int] | None = None  # custom DECRQM status
     group: str | None = None
     group_value: MouseProtocol | MouseEncoding | None = None
     effects: frozenset[ModeEffect] = frozenset()
-    save_fn: Callable[["ModeDevice"], None] | None = None
-    restore_fn: Callable[["ModeDevice"], None] | None = None
+    save_fn: Callable[[ModeDevice], None] | None = None
+    restore_fn: Callable[[ModeDevice], None] | None = None
 
     @property
     def key(self) -> tuple[bool, int]:
@@ -105,11 +105,33 @@ class ModeSpec:
 # --- side effects for modes that do more than flip a flag --- #
 
 
-def _deccolm(device: ModeDevice, value: bool) -> None:
+def _dec_deccolm(device: ModeDevice, value: bool) -> None:
+    device.board.blitter.set_column_mode(132 if value else 80)
+
+
+def _xterm_deccolm(device: ModeDevice, value: bool) -> None:
     # xterm ignores DECCOLM unless mode 40 permits it — reset strings carry ?3l,
     # and honouring it ungated shrinks any wider terminal to 80 columns.
     if device.allow_column_mode:
         device.board.blitter.set_column_mode(132 if value else 80)
+
+
+def _clear_and_home(device: ModeDevice) -> None:
+    device.board.blitter.clear_screen(2)
+    device.board.cursor.set_position(0, 0)
+
+
+def _tmux_deccolm(device: ModeDevice, value: bool) -> None:
+    _clear_and_home(device)
+
+
+def _tmux_column_status(device: ModeDevice) -> int:
+    return 4  # tmux recognises DECCOLM but reports it permanently reset
+
+
+def _kitty_deccolm(device: ModeDevice, value: bool) -> None:
+    if value:
+        _clear_and_home(device)
 
 
 def _alt_screen(device: ModeDevice, value: bool) -> None:
@@ -205,7 +227,17 @@ MODE_SPECS: tuple[ModeSpec, ...] = (
     ModeSpec(mp.ANSI_NEWLINE, 20, False, "linefeed_newline_mode", queryable=True),
     # DEC private modes
     ModeSpec(mp.DEC_CURSOR_APPLICATION, 1, True, "cursor_application_mode", queryable=True),
-    ModeSpec(mp.DEC_COLUMN_MODE, 3, True, apply_fn=_deccolm, status_fn=_column_status),
+    ModeSpec(mp.DEC_COLUMN_MODE, 3, True, apply_fn=_dec_deccolm, status_fn=_column_status),
+    ModeSpec(mp.XTERM_COLUMN_MODE, 3, True, apply_fn=_xterm_deccolm, status_fn=_column_status),
+    ModeSpec(mp.TMUX_COLUMN_MODE, 3, True, apply_fn=_tmux_deccolm, status_fn=_tmux_column_status),
+    ModeSpec(
+        mp.KITTY_COLUMN_MODE,
+        3,
+        True,
+        "column_mode",
+        queryable=True,
+        apply_fn=_kitty_deccolm,
+    ),
     ModeSpec(
         mp.DEC_REVERSE_SCREEN,
         5,

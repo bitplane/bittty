@@ -14,6 +14,9 @@ ANSI_NEWLINE = "ansi.newline"
 # DEC and xterm private modes
 DEC_CURSOR_APPLICATION = "dec.cursor-application"
 DEC_COLUMN_MODE = "dec.column-mode"
+XTERM_COLUMN_MODE = "xterm.column-mode"
+TMUX_COLUMN_MODE = "tmux.column-mode"
+KITTY_COLUMN_MODE = "kitty.column-mode"
 DEC_REVERSE_SCREEN = "dec.reverse-screen"
 DEC_ORIGIN = "dec.origin"
 DEC_AUTOWRAP = "dec.autowrap"
@@ -55,8 +58,8 @@ UNICODE_AMBIGUOUS_WIDTH = "unicode.ambiguous-width"
 
 ANSI_MODE_CAPABILITIES = frozenset({ANSI_INSERT, ANSI_NEWLINE})
 
-# Preserve the currently emulated DEC profiles.  Historical repertoire
-# corrections are deliberately a separate audit from this architecture pass.
+# Hardware profiles are the intersection of the model's documented repertoire
+# and the mode semantics bittty currently implements.
 VT100_MODE_CAPABILITIES = ANSI_MODE_CAPABILITIES | frozenset(
     {
         DEC_CURSOR_APPLICATION,
@@ -64,21 +67,23 @@ VT100_MODE_CAPABILITIES = ANSI_MODE_CAPABILITIES | frozenset(
         DEC_REVERSE_SCREEN,
         DEC_ORIGIN,
         DEC_AUTOWRAP,
+    }
+)
+VT220_MODE_CAPABILITIES = VT100_MODE_CAPABILITIES | frozenset(
+    {
         DEC_PRINT_FORM_FEED,
         DEC_PRINT_EXTENT,
         DEC_CURSOR_VISIBLE,
-        DEC_NUMERIC_KEYPAD,
-        DEC_BACKARROW,
+        DEC_NATIONAL_CHARSET,
     }
 )
-VT220_MODE_CAPABILITIES = VT100_MODE_CAPABILITIES | frozenset({DEC_NATIONAL_CHARSET})
 
 XTERM_MODE_CAPABILITIES = frozenset(
     {
         ANSI_INSERT,
         ANSI_NEWLINE,
         DEC_CURSOR_APPLICATION,
-        DEC_COLUMN_MODE,
+        XTERM_COLUMN_MODE,
         DEC_REVERSE_SCREEN,
         DEC_ORIGIN,
         DEC_AUTOWRAP,
@@ -114,13 +119,9 @@ XTERM_MODE_CAPABILITIES = frozenset(
         XTERM_EXTENDED_REVERSE_WRAP,
         XTERM_ALLOW_ALT_SCREEN,
         XTERM_BRACKETED_PASTE,
-        XTERM_SYNC_OUTPUT,
-        UNICODE_GRAPHEME_CLUSTERING,
-        UNICODE_AMBIGUOUS_WIDTH,
     }
 )
 
-# This is the previous Linux-console repertoire expressed positively.
 LINUX_MODE_CAPABILITIES = frozenset(
     {
         ANSI_INSERT,
@@ -130,28 +131,161 @@ LINUX_MODE_CAPABILITIES = frozenset(
         DEC_REVERSE_SCREEN,
         DEC_ORIGIN,
         DEC_AUTOWRAP,
-        XTERM_CURSOR_BLINK,
-        DEC_PRINT_FORM_FEED,
-        DEC_PRINT_EXTENT,
+        XTERM_MOUSE_X10,
         DEC_CURSOR_VISIBLE,
-        DEC_NATIONAL_CHARSET,
-        XTERM_REVERSE_WRAP,
+        XTERM_MOUSE_NORMAL,
+    }
+)
+
+SCREEN_MODE_CAPABILITIES = frozenset(
+    {
+        ANSI_INSERT,
+        ANSI_NEWLINE,
+        DEC_CURSOR_APPLICATION,
+        DEC_COLUMN_MODE,
+        DEC_REVERSE_SCREEN,
+        DEC_ORIGIN,
+        DEC_AUTOWRAP,
+        XTERM_MOUSE_X10,
+        DEC_CURSOR_VISIBLE,
+        XTERM_ALT_SCREEN_47,
+        XTERM_MOUSE_NORMAL,
+        XTERM_MOUSE_BUTTON,
+        XTERM_MOUSE_ANY,
+        XTERM_MOUSE_SGR,
+        XTERM_ALT_SCREEN_1047,
+        XTERM_SAVE_CURSOR_1048,
+        XTERM_ALT_SCREEN_1049,
+        XTERM_BRACKETED_PASTE,
+    }
+)
+
+TMUX_MODE_CAPABILITIES = frozenset(
+    {
+        ANSI_INSERT,
+        DEC_CURSOR_APPLICATION,
+        TMUX_COLUMN_MODE,
+        DEC_ORIGIN,
+        DEC_AUTOWRAP,
+        XTERM_CURSOR_BLINK,
+        DEC_CURSOR_VISIBLE,
+        XTERM_ALT_SCREEN_47,
+        XTERM_MOUSE_NORMAL,
+        XTERM_FOCUS,
+        XTERM_MOUSE_BUTTON,
+        XTERM_MOUSE_ANY,
+        XTERM_MOUSE_UTF8,
+        XTERM_MOUSE_SGR,
+        XTERM_ALT_SCREEN_1047,
+        XTERM_ALT_SCREEN_1049,
+        XTERM_BRACKETED_PASTE,
+        XTERM_SYNC_OUTPUT,
+    }
+)
+
+URXVT_MODE_CAPABILITIES = frozenset(
+    {
+        ANSI_INSERT,
+        ANSI_NEWLINE,
+        DEC_CURSOR_APPLICATION,
+        XTERM_COLUMN_MODE,
+        DEC_REVERSE_SCREEN,
+        DEC_ORIGIN,
+        DEC_AUTOWRAP,
+        XTERM_MOUSE_X10,
+        XTERM_CURSOR_BLINK,
+        DEC_CURSOR_VISIBLE,
         XTERM_ALT_SCREEN_47,
         DEC_NUMERIC_KEYPAD,
         DEC_BACKARROW,
-        DEC_LEFT_RIGHT_MARGINS,
-        DEC_NO_CLEAR_COLUMN,
+        XTERM_MOUSE_NORMAL,
         XTERM_FOCUS,
+        XTERM_MOUSE_BUTTON,
+        XTERM_MOUSE_ANY,
+        XTERM_MOUSE_UTF8,
+        XTERM_MOUSE_SGR,
+        URXVT_MOUSE,
         XTERM_ALT_SCREEN_1047,
         XTERM_SAVE_CURSOR_1048,
         XTERM_ALT_SCREEN_1049,
         XTERM_ALLOW_COLUMN,
-        XTERM_EXTENDED_REVERSE_WRAP,
-        XTERM_ALLOW_ALT_SCREEN,
+        XTERM_BRACKETED_PASTE,
+    }
+)
+
+VTE_MODE_CAPABILITIES = frozenset(
+    {
+        ANSI_INSERT,
+        DEC_CURSOR_APPLICATION,
+        XTERM_COLUMN_MODE,
+        DEC_REVERSE_SCREEN,
+        DEC_ORIGIN,
+        DEC_AUTOWRAP,
+        XTERM_MOUSE_X10,
+        DEC_CURSOR_VISIBLE,
+        XTERM_ALT_SCREEN_47,
+        DEC_NUMERIC_KEYPAD,
+        DEC_LEFT_RIGHT_MARGINS,
+        XTERM_MOUSE_NORMAL,
+        XTERM_FOCUS,
+        XTERM_MOUSE_BUTTON,
+        XTERM_MOUSE_ANY,
+        XTERM_MOUSE_SGR,
+        XTERM_ALTERNATE_SCROLL,
+        XTERM_META_ESCAPE,
+        XTERM_ALT_SCREEN_1047,
+        XTERM_SAVE_CURSOR_1048,
+        XTERM_ALT_SCREEN_1049,
+        XTERM_ALLOW_COLUMN,
+        XTERM_BRACKETED_PASTE,
+    }
+)
+
+KITTY_MODE_CAPABILITIES = frozenset(
+    {
+        ANSI_INSERT,
+        ANSI_NEWLINE,
+        DEC_CURSOR_APPLICATION,
+        KITTY_COLUMN_MODE,
+        DEC_REVERSE_SCREEN,
+        DEC_ORIGIN,
+        DEC_AUTOWRAP,
+        XTERM_CURSOR_BLINK,
+        DEC_CURSOR_VISIBLE,
+        XTERM_ALT_SCREEN_47,
+        XTERM_MOUSE_NORMAL,
+        XTERM_FOCUS,
+        XTERM_MOUSE_BUTTON,
+        XTERM_MOUSE_ANY,
+        XTERM_MOUSE_UTF8,
+        XTERM_MOUSE_SGR,
+        URXVT_MOUSE,
+        XTERM_ALT_SCREEN_1047,
+        XTERM_SAVE_CURSOR_1048,
+        XTERM_ALT_SCREEN_1049,
+        XTERM_BRACKETED_PASTE,
+        XTERM_SYNC_OUTPUT,
+    }
+)
+
+# The native model keeps bittty extensions separate from the xterm profile.
+BITTTY_MODE_CAPABILITIES = XTERM_MODE_CAPABILITIES | frozenset(
+    {
         XTERM_SYNC_OUTPUT,
         UNICODE_GRAPHEME_CLUSTERING,
         UNICODE_AMBIGUOUS_WIDTH,
     }
 )
 
-ALL_MODE_CAPABILITIES = XTERM_MODE_CAPABILITIES
+# Registry catalogue, including mutually exclusive same-number semantics.
+ALL_MODE_CAPABILITIES = (
+    BITTTY_MODE_CAPABILITIES
+    | VT100_MODE_CAPABILITIES
+    | VT220_MODE_CAPABILITIES
+    | LINUX_MODE_CAPABILITIES
+    | SCREEN_MODE_CAPABILITIES
+    | TMUX_MODE_CAPABILITIES
+    | URXVT_MODE_CAPABILITIES
+    | VTE_MODE_CAPABILITIES
+    | KITTY_MODE_CAPABILITIES
+)

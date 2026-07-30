@@ -10,7 +10,7 @@ from bittty.devices.modes import (
     MouseProtocol,
     resolve_mode_specs,
 )
-from bittty.model import GNOME, KITTY, LINUX, SCREEN, TMUX, URXVT, XTERM, Model, VT100, VT220
+from bittty.model import BITTTY, GNOME, KITTY, LINUX, SCREEN, TMUX, URXVT, VT100, VT220, XTERM, Model
 from bittty.parser import Parser
 from bittty.present import MouseCaptureChanged
 
@@ -41,7 +41,7 @@ def _board(model=None):
     return board, Parser(board), transport
 
 
-def test_positive_profiles_preserve_the_current_dec_repertoires():
+def test_hardware_profiles_expose_only_documented_implemented_modes():
     vt100 = Board(model=VT100)
     vt220 = Board(model=VT220)
 
@@ -53,17 +53,17 @@ def test_positive_profiles_preserve_the_current_dec_repertoires():
         (True, 5),
         (True, 6),
         (True, 7),
+    }
+    assert set(vt100.modes._modes) == expected_vt100
+    assert set(vt220.modes._modes) == expected_vt100 | {
         (True, 18),
         (True, 19),
         (True, 25),
-        (True, 66),
-        (True, 67),
+        (True, 42),
     }
-    assert set(vt100.modes._modes) == expected_vt100
-    assert set(vt220.modes._modes) == expected_vt100 | {(True, 42)}
 
 
-@pytest.mark.parametrize("model", [XTERM, VT100, VT220, LINUX, SCREEN, TMUX, URXVT, GNOME, KITTY])
+@pytest.mark.parametrize("model", [BITTTY, XTERM, VT100, VT220, LINUX, SCREEN, TMUX, URXVT, GNOME, KITTY])
 def test_every_builtin_model_resolves_its_declared_positive_profile(model):
     board = Board(model=model)
     expected = {MODE_BY_CAPABILITY[capability].key for capability in model.mode_capabilities}
@@ -104,6 +104,74 @@ def test_profile_resolution_rejects_unknown_capabilities_and_number_collisions()
 
 def test_registry_and_profile_catalogue_remain_in_lockstep():
     assert {spec.capability for spec in MODE_SPECS} == mp.ALL_MODE_CAPABILITIES
+
+
+def test_native_extensions_are_not_misattributed_to_xterm():
+    assert mp.XTERM_SYNC_OUTPUT not in XTERM.mode_capabilities
+    assert mp.UNICODE_GRAPHEME_CLUSTERING not in XTERM.mode_capabilities
+    assert mp.UNICODE_AMBIGUOUS_WIDTH not in XTERM.mode_capabilities
+
+    assert {
+        mp.XTERM_SYNC_OUTPUT,
+        mp.UNICODE_GRAPHEME_CLUSTERING,
+        mp.UNICODE_AMBIGUOUS_WIDTH,
+    } <= BITTTY.mode_capabilities
+
+
+@pytest.mark.parametrize(
+    ("model", "present", "absent"),
+    [
+        (LINUX, {9, 1000}, {12, 47, 66, 1004, 1049, 2004}),
+        (SCREEN, {9, 47, 1000, 1006, 1048, 2004}, {12, 40, 1004, 2026}),
+        (TMUX, {12, 47, 1004, 1005, 1006, 1049, 2004, 2026}, {5, 9, 40, 1048}),
+        (URXVT, {9, 12, 40, 66, 67, 1005, 1015, 1048, 2004}, {69, 1007, 2026}),
+        (GNOME, {9, 40, 66, 69, 1004, 1006, 1007, 1036, 1048, 2004}, {12, 42, 1005, 1015, 2026}),
+        (KITTY, {12, 1004, 1005, 1006, 1015, 1048, 2004, 2026}, {9, 40, 66, 69, 1007}),
+    ],
+)
+def test_emulator_profiles_match_their_audited_private_mode_repertoires(model, present, absent):
+    board = Board(model=model)
+
+    assert all(board.modes.recognizes(True, mode) for mode in present)
+    assert all(not board.modes.recognizes(True, mode) for mode in absent)
+
+
+def test_deccolm_semantics_are_selected_by_model():
+    dec, dec_parser, _ = _board(VT100)
+    dec.blitter.write_text("DEC")
+    dec.cursor.set_position(4, 2)
+    dec_parser.feed("\x1b[?3h")
+    assert dec.width == 132
+    assert (dec.cursor.x, dec.cursor.y) == (0, 0)
+
+    xterm, xterm_parser, _ = _board(XTERM)
+    xterm_parser.feed("\x1b[?3h")
+    assert xterm.width == 80
+    xterm_parser.feed("\x1b[?40h\x1b[?3h")
+    assert xterm.width == 132
+
+    tmux, tmux_parser, _ = _board(TMUX)
+    tmux.blitter.write_text("tmux")
+    tmux.cursor.set_position(4, 2)
+    tmux_parser.feed("\x1b[?3h")
+    assert tmux.width == 80
+    assert (tmux.cursor.x, tmux.cursor.y) == (0, 0)
+    assert tmux.blitter.current_buffer.get_cell(0, 0)[1] == " "
+    assert tmux.modes.get_private_mode_status(3) == 4
+
+    kitty, kitty_parser, _ = _board(KITTY)
+    kitty.blitter.write_text("kitty")
+    kitty.cursor.set_position(4, 2)
+    kitty_parser.feed("\x1b[?3h")
+    assert kitty.width == 80
+    assert (kitty.cursor.x, kitty.cursor.y) == (0, 0)
+    assert kitty.modes.get_private_mode_status(3) == 1
+    kitty.blitter.write_text("kept")
+    kitty.cursor.set_position(3, 1)
+    kitty_parser.feed("\x1b[?3l")
+    assert (kitty.cursor.x, kitty.cursor.y) == (3, 1)
+    assert kitty.blitter.current_buffer.get_cell(0, 0)[1] == "k"
+    assert kitty.modes.get_private_mode_status(3) == 2
 
 
 def test_tracking_modes_are_mutually_exclusive_and_query_the_selector():

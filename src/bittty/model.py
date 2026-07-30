@@ -19,13 +19,19 @@ from .keymap import (
     XTERM_KEYMAP,
     KeyMap,
 )
-from .palette import VGA_PALETTE, XTERM_PALETTE, PaletteDefaults
 from .mode_profiles import (
+    BITTTY_MODE_CAPABILITIES,
+    KITTY_MODE_CAPABILITIES,
     LINUX_MODE_CAPABILITIES,
+    SCREEN_MODE_CAPABILITIES,
+    TMUX_MODE_CAPABILITIES,
+    URXVT_MODE_CAPABILITIES,
     VT100_MODE_CAPABILITIES,
     VT220_MODE_CAPABILITIES,
+    VTE_MODE_CAPABILITIES,
     XTERM_MODE_CAPABILITIES,
 )
+from .palette import VGA_PALETTE, XTERM_PALETTE, PaletteDefaults
 
 
 @dataclass(frozen=True)
@@ -48,7 +54,9 @@ class Model:
     keymap: KeyMap = field(default=XTERM_KEYMAP)
     # Semantic mode implementations this model assembles. Positive profiles
     # allow different terminal families to give the same number different meanings.
-    mode_capabilities: frozenset[str] = XTERM_MODE_CAPABILITIES
+    mode_capabilities: frozenset[str] = BITTTY_MODE_CAPABILITIES
+    # TERM-compatible name reported by XTGETTCAP; defaults to the model name.
+    term_name: str | None = None
 
 
 # Primary DA responses per vt100.net / xterm ctlseqs.
@@ -57,6 +65,14 @@ XTERM = Model(
     da1_response="\033[?62;1;6;8;9;15;18;21;22;23c",
     da2_response="\033[>1;10;0c",
     mode_capabilities=XTERM_MODE_CAPABILITIES,
+)
+
+BITTTY = Model(
+    name="bittty",
+    da1_response=XTERM.da1_response,
+    term_name="xterm",
+    da2_response=XTERM.da2_response,
+    mode_capabilities=BITTTY_MODE_CAPABILITIES,
 )
 
 VT100 = Model(
@@ -107,7 +123,7 @@ SCREEN = Model(
     da1_response="\033[?1;2c",
     da2_response="\033[>83;0;0c",
     da3_response=None,
-    mode_capabilities=XTERM_MODE_CAPABILITIES,
+    mode_capabilities=SCREEN_MODE_CAPABILITIES,
     color_depth="256",
     keymap=SCREEN_KEYMAP,
 )
@@ -119,7 +135,7 @@ TMUX = Model(
     da1_response="\033[?1;2;4c",
     da2_response="\033[>84;0;0c",
     da3_response=None,
-    mode_capabilities=XTERM_MODE_CAPABILITIES,
+    mode_capabilities=TMUX_MODE_CAPABILITIES,
     color_depth="256",
     keymap=SCREEN_KEYMAP,
 )
@@ -131,7 +147,7 @@ URXVT = Model(
     da1_response="\033[?1;2c",
     da2_response="\033[>85;0;0c",
     da3_response=None,
-    mode_capabilities=XTERM_MODE_CAPABILITIES,
+    mode_capabilities=URXVT_MODE_CAPABILITIES,
     color_depth="256",
     keymap=URXVT_KEYMAP,
 )
@@ -144,7 +160,7 @@ GNOME = Model(
     da1_response="\033[?61;1;21;22;28c",
     da2_response="\033[>61;8400;1c",
     da3_response=None,
-    mode_capabilities=XTERM_MODE_CAPABILITIES,
+    mode_capabilities=VTE_MODE_CAPABILITIES,
     color_depth="truecolor",
     keymap=XTERM_KEYMAP,
 )
@@ -157,15 +173,16 @@ KITTY = Model(
     da1_response="\033[?62;52;c",
     da2_response="\033[>1;4000;45c",
     da3_response=None,
-    mode_capabilities=XTERM_MODE_CAPABILITIES,
+    mode_capabilities=KITTY_MODE_CAPABILITIES,
     color_depth="truecolor",
     keymap=XTERM_KEYMAP,
 )
 
-DEFAULT = XTERM
+DEFAULT = BITTTY
 
 # Resolve a $TERM name to a model (see get_model).
 PERSONALITIES: dict[str, Model] = {
+    "bittty": BITTTY,
     "xterm": XTERM,
     "xterm-256color": XTERM,
     "vt100": VT100,

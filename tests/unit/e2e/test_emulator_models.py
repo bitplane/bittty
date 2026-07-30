@@ -1,9 +1,8 @@
 """Emulator models grabbed from real terminfo + a live tmux DA query."""
 
-from bittty import constants
+from bittty import Board, constants
+from bittty.model import BITTTY, GNOME, KITTY, SCREEN, TMUX, URXVT, XTERM, get_model
 from bittty.parser import Parser
-from bittty.model import GNOME, KITTY, SCREEN, TMUX, URXVT, XTERM, get_model
-from bittty import Board
 
 
 class RecordingTransport:
@@ -95,6 +94,6 @@ def test_get_model_resolves_term_names():
 
 def test_get_model_falls_back_through_prefixes():
     assert get_model("xterm-ghostty") is XTERM  # unknown suffix -> nearest family
-    assert get_model("totally-unknown") is XTERM  # -> default
-    assert get_model("") is XTERM
-    assert get_model(None) is XTERM
+    assert get_model("totally-unknown") is BITTTY  # -> native default
+    assert get_model("") is BITTTY
+    assert get_model(None) is BITTTY

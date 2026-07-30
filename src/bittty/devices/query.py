@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-
 from typing import TYPE_CHECKING
 
 from ..operations import Operation
@@ -18,8 +17,8 @@ from ..present import (
     WindowRequest,
     WindowStateChanged,
 )
-from .base import Device
 from ..style import style_to_ansi
+from .base import Device
 
 if TYPE_CHECKING:
     from .board import Board
@@ -303,7 +302,7 @@ class QueryDevice(Device):
         """The capability strings this model answers XTGETTCAP with."""
         model = self.board.model
         colors = {"monochrome": "2", "16": "16", "256": "256", "truecolor": "256"}.get(model.color_depth, "256")
-        caps = {"TN": model.name, "Co": colors, "colors": colors}
+        caps = {"TN": model.term_name or model.name, "Co": colors, "colors": colors}
         if model.color_depth == "truecolor":
             caps["RGB"] = "8/8/8"
         return caps

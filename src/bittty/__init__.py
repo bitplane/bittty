@@ -8,20 +8,20 @@ plugged into the board's display port. `Terminal` is deliberately not exported
 here — import it from bittty.terminals.
 """
 
-from .devices.board import Board
-from .video import Video
-from .parser import Parser
-from .model import Model, XTERM, VT100, VT220, LINUX
-from .operations import Operation, OperationSink
-from .connections import Connection, DisplayPort, HostPort, Presentable
+from importlib.metadata import PackageNotFoundError, version
+
 from .caps import TerminalCaps
-from .width import WidthPolicy
+from .connections import Connection, DisplayPort, HostPort, Presentable
+from .devices.board import Board
+from .model import BITTTY, LINUX, VT100, VT220, XTERM, Model
+from .operations import Operation, OperationSink
+from .parser import Parser
 from .style import (
     CURSOR_CODE,
     RESET_CODE,
 )
-
-from importlib.metadata import version, PackageNotFoundError
+from .video import Video
+from .width import WidthPolicy
 
 try:
     __version__ = version("bittty")
@@ -29,22 +29,23 @@ except PackageNotFoundError:
     __version__ = "unknown"
 
 __all__ = [
-    "Board",
-    "Video",
-    "Parser",
-    "Operation",
-    "OperationSink",
-    "HostPort",
-    "DisplayPort",
-    "Presentable",
-    "TerminalCaps",
-    "WidthPolicy",
-    "Model",
-    "XTERM",
+    "BITTTY",
+    "CURSOR_CODE",
+    "LINUX",
+    "RESET_CODE",
     "VT100",
     "VT220",
-    "LINUX",
+    "XTERM",
+    "Board",
     "Connection",
-    "CURSOR_CODE",
-    "RESET_CODE",
+    "DisplayPort",
+    "HostPort",
+    "Model",
+    "Operation",
+    "OperationSink",
+    "Parser",
+    "Presentable",
+    "TerminalCaps",
+    "Video",
+    "WidthPolicy",
 ]

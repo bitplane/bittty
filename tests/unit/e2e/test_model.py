@@ -1,10 +1,9 @@
 """Model-driven behaviour: the same board answers as different terminals."""
 
-from bittty import constants
-from bittty.parser import Parser
+from bittty import Board, constants
 from bittty.model import LINUX, VT100, VT220, XTERM
+from bittty.parser import Parser
 from bittty.style import Color
-from bittty import Board
 
 
 class RecordingTransport:
@@ -41,9 +40,9 @@ def test_vt100_does_not_answer_secondary_da():
     assert _replies(XTERM, "\x1b[>c") == ["\033[>1;10;0c"]
 
 
-def test_default_model_is_xterm():
+def test_default_model_is_native_bittty_with_xterm_compatible_identity():
     assert _replies(None, "\x1b[c") == ["\033[?62;1;6;8;9;15;18;21;22;23c"]
-    assert Board().model.name == "xterm"
+    assert Board().model.name == "bittty"
 
 
 def test_model_can_omit_a_mode():

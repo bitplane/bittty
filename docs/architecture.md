@@ -69,6 +69,8 @@ The model number: the emulation profile as data (XTERM, VT220, LINUX...). DA res
 keymaps, the mode repertoire, charsets. A board is constructed with a model the way a VT220
 ships with its ROMs.
 
+The default BITTTY model is the native superset; named compatibility models expose only their audited repertoires.
+
 ## Vocabulary discipline
 
 - "board" never means the chrome; "terminal" never means the emulator core.
