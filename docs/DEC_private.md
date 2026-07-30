@@ -44,12 +44,12 @@
 | 40 | xterm | Allow 80 ⇒ 132 mode | ✅ |
 | 41 | DEC | DECUPM - Unidirectional Print Mode | X |
 | 41 | xterm | more(1) fix | X |
-| 42 | DEC | DECNRCM - National Replacement Character Set Mode | X |
+| 42 | DEC | DECNRCM - National Replacement Character Set Mode | ✅ |
 | 43 | DEC | DECGEPM - Graphics Expanded Print Mode | X |
 | 44 | DEC | DECGPCM - Graphics Print Color Mode | X |
 | 44 | xterm | Turn on margin bell | X |
 | 45 | DEC | DECGPCS - Graphics Print Color Syntax | X |
-| 45 | xterm | Reverse-wraparound mode | X |
+| 45 | xterm | Reverse-wraparound mode | ✅ |
 | 46 | DEC | DECGPBM - Graphics Print Background Mode | X |
 | 46 | xterm | Start logging | X |
 | 47 | DEC | DECGRPM - Graphics Rotated Print Mode | X |
@@ -80,7 +80,7 @@
 | 84 | WY-370 | Erasable/nonerasable WYENAT Off attribute select | X |
 | 85 | WY-370 | Replacement character color | X |
 | 90 | DEC | DECTHAISCM - Thai Space Compensating Mode | X |
-| 95 | DEC | DECNCSM - No Clearing Screen on Column Change Mode | X |
+| 95 | DEC | DECNCSM - No Clearing Screen on Column Change Mode | ✅ |
 | 96 | DEC | DECRLCM - Right to Left Copy Mode | X |
 | 97 | DEC | DECCRTSM - CRT Save Mode | X |
 | 98 | DEC | DECARSM - Auto Resize Mode | X |
@@ -125,7 +125,7 @@
 | 1042 | xterm | Enable Urgency window manager hint when Control-G is received | X |
 | 1043 | xterm | Enable raising of the window when Control-G is received | X |
 | 1044 | xterm | Reuse the most recent data copied to CLIPBOARD | X |
-| 1045 | xterm | Extended Reverse-wraparound mode (XTREVWRAP2) | X |
+| 1045 | xterm | Extended Reverse-wraparound mode (XTREVWRAP2) | ✅ |
 | 1046 | xterm | Enable switching to/from Alternate Screen Buffer | ✅ |
 | 1047 | xterm | Use Alternate Screen Buffer | ✅ |
 | 1048 | xterm | Save cursor as in DECSC | ✅ |

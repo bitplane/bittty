@@ -49,8 +49,10 @@ _POST_VT220_OR_NON_DEC_MODES = frozenset(
         (True, 9),
         (True, 12),
         (True, 40),
+        (True, 45),
         (True, 47),
         (True, 69),
+        (True, 95),
         (True, 1000),
         (True, 1002),
         (True, 1003),
@@ -60,12 +62,15 @@ _POST_VT220_OR_NON_DEC_MODES = frozenset(
         (True, 1048),
         (True, 1049),
         (True, 1046),
+        (True, 1045),
         (True, 2004),
         (True, 2026),
         (True, 2027),
         (True, 8840),
     }
 )
+
+_POST_VT100_MODES = _POST_VT220_OR_NON_DEC_MODES | {(True, 42)}
 
 
 # Primary DA responses per vt100.net / xterm ctlseqs.
@@ -80,7 +85,7 @@ VT100 = Model(
     da1_response="\033[?1;2c",  # VT100 with Advanced Video Option
     da2_response=None,  # secondary DA was introduced with the VT220
     da3_response=None,
-    unsupported_modes=_POST_VT220_OR_NON_DEC_MODES,
+    unsupported_modes=_POST_VT100_MODES,
     # VT100 knows ASCII, UK, DEC Special Graphics and the alternate ROM sets;
     # DEC Supplemental and the national replacement sets arrived with the VT220.
     charsets=frozenset({"B", "A", "0", "1", "2"}),

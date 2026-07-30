@@ -1041,6 +1041,7 @@ class Blitter(Device):
         self.current_buffer = self.primary_buffer
         for buf in (self.primary_buffer, self.alt_buffer):
             buf.reset_line_attributes()
+            buf.reset_wrapped_lines()
             for y in range(self.board.height):
                 buf.clear_line(y, constants.ERASE_ALL, 0, "")
         self.last_printed_char = " "
@@ -1053,7 +1054,8 @@ class Blitter(Device):
             self.resize(columns, self.board.height)
         self.set_scroll_region(0, self.board.height - 1)
         self.reset_left_right_margins()
-        self.clear_screen(constants.ERASE_ALL)
+        if not self.board.modes.no_clear_column_mode:
+            self.clear_screen(constants.ERASE_ALL)
         self.board.cursor.set_position(0, 0)
 
     def erase_characters(self, count: int) -> None:

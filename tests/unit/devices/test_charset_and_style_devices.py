@@ -128,6 +128,7 @@ def test_multiple_charset_sets():
     """Test setting multiple charset designators."""
     board = Board(width=80, height=24)
     parser = Parser(board)
+    parser.feed("\x1b[?42h")
 
     # Set different charsets for each G set
     parser.feed("\x1b(A")  # G0 = UK charset

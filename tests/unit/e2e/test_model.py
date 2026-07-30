@@ -205,3 +205,17 @@ def test_decrqm_reports_unrecognised_for_omitted_mode():
     vt100.host.attach(transport_vt100)
     Parser(vt100).feed("\x1b[?2027$p")
     assert transport_vt100.data == ["\033[?2027;0$y"]  # 0 = not recognised
+
+
+def test_decnrcm_is_vt220_but_not_vt100_capability():
+    transport_vt100 = RecordingTransport()
+    vt100 = Board(width=80, height=24, model=VT100)
+    vt100.host.attach(transport_vt100)
+    Parser(vt100).feed("\x1b[?42$p")
+    assert transport_vt100.data == ["\033[?42;0$y"]
+
+    transport_vt220 = RecordingTransport()
+    vt220 = Board(width=80, height=24, model=VT220)
+    vt220.host.attach(transport_vt220)
+    Parser(vt220).feed("\x1b[?42$p")
+    assert transport_vt220.data == ["\033[?42;2$y"]

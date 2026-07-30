@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..charsets import get_charset
+from ..charsets import NATIONAL_CHARSET_DESIGNATORS, get_charset
 from .base import Device
 
 if TYPE_CHECKING:
@@ -47,6 +47,12 @@ class CharsetDevice(Device):
     def designate(self, index: int, designator: str) -> None:
         """Apply an SCS G-set designation, ignoring charsets the terminal lacks."""
         if not self._recognizes(designator):
+            return
+        if (
+            designator in NATIONAL_CHARSET_DESIGNATORS
+            and self.board.modes.recognizes(True, 42)
+            and not self.board.modes.national_charset_mode
+        ):
             return
         setters = (self.set_g0_charset, self.set_g1_charset, self.set_g2_charset, self.set_g3_charset)
         setters[index](designator)

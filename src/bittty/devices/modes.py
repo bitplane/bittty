@@ -161,10 +161,13 @@ MODE_SPECS: list[Mode] = [
     Mode(9, True, "mouse_tracking", queryable=True, peripheral="mouse"),
     Mode(12, True, "cursor_blinking", queryable=True, peripheral="cursor_blink"),
     Mode(25, True, "cursor_visible", queryable=True, peripheral="cursor"),
+    Mode(42, True, "national_charset_mode", queryable=True),
+    Mode(45, True, "reverse_wraparound", queryable=True),
     Mode(47, True, apply_fn=_alt_screen, status_fn=_alt_screen_status),
     Mode(66, True, "numeric_keypad", invert=True, queryable=True),
     Mode(67, True, "backarrow_key_sends_bs", queryable=True),
     Mode(69, True, "left_right_margin_mode", queryable=True, apply_fn=_declrmm),  # DECLRMM
+    Mode(95, True, "no_clear_column_mode", queryable=True),
     Mode(1000, True, "mouse_tracking", queryable=True, peripheral="mouse"),
     Mode(1004, True, "focus_reporting", queryable=True),
     Mode(1002, True, apply_fn=_mouse_button_tracking, status_fn=_mouse_button_status, peripheral="mouse"),
@@ -176,6 +179,7 @@ MODE_SPECS: list[Mode] = [
     # Extended modes with implemented board or frontend behaviour.
     Mode(40, True, "allow_column_mode", queryable=True),  # permit DECCOLM 80<->132
     Mode(1046, True, "allow_alt_screen", queryable=True, apply_fn=_allow_alt_screen),
+    Mode(1045, True, "extended_reverse_wraparound", queryable=True),
     Mode(2004, True, "bracketed_paste", queryable=True),
     Mode(2026, True, "synchronized_output", queryable=True, peripheral="sync"),
     Mode(
@@ -261,6 +265,8 @@ class ModeDevice(Device):
         self.national_charset_mode = False
         self.margin_bell = False
         self.reverse_wraparound = False
+        self.extended_reverse_wraparound = False
+        self.no_clear_column_mode = False
         self.sixel_display_mode = False
         self.mouse_highlight_tracking = False
         self.mouse_utf8_mode = False
@@ -423,6 +429,10 @@ class ModeDevice(Device):
     def set_mode(self, mode: int, value: bool = True, private: bool = False) -> None:
         """Set a single terminal mode."""
         self._apply(private, mode, value)
+
+    def recognizes(self, private: bool, mode: int) -> bool:
+        """Whether this model implements a mode."""
+        return (private, mode) in self._modes
 
     def clear_mode(self, mode: int, private: bool = False) -> None:
         """Clear a single terminal mode."""

@@ -30,6 +30,7 @@ def test_g2_g3_designation():
     """Test G2 and G3 character set designation."""
     board = Board(width=20, height=5)
     parser = Parser(board)
+    parser.feed("\x1b[?42h")
 
     # Set G2 to DEC Special Graphics
     parser.feed("\x1b*0")  # ESC * 0
@@ -67,6 +68,7 @@ def test_single_shift_3():
     """Test Single Shift 3 (SS3) for temporary G3 usage."""
     board = Board(width=20, height=5)
     parser = Parser(board)
+    parser.feed("\x1b[?42h")
 
     # Set G3 to UK character set
     parser.feed("\x1b+A")  # ESC + A
@@ -88,6 +90,7 @@ def test_multiple_single_shifts():
     """Test multiple single shifts in sequence."""
     board = Board(width=20, height=5)
     parser = Parser(board)
+    parser.feed("\x1b[?42h")
 
     # Set G2 to DEC Special Graphics
     parser.feed("\x1b*0")  # ESC * 0
@@ -239,6 +242,7 @@ def test_mixed_character_sets():
     """Test complex mixing of multiple character sets."""
     board = Board(width=30, height=5)
     parser = Parser(board)
+    parser.feed("\x1b[?42h")
 
     # Set all character sets
     parser.feed("\x1b(B")  # G0 = US ASCII (default)
@@ -350,6 +354,7 @@ def test_uk_national_character_set():
     """Test UK National character set (# -> £)."""
     board = Board(width=20, height=5)
     parser = Parser(board)
+    parser.feed("\x1b[?42h")
 
     parser.feed("\x1b(A")  # Set G0 to UK National
 
@@ -440,6 +445,7 @@ def test_german_national_charset():
     """Test German National character set (ESC ( K)."""
     board = Board(width=20, height=5)
     parser = Parser(board)
+    parser.feed("\x1b[?42h")
 
     # Set G0 to German National
     parser.feed("\x1b(K")  # ESC ( K
@@ -455,6 +461,7 @@ def test_french_national_charset():
     """Test French National character set (ESC ( R)."""
     board = Board(width=20, height=5)
     parser = Parser(board)
+    parser.feed("\x1b[?42h")
 
     # Set G0 to French National
     parser.feed("\x1b(R")  # ESC ( R
@@ -470,6 +477,7 @@ def test_spanish_national_charset():
     """Test Spanish National character set (ESC ( Z)."""
     board = Board(width=20, height=5)
     parser = Parser(board)
+    parser.feed("\x1b[?42h")
 
     # Set G0 to Spanish National
     parser.feed("\x1b(Z")  # ESC ( Z
@@ -485,6 +493,7 @@ def test_italian_national_charset():
     """Test Italian National character set (ESC ( Y)."""
     board = Board(width=20, height=5)
     parser = Parser(board)
+    parser.feed("\x1b[?42h")
 
     # Set G0 to Italian National
     parser.feed("\x1b(Y")  # ESC ( Y
@@ -500,6 +509,7 @@ def test_swedish_national_charset():
     """Test Swedish National character set (ESC ( H)."""
     board = Board(width=20, height=5)
     parser = Parser(board)
+    parser.feed("\x1b[?42h")
 
     # Set G0 to Swedish National
     parser.feed("\x1b(H")  # ESC ( H
@@ -515,6 +525,7 @@ def test_danish_norwegian_charset():
     """Test Danish/Norwegian National character set (ESC ( E)."""
     board = Board(width=20, height=5)
     parser = Parser(board)
+    parser.feed("\x1b[?42h")
 
     # Set G0 to Danish/Norwegian National
     parser.feed("\x1b(E")  # ESC ( E
@@ -530,6 +541,7 @@ def test_finnish_national_charset():
     """Test Finnish National character set (ESC ( C)."""
     board = Board(width=20, height=5)
     parser = Parser(board)
+    parser.feed("\x1b[?42h")
 
     # Set G0 to Finnish National
     parser.feed("\x1b(C")  # ESC ( C
@@ -545,6 +557,7 @@ def test_dutch_national_charset():
     """Test Dutch National character set (ESC ( 4)."""
     board = Board(width=20, height=5)
     parser = Parser(board)
+    parser.feed("\x1b[?42h")
 
     # Set G0 to Dutch National
     parser.feed("\x1b(4")  # ESC ( 4
@@ -560,6 +573,7 @@ def test_french_canadian_charset():
     """Test French Canadian National character set (ESC ( Q)."""
     board = Board(width=20, height=5)
     parser = Parser(board)
+    parser.feed("\x1b[?42h")
 
     # Set G0 to French Canadian National
     parser.feed("\x1b(Q")  # ESC ( Q
@@ -575,6 +589,7 @@ def test_japanese_roman_charset():
     """Test Japanese Roman character set (ESC ( J)."""
     board = Board(width=20, height=5)
     parser = Parser(board)
+    parser.feed("\x1b[?42h")
 
     # Set G0 to Japanese Roman
     parser.feed("\x1b(J")  # ESC ( J
@@ -590,6 +605,7 @@ def test_swiss_national_charset():
     """Test Swiss National character set (ESC ( =)."""
     board = Board(width=20, height=5)
     parser = Parser(board)
+    parser.feed("\x1b[?42h")
 
     # Set G0 to Swiss National
     parser.feed("\x1b(=")  # ESC ( =
@@ -605,6 +621,7 @@ def test_national_charset_switching():
     """Test switching between different national character sets."""
     board = Board(width=30, height=5)
     parser = Parser(board)
+    parser.feed("\x1b[?42h")
 
     # Set G0 to German, G1 to French
     parser.feed("\x1b(K")  # German G0

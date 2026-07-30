@@ -37,8 +37,6 @@ def _term(model=None):
         (20, "linefeed_newline_mode"),
         (44, "margin_bell"),
         (68, "keyboard_usage_mode"),
-        (42, "national_charset_mode"),
-        (45, "reverse_wraparound"),
         (80, "sixel_display_mode"),
         (1001, "mouse_highlight_tracking"),
         (1005, "mouse_utf8_mode"),
@@ -99,6 +97,26 @@ def test_reverse_screen_and_cursor_blink_modes_report_real_state():
     assert board.modes.reverse_screen is False
     assert board.modes.cursor_blinking is False
     assert transport.data[-2:] == ["\x1b[?5;2$y", "\x1b[?12;2$y"]
+
+
+@pytest.mark.parametrize(
+    ("mode", "attr"),
+    [
+        (42, "national_charset_mode"),
+        (45, "reverse_wraparound"),
+        (95, "no_clear_column_mode"),
+        (1045, "extended_reverse_wraparound"),
+    ],
+)
+def test_restored_private_modes_report_and_change_real_state(mode, attr):
+    board, parser, transport = _term()
+
+    parser.feed(f"\x1b[?{mode}$p\x1b[?{mode}h\x1b[?{mode}$p")
+    assert getattr(board.modes, attr) is True
+    assert transport.data[-2:] == [f"\x1b[?{mode};2$y", f"\x1b[?{mode};1$y"]
+
+    parser.feed(f"\x1b[?{mode}l")
+    assert getattr(board.modes, attr) is False
 
 
 def test_mode_1046_disables_alt_screen_and_gates_alt_screen_modes():
@@ -178,6 +196,11 @@ def test_destination_caps_cannot_add_grapheme_mode_to_old_model():
 
 def test_vt220_reports_xterm_era_modes_as_unrecognised():
     _, parser, transport = _term(VT220)
+    parser.feed("\x1b[?42$p")
+    assert transport.data[-1] == "\x1b[?42;2$y"
+    for mode in (45, 95, 1045):
+        parser.feed(f"\x1b[?{mode}$p")
+        assert transport.data[-1] == f"\x1b[?{mode};0$y"
     parser.feed("\x1b[?5$p")
     assert transport.data[-1] == "\x1b[?5;2$y"
     parser.feed("\x1b[?12$p")

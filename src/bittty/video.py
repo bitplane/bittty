@@ -50,6 +50,9 @@ class Video:
 
         # Per-line DECDHL/DECDWL/DECSWL attribute, kept parallel to grid rows.
         self.line_attributes: list[str] = [constants.LINE_SINGLE] * height
+        # Whether the line continued via DECAWM. Reverse-wrap mode 45 follows
+        # this metadata; it is deliberately one boolean per row, not per cell.
+        self.wrapped_lines: list[bool] = [False] * height
 
         # Dirty tracking: readers own the clock. Writes stamp the CURRENT
         # epoch (one store — no increment on the hot path); a renderer calls
@@ -221,6 +224,19 @@ class Video:
         """Return every line to single-width, single-height (RIS)."""
         self.line_attributes = [constants.LINE_SINGLE] * self.height
         self._touch_page()
+
+    def set_line_wrapped(self, y: int, wrapped: bool = True) -> None:
+        """Record whether row ``y`` continued through an automatic wrap."""
+        if 0 <= y < self.height:
+            self.wrapped_lines[y] = wrapped
+
+    def is_line_wrapped(self, y: int) -> bool:
+        """Return the automatic-wrap marker for row ``y``."""
+        return 0 <= y < self.height and self.wrapped_lines[y]
+
+    def reset_wrapped_lines(self) -> None:
+        """Clear all automatic-wrap metadata."""
+        self.wrapped_lines = [False] * self.height
 
     def get_content(self) -> list[list[Cell]]:
         """Get buffer content as a 2D grid."""
@@ -458,6 +474,7 @@ class Video:
                 self.grid[y] = self._create_empty_row()
             else:
                 self.grid[y] = [(style, " ") for _ in range(self.width)]
+            self.wrapped_lines[y] = False
 
     def scroll_up(self, count: int) -> None:
         """Scroll content up, removing top lines and adding blank lines at bottom."""
@@ -473,6 +490,8 @@ class Video:
 
         del self.line_attributes[:count]
         self.line_attributes.extend([constants.LINE_SINGLE] * count)
+        del self.wrapped_lines[:count]
+        self.wrapped_lines.extend([False] * count)
         self._touch_page()
 
     def scroll_down(self, count: int) -> None:
@@ -489,6 +508,8 @@ class Video:
 
         del self.line_attributes[-count:]
         self.line_attributes[:0] = [constants.LINE_SINGLE] * count
+        del self.wrapped_lines[-count:]
+        self.wrapped_lines[:0] = [False] * count
         self._touch_page()
 
     def scroll_region_up(
@@ -504,9 +525,11 @@ class Video:
         count = min(count, bottom - top + 1)
         self.grid[top : bottom + 1 - count] = self.grid[top + count : bottom + 1]
         self.line_attributes[top : bottom + 1 - count] = self.line_attributes[top + count : bottom + 1]
+        self.wrapped_lines[top : bottom + 1 - count] = self.wrapped_lines[top + count : bottom + 1]
         for y in range(bottom + 1 - count, bottom + 1):
             self.grid[y] = self._create_empty_row()
             self.line_attributes[y] = constants.LINE_SINGLE
+            self.wrapped_lines[y] = False
         self._touch_scrolled(top, bottom)
 
     def scroll_rectangle_up(
@@ -550,10 +573,12 @@ class Video:
             # The common path: move complete row objects and their attributes.
             self.grid[top : bottom + 1 - count] = self.grid[top + count : bottom + 1]
             self.line_attributes[top : bottom + 1 - count] = self.line_attributes[top + count : bottom + 1]
+            self.wrapped_lines[top : bottom + 1 - count] = self.wrapped_lines[top + count : bottom + 1]
 
             for y in range(bottom + 1 - count, bottom + 1):
                 self.grid[y] = [blank] * self.width
                 self.line_attributes[y] = constants.LINE_SINGLE
+                self.wrapped_lines[y] = False
         else:
             end = right + 1
             for y in range(top, bottom + 1 - count):
@@ -569,6 +594,10 @@ class Video:
 
             for y in range(bottom + 1 - count, bottom + 1):
                 self._erase_range(self.grid[y], left, end, style)
+
+            self.wrapped_lines[top : bottom + 1 - count] = self.wrapped_lines[top + count : bottom + 1]
+            for y in range(bottom + 1 - count, bottom + 1):
+                self.wrapped_lines[y] = False
 
             # A partial-row operation cannot move a row-wide DECDWL/DECDHL
             # attribute without also changing cells outside the rectangle.
@@ -588,9 +617,11 @@ class Video:
         count = min(count, bottom - top + 1)
         self.grid[top + count : bottom + 1] = self.grid[top : bottom + 1 - count]
         self.line_attributes[top + count : bottom + 1] = self.line_attributes[top : bottom + 1 - count]
+        self.wrapped_lines[top + count : bottom + 1] = self.wrapped_lines[top : bottom + 1 - count]
         for y in range(top, top + count):
             self.grid[y] = self._create_empty_row()
             self.line_attributes[y] = constants.LINE_SINGLE
+            self.wrapped_lines[y] = False
         self._touch_scrolled(top, bottom)
 
     def scroll_rectangle_down(
@@ -628,10 +659,12 @@ class Video:
         if left == 0 and right == self.width - 1:
             self.grid[top + count : bottom + 1] = self.grid[top : bottom + 1 - count]
             self.line_attributes[top + count : bottom + 1] = self.line_attributes[top : bottom + 1 - count]
+            self.wrapped_lines[top + count : bottom + 1] = self.wrapped_lines[top : bottom + 1 - count]
 
             for y in range(top, top + count):
                 self.grid[y] = [blank] * self.width
                 self.line_attributes[y] = constants.LINE_SINGLE
+                self.wrapped_lines[y] = False
         else:
             end = right + 1
             for y in range(bottom, top + count - 1, -1):
@@ -647,6 +680,10 @@ class Video:
             for y in range(top, top + count):
                 self._erase_range(self.grid[y], left, end, style)
 
+            self.wrapped_lines[top + count : bottom + 1] = self.wrapped_lines[top : bottom + 1 - count]
+            for y in range(top, top + count):
+                self.wrapped_lines[y] = False
+
         self._touch_scrolled(top, bottom)
 
     def resize(self, width: int, height: int) -> None:
@@ -657,10 +694,12 @@ class Video:
             for _ in range(height - len(self.grid)):
                 self.grid.append(self._create_empty_row(width))
             self.line_attributes.extend([constants.LINE_SINGLE] * (height - len(self.line_attributes)))
+            self.wrapped_lines.extend([False] * (height - len(self.wrapped_lines)))
         elif len(self.grid) > height:
             # Remove excess rows
             self.grid = self.grid[:height]
             self.line_attributes = self.line_attributes[:height]
+            self.wrapped_lines = self.wrapped_lines[:height]
 
         # Adjust width of each row
         for y in range(len(self.grid)):

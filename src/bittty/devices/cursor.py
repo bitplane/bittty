@@ -99,9 +99,46 @@ class CursorDevice(Device):
         self.x = min(right, self.x + count)
 
     def move_back(self, count: int) -> None:
+        """Move left, optionally following xterm reverse-wrap semantics."""
+        screen = self.board.blitter
+        pending = self._pending_wrap_is_valid()
+        reverse = self.board.modes.auto_wrap and (
+            self.board.modes.reverse_wraparound or self.board.modes.extended_reverse_wraparound
+        )
         self.cancel_pending_wrap()
-        left = self.board.blitter.left_margin if self.board.modes.origin_mode else 0
-        self.x = max(left, self.x - count)
+
+        # In reverse-wrap mode a backward operation from delayed-wrap state
+        # first returns to the displayed right-margin cell without moving.
+        if pending and reverse:
+            count -= 1
+            if count <= 0:
+                return
+
+        within_columns = screen.left_margin <= self.x <= screen.right_margin
+        left = screen.left_margin if within_columns else 0
+        right = screen.right_margin if within_columns else self.board.width - 1
+        within_rows = screen.scroll_top <= self.y <= screen.scroll_bottom
+        top = screen.scroll_top if within_rows else 0
+        bottom = screen.scroll_bottom if within_rows else self.board.height - 1
+
+        while count > 0:
+            if self.x > left:
+                step = min(count, self.x - left)
+                self.x -= step
+                count -= step
+                continue
+            if not reverse:
+                break
+
+            if self.board.modes.extended_reverse_wraparound:
+                self.y = bottom if self.y == top else self.y - 1
+            else:
+                previous = self.y - 1
+                if previous < top or not screen.current_buffer.is_line_wrapped(previous):
+                    break
+                self.y = previous
+            self.x = right
+            count -= 1
 
     def carriage_return(self) -> None:
         """Move cursor to the beginning of the current line."""
@@ -155,6 +192,8 @@ class CursorDevice(Device):
             self.board.printer.print_line(self.y)
         screen = self.board.blitter
         within_columns = self._within_horizontal_margins()
+        if is_wrapped:
+            screen.current_buffer.set_line_wrapped(self.y)
         self.cancel_pending_wrap()
         if self.y == screen.scroll_bottom and within_columns:
             screen.scroll(1)
@@ -195,11 +234,8 @@ class CursorDevice(Device):
             self.y -= 1
 
     def backspace(self) -> None:
-        """Move cursor back one position, stopping at the active left margin."""
-        self.cancel_pending_wrap()
-        left = self.board.blitter.left_margin if self.x >= self.board.blitter.left_margin else 0
-        if self.x > left:
-            self.x -= 1
+        """Move cursor back one position, including enabled reverse wrapping."""
+        self.move_back(1)
 
     def set_tab_stop(self, x: int | None = None) -> None:
         """Set a horizontal tab stop at the given column."""

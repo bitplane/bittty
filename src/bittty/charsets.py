@@ -373,6 +373,13 @@ CHARSETS = {
     "%6": PORTUGUESE_NATIONAL,  # Portuguese (multi-char designator)
 }
 
+# SCS designators whose recognition is controlled by DECNRCM on terminals
+# which implement that mode. Older profiles such as the VT100 have no
+# DECNRCM switch and retain their model-specific SCS behaviour.
+NATIONAL_CHARSET_DESIGNATORS = frozenset(
+    {"A", "4", "5", "6", "7", "=", "C", "E", "H", "J", "K", "Q", "R", "Y", "Z", "%6"}
+)
+
 
 def get_charset(designator: str) -> dict:
     """Get character set mapping for a designator."""
