@@ -3,6 +3,8 @@
 ✅ means the mode has implemented behaviour, not merely a parsed or stored flag.
 `DEC PPL` rows are printer-language commands, not terminal modes.
 
+Related ANSI modes: KAM (`CSI 2 h/l`) and SRM (`CSI 12 h/l`) implement keyboard locking and direct local echo.
+
 | Mode | Origin | Description | Supported |
 | :--- | :--- | :--- | :--- |
 | 1 | DEC | DECCKM - Cursor Keys Mode | ✅ |
@@ -48,7 +50,7 @@
 | 42 | DEC | DECNRCM - National Replacement Character Set Mode | ✅ |
 | 43 | VT340 | DECGEPM - Graphics Expanded Print Mode | X |
 | 44 | VT340 | DECGPCM - Graphics Print Color Mode | X |
-| 44 | xterm | Turn on margin bell | X |
+| 44 | xterm | Turn on margin bell | ✅ |
 | 45 | VT340 | DECGPCS - Graphics Print Color Syntax | X |
 | 45 | xterm | Reverse-wraparound mode | ✅ |
 | 46 | VT340 | DECGPBM - Graphics Print Background Mode | X |
@@ -86,10 +88,10 @@
 | 97 | DEC | DECCRTSM - CRT Save Mode | X |
 | 98 | DEC | DECARSM - Auto Resize Mode | X |
 | 99 | DEC | DECMCM - Modem Control Mode | X |
-| 100 | DEC | DECAAM - Auto Answerback Mode | X |
-| 101 | DEC | DECCANSM - Conceal Answerback Message Mode | X |
+| 100 | DEC | DECAAM - Auto Answerback Mode | ✅ |
+| 101 | DEC | DECCANSM - Conceal Answerback Message Mode | ✅ |
 | 102 | DEC | DECNULM - Ignore Null Mode | ✅ |
-| 103 | DEC | DECHDPXM - Half Duplex Mode | X |
+| 103 | DEC | DECHDPXM - Half Duplex Mode (requires a transport-level half-duplex interface) | X |
 | 104 | DEC | DECESKM - Secondary Keyboard Language Mode | X |
 | 106 | DEC | DECOSCNM - Overscan Mode | X |
 | 108 | DEC | DECNUMLK - NumLock Mode | X |
@@ -123,8 +125,8 @@
 | 1039 | xterm | Send ESC when Alt modifies a key | ✅ |
 | 1040 | xterm | Keep selection even if not highlighted | X |
 | 1041 | xterm | Use the CLIPBOARD selection | X |
-| 1042 | xterm | Enable Urgency window manager hint when Control-G is received | X |
-| 1043 | xterm | Enable raising of the window when Control-G is received | X |
+| 1042 | xterm | Enable Urgency window manager hint when Control-G is received | ✅ |
+| 1043 | xterm | Enable raising of the window when Control-G is received | ✅ |
 | 1044 | xterm | Reuse the most recent data copied to CLIPBOARD | X |
 | 1045 | xterm | Extended Reverse-wraparound mode (XTREVWRAP2) | ✅ |
 | 1046 | xterm | Enable switching to/from Alternate Screen Buffer | ✅ |
@@ -153,7 +155,7 @@
 | 2029 | Contour | Passive Mouse Tracking | X |
 | 2030 | Contour | Report grid cell selection | X |
 | 2031 | Contour | Color palette updates | X |
-| 2048 | @rockorager | In-Band Window Resize Notifications | X |
+| 2048 | @rockorager | In-Band Window Resize Notifications | ✅ |
 | 2500 | VTE | Mirror box drawing characters | X |
 | 2501 | VTE | BiDi autodetection | X |
 | 7700 | mintty | Ambiguous width reporting | X |

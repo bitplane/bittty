@@ -8,7 +8,9 @@ numbered implementation and rejects collisions within one model.
 from __future__ import annotations
 
 # ANSI modes
+ANSI_KEYBOARD_ACTION = "ansi.keyboard-action"
 ANSI_INSERT = "ansi.insert"
+ANSI_SEND_RECEIVE = "ansi.send-receive"
 ANSI_NEWLINE = "ansi.newline"
 
 # DEC and xterm private modes
@@ -20,6 +22,9 @@ KITTY_COLUMN_MODE = "kitty.column-mode"
 DEC_REVERSE_SCREEN = "dec.reverse-screen"
 DEC_ORIGIN = "dec.origin"
 DEC_AUTOWRAP = "dec.autowrap"
+DEC_AUTO_ANSWERBACK = "dec.auto-answerback"
+DEC_CONCEAL_ANSWERBACK = "dec.conceal-answerback"
+XTERM_MARGIN_BELL = "xterm.margin-bell"
 XTERM_MOUSE_X10 = "xterm.mouse-x10"
 XTERM_CURSOR_BLINK = "xterm.cursor-blink"
 DEC_PRINT_FORM_FEED = "dec.print-form-feed"
@@ -46,6 +51,8 @@ XTERM_SPECIAL_MODIFIERS = "xterm.special-modifiers"
 XTERM_META_ESCAPE = "xterm.meta-escape"
 XTERM_DELETE = "xterm.delete"
 XTERM_ALT_ESCAPE = "xterm.alt-escape"
+XTERM_BELL_URGENT = "xterm.bell-urgent"
+XTERM_BELL_RAISE = "xterm.bell-raise"
 XTERM_ALT_SCREEN_1047 = "xterm.alt-screen-1047"
 XTERM_SAVE_CURSOR_1048 = "xterm.save-cursor-1048"
 XTERM_ALT_SCREEN_1049 = "xterm.alt-screen-1049"
@@ -56,6 +63,7 @@ XTERM_BRACKETED_PASTE = "xterm.bracketed-paste"
 XTERM_SYNC_OUTPUT = "xterm.sync-output"
 UNICODE_GRAPHEME_CLUSTERING = "unicode.grapheme-clustering"
 UNICODE_AMBIGUOUS_WIDTH = "unicode.ambiguous-width"
+INBAND_RESIZE = "bittty.inband-resize"
 
 ANSI_MODE_CAPABILITIES = frozenset({ANSI_INSERT, ANSI_NEWLINE})
 
@@ -72,6 +80,8 @@ VT100_MODE_CAPABILITIES = ANSI_MODE_CAPABILITIES | frozenset(
 )
 VT220_MODE_CAPABILITIES = VT100_MODE_CAPABILITIES | frozenset(
     {
+        ANSI_KEYBOARD_ACTION,
+        ANSI_SEND_RECEIVE,
         DEC_PRINT_FORM_FEED,
         DEC_PRINT_EXTENT,
         DEC_CURSOR_VISIBLE,
@@ -80,6 +90,8 @@ VT220_MODE_CAPABILITIES = VT100_MODE_CAPABILITIES | frozenset(
 )
 VT510_MODE_CAPABILITIES = VT220_MODE_CAPABILITIES | frozenset(
     {
+        DEC_AUTO_ANSWERBACK,
+        DEC_CONCEAL_ANSWERBACK,
         DEC_NUMERIC_KEYPAD,
         DEC_BACKARROW,
         DEC_LEFT_RIGHT_MARGINS,
@@ -90,7 +102,9 @@ VT510_MODE_CAPABILITIES = VT220_MODE_CAPABILITIES | frozenset(
 
 XTERM_MODE_CAPABILITIES = frozenset(
     {
+        ANSI_KEYBOARD_ACTION,
         ANSI_INSERT,
+        ANSI_SEND_RECEIVE,
         ANSI_NEWLINE,
         DEC_CURSOR_APPLICATION,
         XTERM_COLUMN_MODE,
@@ -103,6 +117,7 @@ XTERM_MODE_CAPABILITIES = frozenset(
         DEC_PRINT_EXTENT,
         DEC_CURSOR_VISIBLE,
         DEC_NATIONAL_CHARSET,
+        XTERM_MARGIN_BELL,
         XTERM_REVERSE_WRAP,
         XTERM_ALT_SCREEN_47,
         DEC_NUMERIC_KEYPAD,
@@ -122,6 +137,8 @@ XTERM_MODE_CAPABILITIES = frozenset(
         XTERM_META_ESCAPE,
         XTERM_DELETE,
         XTERM_ALT_ESCAPE,
+        XTERM_BELL_URGENT,
+        XTERM_BELL_RAISE,
         XTERM_ALT_SCREEN_1047,
         XTERM_SAVE_CURSOR_1048,
         XTERM_ALT_SCREEN_1049,
@@ -285,6 +302,9 @@ BITTTY_MODE_CAPABILITIES = XTERM_MODE_CAPABILITIES | frozenset(
         UNICODE_GRAPHEME_CLUSTERING,
         UNICODE_AMBIGUOUS_WIDTH,
         DEC_IGNORE_NULL,
+        DEC_AUTO_ANSWERBACK,
+        DEC_CONCEAL_ANSWERBACK,
+        INBAND_RESIZE,
     }
 )
 

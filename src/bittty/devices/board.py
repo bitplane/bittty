@@ -18,7 +18,7 @@ from ..connections import DisplayPort, HostPort
 from ..model import DEFAULT, Model
 from ..operations import Operation
 from ..parser import Parser
-from ..present import Bell, PresentEvent
+from ..present import Bell, PresentEvent, WindowRequest
 from ..width import DEFAULT_WIDTH_POLICY, WidthPolicy
 from .blitter import Blitter
 from .charset import CharsetDevice
@@ -70,7 +70,10 @@ class Board:
         model: Model | None = None,
         palette_overrides: dict | None = None,
         width_policy: WidthPolicy | None = None,
+        margin_bell_columns: int = 10,
     ) -> None:
+        if margin_bell_columns < 0:
+            raise ValueError("margin_bell_columns must be non-negative")
         self.command = command
         self.width = width
         self.height = height
@@ -113,10 +116,13 @@ class Board:
         self.default_underline_color: int | None = None
         self.default_dim_color: int | None = None
         self.console_requests: list[tuple[str, int]] = []  # ("switch", n) / ("previous", 0)
-        self.answerback: str = ""  # ENQ reply string; the chrome or config sets it
+        self._answerback: str = ""
+        self._answerback_concealed = False
+        self.margin_bell_columns = margin_bell_columns
+        self._margin_bell_latch: tuple[int, int] | None = None
         self.warning_bell_volume: int = 8  # DECSWBV (0-8)
         self.margin_bell_volume: int = 0  # DECSMBV (0-8)
-        self.host = HostPort()  # duplex jack toward the child (PTY plugs in)
+        self.host = HostPort(on_connected=self._host_connected)  # duplex jack toward the child
         self.display = DisplayPort(self)  # duplex jack toward the terminal (chrome)
         self.caps = TerminalCaps.unknown()  # what the real terminal can do (terminal pushes)
 
@@ -192,10 +198,29 @@ class Board:
         self.printer.feed_host_data(data, sink)
 
     def resize(self, width: int, height: int) -> None:
-        """Resize the terminal, including buffers and the attached PTY."""
+        """Resize for an internal/host request, without an in-band notification."""
         self.blitter.resize(width, height)
         if self.pty is not None:
             self.pty.resize(height, width)
+
+    def resize_from_frontend(self, width: int, height: int) -> None:
+        """Apply an observed outer-terminal resize, then notify an opted-in child."""
+        self.resize(width, height)
+        if self.modes.inband_resize:
+            self.report_resize()
+
+    def report_resize(self) -> None:
+        """Send the mode-2048 text-area size report using known cell geometry."""
+        if self.caps.cell_px is None:
+            width_px = height_px = 0
+        else:
+            cell_width, cell_height = self.caps.cell_px
+            width_px = cell_width * self.width
+            height_px = cell_height * self.height
+        self.host.write(
+            f"{constants.ESC}[48;{self.height};{self.width};{height_px};{width_px}t",
+            flush=True,
+        )
 
     def set_page_columns(self, columns: int) -> None:
         """Apply DECSCPP and report the resulting page size to the PTY."""
@@ -207,10 +232,125 @@ class Board:
     def bell(self) -> None:
         """Ring the terminal bell: pushed to the terminal (chrome) as a present event."""
         self.present(Bell())
+        if self.modes.bell_urgent:
+            self.request_window("urgent")
+        if self.modes.bell_raise:
+            self.request_window("raise")
+
+    def request_window(self, kind: str) -> None:
+        """Record and present one window-manager action request."""
+        self.window_requests.append(kind)
+        self.present(WindowRequest(kind))
+
+    def reset_margin_bell(self) -> None:
+        """Re-arm the xterm margin bell after its mode changes."""
+        self._margin_bell_latch = None
+
+    def check_margin_bell(self) -> None:
+        """Ring once when a printable keystroke occurs in the right-margin zone."""
+        if not self.modes.margin_bell or self.margin_bell_columns == 0:
+            self._margin_bell_latch = None
+            return
+        cursor = self.cursor
+        blitter = self.blitter
+        inside_margins = (
+            blitter.scroll_top <= cursor.y <= blitter.scroll_bottom
+            and blitter.left_margin <= cursor.display_x <= blitter.right_margin
+        )
+        right = blitter.right_margin if inside_margins else self.width - 1
+        in_zone = cursor.display_x >= max(0, right + 1 - self.margin_bell_columns)
+        latch = (cursor.y, right)
+        if not in_zone:
+            self._margin_bell_latch = None
+        elif self._margin_bell_latch != latch:
+            self._margin_bell_latch = latch
+            self.bell()
+
+    def echo_input(self, text: str) -> None:
+        """Display local keyboard echo directly, never through the ANSI parser."""
+        run: list[str] = []
+
+        def flush_run() -> None:
+            if run:
+                self.blitter.write_text("".join(run), self.style.current)
+                run.clear()
+
+        for char in text:
+            code = ord(char)
+            if code >= 0x20 and not (0x7F <= code <= 0x9F):
+                run.append(char)
+                continue
+            flush_run()
+            if char == constants.CR:
+                self.cursor.carriage_return()
+            elif char in (constants.LF, constants.VT, constants.FF):
+                self.cursor.line_feed()
+            elif char == constants.BS:
+                self.cursor.backspace()
+            elif char == constants.HT:
+                self.cursor.horizontal_tab()
+        flush_run()
+
+    def transmit_keyboard(self, data: str, *, local_text: str | None = None, margin_key: bool = False) -> None:
+        """Apply keyboard policies, then transmit one text payload to the child."""
+        if self.modes.keyboard_locked:
+            return
+        self.host.write(data)
+        if self.modes.local_echo and local_text is not None:
+            self.echo_input(local_text)
+        if margin_key:
+            self.check_margin_bell()
+
+    def transmit_keyboard_bytes(
+        self,
+        data: bytes,
+        *,
+        local_text: str | None = None,
+        margin_key: bool = False,
+    ) -> None:
+        """Byte-oriented variant used by legacy eight-bit Meta input."""
+        if self.modes.keyboard_locked:
+            return
+        self.host.write_bytes(data)
+        if self.modes.local_echo and local_text is not None:
+            self.echo_input(local_text)
+        if margin_key:
+            self.check_margin_bell()
 
     def present(self, event: PresentEvent) -> None:
         """Push a discrete side-effect to the attached terminal (no-op if none)."""
         self.display.present(event)
+
+    @property
+    def answerback(self) -> str | None:
+        """Configured answerback, or None while DECCANSM conceals it."""
+        return None if self._answerback_concealed else self._answerback
+
+    @answerback.setter
+    def answerback(self, value: str) -> None:
+        if not isinstance(value, str):
+            raise TypeError("answerback must be a string")
+        self._answerback = value
+        self._answerback_concealed = False
+
+    @property
+    def answerback_concealed(self) -> bool:
+        return self._answerback_concealed
+
+    def set_answerback_concealed(self, concealed: bool) -> None:
+        """Conceal irreversibly until a new message is assigned."""
+        if concealed:
+            self._answerback_concealed = True
+
+    def send_answerback(self) -> None:
+        """Transmit the stored secret without exposing it through the public getter."""
+        if self._answerback:
+            self.host.write(self._answerback, flush=True)
+
+    def _host_connected(self) -> None:
+        """Handle a real duplex line establishment."""
+        if hasattr(self, "modes") and self.modes.auto_answerback:
+            self.send_answerback()
 
     def set_caps(self, caps: TerminalCaps) -> None:
         """Record what the real terminal can do (a terminal (chrome) pushes this after probing)."""
@@ -337,17 +477,19 @@ class Board:
 
     def input(self, data: str) -> None:
         """Translate control codes based on terminal modes and send to the host."""
-        self.keyboard.input(data)
+        # Raw input is safely echoable only when it is plain text/C0 data, not
+        # an encoded key sequence. Typed entry points provide richer metadata.
+        local_text = None if constants.ESC in data or any(0x80 <= ord(c) <= 0x9F for c in data) else data
+        margin_key = bool(data) and data.isprintable()
+        self.keyboard.input(data, local_text=local_text, margin_key=margin_key)
 
     def input_paste(self, text: str) -> None:
         """Pasted text from the terminal: bracketed when mode 2004 is on, else raw.
 
         Bypasses keyboard translation — a paste is data, not keystrokes.
         """
-        if self.modes.bracketed_paste:
-            self.host.write(f"\x1b[200~{text}\x1b[201~")
-        else:
-            self.host.write(text)
+        data = f"\x1b[200~{text}\x1b[201~" if self.modes.bracketed_paste else text
+        self.transmit_keyboard(data, local_text=text)
 
     def input_mouse(self, x: int, y: int, button: int, event_type: str, modifiers: set[str]) -> None:
         """

@@ -8,7 +8,7 @@ def test_mode_device_applies_implemented_modes_and_ignores_unimplemented_modes()
 
     modes.set_ansi_modes((4, 12, 20), True)
     assert modes.insert_mode is True
-    assert modes.local_echo is True
+    assert modes.local_echo is False
     assert modes.linefeed_newline_mode is True
 
     modes.set_private_modes((1, 5, 8, 1000, 1006, 2004), True)

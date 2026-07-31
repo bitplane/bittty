@@ -51,6 +51,8 @@ in; future siblings render into a Textual widget, a browser, a video file.
 Present events (bell, title, mouse-capture changes...) arrive as typed `on_*` hooks — discrete
 side-effects are pushed; screen content is pulled. Physical facts flow the other way: the
 venue's resize, focus, input, and capabilities go down to the board through the port.
+Frontend resizes use a distinct display-port path, so host-requested XTWINOPS/DECSLPP
+resizes cannot generate false in-band resize notifications.
 
 ## Ports and Connections (`bittty.connections`)
 

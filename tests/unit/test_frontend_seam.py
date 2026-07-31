@@ -4,7 +4,14 @@ import pytest
 
 from bittty import Board, TerminalCaps
 from bittty.connections import DisplayPort, HostPort
-from bittty.present import Bell, GraphemeClusteringChanged, MouseCaptureChanged, Notification, TitleChanged
+from bittty.present import (
+    Bell,
+    GraphemeClusteringChanged,
+    KeyboardLockChanged,
+    MouseCaptureChanged,
+    Notification,
+    TitleChanged,
+)
 from bittty.terminals import Terminal
 
 
@@ -26,6 +33,9 @@ class RecordingTerminal(Terminal):
 
     def on_grapheme_clustering(self, enabled):
         self.events.append(("grapheme", enabled))
+
+    def on_keyboard_lock(self, locked):
+        self.events.append(("keyboard-lock", locked))
 
     # on_notify deliberately NOT overridden -> should be a safe no-op
 
@@ -107,6 +117,14 @@ def test_grapheme_mode_event_dispatch():
     display.attach()
     board.present(GraphemeClusteringChanged(True))
     assert display.events == [("grapheme", True)]
+
+
+def test_keyboard_lock_event_dispatch():
+    board = _term()
+    display = RecordingTerminal(board)
+    display.attach()
+    board.present(KeyboardLockChanged(True))
+    assert display.events == [("keyboard-lock", True)]
 
 
 class QueueConnection:

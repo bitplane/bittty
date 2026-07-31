@@ -52,5 +52,4 @@ class ControlDevice(Device):
 
     def answerback(self) -> None:
         """ENQ — transmit the programmed answerback string, if any is set."""
-        if self.board.answerback:
-            self.board.host.write(self.board.answerback, flush=True)
+        self.board.send_answerback()

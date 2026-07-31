@@ -14,7 +14,6 @@ from ..present import (
     Notification,
     PointerShapeChanged,
     PromptMark,
-    WindowRequest,
     WindowStateChanged,
 )
 from ..style import style_to_ansi
@@ -183,8 +182,7 @@ class QueryDevice(Device):
             self._present_window_state()
         elif op in (5, 6, 7):  # raise / lower / refresh
             kind = {5: "raise", 6: "lower", 7: "refresh"}[op]
-            board.window_requests.append(kind)
-            board.present(WindowRequest(kind))
+            board.request_window(kind)
         elif op == 8 and len(params) >= 3:  # resize text area to rows;cols
             board.resize(params[2] or board.width, params[1] or board.height)
         elif op == 9:  # maximize (0 restore, 1 maximize)

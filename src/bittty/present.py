@@ -70,9 +70,16 @@ class CwdChanged:
 
 @dataclass(frozen=True)
 class WindowRequest:
-    """A window action was requested: "raise" / "lower" / "refresh" (XTWINOPS 5/6/7)."""
+    """A window action was requested: "raise" / "lower" / "refresh" / "urgent"."""
 
     kind: str
+
+
+@dataclass(frozen=True)
+class KeyboardLockChanged:
+    """The host locked or unlocked keyboard-originated input (KAM)."""
+
+    locked: bool
 
 
 @dataclass(frozen=True)
@@ -152,6 +159,7 @@ PresentEvent = (
     | FontChanged
     | CwdChanged
     | WindowRequest
+    | KeyboardLockChanged
     | WindowStateChanged
     | ConsoleRequest
     | MouseCaptureChanged

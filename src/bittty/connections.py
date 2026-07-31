@@ -66,8 +66,13 @@ class HostPort:
     into a sink — the board wires it to its parser.
     """
 
-    def __init__(self, connection: Connection | None = None) -> None:
+    def __init__(
+        self,
+        connection: Connection | None = None,
+        on_connected: Callable[[], None] | None = None,
+    ) -> None:
         self.connection = connection
+        self.on_connected = on_connected
         self.on_data: Callable[[bytes | str], None] | None = None
         self.on_idle: Callable[[], bool] | None = None
         self.on_closed: Callable[[], None] | None = None
@@ -98,6 +103,8 @@ class HostPort:
         self.on_data = on_data
         self.on_idle = on_idle
         self.on_closed = on_closed
+        if self.on_connected is not None:
+            self.on_connected()
         self._reader_task = asyncio.create_task(self._pump())
 
     def disconnect(self) -> None:
@@ -354,3 +361,7 @@ class DisplayPort:
     def set_caps(self, caps: "TerminalCaps") -> None:
         """The terminal reports what its venue can do."""
         self.board.set_caps(caps)
+
+    def resize(self, width: int, height: int) -> None:
+        """Report a completed outer-terminal resize to the board."""
+        self.board.resize_from_frontend(width, height)

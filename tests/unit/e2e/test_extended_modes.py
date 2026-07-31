@@ -35,13 +35,10 @@ def _term(model=None):
         4,
         8,
         20,
-        44,
         68,
         80,
         1001,
         1016,
-        1042,
-        1043,
         1010,
         1011,
         1040,
@@ -272,13 +269,3 @@ def test_decrqm_now_reports_mouse_and_paste_modes():
     assert transport.data[-1] == "\x1b[?1002;1$y"
     parser.feed("\x1b[?2004$p")  # bracketed paste, currently reset
     assert transport.data[-1] == "\x1b[?2004;2$y"
-
-
-@pytest.mark.parametrize("mode", [2, 12])
-def test_unimplemented_ansi_modes_are_unrecognised_and_ignored(mode):
-    board, parser, transport = _term()
-
-    parser.feed(f"\x1b[{mode}h\x1b[{mode}$p")
-
-    assert board.modes.recognizes(False, mode) is False
-    assert transport.data[-1] == f"\x1b[{mode};0$y"

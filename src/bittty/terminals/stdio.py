@@ -326,7 +326,7 @@ class StdioTerminal(Terminal):
         self.width = size.columns
         self.height = size.lines - 2
         logger.info("Resize: %sx%s", self.width, self.height)
-        self.board.resize(self.width, self.height)
+        self.board.display.resize(self.width, self.height)
 
     # --- run loop --- #
 

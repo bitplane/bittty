@@ -173,14 +173,14 @@ class KeyboardDevice(Device):
 
         if char == constants.BS:
             if self.board.modes.backarrow_key_sends_bs:
-                self.input(constants.BS)
+                self.input(constants.BS, local_text=constants.BS)
             else:
-                self.input(constants.DEL)
+                self.input(constants.DEL, local_text=constants.BS)
             return
 
         enhanced = self._enhanced_key(char, modifier)
         if enhanced is not None:  # modifyOtherKeys / Kitty encode modified keys explicitly
-            self.input(enhanced)
+            self.input(enhanced, local_text=char, margin_key=char.isprintable())
             return
 
         # xterm modifier numbers are one plus a shift/alt/control bit mask.
@@ -197,14 +197,19 @@ class KeyboardDevice(Device):
                 char = chr(ord(upper_char) - ord("A") + 1)
 
         if len(char) == 1:
+            local_text = char
             # Escape-prefix policy wins over the older eighth-bit Meta form.
             if (alt and self.board.modes.alt_sends_escape) or (meta and self.board.modes.meta_sends_escape):
                 char = constants.ESC + char
-                self.input(char)
+                self.input(char, local_text=local_text, margin_key=local_text.isprintable())
             elif meta and self.board.modes.eight_bit_input and ord(char) < 128:
-                self.board.host.write_bytes(bytes((ord(char) | 0x80,)))
+                self.board.transmit_keyboard_bytes(
+                    bytes((ord(char) | 0x80,)),
+                    local_text=local_text,
+                    margin_key=local_text.isprintable(),
+                )
             else:
-                self.input(char)
+                self.input(char, local_text=local_text, margin_key=local_text.isprintable())
         # A multi-character key name this terminal's keymap does not define is ignored.
 
     def input_fkey(self, num: int, modifier: int = constants.KEY_MOD_NONE) -> None:
@@ -227,13 +232,14 @@ class KeyboardDevice(Device):
         table = keymap.numpad_numeric if self.board.modes.numeric_keypad else keymap.numpad_application
         sequence = table.get(key, key)
 
-        self.input(sequence)
+        local_text = key if self.board.modes.numeric_keypad and len(key) == 1 else None
+        self.input(sequence, local_text=local_text, margin_key=bool(local_text and local_text.isprintable()))
 
-    def input(self, data: str) -> None:
+    def input(self, data: str, *, local_text: str | None = None, margin_key: bool = False) -> None:
         """Translate control codes based on terminal modes and send to the host."""
         if self.board.modes.cursor_application_mode and f"{constants.ESC}[" in data:
             data = self.translate_application_cursor_keys(data)
-        self.board.host.write(data)
+        self.board.transmit_keyboard(data, local_text=local_text, margin_key=margin_key)
 
     def translate_application_cursor_keys(self, data: str) -> str:
         """Translate embedded normal cursor-key CSI sequences to application mode."""

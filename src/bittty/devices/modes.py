@@ -14,6 +14,7 @@ from ..present import (
     CursorBlinkChanged,
     CursorVisibilityChanged,
     GraphemeClusteringChanged,
+    KeyboardLockChanged,
     MouseCaptureChanged,
     ReverseScreenChanged,
     SyncOutputChanged,
@@ -34,6 +35,7 @@ class ModeEffect(Enum):
     SYNC = "sync"
     WIDTH = "width"
     GRAPHEME = "grapheme"
+    KEYBOARD_LOCK = "keyboard-lock"
 
 
 class MouseProtocol(Enum):
@@ -222,6 +224,23 @@ def _ignore_null_status(device: ModeDevice) -> int:
     return 1 if device.board.printer.configuration.ignore_null else 2
 
 
+def _conceal_answerback(device: ModeDevice, value: bool) -> None:
+    device.board.set_answerback_concealed(value)
+
+
+def _conceal_answerback_status(device: ModeDevice) -> int:
+    return 1 if device.board.answerback_concealed else 2
+
+
+def _inband_resize(device: ModeDevice, value: bool) -> None:
+    if value:
+        device.board.report_resize()
+
+
+def _margin_bell(device: ModeDevice, value: bool) -> None:
+    device.board.reset_margin_bell()
+
+
 def _ambiguous_width_default(device: ModeDevice) -> bool:
     return device.board.width_policy.ambiguous_width == 2
 
@@ -231,7 +250,16 @@ _MOUSE_EFFECT = frozenset({ModeEffect.MOUSE_CAPTURE})
 # Every implemented semantic capability. Models select these by capability ID.
 MODE_SPECS: tuple[ModeSpec, ...] = (
     # ANSI modes (autowrap and cursor visibility are DEC *private* 7/25, not ANSI)
+    ModeSpec(
+        mp.ANSI_KEYBOARD_ACTION,
+        2,
+        False,
+        "keyboard_locked",
+        queryable=True,
+        effects=frozenset({ModeEffect.KEYBOARD_LOCK}),
+    ),
     ModeSpec(mp.ANSI_INSERT, 4, False, "insert_mode", queryable=True),
+    ModeSpec(mp.ANSI_SEND_RECEIVE, 12, False, "local_echo", invert=True, queryable=True),
     ModeSpec(mp.ANSI_NEWLINE, 20, False, "linefeed_newline_mode", queryable=True),
     # DEC private modes
     ModeSpec(mp.DEC_CURSOR_APPLICATION, 1, True, "cursor_application_mode", queryable=True),
@@ -285,6 +313,7 @@ MODE_SPECS: tuple[ModeSpec, ...] = (
         effects=frozenset({ModeEffect.CURSOR}),
     ),
     ModeSpec(mp.DEC_NATIONAL_CHARSET, 42, True, "national_charset_mode", queryable=True),
+    ModeSpec(mp.XTERM_MARGIN_BELL, 44, True, "margin_bell", queryable=True, apply_fn=_margin_bell),
     ModeSpec(mp.XTERM_REVERSE_WRAP, 45, True, "reverse_wraparound", queryable=True),
     ModeSpec(
         mp.XTERM_ALT_SCREEN_47,
@@ -305,6 +334,14 @@ MODE_SPECS: tuple[ModeSpec, ...] = (
         apply_fn=_declrmm,
     ),
     ModeSpec(mp.DEC_NO_CLEAR_COLUMN, 95, True, "no_clear_column_mode", queryable=True),
+    ModeSpec(mp.DEC_AUTO_ANSWERBACK, 100, True, "auto_answerback", queryable=True),
+    ModeSpec(
+        mp.DEC_CONCEAL_ANSWERBACK,
+        101,
+        True,
+        apply_fn=_conceal_answerback,
+        status_fn=_conceal_answerback_status,
+    ),
     ModeSpec(
         mp.DEC_IGNORE_NULL,
         102,
@@ -386,6 +423,8 @@ MODE_SPECS: tuple[ModeSpec, ...] = (
     ModeSpec(mp.XTERM_META_ESCAPE, 1036, True, "meta_sends_escape", queryable=True),
     ModeSpec(mp.XTERM_DELETE, 1037, True, "delete_sends_del", queryable=True),
     ModeSpec(mp.XTERM_ALT_ESCAPE, 1039, True, "alt_sends_escape", queryable=True),
+    ModeSpec(mp.XTERM_BELL_URGENT, 1042, True, "bell_urgent", queryable=True),
+    ModeSpec(mp.XTERM_BELL_RAISE, 1043, True, "bell_raise", queryable=True),
     ModeSpec(
         mp.XTERM_ALT_SCREEN_1047,
         1047,
@@ -424,6 +463,14 @@ MODE_SPECS: tuple[ModeSpec, ...] = (
         effects=_MOUSE_EFFECT,
     ),
     ModeSpec(mp.XTERM_BRACKETED_PASTE, 2004, True, "bracketed_paste", queryable=True),
+    ModeSpec(
+        mp.INBAND_RESIZE,
+        2048,
+        True,
+        "inband_resize",
+        queryable=True,
+        apply_fn=_inband_resize,
+    ),
     ModeSpec(
         mp.XTERM_SYNC_OUTPUT,
         2026,
@@ -506,6 +553,7 @@ class ModeDevice(Device):
         self._last_sync: bool | None = None
         self._last_ambiguous_width: int | None = None
         self._last_grapheme_clustering: bool | None = None
+        self._last_keyboard_locked: bool | None = None
         self._set_defaults()
         self.handlers = {
             "SM": self.apply_mode_operation,
@@ -532,9 +580,8 @@ class ModeDevice(Device):
 
         # DECKPAM/DECKPNM are escape controls, not SM/RM modes.
         self.application_keypad = False
-        # These hardware defaults are retained for unimplemented KAM/SRM/ARM.
+        # DECARM remains a hardware register until repeat events carry enough metadata.
         self.auto_repeat = True
-        self.local_echo = True
 
     def reset(self, hard: bool = True, *, reconcile: bool = True) -> None:
         """Reset modes. hard restores every flag (RIS); soft is the DECSTR subset."""
@@ -553,6 +600,8 @@ class ModeDevice(Device):
             self.origin_mode = False
             self.cursor_visible = True
             self.ignore_null = False
+            if hasattr(self, "keyboard_locked"):
+                self.keyboard_locked = False
         if reconcile:
             self.reconcile_all()
 
@@ -698,6 +747,10 @@ class ModeDevice(Device):
             if force or self.grapheme_clustering != self._last_grapheme_clustering:
                 self._last_grapheme_clustering = self.grapheme_clustering
                 self.board.present(GraphemeClusteringChanged(self.grapheme_clustering))
+        elif effect is ModeEffect.KEYBOARD_LOCK:
+            if force or self.keyboard_locked != self._last_keyboard_locked:
+                self._last_keyboard_locked = self.keyboard_locked
+                self.board.present(KeyboardLockChanged(self.keyboard_locked))
 
     def set_cursor_blinking(self, enabled: bool) -> None:
         """Set cursor blink state and notify the attached terminal on an edge."""
