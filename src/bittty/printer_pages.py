@@ -151,6 +151,20 @@ class PrinterControlToken(PrinterPageItem):
 
 
 @dataclass(frozen=True)
+class PrinterRenditionSpan(PrinterPageItem):
+    """A lined horizontal movement produced by HPA or HPR."""
+
+    state: VirtualPrinterState
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.bounds.width <= 0 or self.bounds.height <= 0:
+            raise ValueError("bounds must have positive width and height")
+        if not isinstance(self.state, VirtualPrinterState):
+            raise TypeError("state must be a VirtualPrinterState")
+
+
+@dataclass(frozen=True)
 class PrinterPage:
     """An immutable physical-page display-list snapshot."""
 

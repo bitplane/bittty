@@ -12,8 +12,10 @@ from bittty import (
     PrinterPageGeometry,
     PrinterPageItem,
     PrinterRect,
+    PrinterRenditionSpan,
     PrinterTextRun,
     PrinterType,
+    PrinterUnderline,
     VirtualPrinter,
     VirtualPrinterState,
 )
@@ -571,6 +573,25 @@ def test_hpa_hpr_vpa_and_vpr_position_in_character_cells():
     assert (c.bounds.left, c.bounds.top) == (6 * 2160, 2 * 3600)
     assert (d.bounds.left, d.bounds.top) == (7 * 2160, 4 * 3600)
     assert e.bounds.top == 4 * 3600  # VPA cannot move backwards.
+
+
+def test_lining_attributes_materialize_hpa_and_hpr_motion_as_page_spans():
+    printer = VirtualPrinter()
+    printer.write_bytes(b"\x1b[4m\x1b[4a\x1b[2`")
+
+    relative, absolute = printer.current_page.items
+    assert isinstance(relative, PrinterRenditionSpan)
+    assert isinstance(absolute, PrinterRenditionSpan)
+    assert relative.bounds == PrinterRect(0, 0, 4 * 2160, 3600)
+    assert absolute.bounds == PrinterRect(2160, 0, 4 * 2160, 3600)
+    assert relative.state.rendition.underline is PrinterUnderline.SINGLE
+
+
+def test_unlined_hpa_and_hpr_remain_mark_free_positioning_operations():
+    printer = VirtualPrinter()
+    printer.write_bytes(b"\x1b[4a\x1b[2`")
+
+    assert printer.current_page.items == ()
 
 
 def test_position_unit_mode_uses_decipoints_for_absolute_and_relative_motion():

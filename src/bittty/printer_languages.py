@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import Enum
 
 
@@ -19,6 +19,100 @@ class PrintDirection(Enum):
 
     BIDIRECTIONAL = "bidirectional"
     UNIDIRECTIONAL = "unidirectional"
+
+
+class PrinterUnderline(Enum):
+    """DEC PPL lining selection."""
+
+    NONE = "none"
+    SINGLE = "single"
+    DOUBLE = "double"
+
+
+class PrinterScript(Enum):
+    """DEC PPL algorithmic script selection."""
+
+    NORMAL = "normal"
+    SUPERSCRIPT = "superscript"
+    SUBSCRIPT = "subscript"
+
+
+class PrinterColor(Enum):
+    """DEC PPL text colour selection."""
+
+    BLACK = "black"
+    RED = "red"
+    GREEN = "green"
+    YELLOW = "yellow"
+    BLUE = "blue"
+    MAGENTA = "magenta"
+    CYAN = "cyan"
+    WHITE = "white"
+
+
+class PrinterDensity(Enum):
+    """DEC PPL font-density selection."""
+
+    DRAFT = "draft"
+    LETTER_QUALITY = "letter-quality"
+    MEMO = "memo"
+    NEAR_LETTER_QUALITY = "near-letter-quality"
+
+
+@dataclass(frozen=True)
+class PrinterRendition:
+    """Retained DEC PPL typestyle and algorithmic attributes."""
+
+    typestyle: int = 10
+    bold: bool = False
+    slanted: bool = False
+    underline: PrinterUnderline = PrinterUnderline.NONE
+    strikethrough: bool = False
+    overline: bool = False
+    script: PrinterScript = PrinterScript.NORMAL
+    color: PrinterColor = PrinterColor.BLACK
+    density: PrinterDensity = PrinterDensity.DRAFT
+
+    @property
+    def has_lining(self) -> bool:
+        """Whether horizontal text motion produces a visible rule."""
+        return self.underline is not PrinterUnderline.NONE or self.strikethrough or self.overline
+
+
+@dataclass(frozen=True)
+class PrinterCharacterSet:
+    """One designated 94- or 96-character graphic set."""
+
+    size: int
+    designator: str
+
+    def __post_init__(self) -> None:
+        if self.size not in (94, 96):
+            raise ValueError("size must be 94 or 96")
+        if not self.designator or not self.designator.isascii():
+            raise ValueError("designator must be nonempty ASCII")
+
+
+_ASCII = PrinterCharacterSet(94, "B")
+_USER_PREFERENCE = PrinterCharacterSet(94, "<")
+_DEC_SUPPLEMENTAL = PrinterCharacterSet(94, "%5")
+_ISO_LATIN_1 = PrinterCharacterSet(96, "A")
+
+
+@dataclass(frozen=True)
+class PrinterCharacterState:
+    """DEC PPL graphic-set designation and invocation state."""
+
+    g_sets: tuple[PrinterCharacterSet, PrinterCharacterSet, PrinterCharacterSet, PrinterCharacterSet] = (
+        _ASCII,
+        _ASCII,
+        _USER_PREFERENCE,
+        _USER_PREFERENCE,
+    )
+    gl: int = 0
+    gr: int = 2
+    single_shift: int | None = None
+    user_preference: PrinterCharacterSet = _DEC_SUPPLEMENTAL
 
 
 class _PrinterLayoutCommand(Enum):
@@ -56,6 +150,8 @@ class VirtualPrinterState:
     control_representation: bool = False
     line_feed_new_line: bool = False
     position_unit_mode: bool = False
+    rendition: PrinterRendition = PrinterRendition()
+    characters: PrinterCharacterState = PrinterCharacterState()
 
 
 _ESC = 0x1B
@@ -73,6 +169,10 @@ _CR = 0x0D
 _NEL = 0x85
 _HTS = 0x88
 _VTS = 0x8A
+_SS2 = 0x8E
+_SS3 = 0x8F
+_SO = 0x0E
+_SI = 0x0F
 _BASIC_CONTROLS = frozenset((_BS, _HT, _LF, _VT, _FF, _CR))
 _DEC_SPECIAL_BYTES = (
     b"\x08",
@@ -81,10 +181,14 @@ _DEC_SPECIAL_BYTES = (
     b"\x0b",
     b"\x0c",
     b"\x0d",
+    b"\x0e",
+    b"\x0f",
     b"\x1b",
     b"\x85",
     b"\x88",
     b"\x8a",
+    b"\x8e",
+    b"\x8f",
     b"\x90",
     b"\x98",
     b"\x9b",
@@ -198,8 +302,15 @@ class _PrinterLanguageEngine:
         self._control_representation = False
         self._line_feed_new_line = False
         self._position_unit_mode = False
+        self._rendition = PrinterRendition()
+        self._characters = PrinterCharacterState()
         self._dec_state = "ground"
         self._dec_string_is_osc = False
+        self._dec_string_kind = 0
+        self._dec_string = bytearray()
+        self._scs_gset = 0
+        self._scs_size = 94
+        self._scs_designator = bytearray()
         self._csi = bytearray()
         self._crm_pending = bytearray()
         self._ibm_pending = bytearray()
@@ -216,6 +327,8 @@ class _PrinterLanguageEngine:
             control_representation=self._control_representation,
             line_feed_new_line=self._line_feed_new_line,
             position_unit_mode=self._position_unit_mode,
+            rendition=self._rendition,
+            characters=self._characters,
         )
 
     def reset(self) -> None:
@@ -225,6 +338,9 @@ class _PrinterLanguageEngine:
         self._emit_reset()
         self._dec_state = "ground"
         self._dec_string_is_osc = False
+        self._dec_string_kind = 0
+        self._dec_string.clear()
+        self._scs_designator.clear()
         self._csi.clear()
         self._crm_pending.clear()
         self._ibm_pending.clear()
@@ -251,6 +367,10 @@ class _PrinterLanguageEngine:
 
             if byte in _BASIC_CONTROLS:
                 self._emit_control(byte)
+            elif byte == _SO:
+                self._invoke_gl(1)
+            elif byte == _SI:
+                self._invoke_gl(0)
             elif byte == _NEL:
                 self._csi.clear()
                 self._dec_state = "ground"
@@ -263,13 +383,17 @@ class _PrinterLanguageEngine:
                     if byte == _HTS
                     else _PrinterLayoutCommand.SET_VERTICAL_TAB_HERE
                 )
+            elif byte in (_SS2, _SS3):
+                self._csi.clear()
+                self._dec_state = "ground"
+                self._single_shift(2 if byte == _SS2 else 3)
             elif self._dec_state == "ground":
                 if byte == _ESC:
                     self._dec_state = "escape"
                 elif byte == _C1_CSI:
                     self._begin_csi()
                 elif byte in _C1_STRINGS:
-                    self._begin_string(is_osc=byte == 0x9D)
+                    self._begin_string(byte)
                 else:
                     # Most printer output is ordinary text. Scan it in C rather
                     # than returning to Python for every byte.
@@ -285,7 +409,13 @@ class _PrinterLanguageEngine:
                 if byte == ord("["):
                     self._begin_csi()
                 elif byte in (ord("P"), ord("X"), ord("]"), ord("^"), ord("_")):
-                    self._begin_string(is_osc=byte == ord("]"))
+                    self._begin_string(byte + 0x40)
+                elif byte in (ord("("), ord(")"), ord("*"), ord("+")):
+                    self._begin_scs(byte - ord("("), size=94)
+                elif byte in (ord("-"), ord("."), ord("/")):
+                    self._begin_scs(byte - ord("-") + 1, size=96)
+                elif byte == ord(" "):
+                    self._dec_state = "escape_space"
                 elif byte == ord("%"):
                     self._dec_state = "percent"
                 elif byte == ord("E"):
@@ -303,6 +433,15 @@ class _PrinterLanguageEngine:
                 elif byte == ord("4"):
                     self._emit_layout(_PrinterLayoutCommand.CLEAR_VERTICAL_TABS)
                     self._dec_state = "ground"
+                elif byte in (ord("N"), ord("O")):
+                    self._single_shift(2 if byte == ord("N") else 3)
+                    self._dec_state = "ground"
+                elif byte in (ord("n"), ord("o")):
+                    self._invoke_gl(2 if byte == ord("n") else 3)
+                    self._dec_state = "ground"
+                elif byte in (ord("~"), ord("}"), ord("|")):
+                    self._invoke_gr({ord("~"): 1, ord("}"): 2, ord("|"): 3}[byte])
+                    self._dec_state = "ground"
                 elif byte == ord("c"):
                     self._reset_dec_modes()
                     self._emit_reset()
@@ -310,6 +449,30 @@ class _PrinterLanguageEngine:
                 elif byte == _ESC:
                     pass
                 else:
+                    self._dec_state = "ground"
+            elif self._dec_state == "escape_space":
+                if byte in (ord("L"), ord("M"), ord("N")):
+                    self._announce_code_extension(byte - ord("K"))
+                    self._dec_state = "ground"
+                elif byte == _ESC:
+                    self._dec_state = "escape"
+                else:
+                    self._dec_state = "ground"
+            elif self._dec_state == "scs":
+                if 0x20 <= byte <= 0x2F and len(self._scs_designator) < 8:
+                    self._scs_designator.append(byte)
+                elif 0x30 <= byte <= 0x7E:
+                    self._scs_designator.append(byte)
+                    self._designate_character_set()
+                    self._dec_state = "ground"
+                elif byte == _ESC:
+                    self._scs_designator.clear()
+                    self._dec_state = "escape"
+                elif byte in (_CAN, _SUB):
+                    self._scs_designator.clear()
+                    self._dec_state = "ground"
+                else:
+                    self._scs_designator.clear()
                     self._dec_state = "ground"
             elif self._dec_state == "percent":
                 if byte == ord("=") and self._supports_proprinter_switching:
@@ -323,12 +486,14 @@ class _PrinterLanguageEngine:
                 self._consume_csi(byte)
             elif self._dec_state == "string":
                 if byte == _C1_ST or byte in (_CAN, _SUB) or (byte == 0x07 and self._dec_string_is_osc):
-                    self._dec_state = "ground"
+                    self._end_string(dispatch=byte not in (_CAN, _SUB))
                 elif byte == _ESC:
                     self._dec_state = "string_escape"
+                elif self._dec_string_kind == 0x90 and len(self._dec_string) < _MAX_CSI:
+                    self._dec_string.append(byte)
             else:  # string_escape
                 if byte in (ord("\\"), _C1_ST, _CAN, _SUB) or byte == 0x07 and self._dec_string_is_osc:
-                    self._dec_state = "ground"
+                    self._end_string(dispatch=byte not in (_CAN, _SUB))
                 elif byte != _ESC:
                     self._dec_state = "string"
         return offset
@@ -338,11 +503,25 @@ class _PrinterLanguageEngine:
         self._dec_state = "csi"
 
     def _emit_printable(self, data: bytes) -> None:
-        if self._on_printable is None:
-            return
         printable = data.translate(None, _NON_PRINTABLE_BYTES)
-        if printable:
-            self._on_printable(printable)
+        if not printable:
+            return
+        shifted_index = self._single_shifted_index(printable)
+        if shifted_index is None:
+            if self._on_printable is not None:
+                self._on_printable(printable)
+            return
+        pending = self._characters
+        if shifted_index:
+            self._characters = replace(pending, single_shift=None)
+            if self._on_printable is not None:
+                self._on_printable(printable[:shifted_index])
+            self._characters = pending
+        if self._on_printable is not None:
+            self._on_printable(printable[shifted_index : shifted_index + 1])
+        self._characters = replace(pending, single_shift=None)
+        if shifted_index + 1 < len(printable) and self._on_printable is not None:
+            self._on_printable(printable[shifted_index + 1 :])
 
     def _emit_control(self, byte: int) -> None:
         if self._on_control is not None:
@@ -356,9 +535,80 @@ class _PrinterLanguageEngine:
         if self._on_reset is not None:
             self._on_reset()
 
-    def _begin_string(self, *, is_osc: bool) -> None:
-        self._dec_string_is_osc = is_osc
+    def _begin_string(self, kind: int) -> None:
+        self._dec_string_kind = kind
+        self._dec_string_is_osc = kind == 0x9D
+        self._dec_string.clear()
         self._dec_state = "string"
+
+    def _end_string(self, *, dispatch: bool) -> None:
+        if dispatch and self._dec_string_kind == 0x90:
+            self._dispatch_dcs(bytes(self._dec_string))
+        self._dec_string.clear()
+        self._dec_string_kind = 0
+        self._dec_state = "ground"
+
+    def _begin_scs(self, gset: int, *, size: int) -> None:
+        self._scs_gset = gset
+        self._scs_size = size
+        self._scs_designator.clear()
+        self._dec_state = "scs"
+
+    def _designate_character_set(self) -> None:
+        designator = self._scs_designator.decode("ascii")
+        self._scs_designator.clear()
+        g_sets = list(self._characters.g_sets)
+        g_sets[self._scs_gset] = PrinterCharacterSet(self._scs_size, designator)
+        self._characters = replace(self._characters, g_sets=tuple(g_sets))
+
+    def _invoke_gl(self, gset: int) -> None:
+        self._characters = replace(self._characters, gl=gset)
+
+    def _invoke_gr(self, gset: int) -> None:
+        self._characters = replace(self._characters, gr=gset)
+
+    def _single_shift(self, gset: int) -> None:
+        self._characters = replace(self._characters, single_shift=gset)
+
+    def _single_shifted_index(self, data: bytes) -> int | None:
+        gset = self._characters.single_shift
+        if gset is None:
+            return None
+        is_96 = self._characters.g_sets[gset].size == 96
+        return next(
+            (
+                index
+                for index, byte in enumerate(data)
+                if byte >= 0xA0 or 0x21 <= byte <= 0x7E or is_96 and byte == 0x20
+            ),
+            None,
+        )
+
+    def _announce_code_extension(self, level: int) -> None:
+        g_sets = list(self._characters.g_sets)
+        g_sets[0] = _ASCII
+        gl = 0
+        gr = self._characters.gr
+        if level in (1, 2):
+            g_sets[1] = _ISO_LATIN_1
+            gr = 1
+        self._characters = replace(self._characters, g_sets=tuple(g_sets), gl=gl, gr=gr, single_shift=None)
+
+    def _dispatch_dcs(self, data: bytes) -> None:
+        marker = data.find(b"!u")
+        if marker == -1:
+            return
+        parameters = self._numeric_parameters(data[:marker])
+        designator = data[marker + 2 :]
+        if parameters is None or len(parameters) > 1 or not designator or not designator.isascii():
+            return
+        size_parameter = parameters[0] if parameters else 0
+        if size_parameter not in (0, 1):
+            return
+        self._characters = replace(
+            self._characters,
+            user_preference=PrinterCharacterSet(94 if size_parameter == 0 else 96, designator.decode("ascii")),
+        )
 
     def _consume_csi(self, byte: int) -> None:
         if byte in (_CAN, _SUB):
@@ -411,6 +661,19 @@ class _PrinterLanguageEngine:
                     return
             return
 
+        if final == ord("m"):
+            private = body.startswith(b"?")
+            parameters = self._numeric_parameters_preserving_zeros(body[1:] if private else body)
+            if parameters is not None:
+                self._apply_sgr(parameters or [0], private=private)
+            return
+
+        if final == ord("z") and body.endswith(b'"'):
+            parameters = self._numeric_parameters(body[:-1])
+            if parameters is not None:
+                self._apply_density(parameters[0] if parameters else 0)
+            return
+
         if final == ord("p") and body.endswith(b"!"):
             parameters = self._numeric_parameters(body[:-1])
             if parameters is not None:
@@ -449,6 +712,75 @@ class _PrinterLanguageEngine:
         elif final == ord("g"):
             self._emit_layout(_PrinterLayoutCommand.CLEAR_TABS, *(parameters or [0]))
 
+    def _apply_sgr(self, parameters: list[int], *, private: bool) -> None:
+        rendition = self._rendition
+        for parameter in parameters:
+            if private:
+                if parameter == 0:
+                    rendition = replace(
+                        rendition,
+                        overline=False,
+                        script=PrinterScript.NORMAL,
+                    )
+                elif parameter == 4:
+                    rendition = replace(rendition, script=PrinterScript.SUPERSCRIPT)
+                elif parameter == 5:
+                    rendition = replace(rendition, script=PrinterScript.SUBSCRIPT)
+                elif parameter == 6:
+                    rendition = replace(rendition, overline=True)
+                elif parameter == 24:
+                    rendition = replace(rendition, script=PrinterScript.NORMAL)
+                elif parameter == 26:
+                    rendition = replace(rendition, overline=False)
+                continue
+
+            if parameter == 0:
+                rendition = PrinterRendition(
+                    typestyle=rendition.typestyle,
+                    density=rendition.density,
+                )
+            elif parameter == 1:
+                rendition = replace(rendition, bold=True)
+            elif parameter == 3:
+                rendition = replace(rendition, slanted=True)
+            elif parameter == 4:
+                rendition = replace(rendition, underline=PrinterUnderline.SINGLE)
+            elif parameter == 9:
+                rendition = replace(rendition, strikethrough=True)
+            elif 10 <= parameter <= 19:
+                rendition = replace(rendition, typestyle=parameter)
+            elif parameter == 21:
+                rendition = replace(rendition, underline=PrinterUnderline.DOUBLE)
+            elif parameter == 22:
+                rendition = replace(rendition, bold=False)
+            elif parameter == 23:
+                rendition = replace(rendition, slanted=False)
+            elif parameter == 24:
+                rendition = replace(rendition, underline=PrinterUnderline.NONE)
+            elif parameter == 29:
+                rendition = replace(rendition, strikethrough=False)
+            elif 30 <= parameter <= 37:
+                rendition = replace(rendition, color=tuple(PrinterColor)[parameter - 30])
+            elif parameter == 39:
+                rendition = replace(rendition, color=PrinterColor.BLACK)
+            elif parameter == 53:
+                rendition = replace(rendition, overline=True)
+            elif parameter == 55:
+                rendition = replace(rendition, overline=False)
+        self._rendition = rendition
+
+    def _apply_density(self, parameter: int) -> None:
+        densities = {
+            0: PrinterDensity.DRAFT,
+            1: PrinterDensity.DRAFT,
+            2: PrinterDensity.LETTER_QUALITY,
+            3: PrinterDensity.MEMO,
+            4: PrinterDensity.NEAR_LETTER_QUALITY,
+        }
+        density = densities.get(parameter)
+        if density is not None:
+            self._rendition = replace(self._rendition, density=density)
+
     @staticmethod
     def _numeric_parameters(data: bytes) -> list[int] | None:
         if any(byte not in b"0123456789;" for byte in data):
@@ -474,6 +806,8 @@ class _PrinterLanguageEngine:
         self._control_representation = False
         self._line_feed_new_line = False
         self._position_unit_mode = False
+        self._rendition = PrinterRendition()
+        self._characters = PrinterCharacterState()
 
     def _feed_crm(self, data: bytes, offset: int) -> int:
         patterns = (b"\x1b[3l", b"\x9b3l")

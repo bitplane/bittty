@@ -6,9 +6,16 @@ import pytest
 from bittty import (
     Board,
     PrintDirection,
+    PrinterCharacterSet,
+    PrinterCharacterState,
+    PrinterColor,
     PrinterConfiguration,
+    PrinterDensity,
     PrinterLanguage,
+    PrinterRendition,
+    PrinterScript,
     PrinterType,
+    PrinterUnderline,
     VirtualPrinter,
     VirtualPrinterState,
 )
@@ -115,6 +122,204 @@ def test_standard_printer_modes_accept_7_bit_and_c1_csi(mode, attribute, introdu
     assert getattr(printer.state, attribute) is False
 
 
+def test_printer_character_and_rendition_defaults_are_explicit_and_immutable():
+    printer = VirtualPrinter()
+
+    assert printer.state.rendition == PrinterRendition()
+    assert printer.state.characters == PrinterCharacterState()
+    assert printer.state.characters.g_sets == (
+        PrinterCharacterSet(94, "B"),
+        PrinterCharacterSet(94, "B"),
+        PrinterCharacterSet(94, "<"),
+        PrinterCharacterSet(94, "<"),
+    )
+    assert printer.state.characters.user_preference == PrinterCharacterSet(94, "%5")
+    with pytest.raises(ValueError):
+        PrinterCharacterSet(95, "B")
+    with pytest.raises(ValueError):
+        PrinterCharacterSet(94, "")
+
+
+def test_sgr_retains_standard_attributes_colour_and_typestyle():
+    printer = VirtualPrinter()
+    printer.write_bytes(b"\x1b[1;3;4;9;12;31;53m")
+
+    assert printer.state.rendition == PrinterRendition(
+        typestyle=12,
+        bold=True,
+        slanted=True,
+        underline=PrinterUnderline.SINGLE,
+        strikethrough=True,
+        overline=True,
+        color=PrinterColor.RED,
+    )
+
+    printer.write_bytes(b"\x1b[21;22;23;29;39;55m")
+    assert printer.state.rendition == PrinterRendition(
+        typestyle=12,
+        underline=PrinterUnderline.DOUBLE,
+    )
+
+    printer.write_bytes(b"\x1b[m")
+    assert printer.state.rendition == PrinterRendition(typestyle=12)
+
+
+def test_private_sgr_retains_script_and_deprecated_overline_attributes():
+    printer = VirtualPrinter()
+    printer.write_bytes(b"\x1b[?4;6m")
+    assert printer.state.rendition.script is PrinterScript.SUPERSCRIPT
+    assert printer.state.rendition.overline is True
+
+    printer.write_bytes(b"\x1b[?5m")
+    assert printer.state.rendition.script is PrinterScript.SUBSCRIPT
+    printer.write_bytes(b"\x1b[?24;26m")
+    assert printer.state.rendition.script is PrinterScript.NORMAL
+    assert printer.state.rendition.overline is False
+
+
+@pytest.mark.parametrize(
+    "parameter, density",
+    (
+        (0, PrinterDensity.DRAFT),
+        (1, PrinterDensity.DRAFT),
+        (2, PrinterDensity.LETTER_QUALITY),
+        (3, PrinterDensity.MEMO),
+        (4, PrinterDensity.NEAR_LETTER_QUALITY),
+    ),
+)
+def test_decden_selects_font_density_and_sgr_reset_preserves_it(parameter, density):
+    printer = VirtualPrinter()
+    printer.write_bytes(f'\x1b[{parameter}"z'.encode())
+    assert printer.state.rendition.density is density
+
+    printer.write_bytes(b"\x1b[1;0m")
+    assert printer.state.rendition == PrinterRendition(density=density)
+
+
+def test_sgr_changes_split_page_runs_and_capture_their_rendition():
+    printer = VirtualPrinter()
+    printer.write_bytes(b"A\x1b[1;34mB\x1b[22;39mC")
+
+    first, second, third = printer.current_page.items
+    assert first.state.rendition == PrinterRendition()
+    assert second.state.rendition == PrinterRendition(bold=True, color=PrinterColor.BLUE)
+    assert third.state.rendition == PrinterRendition()
+
+
+def test_scs_designates_94_and_96_character_sets_in_all_four_g_sets():
+    printer = VirtualPrinter()
+    printer.write_bytes(b"\x1b(0\x1b)A\x1b*%5\x1b-A")
+
+    assert printer.state.characters.g_sets == (
+        PrinterCharacterSet(94, "0"),
+        PrinterCharacterSet(96, "A"),
+        PrinterCharacterSet(94, "%5"),
+        PrinterCharacterSet(94, "<"),
+    )
+
+
+def test_locking_shifts_invoke_g_sets_into_gl_and_gr():
+    printer = VirtualPrinter()
+
+    for sequence, gl, gr in (
+        (b"\x0e", 1, 2),
+        (b"\x0f", 0, 2),
+        (b"\x1bn", 2, 2),
+        (b"\x1bo", 3, 2),
+        (b"\x1b~", 3, 1),
+        (b"\x1b}", 3, 2),
+        (b"\x1b|", 3, 3),
+    ):
+        printer.write_bytes(sequence)
+        assert (printer.state.characters.gl, printer.state.characters.gr) == (gl, gr)
+
+
+@pytest.mark.parametrize("shift", (b"\x1bN", b"\x8e"))
+def test_single_shift_is_captured_by_one_print_run_then_cleared(shift):
+    printer = VirtualPrinter()
+    printer.write_bytes(b"\x1b*0" + shift + b"qA")
+
+    shifted, normal = printer.current_page.items
+    assert shifted.data == b"q"
+    assert shifted.state.characters.single_shift == 2
+    assert normal.data == b"A"
+    assert normal.state.characters.single_shift is None
+    assert printer.state.characters.single_shift is None
+
+
+def test_single_shift_survives_controls_and_sequences_until_printable_data():
+    printer = VirtualPrinter()
+    printer.write_bytes(b"\x1b*0\x1bN\n\x1b[1mq")
+
+    run = printer.current_page.items[0]
+    assert run.bounds.top == 3600
+    assert run.state.characters.single_shift == 2
+    assert run.state.rendition.bold is True
+    assert printer.state.characters.single_shift is None
+
+
+def test_single_shift_skips_space_for_a_94_character_set():
+    printer = VirtualPrinter()
+    printer.write_bytes(b"\x1b*0\x1bN qA")
+
+    space, shifted, normal = printer.current_page.items
+    assert space.data == b" "
+    assert space.state.characters.single_shift is None
+    assert shifted.data == b"q"
+    assert shifted.state.characters.single_shift == 2
+    assert normal.state.characters.single_shift is None
+
+
+def test_single_shift_consumes_space_for_a_96_character_set():
+    printer = VirtualPrinter()
+    printer.write_bytes(b"\x1b.A\x1bN A")
+
+    shifted, normal = printer.current_page.items
+    assert shifted.data == b" "
+    assert shifted.state.characters.single_shift == 2
+    assert normal.data == b"A"
+    assert normal.state.characters.single_shift is None
+
+
+@pytest.mark.parametrize("level", (b"L", b"M"))
+def test_ascef_levels_one_and_two_select_ascii_and_iso_latin_1(level):
+    printer = VirtualPrinter()
+    printer.write_bytes(b"\x1b " + level)
+
+    assert printer.state.characters.g_sets[:2] == (
+        PrinterCharacterSet(94, "B"),
+        PrinterCharacterSet(96, "A"),
+    )
+    assert (printer.state.characters.gl, printer.state.characters.gr) == (0, 1)
+
+
+@pytest.mark.parametrize(
+    "sequence, expected",
+    (
+        (b"\x1bP0!u>\x1b\\", PrinterCharacterSet(94, ">")),
+        (b"\x901!uA\x9c", PrinterCharacterSet(96, "A")),
+    ),
+)
+def test_decaupss_assigns_the_user_preference_character_set(sequence, expected):
+    printer = VirtualPrinter()
+    printer.write_bytes(sequence)
+
+    assert printer.state.characters.user_preference == expected
+
+
+def test_character_and_rendition_commands_survive_every_stream_boundary():
+    payload = b"\x1b(0\x1b*%5\x1bn\x1bN\x1b[1;4;13;35mA\x1bP1!uA\x1b\\"
+    whole = VirtualPrinter()
+    whole.write_bytes(payload)
+
+    for boundary in range(len(payload) + 1):
+        streamed = VirtualPrinter()
+        streamed.write_bytes(payload[:boundary])
+        streamed.write_bytes(payload[boundary:])
+        assert streamed.current_page == whole.current_page
+        assert streamed.state == whole.state
+
+
 @pytest.mark.parametrize("reset", (b"\x1b[3l", b"\x9b3l"))
 def test_crm_shields_other_commands_until_its_own_reset(reset):
     printer = VirtualPrinter(PrinterType.DEC_AND_IBM)
@@ -205,7 +410,7 @@ def test_ibm_recognises_only_exact_7_bit_exit_sequences():
 def test_decstr_ris_and_public_reset_have_distinct_reset_scopes():
     printer = VirtualPrinter(PrinterType.DEC_AND_IBM)
     for reset in (b"\x1b[!p", b"\x1bc"):
-        printer.write_bytes(b"\x1b[?7l\x1b[20h\x1b[?27;29;40;41h" + reset)
+        printer.write_bytes(b"\x1b[?7l\x1b[20h\x1b[?27;29;40;41h\x1b[1;14;31m\x1b(0" + reset)
         assert printer.state == VirtualPrinterState(
             PrinterLanguage.DEC_PPL,
             PrintDirection.BIDIRECTIONAL,
@@ -226,6 +431,8 @@ def test_decstr_ris_and_public_reset_have_distinct_reset_scopes():
     printer.write_bytes(b"\x1b[3h")
     printer.reset()
     assert printer.state.control_representation is False
+    assert printer.state.rendition == PrinterRendition()
+    assert printer.state.characters == PrinterCharacterState()
 
 
 def test_dec_modes_survive_protocol_switching_and_ibm_ignores_dec_mode_commands():

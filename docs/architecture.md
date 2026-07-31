@@ -65,8 +65,9 @@ Ports are full-duplex jacks on the board; connections are the cables that plug i
   DEC PPL/IBM language and basic DEC PPL mode state. Its physical page store exposes
   immutable display-list snapshots while retaining mutable page ownership inside the printer;
   printable DEC PPL bytes are assembled into positioned runs without per-byte parser dispatch,
-  while semantic pitch, page, margin, positioning, tab, format-effector, and CRM events drive
-  page layout.
+  while retained rendition and G-set state plus semantic pitch, page, margin, positioning, tab,
+  format-effector, and CRM events drive page layout. Lined HPA/HPR movement is retained as a
+  rendition span rather than flattened into pixels.
 - **DisplayPort** carries typed events both ways: present events down to the chrome,
   input/focus/caps up from it. Serialize its two event streams and the chrome can live in
   another process or another machine; the board never notices. The name is the

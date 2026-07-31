@@ -40,4 +40,4 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
 
 - Resizing is not atomic with concurrent PTY output.
 - There is no scrollback buffer or reflow on resize.
-- Printer pages cover DEC PPL text layout, pitch, margins, positioning, tabs, wrapping, forms, and CRM tokens; graphics, SSU-selected point units, and mechanical timing remain unsupported.
+- Printer pages cover DEC PPL text layout, character sets, rendition, positioning, tabs, wrapping, forms, and CRM tokens; graphics, font-file metrics, SSU-selected units, and mechanical timing remain unsupported.

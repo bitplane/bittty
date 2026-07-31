@@ -21,6 +21,7 @@ from .printer_pages import (
     PrinterPage,
     PrinterPageGeometry,
     PrinterRect,
+    PrinterRenditionSpan,
     PrinterTextRun,
     _PrinterPageStore,
 )
@@ -579,9 +580,9 @@ class VirtualPrinter(MemoryPrinter):
         target = self._parameter_position(max(1, parameter), horizontal=True)
         target = max(target, self._left_margin)
         if target > self._right_margin:
-            self._active_x = self._right_margin
+            target = self._right_margin
             self._right_margin_flag = True
-            return
+        self._record_lined_motion(self._active_x, target)
         self._active_x = target
         if target < self._right_margin:
             self._right_margin_flag = False
@@ -591,10 +592,26 @@ class VirtualPrinter(MemoryPrinter):
             return
         target = self._active_x + self._parameter_distance(max(1, parameter), horizontal=True)
         if target > self._right_margin:
-            self._active_x = self._right_margin
+            target = self._right_margin
             self._right_margin_flag = True
-        else:
-            self._active_x = target
+        self._record_lined_motion(self._active_x, target)
+        self._active_x = target
+
+    def _record_lined_motion(self, start: int, end: int) -> None:
+        rendition = self.state.rendition
+        if start == end or not rendition.has_lining:
+            return
+        self._page_store.append(
+            PrinterRenditionSpan(
+                PrinterRect(
+                    min(start, end),
+                    self._active_y,
+                    max(start, end),
+                    self._active_y + self._vertical_advance,
+                ),
+                self.state,
+            )
+        )
 
     def _vertical_absolute(self, parameter: int) -> None:
         if self._no_forms:

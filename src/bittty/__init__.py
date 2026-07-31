@@ -24,7 +24,18 @@ from .devices.board import Board
 from .model import BITTTY, LINUX, VT100, VT220, VT510, XTERM, Model, PrinterCapabilities
 from .operations import Operation, OperationSink
 from .parser import Parser
-from .printer_languages import PrintDirection, PrinterLanguage, VirtualPrinterState
+from .printer_languages import (
+    PrintDirection,
+    PrinterCharacterSet,
+    PrinterCharacterState,
+    PrinterColor,
+    PrinterDensity,
+    PrinterLanguage,
+    PrinterRendition,
+    PrinterScript,
+    PrinterUnderline,
+    VirtualPrinterState,
+)
 from .printer_pages import (
     LETTER_PAGE_GEOMETRY,
     PRINT_UNITS_PER_INCH,
@@ -33,6 +44,7 @@ from .printer_pages import (
     PrinterPageGeometry,
     PrinterPageItem,
     PrinterRect,
+    PrinterRenditionSpan,
     PrinterTextRun,
 )
 from .printers import (
@@ -84,9 +96,13 @@ __all__ = [
     "PrintDirection",
     "PrintedDataType",
     "PrinterCapabilities",
+    "PrinterCharacterSet",
+    "PrinterCharacterState",
+    "PrinterColor",
     "PrinterConfiguration",
     "PrinterConnection",
     "PrinterControlToken",
+    "PrinterDensity",
     "PrinterFlowControl",
     "PrinterFlowThreshold",
     "PrinterLanguage",
@@ -97,9 +113,13 @@ __all__ = [
     "PrinterPort",
     "PrinterPortSelection",
     "PrinterRect",
+    "PrinterRendition",
+    "PrinterRenditionSpan",
+    "PrinterScript",
     "PrinterStatus",
     "PrinterTextRun",
     "PrinterType",
+    "PrinterUnderline",
     "ProPrinterCodePage",
     "StreamPrinter",
     "TerminalCaps",
