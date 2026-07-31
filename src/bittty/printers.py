@@ -268,6 +268,9 @@ class VirtualPrinter(MemoryPrinter):
         self._bottom_margin = page_geometry.printable_area.bottom
         self._right_margin_flag = False
         self._horizontal_advance = PRINT_UNITS_PER_INCH // 10
+        self._ibm_base_horizontal_advance = self._horizontal_advance
+        self._ibm_double_width = False
+        self._dec_layout_snapshot: tuple[object, ...] | None = None
         self._vertical_advance = PRINT_UNITS_PER_INCH // 6
         self._logical_page_bottom = page_geometry.printable_area.bottom
         self._no_forms = False
@@ -286,6 +289,8 @@ class VirtualPrinter(MemoryPrinter):
         initial_language = (
             PrinterLanguage.IBM_PROPRINTER if self._device_type is PrinterType.PROPRINTER else PrinterLanguage.DEC_PPL
         )
+        if initial_language is PrinterLanguage.IBM_PROPRINTER:
+            self._vertical_tabs.clear()
         self._language_engine = _PrinterLanguageEngine(
             initial_language,
             supports_proprinter_switching=self._device_type is PrinterType.DEC_AND_IBM,
@@ -336,6 +341,11 @@ class VirtualPrinter(MemoryPrinter):
     def take_completed_pages(self) -> tuple[PrinterPage, ...]:
         """Return completed pages and release the printer's references to them."""
         return self._page_store.take_completed_pages()
+
+    def configure(self, configuration: PrinterConfiguration) -> None:
+        """Apply adapter configuration without changing the fixed printer identity."""
+        super().configure(configuration)
+        self._language_engine.set_ibm_code_page(configuration.code_page)
 
     def _record_printable(self, data: bytes) -> None:
         if data.isascii():
@@ -464,7 +474,12 @@ class VirtualPrinter(MemoryPrinter):
                 for stop in self._horizontal_tabs
                 if self._active_x < stop < self._right_margin and stop >= self._left_margin
             )
-            target = min(targets, default=self._right_margin)
+            target = min(
+                targets,
+                default=self._active_x if self.state.language is PrinterLanguage.IBM_PROPRINTER else self._right_margin,
+            )
+            if target == self._active_x:
+                return
             if target >= self._right_margin:
                 self._active_x = self._right_margin
                 self._right_margin_flag = True
@@ -482,9 +497,18 @@ class VirtualPrinter(MemoryPrinter):
                     for stop in self._vertical_tabs
                     if self._active_y < stop <= self._last_vertical_position() and stop >= self._top_margin
                 )
-                self._active_y = min(targets, default=self._last_vertical_position())
+                target = min(targets, default=None)
+                if target is None and self.state.language is PrinterLanguage.IBM_PROPRINTER:
+                    self._advance_line(home=self.state.carriage_return_new_line)
+                elif target is not None:
+                    self._active_y = target
+                else:
+                    self._active_y = self._last_vertical_position()
         elif byte == 0x0C:  # FF
             self._form_feed()
+            if self.state.language is PrinterLanguage.IBM_PROPRINTER:
+                self._active_x = self._left_margin
+                self._right_margin_flag = False
         elif byte == 0x0D:  # CR
             self._active_x = self._left_margin
             self._right_margin_flag = False
@@ -528,6 +552,30 @@ class VirtualPrinter(MemoryPrinter):
             self._horizontal_tabs.clear()
         elif command is _PrinterLayoutCommand.CLEAR_VERTICAL_TABS:
             self._vertical_tabs.clear()
+        elif command is _PrinterLayoutCommand.IBM_HORIZONTAL_PITCH:
+            self._set_ibm_horizontal_pitch(parameter)
+        elif command is _PrinterLayoutCommand.IBM_LINE_SPACING:
+            self._set_ibm_line_spacing(parameter)
+        elif command is _PrinterLayoutCommand.IBM_VERTICAL_MOTION:
+            self._ibm_vertical_motion(parameter)
+        elif command is _PrinterLayoutCommand.IBM_DOUBLE_WIDTH:
+            self._set_ibm_double_width(bool(parameter))
+        elif command is _PrinterLayoutCommand.IBM_REPLACE_HORIZONTAL_TABS:
+            self._horizontal_tabs.clear()
+            self._set_tab_parameters(self._horizontal_tabs, parameters, horizontal=True)
+        elif command is _PrinterLayoutCommand.IBM_REPLACE_VERTICAL_TABS:
+            self._vertical_tabs.clear()
+            self._set_tab_parameters(self._vertical_tabs, parameters, horizontal=False)
+        elif command is _PrinterLayoutCommand.IBM_RESET_TABS:
+            self._reset_ibm_tabs()
+        elif command is _PrinterLayoutCommand.IBM_FORM_LENGTH_LINES:
+            self._set_page_length(parameter)
+        elif command is _PrinterLayoutCommand.IBM_FORM_LENGTH_INCHES:
+            self._set_ibm_form_length_inches(parameter)
+        elif command is _PrinterLayoutCommand.IBM_LANGUAGE_ENTER:
+            self._save_dec_layout()
+        elif command is _PrinterLayoutCommand.IBM_LANGUAGE_LEAVE:
+            self._restore_dec_layout()
 
     def _record_report(self, command: _PrinterReportCommand) -> None:
         if command is _PrinterReportCommand.PRIMARY_ATTRIBUTES:
@@ -588,6 +636,9 @@ class VirtualPrinter(MemoryPrinter):
         self._bottom_margin = area.bottom
         self._right_margin_flag = False
         self._horizontal_advance = PRINT_UNITS_PER_INCH // 10
+        self._ibm_base_horizontal_advance = self._horizontal_advance
+        self._ibm_double_width = False
+        self._dec_layout_snapshot = None
         self._vertical_advance = PRINT_UNITS_PER_INCH // 6
         self._logical_page_bottom = area.bottom
         self._no_forms = False
@@ -597,6 +648,8 @@ class VirtualPrinter(MemoryPrinter):
             self._horizontal_advance,
             self._vertical_advance,
         )
+        if self.state.language is PrinterLanguage.IBM_PROPRINTER:
+            self._vertical_tabs.clear()
 
     @staticmethod
     def _initial_tab_tables(
@@ -641,6 +694,114 @@ class VirtualPrinter(MemoryPrinter):
             area.left + (stop - area.left) * new_advance // old_advance for stop in self._horizontal_tabs
         }
         self._active_x = self._grid_ceiling(self._active_x, area.left, new_advance)
+
+    def _set_ibm_horizontal_pitch(self, tenths_cpi: int) -> None:
+        if tenths_cpi <= 0:
+            return
+        self._ibm_base_horizontal_advance = round(PRINT_UNITS_PER_INCH * 10 / tenths_cpi)
+        self._apply_ibm_horizontal_advance()
+
+    def _set_ibm_double_width(self, enabled: bool) -> None:
+        if self._ibm_double_width == enabled:
+            return
+        self._ibm_double_width = enabled
+        self._apply_ibm_horizontal_advance()
+
+    def _apply_ibm_horizontal_advance(self) -> None:
+        self._flush_pending_run()
+        self._horizontal_advance = self._ibm_base_horizontal_advance * (2 if self._ibm_double_width else 1)
+        if self._active_x > self._right_margin:
+            self._active_x = self._right_margin
+            self._right_margin_flag = True
+
+    def _set_ibm_line_spacing(self, units_216: int) -> None:
+        if units_216 <= 0:
+            return
+        self._vertical_advance = units_216 * (PRINT_UNITS_PER_INCH // 216)
+        self._vertical_grid_pending = False
+
+    def _ibm_vertical_motion(self, units_216: int) -> None:
+        if units_216 <= 0:
+            return
+        distance = units_216 * (PRINT_UNITS_PER_INCH // 216)
+        target = self._active_y + distance
+        if self._no_forms or target < self._bottom_margin:
+            self._active_y = target
+        else:
+            self._form_feed()
+
+    def _reset_ibm_tabs(self) -> None:
+        area = self.page_geometry.printable_area
+        capacity = area.width // self._horizontal_advance + 1
+        self._horizontal_tabs = {
+            area.left + (column - 1) * self._horizontal_advance for column in range(9, capacity + 1, 8)
+        }
+        self._vertical_tabs.clear()
+
+    def _set_ibm_form_length_inches(self, inches: int) -> None:
+        if inches <= 0:
+            return
+        area = self.page_geometry.printable_area
+        self._no_forms = False
+        self._logical_page_bottom = area.top + min(inches * PRINT_UNITS_PER_INCH, area.height)
+        self._top_margin = area.top
+        self._bottom_margin = self._logical_page_bottom
+
+    def _save_dec_layout(self) -> None:
+        self._dec_layout_snapshot = (
+            self._left_margin,
+            self._right_margin,
+            self._top_margin,
+            self._bottom_margin,
+            self._horizontal_advance,
+            self._vertical_advance,
+            self._logical_page_bottom,
+            self._no_forms,
+            self._vertical_grid_pending,
+            self._horizontal_tabs.copy(),
+            self._vertical_tabs.copy(),
+        )
+        area = self.page_geometry.printable_area
+        self._left_margin = area.left
+        self._right_margin = area.right
+        self._top_margin = area.top
+        self._bottom_margin = area.bottom
+        self._horizontal_advance = PRINT_UNITS_PER_INCH // 10
+        self._ibm_base_horizontal_advance = self._horizontal_advance
+        self._ibm_double_width = False
+        self._vertical_advance = PRINT_UNITS_PER_INCH // 6
+        self._logical_page_bottom = area.bottom
+        self._no_forms = False
+        self._vertical_grid_pending = False
+        self._reset_ibm_tabs()
+        self._active_x = min(max(self._active_x, self._left_margin), self._right_margin)
+        self._active_y = max(self._active_y, self._top_margin)
+        self._right_margin_flag = self._active_x >= self._right_margin
+
+    def _restore_dec_layout(self) -> None:
+        if self._dec_layout_snapshot is None:
+            return
+        (
+            self._left_margin,
+            self._right_margin,
+            self._top_margin,
+            self._bottom_margin,
+            self._horizontal_advance,
+            self._vertical_advance,
+            self._logical_page_bottom,
+            self._no_forms,
+            self._vertical_grid_pending,
+            horizontal_tabs,
+            vertical_tabs,
+        ) = self._dec_layout_snapshot
+        self._horizontal_tabs = horizontal_tabs
+        self._vertical_tabs = vertical_tabs
+        self._ibm_base_horizontal_advance = PRINT_UNITS_PER_INCH // 10
+        self._ibm_double_width = False
+        self._active_x = min(max(self._active_x, self._left_margin), self._right_margin)
+        self._active_y = max(self._active_y, self._top_margin)
+        self._right_margin_flag = self._active_x >= self._right_margin
+        self._dec_layout_snapshot = None
 
     def _set_vertical_pitch(self, parameter: int) -> None:
         advances = {

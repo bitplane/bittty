@@ -304,10 +304,93 @@ def test_mode_changes_split_runs_and_capture_the_state_at_each_write():
     assert second.bounds.left == first.bounds.right
 
 
-def test_page_assembly_is_deferred_in_ibm_mode():
+def test_ibm_ordinary_text_uses_the_page_assembly_fast_path():
     ibm = VirtualPrinter(PrinterType.PROPRINTER)
-    ibm.write_bytes(b"not interpreted yet")
-    assert ibm.current_page.items == ()
+    payload = b"ordinary ProPrinter text " * 1000
+    ibm.write_bytes(payload)
+
+    pages = (*ibm.completed_pages, ibm.current_page)
+    assert b"".join(item.data for page in pages for item in page.items) == payload
+    assert all(item.state.language is PrinterLanguage.IBM_PROPRINTER for page in pages for item in page.items)
+
+
+def test_ibm_pitch_and_double_width_change_physical_text_advance():
+    printer = VirtualPrinter(PrinterType.PROPRINTER)
+    printer.write_bytes(b"A\x1b:B\x0eC\x14D\x0fE\x12F")
+
+    items = printer.current_page.items
+    assert [item.data for item in items] == [b"A", b"B", b"C", b"D", b"E", b"F"]
+    assert [item.advance for item in items] == [2160, 1800, 3600, 1800, 1263, 2160]
+    assert items[2].state.double_width is True
+    assert items[3].state.double_width is False
+
+
+def test_ibm_line_spacing_and_variable_vertical_motion_are_exact():
+    printer = VirtualPrinter(PrinterType.PROPRINTER)
+    printer.write_bytes(b"A\x1b0\nB\x1b3\x12\nC\x1bJ\x09D")
+
+    first, second, third, fourth = printer.current_page.items
+    assert [item.data for item in (first, second, third, fourth)] == [b"A", b"B", b"C", b"D"]
+    assert [item.bounds.top for item in (first, second, third, fourth)] == [0, 2700, 4500, 5400]
+
+
+def test_ibm_tabs_replace_previous_tables_and_reset_to_power_on_defaults():
+    printer = VirtualPrinter(PrinterType.PROPRINTER)
+    printer.write_bytes(b"A\x1bD\x03\x00\r\tB\x1bD\x00\r\tC\x1bR\r\tD")
+
+    first, second, third, fourth = printer.current_page.items
+    assert first.data == b"A"
+    assert second.bounds.left == 2 * 2160
+    assert third.bounds.left == 0
+    assert fourth.bounds.left == 8 * 2160
+
+
+def test_ibm_margins_and_form_length_drive_shared_page_layout():
+    geometry = _cell_geometry(10, 6)
+    printer = VirtualPrinter(PrinterType.PROPRINTER, page_geometry=geometry)
+    printer.write_bytes(b"\x1bX\x03\x07\rA\x1bC\x02\r\nB\r\nC")
+
+    first = printer.completed_pages[0].items[0]
+    current = printer.current_page.items[0]
+    assert (first.data, first.bounds.left) == (b"A", 2 * 2160)
+    assert (current.data, current.bounds.left) == (b"C", 2 * 2160)
+
+
+def test_ibm_all_characters_payload_is_printed_but_bit_images_are_shielded():
+    printer = VirtualPrinter(PrinterType.PROPRINTER)
+    printer.write_bytes(b"A\x1b\\\x03\x00\x00\x0aB\x1bK\x04\x00\x1b\x0aXYC")
+
+    assert b"".join(item.data for item in printer.current_page.items) == b"A\x00\x0aBC"
+
+
+def test_ibm_parser_is_invariant_at_every_stream_boundary():
+    payload = b"A\x1bEbold\x1bF\x1bD\x05\x00\r\tB\x1bL\x03\x00\x1b\x0a\x00C"
+    whole = VirtualPrinter(PrinterType.PROPRINTER)
+    whole.write_bytes(payload)
+
+    for boundary in range(len(payload) + 1):
+        streamed = VirtualPrinter(PrinterType.PROPRINTER)
+        streamed.write_bytes(payload[:boundary])
+        streamed.write_bytes(payload[boundary:])
+        assert streamed.current_page == whole.current_page
+
+
+def test_unknown_ibm_bracket_command_does_not_capture_following_text():
+    printer = VirtualPrinter(PrinterType.PROPRINTER)
+    printer.write_bytes(b"\x1b[cOK")
+
+    assert printer.current_page.items[0].data == b"OK"
+
+
+def test_dual_language_layout_settings_are_isolated_but_paper_position_is_continuous():
+    printer = VirtualPrinter(PrinterType.DEC_AND_IBM)
+    printer.write_bytes(b"\x1b[2wA\x1b%=B\x0eC\x1b%@D")
+
+    dec_before, ibm_normal, ibm_wide, dec_after = printer.current_page.items
+    assert [item.advance for item in (dec_before, ibm_normal, ibm_wide, dec_after)] == [1800, 2160, 4320, 1800]
+    assert dec_after.bounds.left == ibm_wide.bounds.right
+    assert dec_after.state.language is PrinterLanguage.DEC_PPL
+    assert dec_after.state.double_width is False
 
 
 def test_printable_runs_delay_wrap_until_the_next_character():

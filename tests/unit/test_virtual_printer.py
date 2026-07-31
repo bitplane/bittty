@@ -18,6 +18,7 @@ from bittty import (
     PrinterType,
     PrinterUnderline,
     PrinterUnsolicitedReports,
+    ProPrinterCodePage,
     VirtualPrinter,
     VirtualPrinterProfile,
     VirtualPrinterState,
@@ -167,6 +168,80 @@ def test_report_sequences_remain_fragment_safe_and_ibm_language_ignores_them():
     ibm.write_bytes(b"\x1b[c\x1b[5n")
     ibm.send_bytes(b"sentinel")
     assert asyncio.run(ibm.read_bytes_async(1024)) == b"sentinel"
+
+
+def test_ibm_text_modes_are_retained_in_page_state():
+    printer = VirtualPrinter(PrinterType.PROPRINTER)
+    printer.write_bytes(b"plain\x1bE\x1bG\x1b-\x01\x1b_\x01\x1bS\x00super\x1bT\x1bF\x1bH\x1b-\x00\x1b_\x00")
+
+    plain, decorated = printer.current_page.items
+    assert plain.data == b"plain"
+    assert decorated.data == b"super"
+    assert decorated.state.rendition == PrinterRendition(
+        bold=True,
+        underline=PrinterUnderline.SINGLE,
+        overline=True,
+        script=PrinterScript.SUPERSCRIPT,
+        double_strike=True,
+    )
+    assert printer.state.rendition == PrinterRendition()
+
+
+def test_ibm_bracketed_highlight_controls_height_width_and_line_spacing():
+    printer = VirtualPrinter(PrinterType.PROPRINTER)
+    printer.write_bytes(b"A\x1b[@\x04\x00\x00\x00\x22\x02B\nC")
+
+    first, second, third = printer.current_page.items
+    assert [item.data for item in (first, second, third)] == [b"A", b"B", b"C"]
+    assert second.advance == 4320
+    assert second.state.double_height is True
+    assert second.state.double_width is True
+    assert third.bounds.top == 7200
+
+    printer.write_bytes(b"\x1b[@\x04\x00\x00\x00\x11\x01D")
+    assert printer.current_page.items[-1].state.double_height is False
+    assert printer.current_page.items[-1].state.double_width is False
+
+
+def test_ibm_configuration_selects_code_page_without_changing_identity():
+    printer = VirtualPrinter(PrinterType.PROPRINTER)
+    configuration = replace(PrinterConfiguration(), code_page=ProPrinterCodePage.MULTILINGUAL)
+    printer.configure(configuration)
+
+    assert printer.device_type is PrinterType.PROPRINTER
+    assert printer.state.ibm_code_page == 850
+
+
+def test_ibm_print_mode_direction_character_set_and_proportional_state():
+    printer = VirtualPrinter(PrinterType.PROPRINTER)
+    printer.write_bytes(b"\x1bI\x02\x1bP\x01\x1bU\x01\x1b6")
+
+    assert printer.state.rendition.density is PrinterDensity.NEAR_LETTER_QUALITY
+    assert printer.state.proportional_spacing is True
+    assert printer.state.direction is PrintDirection.UNIDIRECTIONAL
+    assert printer.state.ibm_character_set == 2
+
+    printer.write_bytes(b"\x1bP\x00\x1bU\x00\x1b7")
+    assert printer.state.proportional_spacing is False
+    assert printer.state.direction is PrintDirection.BIDIRECTIONAL
+    assert printer.state.ibm_character_set == 1
+
+
+def test_ibm_deselect_discards_input_until_dc1_and_is_observable():
+    printer = VirtualPrinter(PrinterType.PROPRINTER)
+    printer.write_bytes(b"before\x1bQ\x03discarded\x1bE\x11after")
+
+    assert b"".join(item.data for item in printer.current_page.items) == b"beforeafter"
+    assert printer.state.printer_selected is True
+    assert printer.state.rendition.bold is False
+
+
+def test_ibm_rendition_changes_do_not_leak_into_restored_dec_state():
+    printer = VirtualPrinter(PrinterType.DEC_AND_IBM)
+    printer.write_bytes(b"\x1b[1;31m\x1b%=\x1bF\x1bG\x1b-\x01\x1b%@")
+
+    assert printer.state.language is PrinterLanguage.DEC_PPL
+    assert printer.state.rendition == PrinterRendition(bold=True, color=PrinterColor.RED)
 
 
 @pytest.mark.parametrize("introducer", (b"\x1b[", b"\x9b"))

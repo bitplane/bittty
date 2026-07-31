@@ -62,14 +62,15 @@ Ports are full-duplex jacks on the board; connections are the cables that plug i
   adapter, or historical-hardware bridge. Controller mode is routed before text decoding;
   VT510-capable adapters may also accept immutable `PrinterConfiguration` snapshots.
   `VirtualPrinter` preserves the raw stream while incrementally tracking the fixed device's
-  DEC PPL/IBM language and basic DEC PPL mode state. Its physical page store exposes
+  DEC PPL or IBM PPDS language and retained text state. Its physical page store exposes
   immutable display-list snapshots while retaining mutable page ownership inside the printer;
   printable DEC PPL bytes are assembled into positioned runs without per-byte parser dispatch,
   while retained rendition and G-set state plus semantic pitch, page, margin, positioning, tab,
   format-effector, and CRM events drive page layout. Immutable model profiles provide physical
   defaults and truthful DA/DA2, status, unsolicited-status, and optional CPR behaviour over the
-  duplex port. Lined HPA/HPR movement is retained as a rendition span rather than flattened into
-  pixels.
+  duplex port. IBM text commands share the physical layout engine, while binary bit-image and
+  bracketed records are length-framed until graphical page items exist. Lined HPA/HPR movement is
+  retained as a rendition span rather than flattened into pixels.
 - **DisplayPort** carries typed events both ways: present events down to the chrome,
   input/focus/caps up from it. Serialize its two event streams and the chrome can live in
   another process or another machine; the board never notices. The name is the

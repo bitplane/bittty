@@ -72,6 +72,7 @@ class PrinterRendition:
     script: PrinterScript = PrinterScript.NORMAL
     color: PrinterColor = PrinterColor.BLACK
     density: PrinterDensity = PrinterDensity.DRAFT
+    double_strike: bool = False
 
     @property
     def has_lining(self) -> bool:
@@ -135,6 +136,17 @@ class _PrinterLayoutCommand(Enum):
     CLEAR_HORIZONTAL_TABS = "clear-horizontal-tabs"
     CLEAR_VERTICAL_TABS = "clear-vertical-tabs"
     POSITION_UNIT_MODE = "position-unit-mode"
+    IBM_HORIZONTAL_PITCH = "ibm-horizontal-pitch"
+    IBM_LINE_SPACING = "ibm-line-spacing"
+    IBM_VERTICAL_MOTION = "ibm-vertical-motion"
+    IBM_DOUBLE_WIDTH = "ibm-double-width"
+    IBM_REPLACE_HORIZONTAL_TABS = "ibm-replace-horizontal-tabs"
+    IBM_REPLACE_VERTICAL_TABS = "ibm-replace-vertical-tabs"
+    IBM_RESET_TABS = "ibm-reset-tabs"
+    IBM_FORM_LENGTH_LINES = "ibm-form-length-lines"
+    IBM_FORM_LENGTH_INCHES = "ibm-form-length-inches"
+    IBM_LANGUAGE_ENTER = "ibm-language-enter"
+    IBM_LANGUAGE_LEAVE = "ibm-language-leave"
 
 
 class _PrinterReportCommand(Enum):
@@ -164,6 +176,11 @@ class VirtualPrinterState:
     position_unit_mode: bool = False
     rendition: PrinterRendition = PrinterRendition()
     characters: PrinterCharacterState = PrinterCharacterState()
+    double_width: bool = False
+    double_height: bool = False
+    ibm_character_set: int = 1
+    ibm_code_page: int = 437
+    printer_selected: bool = True
 
 
 _ESC = 0x1B
@@ -210,6 +227,11 @@ _DEC_SPECIAL_BYTES = (
 )
 _NON_PRINTABLE_BYTES = bytes(range(0x20)) + b"\x7f" + bytes(range(0x80, 0xA0))
 _MAX_CSI = 128
+_IBM_BRACKET_LENGTH_COMMANDS = b"@AFKTZ\\ghim"
+_IBM_SPECIAL_BYTES = tuple(
+    bytes((byte,))
+    for byte in (0x00, 0x07, 0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D, 0x0E, 0x0F, 0x11, 0x12, 0x13, 0x14, 0x18, 0x1B)
+)
 _C0_NAMES = (
     "NUL",
     "SOH",
@@ -328,6 +350,17 @@ class _PrinterLanguageEngine:
         self._csi = bytearray()
         self._crm_pending = bytearray()
         self._ibm_pending = bytearray()
+        self._ibm_state = "ground"
+        self._ibm_command = 0
+        self._ibm_expected = 0
+        self._ibm_pending_line_spacing = 36
+        self._ibm_line_double_width = False
+        self._ibm_continuous_double_width = False
+        self._ibm_double_height = False
+        self._ibm_character_set = 1
+        self._ibm_code_page = 437
+        self._ibm_selected = True
+        self._saved_dec_modes: tuple[object, ...] | None = None
 
     @property
     def state(self) -> VirtualPrinterState:
@@ -343,6 +376,15 @@ class _PrinterLanguageEngine:
             position_unit_mode=self._position_unit_mode,
             rendition=self._rendition,
             characters=self._characters,
+            double_width=(
+                self._ibm_line_double_width or self._ibm_continuous_double_width
+                if self._language is PrinterLanguage.IBM_PROPRINTER
+                else False
+            ),
+            double_height=self._ibm_double_height if self._language is PrinterLanguage.IBM_PROPRINTER else False,
+            ibm_character_set=self._ibm_character_set if self._language is PrinterLanguage.IBM_PROPRINTER else 1,
+            ibm_code_page=self._ibm_code_page,
+            printer_selected=self._ibm_selected if self._language is PrinterLanguage.IBM_PROPRINTER else True,
         )
 
     def reset(self) -> None:
@@ -358,6 +400,12 @@ class _PrinterLanguageEngine:
         self._csi.clear()
         self._crm_pending.clear()
         self._ibm_pending.clear()
+        self._reset_ibm_modes()
+        self._saved_dec_modes = None
+
+    def set_ibm_code_page(self, code_page: int) -> None:
+        """Apply the code page selected by the physical printer adapter."""
+        self._ibm_code_page = int(code_page)
 
     def feed(self, data: bytes) -> None:
         """Consume one arbitrary stream fragment."""
@@ -365,8 +413,6 @@ class _PrinterLanguageEngine:
         size = len(data)
         while offset < size:
             if self._language is PrinterLanguage.IBM_PROPRINTER:
-                if not self._supports_proprinter_switching:
-                    return
                 offset = self._feed_ibm(data, offset)
             elif self._control_representation:
                 offset = self._feed_crm(data, offset)
@@ -490,7 +536,7 @@ class _PrinterLanguageEngine:
                     self._dec_state = "ground"
             elif self._dec_state == "percent":
                 if byte == ord("=") and self._supports_proprinter_switching:
-                    self._language = PrinterLanguage.IBM_PROPRINTER
+                    self._enter_ibm_language()
                     self._dec_state = "ground"
                 elif byte == _ESC:
                     self._dec_state = "escape"
@@ -536,6 +582,10 @@ class _PrinterLanguageEngine:
         self._characters = replace(pending, single_shift=None)
         if shifted_index + 1 < len(printable) and self._on_printable is not None:
             self._on_printable(printable[shifted_index + 1 :])
+
+    def _emit_verbatim_printable(self, data: bytes) -> None:
+        if data and self._on_printable is not None:
+            self._on_printable(data)
 
     def _emit_control(self, byte: int) -> None:
         if self._on_control is not None:
@@ -708,7 +758,7 @@ class _PrinterLanguageEngine:
                 elif private and parameter == 41:
                     self._direction = PrintDirection.UNIDIRECTIONAL if enabled else PrintDirection.BIDIRECTIONAL
                 elif private and parameter == 58 and enabled and self._supports_proprinter_switching:
-                    self._language = PrinterLanguage.IBM_PROPRINTER
+                    self._enter_ibm_language()
                     return
             return
 
@@ -860,6 +910,18 @@ class _PrinterLanguageEngine:
         self._rendition = PrinterRendition()
         self._characters = PrinterCharacterState()
 
+    def _reset_ibm_modes(self) -> None:
+        self._ibm_state = "ground"
+        self._ibm_command = 0
+        self._ibm_expected = 0
+        self._ibm_pending.clear()
+        self._ibm_pending_line_spacing = 36
+        self._ibm_line_double_width = False
+        self._ibm_continuous_double_width = False
+        self._ibm_double_height = False
+        self._ibm_character_set = 1
+        self._ibm_selected = True
+
     def _feed_crm(self, data: bytes, offset: int) -> int:
         patterns = (b"\x1b[3l", b"\x9b3l")
         size = len(data)
@@ -917,28 +979,344 @@ class _PrinterLanguageEngine:
         return f"<{name or f'X{byte:02X}'}>"
 
     def _feed_ibm(self, data: bytes, offset: int) -> int:
-        patterns = (b"\x1b%@", b"\x1b[?58l", b"\x1b[!p")
         size = len(data)
         while offset < size and self._language is PrinterLanguage.IBM_PROPRINTER:
-            if not self._ibm_pending:
-                found = data.find(b"\x1b", offset)
-                if found == -1:
+            if not self._ibm_selected:
+                selected = data.find(b"\x11", offset)
+                if selected == -1:
                     return size
-                offset = found
-
-            self._ibm_pending.append(data[offset])
-            offset += 1
-            pending = bytes(self._ibm_pending)
-            candidates = tuple(pattern for pattern in patterns if pattern.startswith(pending))
-            if not candidates:
-                keep_escape = pending.endswith(b"\x1b")
-                self._ibm_pending.clear()
-                if keep_escape:
-                    self._ibm_pending.append(_ESC)
+                offset = selected + 1
+                self._ibm_selected = True
                 continue
-            if pending in candidates:
-                self._ibm_pending.clear()
-                if pending != b"\x1b[!p":
-                    self._language = PrinterLanguage.DEC_PPL
-                    self._dec_state = "ground"
+
+            if self._ibm_state == "ground":
+                byte = data[offset]
+                offset += 1
+                if byte == _ESC:
+                    self._ibm_state = "escape"
+                elif byte in (0x00, 0x07, 0x13):
+                    pass
+                elif byte in (0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D):
+                    if byte in (0x0A, 0x0B, 0x0C, 0x0D):
+                        self._set_ibm_line_double_width(False)
+                    self._emit_control(byte)
+                elif byte == 0x0E:
+                    self._set_ibm_line_double_width(True)
+                elif byte == 0x0F:
+                    self._emit_layout(_PrinterLayoutCommand.IBM_HORIZONTAL_PITCH, 171)
+                elif byte == 0x11:
+                    self._ibm_selected = True
+                elif byte == 0x12:
+                    self._emit_layout(_PrinterLayoutCommand.IBM_HORIZONTAL_PITCH, 100)
+                elif byte in (0x14, 0x18):
+                    self._set_ibm_line_double_width(False)
+                else:
+                    start = offset - 1
+                    next_special = size
+                    for marker in _IBM_SPECIAL_BYTES:
+                        found = data.find(marker, offset)
+                        if found != -1 and found < next_special:
+                            next_special = found
+                    self._emit_printable(data[start:next_special])
+                    offset = next_special
+                continue
+
+            if self._ibm_state == "verbatim":
+                take = min(self._ibm_expected, size - offset)
+                self._emit_verbatim_printable(data[offset : offset + take])
+                offset += take
+                self._ibm_expected -= take
+                if self._ibm_expected == 0:
+                    self._ibm_state = "ground"
+                continue
+
+            if self._ibm_state == "discard":
+                take = min(self._ibm_expected, size - offset)
+                offset += take
+                self._ibm_expected -= take
+                if self._ibm_expected == 0:
+                    self._ibm_state = "ground"
+                continue
+
+            if self._ibm_state == "bracket-data":
+                take = min(self._ibm_expected, size - offset)
+                retained = min(take, max(0, 4 - len(self._ibm_pending)))
+                self._ibm_pending.extend(data[offset : offset + retained])
+                offset += take
+                self._ibm_expected -= take
+                if self._ibm_expected == 0:
+                    self._dispatch_ibm_highlight()
+                continue
+
+            byte = data[offset]
+            offset += 1
+            if self._ibm_state == "escape":
+                self._begin_ibm_escape(byte)
+            elif self._ibm_state == "language-switch":
+                self._ibm_state = "ground"
+                if byte == ord("@") and self._supports_proprinter_switching:
+                    self._leave_ibm_language()
+                elif byte == _ESC:
+                    self._ibm_state = "escape"
+            elif self._ibm_state == "bracket":
+                self._consume_ibm_bracket(byte)
+            elif self._ibm_state == "fixed":
+                self._ibm_pending.append(byte)
+                if len(self._ibm_pending) == self._ibm_expected:
+                    self._dispatch_ibm_fixed()
+            elif self._ibm_state == "form-length":
+                self._ibm_state = "ground"
+                self._emit_layout(_PrinterLayoutCommand.IBM_FORM_LENGTH_INCHES, byte)
+            elif self._ibm_state == "tab-list":
+                if byte == 0 or len(self._ibm_pending) >= self._ibm_expected:
+                    self._dispatch_ibm_tabs()
+                else:
+                    self._ibm_pending.append(byte)
+            elif self._ibm_state == "length-header":
+                self._ibm_pending.append(byte)
+                if len(self._ibm_pending) == 2:
+                    count = self._ibm_pending[0] + self._ibm_pending[1] * 256
+                    self._ibm_pending.clear()
+                    self._ibm_expected = count
+                    if self._ibm_command == ord("\\"):
+                        self._ibm_state = "verbatim"
+                    elif self._ibm_command == ord("@"):
+                        self._ibm_state = "bracket-data"
+                    else:
+                        self._ibm_state = "discard"
+                    if count == 0:
+                        self._ibm_state = "ground"
         return offset
+
+    def _begin_ibm_escape(self, command: int) -> None:
+        self._ibm_command = command
+        self._ibm_pending.clear()
+        if command == ord("%"):
+            self._ibm_state = "language-switch"
+        elif command == ord("["):
+            self._ibm_state = "bracket"
+        elif command in b"EFGHORT012467:":
+            self._ibm_state = "ground"
+            self._dispatch_ibm_no_parameter(command)
+        elif command == 0x0E:
+            self._ibm_state = "ground"
+            self._set_ibm_line_double_width(True)
+        elif command == 0x0F:
+            self._ibm_state = "ground"
+            self._emit_layout(_PrinterLayoutCommand.IBM_HORIZONTAL_PITCH, 171)
+        elif command in b"AIJNPQSUW35-_^" or command == ord("C"):
+            self._ibm_expected = 1
+            self._ibm_state = "fixed"
+        elif command == ord("X"):
+            self._ibm_expected = 2
+            self._ibm_state = "fixed"
+        elif command in b"BD":
+            self._ibm_expected = 64 if command == ord("B") else 28
+            self._ibm_state = "tab-list"
+        elif command in b"KLYZ\\":
+            self._ibm_state = "length-header"
+        else:
+            self._ibm_state = "escape" if command == _ESC else "ground"
+
+    def _dispatch_ibm_no_parameter(self, command: int) -> None:
+        if command == ord("E"):
+            self._rendition = replace(self._rendition, bold=True)
+        elif command == ord("F"):
+            self._rendition = replace(self._rendition, bold=False)
+        elif command == ord("G"):
+            self._rendition = replace(self._rendition, double_strike=True)
+        elif command == ord("H"):
+            self._rendition = replace(self._rendition, double_strike=False)
+        elif command == ord("O"):
+            pass  # Perforation skip is retained for the physical-fidelity pass.
+        elif command == ord("R"):
+            self._emit_layout(_PrinterLayoutCommand.IBM_RESET_TABS)
+        elif command == ord("T"):
+            self._rendition = replace(self._rendition, script=PrinterScript.NORMAL)
+        elif command == ord("0"):
+            self._emit_layout(_PrinterLayoutCommand.IBM_LINE_SPACING, 27)
+        elif command == ord("1"):
+            self._emit_layout(_PrinterLayoutCommand.IBM_LINE_SPACING, 21)
+        elif command == ord("2"):
+            self._emit_layout(_PrinterLayoutCommand.IBM_LINE_SPACING, self._ibm_pending_line_spacing)
+        elif command == ord("4"):
+            pass  # The page snapshot has a fixed physical origin.
+        elif command == ord("6"):
+            self._ibm_character_set = 2
+        elif command == ord("7"):
+            self._ibm_character_set = 1
+        elif command == ord(":"):
+            self._emit_layout(_PrinterLayoutCommand.IBM_HORIZONTAL_PITCH, 120)
+
+    def _dispatch_ibm_fixed(self) -> None:
+        command = self._ibm_command
+        parameters = bytes(self._ibm_pending)
+        self._ibm_pending.clear()
+        self._ibm_state = "ground"
+        value = parameters[0]
+        if command == ord("A"):
+            self._ibm_pending_line_spacing = value * 3
+        elif command == ord("C"):
+            if value == 0:
+                self._ibm_state = "form-length"
+            else:
+                self._emit_layout(_PrinterLayoutCommand.IBM_FORM_LENGTH_LINES, value)
+        elif command == ord("I"):
+            if value <= 7:
+                density = PrinterDensity.DRAFT if value in (0, 1, 4, 5) else PrinterDensity.NEAR_LETTER_QUALITY
+                self._rendition = replace(self._rendition, density=density)
+                if value in (1, 5):
+                    self._emit_layout(_PrinterLayoutCommand.IBM_HORIZONTAL_PITCH, 120)
+        elif command == ord("J"):
+            self._set_ibm_line_double_width(False)
+            self._emit_layout(_PrinterLayoutCommand.IBM_VERTICAL_MOTION, value)
+        elif command == ord("N"):
+            pass  # Perforation skip is retained for the physical-fidelity pass.
+        elif command == ord("P") and (enabled := self._ibm_toggle(value)) is not None:
+            self._proportional_spacing = enabled
+        elif command == ord("Q") and value in (3, 22):
+            self._ibm_selected = False
+        elif command == ord("S") and value in (0, 1):
+            self._rendition = replace(
+                self._rendition,
+                script=PrinterScript.SUBSCRIPT if value else PrinterScript.SUPERSCRIPT,
+            )
+        elif command == ord("U") and (enabled := self._ibm_toggle(value)) is not None:
+            self._direction = PrintDirection.UNIDIRECTIONAL if enabled else PrintDirection.BIDIRECTIONAL
+        elif command == ord("W") and (enabled := self._ibm_toggle(value)) is not None:
+            self._set_ibm_line_double_width(False)
+            self._set_ibm_continuous_double_width(enabled)
+        elif command == ord("X"):
+            self._emit_layout(_PrinterLayoutCommand.HORIZONTAL_MARGINS, *parameters)
+        elif command == ord("3"):
+            self._emit_layout(_PrinterLayoutCommand.IBM_LINE_SPACING, value)
+        elif command == ord("5") and (enabled := self._ibm_toggle(value)) is not None:
+            self._carriage_return_new_line = enabled
+        elif command == ord("-") and (enabled := self._ibm_toggle(value)) is not None:
+            self._rendition = replace(
+                self._rendition,
+                underline=PrinterUnderline.SINGLE if enabled else PrinterUnderline.NONE,
+            )
+        elif command == ord("_") and (enabled := self._ibm_toggle(value)) is not None:
+            self._rendition = replace(self._rendition, overline=enabled)
+        elif command == ord("^"):
+            self._emit_verbatim_printable(parameters)
+
+    def _dispatch_ibm_tabs(self) -> None:
+        command = self._ibm_command
+        parameters = tuple(self._ibm_pending)
+        self._ibm_pending.clear()
+        self._ibm_state = "ground"
+        self._emit_layout(
+            _PrinterLayoutCommand.IBM_REPLACE_VERTICAL_TABS
+            if command == ord("B")
+            else _PrinterLayoutCommand.IBM_REPLACE_HORIZONTAL_TABS,
+            *parameters,
+        )
+
+    def _consume_ibm_bracket(self, byte: int) -> None:
+        self._ibm_pending.append(byte)
+        pending = bytes(self._ibm_pending)
+        patterns = (b"?58l", b"!p")
+        candidates = tuple(pattern for pattern in patterns if pattern.startswith(pending))
+        if pending in candidates:
+            self._ibm_pending.clear()
+            self._ibm_state = "ground"
+            if pending == b"?58l" and self._supports_proprinter_switching:
+                self._leave_ibm_language()
+        elif not candidates:
+            # Bracketed PPDS commands (double-height, media and unit controls)
+            # are framed by a little-endian byte count. Consume their payload
+            # now so unsupported binary parameters never leak into text.
+            if len(pending) == 1 and byte in _IBM_BRACKET_LENGTH_COMMANDS:
+                self._ibm_command = byte
+                self._ibm_pending.clear()
+                self._ibm_state = "length-header"
+            else:
+                self._ibm_pending.clear()
+                self._ibm_state = "ground"
+
+    def _dispatch_ibm_highlight(self) -> None:
+        modes = bytes(self._ibm_pending)
+        self._ibm_pending.clear()
+        self._ibm_state = "ground"
+        if self._ibm_command != ord("@"):
+            return
+        self._set_ibm_line_double_width(False)
+        if len(modes) >= 3:
+            spacing = modes[2] >> 4
+            height = modes[2] & 0x0F
+            if spacing in (1, 2):
+                self._emit_layout(_PrinterLayoutCommand.IBM_LINE_SPACING, 36 * spacing)
+            if height in (1, 2):
+                self._ibm_double_height = height == 2
+        if len(modes) >= 4:
+            width = modes[3] & 0x0F
+            if width in (1, 2):
+                self._set_ibm_continuous_double_width(width == 2)
+
+    @staticmethod
+    def _ibm_toggle(value: int) -> bool | None:
+        if value in (0, ord("0")):
+            return False
+        if value in (1, ord("1")):
+            return True
+        return None
+
+    def _set_ibm_line_double_width(self, enabled: bool) -> None:
+        if self._ibm_line_double_width == enabled:
+            return
+        self._ibm_line_double_width = enabled
+        self._emit_layout(
+            _PrinterLayoutCommand.IBM_DOUBLE_WIDTH,
+            int(self._ibm_line_double_width or self._ibm_continuous_double_width),
+        )
+
+    def _set_ibm_continuous_double_width(self, enabled: bool) -> None:
+        if self._ibm_continuous_double_width == enabled:
+            return
+        self._ibm_continuous_double_width = enabled
+        self._emit_layout(
+            _PrinterLayoutCommand.IBM_DOUBLE_WIDTH,
+            int(self._ibm_line_double_width or self._ibm_continuous_double_width),
+        )
+
+    def _enter_ibm_language(self) -> None:
+        if self._language is PrinterLanguage.IBM_PROPRINTER:
+            return
+        self._saved_dec_modes = (
+            self._direction,
+            self._proportional_spacing,
+            self._pitch_from_font,
+            self._carriage_return_new_line,
+            self._autowrap,
+            self._control_representation,
+            self._line_feed_new_line,
+            self._position_unit_mode,
+            self._rendition,
+            self._characters,
+        )
+        self._reset_ibm_modes()
+        self._emit_layout(_PrinterLayoutCommand.IBM_LANGUAGE_ENTER)
+        self._language = PrinterLanguage.IBM_PROPRINTER
+
+    def _leave_ibm_language(self) -> None:
+        if self._language is not PrinterLanguage.IBM_PROPRINTER:
+            return
+        self._emit_layout(_PrinterLayoutCommand.IBM_LANGUAGE_LEAVE)
+        if self._saved_dec_modes is not None:
+            (
+                self._direction,
+                self._proportional_spacing,
+                self._pitch_from_font,
+                self._carriage_return_new_line,
+                self._autowrap,
+                self._control_representation,
+                self._line_feed_new_line,
+                self._position_unit_mode,
+                self._rendition,
+                self._characters,
+            ) = self._saved_dec_modes
+        self._saved_dec_modes = None
+        self._language = PrinterLanguage.DEC_PPL
+        self._dec_state = "ground"
