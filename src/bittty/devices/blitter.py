@@ -616,7 +616,10 @@ class Blitter(Device):
 
         self.primary_buffer.resize(width, height)
         self.alt_buffer.resize(width, height)
-        self.scroll_bottom = height - 1
+        # A resize restores the full page, both ways: keeping scroll_top while
+        # clamping scroll_bottom can invert the region, and an inverted region
+        # stops line feed scrolling at all.
+        self.set_scroll_region(0, height - 1)
         self.reset_left_right_margins()
 
         self.board.cursor.clamp_to_terminal()

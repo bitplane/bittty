@@ -147,6 +147,23 @@ def test_reset_scroll_region():
     assert board.blitter.scroll_bottom == 9
 
 
+def test_shrinking_resize_restores_the_full_scroll_region():
+    """A resize past the region's top must not leave scroll_top above scroll_bottom."""
+    board = Board(width=20, height=24)
+
+    board.parser.feed("\x1b[20;24r")  # DECSTBM: rows 19-23, entirely below the new height
+    board.resize(20, 10)
+
+    assert (board.blitter.scroll_top, board.blitter.scroll_bottom) == (0, 9)
+
+    # The symptom of an inverted region: line feed stops scrolling and rows
+    # overwrite each other in place.
+    board.cursor.set_position(0, 9)
+    board.parser.feed("hello\r\nworld\r\n")
+
+    assert board.capture_text() == "\n".join(["", "", "", "", "", "", "", "hello", "world"])
+
+
 def test_tmux_style_scroll_only_moves_the_margin_rectangle():
     board = Board(width=10, height=6)
     buffer = board.blitter.current_buffer
