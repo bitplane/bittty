@@ -26,6 +26,9 @@ class VirtualPrinterState:
 
     language: PrinterLanguage
     direction: PrintDirection
+    proportional_spacing: bool = False
+    pitch_from_font: bool = False
+    carriage_return_new_line: bool = False
 
 
 _ESC = 0x1B
@@ -55,6 +58,9 @@ class _PrinterLanguageEngine:
         self._supports_proprinter_switching = supports_proprinter_switching
         self._language = initial_language
         self._direction = PrintDirection.BIDIRECTIONAL
+        self._proportional_spacing = False
+        self._pitch_from_font = False
+        self._carriage_return_new_line = False
         self._dec_state = "ground"
         self._dec_string_is_osc = False
         self._csi = bytearray()
@@ -62,12 +68,18 @@ class _PrinterLanguageEngine:
 
     @property
     def state(self) -> VirtualPrinterState:
-        return VirtualPrinterState(self._language, self._direction)
+        return VirtualPrinterState(
+            self._language,
+            self._direction,
+            proportional_spacing=self._proportional_spacing,
+            pitch_from_font=self._pitch_from_font,
+            carriage_return_new_line=self._carriage_return_new_line,
+        )
 
     def reset(self) -> None:
         """Apply a power-on reset and discard any partial input sequence."""
         self._language = self._initial_language
-        self._direction = PrintDirection.BIDIRECTIONAL
+        self._reset_dec_modes()
         self._dec_state = "ground"
         self._dec_string_is_osc = False
         self._csi.clear()
@@ -179,7 +191,13 @@ class _PrinterLanguageEngine:
                 return
             enabled = final == ord("h")
             for parameter in parameters:
-                if parameter == 41:
+                if parameter == 27:
+                    self._proportional_spacing = enabled
+                elif parameter == 29:
+                    self._pitch_from_font = enabled
+                elif parameter == 40:
+                    self._carriage_return_new_line = enabled
+                elif parameter == 41:
                     self._direction = PrintDirection.UNIDIRECTIONAL if enabled else PrintDirection.BIDIRECTIONAL
                 elif parameter == 58 and enabled and self._supports_proprinter_switching:
                     self._language = PrinterLanguage.IBM_PROPRINTER
@@ -201,6 +219,9 @@ class _PrinterLanguageEngine:
 
     def _reset_dec_modes(self) -> None:
         self._direction = PrintDirection.BIDIRECTIONAL
+        self._proportional_spacing = False
+        self._pitch_from_font = False
+        self._carriage_return_new_line = False
 
     def _feed_ibm(self, data: bytes, offset: int) -> int:
         patterns = (b"\x1b%@", b"\x1b[?58l", b"\x1b[!p")

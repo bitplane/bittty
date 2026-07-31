@@ -33,15 +33,15 @@
 | 23 | DEC | PK1 - Programmable Keypad | X |
 | 24 | DEC | AH1 - Auto Hardcopy | X |
 | 25 | DEC | DECTCEM - Text Cursor Enable Mode | ✅ |
-| 27 | DEC PPL | DECPSP - Proportional Spacing | X |
-| 29 | DEC PPL | DECPSM - Pitch Select Mode | X |
+| 27 | DEC PPL | DECPSP - Proportional Spacing | ✅ |
+| 29 | DEC PPL | DECPSM - Pitch Select Mode | ✅ |
 | 30 | rxvt | Show scrollbar | X |
 | 34 | DEC | DECRLM - Cursor Right to Left Mode | X |
 | 35 | DEC | DECHEBM - Hebrew (Keyboard) Mode | X |
 | 35 | rxvt | Enable font-shifting functions | X |
 | 36 | DEC | DECHEM - Hebrew Encoding Mode | X |
 | 38 | DEC | DECTEK - Tektronix 4010/4014 Mode | X |
-| 40 | DEC PPL | DECCRNLM - Carriage Return/New Line Mode | X |
+| 40 | DEC PPL | DECCRNLM - Carriage Return/New Line Mode | ✅ |
 | 40 | xterm | Allow 80 ⇒ 132 mode | ✅ |
 | 41 | DEC PPL | DECUPM - Unidirectional Print Mode | ✅ |
 | 41 | xterm | more(1) fix | X |

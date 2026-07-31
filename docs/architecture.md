@@ -62,7 +62,7 @@ Ports are full-duplex jacks on the board; connections are the cables that plug i
   adapter, or historical-hardware bridge. Controller mode is routed before text decoding;
   VT510-capable adapters may also accept immutable `PrinterConfiguration` snapshots.
   `VirtualPrinter` preserves the raw stream while incrementally tracking the fixed device's
-  DEC PPL/IBM language and print-direction state.
+  DEC PPL/IBM language and basic DEC PPL mode state.
 - **DisplayPort** carries typed events both ways: present events down to the chrome,
   input/focus/caps up from it. Serialize its two event streams and the chrome can live in
   another process or another machine; the board never notices. The name is the

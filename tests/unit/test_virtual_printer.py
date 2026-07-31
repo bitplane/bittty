@@ -52,6 +52,39 @@ def test_decupm_accepts_7_bit_and_c1_csi(introducer):
     assert printer.state.direction is PrintDirection.BIDIRECTIONAL
 
 
+@pytest.mark.parametrize(
+    "mode, attribute",
+    (
+        (27, "proportional_spacing"),
+        (29, "pitch_from_font"),
+        (40, "carriage_return_new_line"),
+    ),
+)
+@pytest.mark.parametrize("introducer", (b"\x1b[", b"\x9b"))
+def test_low_cost_dec_ppl_modes_accept_7_bit_and_c1_csi(mode, attribute, introducer):
+    printer = VirtualPrinter()
+    assert getattr(printer.state, attribute) is False
+
+    printer.write_bytes(introducer + f"?{mode}h".encode())
+    assert getattr(printer.state, attribute) is True
+
+    printer.write_bytes(introducer + f"?{mode}l".encode())
+    assert getattr(printer.state, attribute) is False
+
+
+def test_low_cost_dec_ppl_modes_support_ordered_parameter_lists():
+    printer = VirtualPrinter()
+    printer.write_bytes(b"\x1b[?27;999;29;40h")
+    assert printer.state.proportional_spacing is True
+    assert printer.state.pitch_from_font is True
+    assert printer.state.carriage_return_new_line is True
+
+    printer.write_bytes(b"\x1b[?29l")
+    assert printer.state.proportional_spacing is True
+    assert printer.state.pitch_from_font is False
+    assert printer.state.carriage_return_new_line is True
+
+
 def test_dec_private_parameters_are_applied_in_stream_order():
     printer = VirtualPrinter(PrinterType.DEC_AND_IBM)
     printer.write_bytes(b"\x1b[?999;41h")
@@ -102,10 +135,12 @@ def test_ibm_recognises_only_exact_7_bit_exit_sequences():
 
 def test_decstr_ris_and_public_reset_have_distinct_reset_scopes():
     printer = VirtualPrinter(PrinterType.DEC_AND_IBM)
-    printer.write_bytes(b"\x1b[?41h\x1b[!p")
-    assert printer.state.direction is PrintDirection.BIDIRECTIONAL
-    printer.write_bytes(b"\x1b[?41h\x1bc")
-    assert printer.state.direction is PrintDirection.BIDIRECTIONAL
+    for reset in (b"\x1b[!p", b"\x1bc"):
+        printer.write_bytes(b"\x1b[?27;29;40;41h" + reset)
+        assert printer.state == VirtualPrinterState(
+            PrinterLanguage.DEC_PPL,
+            PrintDirection.BIDIRECTIONAL,
+        )
 
     printer.write_bytes(b"\x1b[?58h")
     assert printer.state.language is PrinterLanguage.IBM_PROPRINTER
@@ -118,6 +153,28 @@ def test_decstr_ris_and_public_reset_have_distinct_reset_scopes():
     native_ibm = VirtualPrinter(PrinterType.PROPRINTER)
     native_ibm.reset()
     assert native_ibm.state.language is PrinterLanguage.IBM_PROPRINTER
+
+
+def test_dec_modes_survive_protocol_switching_and_ibm_ignores_dec_mode_commands():
+    printer = VirtualPrinter(PrinterType.DEC_AND_IBM)
+    printer.write_bytes(b"\x1b[?27;29;40h\x1b%=")
+    printer.write_bytes(b"\x1b[?27;29;40l")
+    assert printer.state == VirtualPrinterState(
+        PrinterLanguage.IBM_PROPRINTER,
+        PrintDirection.BIDIRECTIONAL,
+        proportional_spacing=True,
+        pitch_from_font=True,
+        carriage_return_new_line=True,
+    )
+
+    printer.write_bytes(b"\x1b%@")
+    assert printer.state == VirtualPrinterState(
+        PrinterLanguage.DEC_PPL,
+        PrintDirection.BIDIRECTIONAL,
+        proportional_spacing=True,
+        pitch_from_font=True,
+        carriage_return_new_line=True,
+    )
 
 
 @pytest.mark.parametrize(
@@ -158,6 +215,23 @@ def test_commands_survive_every_stream_boundary(sequence, expected):
         printer.write_bytes(sequence[:boundary])
         printer.write_bytes(sequence[boundary:])
         assert printer.state == expected
+
+
+@pytest.mark.parametrize(
+    "mode, attribute",
+    (
+        (27, "proportional_spacing"),
+        (29, "pitch_from_font"),
+        (40, "carriage_return_new_line"),
+    ),
+)
+def test_low_cost_dec_ppl_modes_survive_every_stream_boundary(mode, attribute):
+    sequence = f"\x1b[?{mode}h".encode()
+    for boundary in range(len(sequence) + 1):
+        printer = VirtualPrinter()
+        printer.write_bytes(sequence[:boundary])
+        printer.write_bytes(sequence[boundary:])
+        assert getattr(printer.state, attribute) is True
 
 
 def test_ibm_exit_survives_every_stream_boundary():

@@ -40,4 +40,4 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
 
 - Resizing is not atomic with concurrent PTY output.
 - There is no scrollback buffer or reflow on resize.
-- Printer-language coverage is limited to DECUPM and DEC/IBM protocol switching; page rendering and historical baud/buffer timing are not emulated yet.
+- Printer-language coverage is limited to basic DEC PPL mode state and DEC/IBM protocol switching; page rendering and historical baud/buffer timing are not emulated yet.
