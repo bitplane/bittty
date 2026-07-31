@@ -41,9 +41,100 @@ _SUB = 0x1A
 _C1_CSI = 0x9B
 _C1_ST = 0x9C
 _C1_STRINGS = frozenset((0x90, 0x98, 0x9D, 0x9E, 0x9F))
-_DEC_SPECIAL_BYTES = (b"\x1b", b"\x90", b"\x98", b"\x9b", b"\x9d", b"\x9e", b"\x9f")
+_BS = 0x08
+_HT = 0x09
+_LF = 0x0A
+_VT = 0x0B
+_FF = 0x0C
+_CR = 0x0D
+_NEL = 0x85
+_BASIC_CONTROLS = frozenset((_BS, _HT, _LF, _VT, _FF, _CR))
+_DEC_SPECIAL_BYTES = (
+    b"\x08",
+    b"\x09",
+    b"\x0a",
+    b"\x0b",
+    b"\x0c",
+    b"\x0d",
+    b"\x1b",
+    b"\x85",
+    b"\x90",
+    b"\x98",
+    b"\x9b",
+    b"\x9d",
+    b"\x9e",
+    b"\x9f",
+)
 _NON_PRINTABLE_BYTES = bytes(range(0x20)) + b"\x7f" + bytes(range(0x80, 0xA0))
 _MAX_CSI = 128
+_C0_NAMES = (
+    "NUL",
+    "SOH",
+    "STX",
+    "ETX",
+    "EOT",
+    "ENQ",
+    "ACK",
+    "BEL",
+    "BS",
+    "HT",
+    "LF",
+    "VT",
+    "FF",
+    "CR",
+    "SO",
+    "SI",
+    "DLE",
+    "DC1",
+    "DC2",
+    "DC3",
+    "DC4",
+    "NAK",
+    "SYN",
+    "ETB",
+    "CAN",
+    "EM",
+    "SUB",
+    "ESC",
+    "FS",
+    "GS",
+    "RS",
+    "US",
+)
+_C1_NAMES = (
+    None,
+    None,
+    "BPH",
+    "NBH",
+    "IND",
+    "NEL",
+    "SSA",
+    "ESA",
+    "HTS",
+    "HTJ",
+    "VTS",
+    "PLD",
+    "PLU",
+    "RI",
+    "SS2",
+    "SS3",
+    "DCS",
+    "PU1",
+    "PU2",
+    "STS",
+    "CCH",
+    "MW",
+    "SPA",
+    "EPA",
+    "SOS",
+    None,
+    "SCI",
+    "CSI",
+    "ST",
+    "OSC",
+    "PM",
+    "APC",
+)
 
 
 class _PrinterLanguageEngine:
@@ -59,10 +150,14 @@ class _PrinterLanguageEngine:
         *,
         supports_proprinter_switching: bool,
         on_printable: Callable[[bytes], None] | None = None,
+        on_control: Callable[[int], None] | None = None,
+        on_crm_token: Callable[[bytes, str], None] | None = None,
     ) -> None:
         self._initial_language = initial_language
         self._supports_proprinter_switching = supports_proprinter_switching
         self._on_printable = on_printable
+        self._on_control = on_control
+        self._on_crm_token = on_crm_token
         self._language = initial_language
         self._direction = PrintDirection.BIDIRECTIONAL
         self._proportional_spacing = False
@@ -120,7 +215,13 @@ class _PrinterLanguageEngine:
             byte = data[offset]
             offset += 1
 
-            if self._dec_state == "ground":
+            if byte in _BASIC_CONTROLS:
+                self._emit_control(byte)
+            elif byte == _NEL:
+                self._csi.clear()
+                self._dec_state = "ground"
+                self._emit_control(byte)
+            elif self._dec_state == "ground":
                 if byte == _ESC:
                     self._dec_state = "escape"
                 elif byte == _C1_CSI:
@@ -145,6 +246,9 @@ class _PrinterLanguageEngine:
                     self._begin_string(is_osc=byte == ord("]"))
                 elif byte == ord("%"):
                     self._dec_state = "percent"
+                elif byte == ord("E"):
+                    self._emit_control(_NEL)
+                    self._dec_state = "ground"
                 elif byte == ord("c"):
                     self._reset_dec_modes()
                     self._dec_state = "ground"
@@ -184,6 +288,10 @@ class _PrinterLanguageEngine:
         printable = data.translate(None, _NON_PRINTABLE_BYTES)
         if printable:
             self._on_printable(printable)
+
+    def _emit_control(self, byte: int) -> None:
+        if self._on_control is not None:
+            self._on_control(byte)
 
     def _begin_string(self, *, is_osc: bool) -> None:
         self._dec_string_is_osc = is_osc
@@ -268,8 +376,11 @@ class _PrinterLanguageEngine:
                 csi = data.find(b"\x9b", offset)
                 starts = tuple(index for index in (escape, csi) if index != -1)
                 if not starts:
+                    self._emit_crm_bytes(data[offset:])
                     return size
-                offset = min(starts)
+                start = min(starts)
+                self._emit_crm_bytes(data[offset:start])
+                offset = start
 
             self._crm_pending.append(data[offset])
             offset += 1
@@ -278,13 +389,39 @@ class _PrinterLanguageEngine:
             if not candidates:
                 trailing_start = pending[-1] if pending[-1] in (_ESC, _C1_CSI) else None
                 self._crm_pending.clear()
+                self._emit_crm_bytes(pending[:-1] if trailing_start is not None else pending)
                 if trailing_start is not None:
                     self._crm_pending.append(trailing_start)
                 continue
             if pending in candidates:
                 self._crm_pending.clear()
+                if self._on_crm_token is not None:
+                    self._on_crm_token(pending, "<CSI>3l")
                 self._control_representation = False
         return offset
+
+    def _emit_crm_bytes(self, data: bytes) -> None:
+        start = 0
+        for offset, byte in enumerate(data):
+            if 0x20 <= byte <= 0x7E or byte >= 0xA0:
+                continue
+            self._emit_printable(data[start:offset])
+            if self._on_crm_token is not None:
+                self._on_crm_token(bytes((byte,)), self._crm_token(byte))
+            if byte in (_LF, _FF):
+                self._emit_control(byte)
+            start = offset + 1
+        self._emit_printable(data[start:])
+
+    @staticmethod
+    def _crm_token(byte: int) -> str:
+        if byte < 0x20:
+            name = _C0_NAMES[byte]
+        elif byte == 0x7F:
+            name = "DEL"
+        else:
+            name = _C1_NAMES[byte - 0x80]
+        return f"<{name or f'X{byte:02X}'}>"
 
     def _feed_ibm(self, data: bytes, offset: int) -> int:
         patterns = (b"\x1b%@", b"\x1b[?58l", b"\x1b[!p")

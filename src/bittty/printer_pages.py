@@ -121,6 +121,36 @@ class PrinterTextRun(PrinterPageItem):
 
 
 @dataclass(frozen=True)
+class PrinterControlToken(PrinterPageItem):
+    """One positioned CRM graphic token."""
+
+    source: bytes
+    text: str
+    advance: int
+    state: VirtualPrinterState
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if not isinstance(self.source, bytes):
+            raise TypeError("source must be bytes")
+        if not self.source:
+            raise ValueError("source must not be empty")
+        if not isinstance(self.text, str):
+            raise TypeError("text must be a string")
+        if not self.text or not self.text.isascii():
+            raise ValueError("text must be nonempty ASCII")
+        _require_int("advance", self.advance)
+        if self.advance <= 0:
+            raise ValueError("advance must be positive")
+        if self.bounds.width != self.advance:
+            raise ValueError("bounds width must equal advance")
+        if self.bounds.height <= 0:
+            raise ValueError("bounds height must be positive")
+        if not isinstance(self.state, VirtualPrinterState):
+            raise TypeError("state must be a VirtualPrinterState")
+
+
+@dataclass(frozen=True)
 class PrinterPage:
     """An immutable physical-page display-list snapshot."""
 

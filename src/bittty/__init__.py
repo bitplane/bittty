@@ -28,6 +28,7 @@ from .printer_languages import PrintDirection, PrinterLanguage, VirtualPrinterSt
 from .printer_pages import (
     LETTER_PAGE_GEOMETRY,
     PRINT_UNITS_PER_INCH,
+    PrinterControlToken,
     PrinterPage,
     PrinterPageGeometry,
     PrinterPageItem,
@@ -85,6 +86,7 @@ __all__ = [
     "PrinterCapabilities",
     "PrinterConfiguration",
     "PrinterConnection",
+    "PrinterControlToken",
     "PrinterFlowControl",
     "PrinterFlowThreshold",
     "PrinterLanguage",

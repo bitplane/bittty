@@ -16,6 +16,7 @@ from .printer_languages import (
 from .printer_pages import (
     LETTER_PAGE_GEOMETRY,
     PRINT_UNITS_PER_INCH,
+    PrinterControlToken,
     PrinterPage,
     PrinterPageGeometry,
     PrinterRect,
@@ -180,6 +181,8 @@ class VirtualPrinter(MemoryPrinter):
             initial_language,
             supports_proprinter_switching=self._device_type is PrinterType.DEC_AND_IBM,
             on_printable=self._record_printable,
+            on_control=self._record_control,
+            on_crm_token=self._record_crm_token,
         )
 
     @property
@@ -243,6 +246,49 @@ class VirtualPrinter(MemoryPrinter):
             self._pending_marks = False
         self._pending_data.extend(data)
         self._pending_marks = self._pending_marks or marks
+        self._active_x += advance
+
+    def _record_control(self, byte: int) -> None:
+        self._flush_pending_run()
+        left = self._page_store.geometry.printable_area.left
+        if byte == 0x08:  # BS
+            self._active_x = max(left, self._active_x - self._horizontal_advance)
+        elif byte == 0x09:  # HT; initial stops are columns 9, 17, ...
+            column = max(0, (self._active_x - left) // self._horizontal_advance)
+            self._active_x = left + (column // 8 + 1) * 8 * self._horizontal_advance
+        elif byte == 0x0A:  # LF
+            self._active_y += self._vertical_advance
+            if self.state.control_representation or self.state.line_feed_new_line:
+                self._active_x = left
+        elif byte == 0x0B:  # VT; initial vertical stops occur every line
+            self._active_y += self._vertical_advance
+        elif byte == 0x0C:  # FF
+            self._page_store.complete(force=True)
+            self._active_y = self._page_store.geometry.printable_area.top
+        elif byte == 0x0D:  # CR
+            self._active_x = left
+            if self.state.carriage_return_new_line:
+                self._active_y += self._vertical_advance
+        elif byte == 0x85:  # NEL
+            self._active_x = left
+            self._active_y += self._vertical_advance
+
+    def _record_crm_token(self, source: bytes, text: str) -> None:
+        self._flush_pending_run()
+        advance = len(text) * self._horizontal_advance
+        token = PrinterControlToken(
+            PrinterRect(
+                self._active_x,
+                self._active_y,
+                self._active_x + advance,
+                self._active_y + self._vertical_advance,
+            ),
+            source,
+            text,
+            advance,
+            self.state,
+        )
+        self._page_store.append(token)
         self._active_x += advance
 
     def _flush_pending_run(self) -> None:
