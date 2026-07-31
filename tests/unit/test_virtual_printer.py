@@ -85,6 +85,75 @@ def test_low_cost_dec_ppl_modes_support_ordered_parameter_lists():
     assert printer.state.carriage_return_new_line is True
 
 
+@pytest.mark.parametrize("introducer", (b"\x1b[", b"\x9b"))
+def test_printer_autowrap_accepts_7_bit_and_c1_csi(introducer):
+    printer = VirtualPrinter()
+    assert printer.state.autowrap is True
+
+    printer.write_bytes(introducer + b"?7l")
+    assert printer.state.autowrap is False
+    printer.write_bytes(introducer + b"?7h")
+    assert printer.state.autowrap is True
+
+
+@pytest.mark.parametrize(
+    "mode, attribute",
+    (
+        (3, "control_representation"),
+        (20, "line_feed_new_line"),
+    ),
+)
+@pytest.mark.parametrize("introducer", (b"\x1b[", b"\x9b"))
+def test_standard_printer_modes_accept_7_bit_and_c1_csi(mode, attribute, introducer):
+    printer = VirtualPrinter()
+    assert getattr(printer.state, attribute) is False
+
+    printer.write_bytes(introducer + f"{mode}h".encode())
+    assert getattr(printer.state, attribute) is True
+
+    printer.write_bytes(introducer + f"{mode}l".encode())
+    assert getattr(printer.state, attribute) is False
+
+
+@pytest.mark.parametrize("reset", (b"\x1b[3l", b"\x9b3l"))
+def test_crm_shields_other_commands_until_its_own_reset(reset):
+    printer = VirtualPrinter(PrinterType.DEC_AND_IBM)
+    printer.write_bytes(b"\x1b[?7l\x1b[3h")
+    printer.write_bytes(b"\x1b[?7h\x1b[20h\x1b[?58h\x1b[!p\x1bc")
+    assert printer.state == VirtualPrinterState(
+        PrinterLanguage.DEC_PPL,
+        PrintDirection.BIDIRECTIONAL,
+        autowrap=False,
+        control_representation=True,
+    )
+
+    printer.write_bytes(reset)
+    printer.write_bytes(b"\x1b[?7h\x1b[20h")
+    assert printer.state.autowrap is True
+    assert printer.state.control_representation is False
+    assert printer.state.line_feed_new_line is True
+
+
+@pytest.mark.parametrize("reset", (b"\x1b[3l", b"\x9b3l"))
+def test_crm_reset_survives_every_stream_boundary(reset):
+    for boundary in range(len(reset) + 1):
+        printer = VirtualPrinter()
+        printer.write_bytes(b"\x1b[3h")
+        printer.write_bytes(reset[:boundary])
+        printer.write_bytes(reset[boundary:])
+        assert printer.state.control_representation is False
+
+
+def test_crm_reset_near_misses_are_inert_and_parser_resynchronises():
+    printer = VirtualPrinter()
+    printer.write_bytes(b"\x1b[3h")
+    printer.write_bytes(b"\x1b[3m\x1b[33l\x9b3m")
+    assert printer.state.control_representation is True
+
+    printer.write_bytes(b"\x1b[3l")
+    assert printer.state.control_representation is False
+
+
 def test_dec_private_parameters_are_applied_in_stream_order():
     printer = VirtualPrinter(PrinterType.DEC_AND_IBM)
     printer.write_bytes(b"\x1b[?999;41h")
@@ -136,7 +205,7 @@ def test_ibm_recognises_only_exact_7_bit_exit_sequences():
 def test_decstr_ris_and_public_reset_have_distinct_reset_scopes():
     printer = VirtualPrinter(PrinterType.DEC_AND_IBM)
     for reset in (b"\x1b[!p", b"\x1bc"):
-        printer.write_bytes(b"\x1b[?27;29;40;41h" + reset)
+        printer.write_bytes(b"\x1b[?7l\x1b[20h\x1b[?27;29;40;41h" + reset)
         assert printer.state == VirtualPrinterState(
             PrinterLanguage.DEC_PPL,
             PrintDirection.BIDIRECTIONAL,
@@ -154,17 +223,23 @@ def test_decstr_ris_and_public_reset_have_distinct_reset_scopes():
     native_ibm.reset()
     assert native_ibm.state.language is PrinterLanguage.IBM_PROPRINTER
 
+    printer.write_bytes(b"\x1b[3h")
+    printer.reset()
+    assert printer.state.control_representation is False
+
 
 def test_dec_modes_survive_protocol_switching_and_ibm_ignores_dec_mode_commands():
     printer = VirtualPrinter(PrinterType.DEC_AND_IBM)
-    printer.write_bytes(b"\x1b[?27;29;40h\x1b%=")
-    printer.write_bytes(b"\x1b[?27;29;40l")
+    printer.write_bytes(b"\x1b[?7l\x1b[20h\x1b[?27;29;40h\x1b%=")
+    printer.write_bytes(b"\x1b[20l\x1b[?7;27;29;40l")
     assert printer.state == VirtualPrinterState(
         PrinterLanguage.IBM_PROPRINTER,
         PrintDirection.BIDIRECTIONAL,
         proportional_spacing=True,
         pitch_from_font=True,
         carriage_return_new_line=True,
+        autowrap=False,
+        line_feed_new_line=True,
     )
 
     printer.write_bytes(b"\x1b%@")
@@ -174,6 +249,8 @@ def test_dec_modes_survive_protocol_switching_and_ibm_ignores_dec_mode_commands(
         proportional_spacing=True,
         pitch_from_font=True,
         carriage_return_new_line=True,
+        autowrap=False,
+        line_feed_new_line=True,
     )
 
 

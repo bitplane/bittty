@@ -29,6 +29,9 @@ class VirtualPrinterState:
     proportional_spacing: bool = False
     pitch_from_font: bool = False
     carriage_return_new_line: bool = False
+    autowrap: bool = True
+    control_representation: bool = False
+    line_feed_new_line: bool = False
 
 
 _ESC = 0x1B
@@ -61,9 +64,13 @@ class _PrinterLanguageEngine:
         self._proportional_spacing = False
         self._pitch_from_font = False
         self._carriage_return_new_line = False
+        self._autowrap = True
+        self._control_representation = False
+        self._line_feed_new_line = False
         self._dec_state = "ground"
         self._dec_string_is_osc = False
         self._csi = bytearray()
+        self._crm_pending = bytearray()
         self._ibm_pending = bytearray()
 
     @property
@@ -74,6 +81,9 @@ class _PrinterLanguageEngine:
             proportional_spacing=self._proportional_spacing,
             pitch_from_font=self._pitch_from_font,
             carriage_return_new_line=self._carriage_return_new_line,
+            autowrap=self._autowrap,
+            control_representation=self._control_representation,
+            line_feed_new_line=self._line_feed_new_line,
         )
 
     def reset(self) -> None:
@@ -83,6 +93,7 @@ class _PrinterLanguageEngine:
         self._dec_state = "ground"
         self._dec_string_is_osc = False
         self._csi.clear()
+        self._crm_pending.clear()
         self._ibm_pending.clear()
 
     def feed(self, data: bytes) -> None:
@@ -94,12 +105,14 @@ class _PrinterLanguageEngine:
                 if not self._supports_proprinter_switching:
                     return
                 offset = self._feed_ibm(data, offset)
+            elif self._control_representation:
+                offset = self._feed_crm(data, offset)
             else:
                 offset = self._feed_dec(data, offset)
 
     def _feed_dec(self, data: bytes, offset: int) -> int:
         size = len(data)
-        while offset < size and self._language is PrinterLanguage.DEC_PPL:
+        while offset < size and self._language is PrinterLanguage.DEC_PPL and not self._control_representation:
             byte = data[offset]
             offset += 1
 
@@ -185,21 +198,28 @@ class _PrinterLanguageEngine:
         self._csi.append(byte)
 
     def _dispatch_dec_csi(self, body: bytes, final: int) -> None:
-        if final in (ord("h"), ord("l")) and body.startswith(b"?"):
-            parameters = self._numeric_parameters(body[1:])
+        if final in (ord("h"), ord("l")):
+            private = body.startswith(b"?")
+            parameters = self._numeric_parameters(body[1:] if private else body)
             if parameters is None:
                 return
             enabled = final == ord("h")
             for parameter in parameters:
-                if parameter == 27:
+                if not private and parameter == 3:
+                    self._control_representation = enabled
+                elif not private and parameter == 20:
+                    self._line_feed_new_line = enabled
+                elif private and parameter == 7:
+                    self._autowrap = enabled
+                elif private and parameter == 27:
                     self._proportional_spacing = enabled
-                elif parameter == 29:
+                elif private and parameter == 29:
                     self._pitch_from_font = enabled
-                elif parameter == 40:
+                elif private and parameter == 40:
                     self._carriage_return_new_line = enabled
-                elif parameter == 41:
+                elif private and parameter == 41:
                     self._direction = PrintDirection.UNIDIRECTIONAL if enabled else PrintDirection.BIDIRECTIONAL
-                elif parameter == 58 and enabled and self._supports_proprinter_switching:
+                elif private and parameter == 58 and enabled and self._supports_proprinter_switching:
                     self._language = PrinterLanguage.IBM_PROPRINTER
                     return
             return
@@ -222,6 +242,36 @@ class _PrinterLanguageEngine:
         self._proportional_spacing = False
         self._pitch_from_font = False
         self._carriage_return_new_line = False
+        self._autowrap = True
+        self._control_representation = False
+        self._line_feed_new_line = False
+
+    def _feed_crm(self, data: bytes, offset: int) -> int:
+        patterns = (b"\x1b[3l", b"\x9b3l")
+        size = len(data)
+        while offset < size and self._control_representation:
+            if not self._crm_pending:
+                escape = data.find(b"\x1b", offset)
+                csi = data.find(b"\x9b", offset)
+                starts = tuple(index for index in (escape, csi) if index != -1)
+                if not starts:
+                    return size
+                offset = min(starts)
+
+            self._crm_pending.append(data[offset])
+            offset += 1
+            pending = bytes(self._crm_pending)
+            candidates = tuple(pattern for pattern in patterns if pattern.startswith(pending))
+            if not candidates:
+                trailing_start = pending[-1] if pending[-1] in (_ESC, _C1_CSI) else None
+                self._crm_pending.clear()
+                if trailing_start is not None:
+                    self._crm_pending.append(trailing_start)
+                continue
+            if pending in candidates:
+                self._crm_pending.clear()
+                self._control_representation = False
+        return offset
 
     def _feed_ibm(self, data: bytes, offset: int) -> int:
         patterns = (b"\x1b%@", b"\x1b[?58l", b"\x1b[!p")
