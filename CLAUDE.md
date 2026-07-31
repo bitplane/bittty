@@ -63,6 +63,12 @@ chrome a human looks at, and two full-duplex ports connect the board to its outs
   parser. **DisplayPort** carries typed events both ways to the chrome: present events
   down, input/focus/caps up. Its name is the video-connector pun, kept on purpose
 
+**Peripherals** (`src/bittty/peripherals/`)
+- Simulations of hardware on the far end of a cable: `peripherals/printer` is a virtual
+  printer (DEC PPL / IBM PPDS, page store). A device is part of the terminal; a peripheral
+  is what you plug into it. Core imports nothing from here — `tests/unit/test_peripheral_boundary.py`
+  enforces it. See `docs/peripherals.md` for the option/configuration/connection tiers
+
 **Model** (`src/bittty/model.py`)
 - The model number: the emulation profile as data (XTERM, VT220, LINUX, ...) — DA
   responses, keymaps, mode repertoire, charsets
@@ -83,6 +89,8 @@ chrome a human looks at, and two full-duplex ports connect the board to its outs
 | Term | Means | Never means |
 |---|---|---|
 | board | the emulator machine | the chrome |
+| device | a card in the terminal | something you plug in |
+| peripheral | a simulation of what's on the far end of a cable | a device |
 | terminal | the chrome a human looks at | the emulator core |
 | video | the cell-grid memory (pages) | — |
 | blitter | the device that writes video | a renderer |

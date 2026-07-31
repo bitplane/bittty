@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .printer_languages import VirtualPrinterState
+from .languages import VirtualPrinterState
 
 PRINT_UNITS_PER_INCH = 21_600
 

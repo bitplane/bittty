@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Callable
 from enum import IntEnum
-from typing import TYPE_CHECKING, Callable, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, BinaryIO, Protocol, runtime_checkable
 
 from . import constants
 
@@ -19,7 +20,7 @@ if TYPE_CHECKING:
     from .caps import TerminalCaps
     from .devices.board import Board
     from .present import PresentEvent
-    from .printers import PrinterConfiguration
+    from .printer_config import PrinterConfiguration
 
 logger = logging.getLogger(__name__)
 
@@ -54,7 +55,7 @@ class PrinterStatus(IntEnum):
 class Presentable(Protocol):
     """A terminal (chrome) that receives discrete present events from the board."""
 
-    def present(self, event: "PresentEvent") -> None:
+    def present(self, event: PresentEvent) -> None:
         """Handle one present event."""
 
 
@@ -292,6 +293,98 @@ class PrinterPort:
                 break
 
 
+# --- printer cables --------------------------------------------------- #
+# Not printers: an in-memory duplex byte sink and a BinaryIO adapter. The
+# thing that simulates a printer is bittty.peripherals.printer.VirtualPrinter.
+
+
+class MemoryPrinter:
+    """An in-memory duplex printer useful for virtual devices and tests."""
+
+    def __init__(self, *, status: PrinterStatus = PrinterStatus.READY) -> None:
+        self.data = bytearray()
+        self._status = PrinterStatus(status)
+        self.closed = False
+        self.configuration: PrinterConfiguration | None = None
+        self.configuration_history: list[PrinterConfiguration] = []
+        self._inbound: asyncio.Queue[bytes] = asyncio.Queue()
+
+    @property
+    def status(self) -> PrinterStatus:
+        return self._status
+
+    @status.setter
+    def status(self, status: PrinterStatus) -> None:
+        status = PrinterStatus(status)
+        previous = self._status
+        self._status = status
+        if status is not previous:
+            self._status_changed()
+
+    def _status_changed(self) -> None:
+        """Hook for duplex devices that report asynchronous status changes."""
+
+    def write_bytes(self, data: bytes) -> int:
+        if self.closed:
+            raise ValueError("printer is closed")
+        self.data.extend(data)
+        return len(data)
+
+    async def read_bytes_async(self, size: int) -> bytes:
+        data = await self._inbound.get()
+        if len(data) <= size:
+            return data
+        self._inbound.put_nowait(data[size:])
+        return data[:size]
+
+    def send_bytes(self, data: bytes) -> None:
+        """Inject bytes arriving from the printer toward the host."""
+        self._inbound.put_nowait(data)
+
+    def configure(self, configuration: PrinterConfiguration) -> None:
+        """Record a configuration snapshot, as a virtual adapter would."""
+        self.configuration = configuration
+        self.configuration_history.append(configuration)
+
+    def flush(self) -> None:
+        pass
+
+    def close(self) -> None:
+        self.closed = True
+
+
+class StreamPrinter:
+    """Adapt a binary stream (file, serial object, pipe, socket file) as a printer."""
+
+    def __init__(
+        self,
+        output: BinaryIO,
+        input: BinaryIO | None = None,
+        *,
+        status: PrinterStatus = PrinterStatus.READY,
+    ) -> None:
+        self.output = output
+        self.input = input
+        self.status = status
+
+    @property
+    def closed(self) -> bool:
+        return bool(getattr(self.output, "closed", False))
+
+    def write_bytes(self, data: bytes):
+        return self.output.write(data)
+
+    async def read_bytes_async(self, size: int) -> bytes:
+        if self.input is None:
+            return b""
+        return await asyncio.to_thread(self.input.read, size)
+
+    def flush(self) -> None:
+        flusher = getattr(self.output, "flush", None)
+        if callable(flusher):
+            flusher()
+
+
 class DisplayPort:
     """The board's jack toward the terminal (chrome); mirrors HostPort.
 
@@ -302,7 +395,7 @@ class DisplayPort:
     present() is a no-op, so the board runs headless exactly as before.
     """
 
-    def __init__(self, board: "Board | None" = None, terminal: Presentable | None = None) -> None:
+    def __init__(self, board: Board | None = None, terminal: Presentable | None = None) -> None:
         self.board = board
         self.terminal = terminal
 
@@ -319,7 +412,7 @@ class DisplayPort:
         """Whether a terminal (chrome) is attached."""
         return self.terminal is not None
 
-    def present(self, event: "PresentEvent") -> None:
+    def present(self, event: PresentEvent) -> None:
         """Forward a present event to the attached terminal, if any."""
         if self.terminal is not None:
             self.terminal.present(event)
@@ -358,7 +451,7 @@ class DisplayPort:
         """The box lost focus."""
         self.board.focus_out()
 
-    def set_caps(self, caps: "TerminalCaps") -> None:
+    def set_caps(self, caps: TerminalCaps) -> None:
         """The terminal reports what its venue can do."""
         self.board.set_caps(caps)
 

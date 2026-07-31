@@ -3,12 +3,14 @@
 from bittty import (
     Board,
     MemoryPrinter,
-    PrintedDataType,
     PrinterConfiguration,
+    PrinterStatus,
+)
+from bittty.printer_config import (
+    PrintedDataType,
     PrinterFlowControl,
     PrinterParity,
     PrinterPortSelection,
-    PrinterStatus,
     PrinterType,
     ProPrinterCodePage,
 )

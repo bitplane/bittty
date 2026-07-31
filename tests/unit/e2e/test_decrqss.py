@@ -90,7 +90,7 @@ def test_vt510_decrqss_uses_dec_validity_for_existing_and_invalid_settings():
 
 def test_non_configurable_model_does_not_expose_attached_configuration():
     from bittty.model import XTERM
-    from bittty.printers import MemoryPrinter
+    from bittty import MemoryPrinter
 
     parser, transport = _driver(XTERM)
     parser.sink.printer.attach(MemoryPrinter())

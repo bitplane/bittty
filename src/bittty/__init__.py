@@ -6,6 +6,9 @@ Vocabulary: the `Board` is the machine (devices, registers, video memory, the
 child process). A terminal (bittty.terminals) is the chrome a human looks at,
 plugged into the board's display port. `Terminal` is deliberately not exported
 here — import it from bittty.terminals.
+
+Peripherals — simulations of hardware on the far end of a cable — are not exported
+here either: import them from bittty.peripherals.<name>. Core never imports them.
 """
 
 from importlib.metadata import PackageNotFoundError, version
@@ -15,60 +18,18 @@ from .connections import (
     Connection,
     DisplayPort,
     HostPort,
+    MemoryPrinter,
     Presentable,
     PrinterConnection,
     PrinterPort,
     PrinterStatus,
+    StreamPrinter,
 )
 from .devices.board import Board
 from .model import BITTTY, LINUX, VT100, VT220, VT510, XTERM, Model, PrinterCapabilities
 from .operations import Operation, OperationSink
 from .parser import Parser
-from .printer_languages import (
-    PrintDirection,
-    PrinterCharacterSet,
-    PrinterCharacterState,
-    PrinterColor,
-    PrinterDensity,
-    PrinterLanguage,
-    PrinterRendition,
-    PrinterScript,
-    PrinterUnderline,
-    VirtualPrinterState,
-)
-from .printer_pages import (
-    LETTER_PAGE_GEOMETRY,
-    PRINT_UNITS_PER_INCH,
-    PrinterBitImage,
-    PrinterControlToken,
-    PrinterDownloadedGlyph,
-    PrinterPage,
-    PrinterPageGeometry,
-    PrinterPageItem,
-    PrinterRect,
-    PrinterRenditionSpan,
-    PrinterTextRun,
-)
-from .printers import (
-    GENERIC_DEC_AND_IBM_PRINTER,
-    GENERIC_DEC_PPL2_PRINTER,
-    GENERIC_PROPRINTER,
-    MemoryPrinter,
-    PrintedDataType,
-    PrinterConfiguration,
-    PrinterFlowControl,
-    PrinterFlowThreshold,
-    PrinterMechanicalAction,
-    PrinterMechanicalEvent,
-    PrinterParity,
-    PrinterPortSelection,
-    PrinterType,
-    PrinterUnsolicitedReports,
-    ProPrinterCodePage,
-    StreamPrinter,
-    VirtualPrinter,
-    VirtualPrinterProfile,
-)
+from .printer_config import PrinterConfiguration
 from .style import (
     CURSOR_CODE,
     RESET_CODE,
@@ -84,12 +45,7 @@ except PackageNotFoundError:
 __all__ = [
     "BITTTY",
     "CURSOR_CODE",
-    "GENERIC_DEC_AND_IBM_PRINTER",
-    "GENERIC_DEC_PPL2_PRINTER",
-    "GENERIC_PROPRINTER",
-    "LETTER_PAGE_GEOMETRY",
     "LINUX",
-    "PRINT_UNITS_PER_INCH",
     "RESET_CODE",
     "VT100",
     "VT220",
@@ -105,44 +61,13 @@ __all__ = [
     "OperationSink",
     "Parser",
     "Presentable",
-    "PrintDirection",
-    "PrintedDataType",
-    "PrinterBitImage",
     "PrinterCapabilities",
-    "PrinterCharacterSet",
-    "PrinterCharacterState",
-    "PrinterColor",
     "PrinterConfiguration",
     "PrinterConnection",
-    "PrinterControlToken",
-    "PrinterDensity",
-    "PrinterDownloadedGlyph",
-    "PrinterFlowControl",
-    "PrinterFlowThreshold",
-    "PrinterLanguage",
-    "PrinterMechanicalAction",
-    "PrinterMechanicalEvent",
-    "PrinterPage",
-    "PrinterPageGeometry",
-    "PrinterPageItem",
-    "PrinterParity",
     "PrinterPort",
-    "PrinterPortSelection",
-    "PrinterRect",
-    "PrinterRendition",
-    "PrinterRenditionSpan",
-    "PrinterScript",
     "PrinterStatus",
-    "PrinterTextRun",
-    "PrinterType",
-    "PrinterUnderline",
-    "PrinterUnsolicitedReports",
-    "ProPrinterCodePage",
     "StreamPrinter",
     "TerminalCaps",
     "Video",
-    "VirtualPrinter",
-    "VirtualPrinterProfile",
-    "VirtualPrinterState",
     "WidthPolicy",
 ]

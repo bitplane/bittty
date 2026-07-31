@@ -1,21 +1,26 @@
-"""Reusable byte transports for the board's auxiliary printer port."""
+"""The virtual printer: a simulation of the box on the far end of the cable.
+
+Tier 3 of the peripheral model (see docs/peripherals.md). Nothing here is part of
+the terminal — the board runs identically with nothing plugged into its printer
+port. Physical identity and report repertoire come from a PrinterModel, the
+printer's equivalent of the terminal's Model.
+"""
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass
-from enum import Enum, IntEnum
-from typing import BinaryIO
+from enum import Enum
 
-from .connections import PrinterStatus
-from .printer_languages import (
+from ...connections import MemoryPrinter, PrinterStatus
+from ...printer_config import PrinterConfiguration, PrinterType
+from .languages import (
     PrinterLanguage,
     VirtualPrinterState,
     _PrinterLanguageEngine,
     _PrinterLayoutCommand,
     _PrinterReportCommand,
 )
-from .printer_pages import (
+from .pages import (
     LETTER_PAGE_GEOMETRY,
     PRINT_UNITS_PER_INCH,
     PrinterBitImage,
@@ -28,74 +33,6 @@ from .printer_pages import (
     PrinterTextRun,
     _PrinterPageStore,
 )
-
-
-class PrinterPortSelection(IntEnum):
-    """Physical VT510 printer-port selection."""
-
-    PARALLEL = 1
-    COMM1 = 2
-    COMM2 = 3
-
-
-class PrinterType(IntEnum):
-    """Physical printer language capability."""
-
-    DEC_ANSI = 1
-    PROPRINTER = 2
-    DEC_AND_IBM = 3
-
-
-class PrintedDataType(IntEnum):
-    """Character repertoire emitted by the terminal."""
-
-    NATIONAL = 1
-    NATIONAL_LINE_DRAWING = 2
-    MULTINATIONAL = 3
-    ALL = 4
-
-
-class ProPrinterCodePage(IntEnum):
-    """IBM ProPrinter code pages accepted by DECSPPCS."""
-
-    GREEK = 210
-    SPANISH = 220
-    PC_INTERNATIONAL = 437
-    INTERNATIONAL = 437  # backward-friendly shorthand
-    MULTILINGUAL = 850
-    SLAVIC = 852
-    TURKISH = 857
-    PORTUGUESE = 860
-    HEBREW = 862
-    FRENCH_CANADIAN = 863
-    DANISH = 865
-    CYRILLIC = 866
-
-
-class PrinterParity(IntEnum):
-    """Serial parity selectors used by DECSPP."""
-
-    NONE = 1
-    EVEN = 2
-    ODD = 3
-    MARK = 6
-    SPACE = 7
-
-
-class PrinterFlowControl(IntEnum):
-    """Serial flow-control selectors used by DECSFC."""
-
-    XON_XOFF = 1
-    DTR = 2
-    BOTH = 3
-    NONE = 4
-
-
-class PrinterFlowThreshold(IntEnum):
-    """Receive-flow threshold. Printers support the low threshold."""
-
-    LOW = 1
-    HIGH = 2
 
 
 class PrinterUnsolicitedReports(Enum):
@@ -124,7 +61,7 @@ class PrinterMechanicalEvent:
 
 
 @dataclass(frozen=True)
-class VirtualPrinterProfile:
+class PrinterModel:
     """Immutable physical identity and report capabilities of a virtual printer.
 
     Device-attribute tuples contain the parameters following ``CSI ?`` (DA) or
@@ -165,13 +102,13 @@ class VirtualPrinterProfile:
             object.__setattr__(self, field_name, parameters)
 
 
-GENERIC_DEC_PPL2_PRINTER = VirtualPrinterProfile("generic-dec-ppl2")
-GENERIC_PROPRINTER = VirtualPrinterProfile(
+GENERIC_DEC_PPL2_PRINTER = PrinterModel("generic-dec-ppl2")
+GENERIC_PROPRINTER = PrinterModel(
     "generic-ibm-proprinter",
     device_type=PrinterType.PROPRINTER,
     primary_device_attributes=None,
 )
-GENERIC_DEC_AND_IBM_PRINTER = VirtualPrinterProfile(
+GENERIC_DEC_AND_IBM_PRINTER = PrinterModel(
     "generic-dec-ppl2-and-ibm-proprinter",
     device_type=PrinterType.DEC_AND_IBM,
 )
@@ -184,79 +121,6 @@ _DEFAULT_PROFILES = {
 }
 
 
-@dataclass(frozen=True)
-class PrinterConfiguration:
-    """Complete physical printer configuration exposed to an adapter."""
-
-    port: PrinterPortSelection = PrinterPortSelection.PARALLEL
-    printer_type: PrinterType = PrinterType.DEC_ANSI
-    printed_data_type: PrintedDataType = PrintedDataType.NATIONAL
-    code_page: ProPrinterCodePage = ProPrinterCodePage.PC_INTERNATIONAL
-    baud_rate: int = 4800
-    data_bits: int = 8
-    parity: PrinterParity = PrinterParity.NONE
-    stop_bits: int = 1
-    transmit_flow_control: PrinterFlowControl = PrinterFlowControl.XON_XOFF
-    receive_flow_control: PrinterFlowControl = PrinterFlowControl.XON_XOFF
-    flow_threshold: PrinterFlowThreshold = PrinterFlowThreshold.LOW
-    ignore_null: bool = False
-
-
-class MemoryPrinter:
-    """An in-memory duplex printer useful for virtual devices and tests."""
-
-    def __init__(self, *, status: PrinterStatus = PrinterStatus.READY) -> None:
-        self.data = bytearray()
-        self._status = PrinterStatus(status)
-        self.closed = False
-        self.configuration: PrinterConfiguration | None = None
-        self.configuration_history: list[PrinterConfiguration] = []
-        self._inbound: asyncio.Queue[bytes] = asyncio.Queue()
-
-    @property
-    def status(self) -> PrinterStatus:
-        return self._status
-
-    @status.setter
-    def status(self, status: PrinterStatus) -> None:
-        status = PrinterStatus(status)
-        previous = self._status
-        self._status = status
-        if status is not previous:
-            self._status_changed()
-
-    def _status_changed(self) -> None:
-        """Hook for duplex devices that report asynchronous status changes."""
-
-    def write_bytes(self, data: bytes) -> int:
-        if self.closed:
-            raise ValueError("printer is closed")
-        self.data.extend(data)
-        return len(data)
-
-    async def read_bytes_async(self, size: int) -> bytes:
-        data = await self._inbound.get()
-        if len(data) <= size:
-            return data
-        self._inbound.put_nowait(data[size:])
-        return data[:size]
-
-    def send_bytes(self, data: bytes) -> None:
-        """Inject bytes arriving from the printer toward the host."""
-        self._inbound.put_nowait(data)
-
-    def configure(self, configuration: PrinterConfiguration) -> None:
-        """Record a configuration snapshot, as a virtual adapter would."""
-        self.configuration = configuration
-        self.configuration_history.append(configuration)
-
-    def flush(self) -> None:
-        pass
-
-    def close(self) -> None:
-        self.closed = True
-
-
 class VirtualPrinter(MemoryPrinter):
     """A duplex virtual printer with streaming printer-language state."""
 
@@ -264,7 +128,7 @@ class VirtualPrinter(MemoryPrinter):
         self,
         device_type: PrinterType | None = None,
         *,
-        profile: VirtualPrinterProfile | None = None,
+        profile: PrinterModel | None = None,
         page_geometry: PrinterPageGeometry | None = None,
         status: PrinterStatus = PrinterStatus.READY,
     ) -> None:
@@ -333,7 +197,7 @@ class VirtualPrinter(MemoryPrinter):
         return self._device_type
 
     @property
-    def profile(self) -> VirtualPrinterProfile:
+    def profile(self) -> PrinterModel:
         """Return this printer's immutable model identity and capabilities."""
         return self._profile
 
@@ -1214,35 +1078,3 @@ class VirtualPrinter(MemoryPrinter):
         """Restore the physical printer's power-on language state."""
         self._language_engine.reset()
         self._unsolicited_reports = PrinterUnsolicitedReports.DISABLED
-
-
-class StreamPrinter:
-    """Adapt a binary stream (file, serial object, pipe, socket file) as a printer."""
-
-    def __init__(
-        self,
-        output: BinaryIO,
-        input: BinaryIO | None = None,
-        *,
-        status: PrinterStatus = PrinterStatus.READY,
-    ) -> None:
-        self.output = output
-        self.input = input
-        self.status = status
-
-    @property
-    def closed(self) -> bool:
-        return bool(getattr(self.output, "closed", False))
-
-    def write_bytes(self, data: bytes):
-        return self.output.write(data)
-
-    async def read_bytes_async(self, size: int) -> bytes:
-        if self.input is None:
-            return b""
-        return await asyncio.to_thread(self.input.read, size)
-
-    def flush(self) -> None:
-        flusher = getattr(self.output, "flush", None)
-        if callable(flusher):
-            flusher()

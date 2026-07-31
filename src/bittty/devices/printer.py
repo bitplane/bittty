@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import codecs
+from collections.abc import Callable
 from dataclasses import replace
-from typing import TYPE_CHECKING, Callable
+from typing import TYPE_CHECKING
 
 from ..connections import PrinterConnection, PrinterPort, PrinterStatus
 from ..operations import Operation
-from ..printers import (
+from ..printer_config import (
     PrintedDataType,
     PrinterConfiguration,
     PrinterFlowControl,

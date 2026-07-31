@@ -29,6 +29,9 @@ Devices are single-responsibility cards: charset, control, cursor, keyboard, mod
 palette, printer, query, style, title, and the **Blitter** — the device that writes video
 memory. It blits; it does not render.
 
+A device is part of the terminal. What plugs *into* it lives in `bittty.peripherals` and is
+never imported by core — see [peripherals.md](peripherals.md).
+
 Registers on the board hold physical facts reported by the chrome (focus, window state,
 caps) and hardware state the child can set (bell pitch, blank timeout, console requests).
 
@@ -60,20 +63,11 @@ Ports are full-duplex jacks on the board; connections are the cables that plug i
 
 - **HostPort** carries bytes both ways (a serial line). A `Connection` — PTY, pipe,
   socket — plugs in; the port's receive pump feeds the child's output into the parser.
-- **PrinterPort** carries raw bytes both ways to a virtual printer, binary stream, serial
-  adapter, or historical-hardware bridge. Controller mode is routed before text decoding;
-  VT510-capable adapters may also accept immutable `PrinterConfiguration` snapshots.
-  `VirtualPrinter` preserves the raw stream while incrementally tracking the fixed device's
-  DEC PPL or IBM PPDS language and retained text state. Its physical page store exposes
-  immutable display-list snapshots while retaining mutable page ownership inside the printer;
-  printable DEC PPL bytes are assembled into positioned runs without per-byte parser dispatch,
-  while retained rendition and G-set state plus semantic pitch, page, margin, positioning, tab,
-  format-effector, and CRM events drive page layout. Immutable model profiles provide physical
-  defaults and truthful DA/DA2, status, unsolicited-status, and optional CPR behaviour over the
-  duplex port. IBM text commands share the physical layout engine; bit images remain compact packed
-  slices, downloadable glyphs remain compact column data, and line checkpoints implement CAN without
-  rewinding the print head. Page ejects and bells produce untimed mechanical events for frontends or
-  hardware bridges. Lined HPA/HPR movement remains a rendition span rather than flattened pixels.
+- **PrinterPort** carries raw bytes both ways to whatever is on the auxiliary cable: a
+  virtual printer, a binary stream, a serial adapter, a bridge to real hardware. Controller
+  mode is routed before text decoding, and a capable adapter is offered immutable
+  `PrinterConfiguration` snapshots. What is on the far end is a *peripheral*, not part of
+  the board — see [peripherals.md](peripherals.md).
 - **DisplayPort** carries typed events both ways: present events down to the chrome,
   input/focus/caps up from it. Serialize its two event streams and the chrome can live in
   another process or another machine; the board never notices. The name is the

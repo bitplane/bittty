@@ -5,23 +5,27 @@ import pytest
 
 from bittty import (
     Board,
+    PrinterConfiguration,
+    PrinterStatus,
+)
+from bittty.printer_config import (
+    PrinterType,
+    ProPrinterCodePage,
+)
+from bittty.peripherals.printer import (
     PrintDirection,
     PrinterCharacterSet,
     PrinterCharacterState,
     PrinterColor,
-    PrinterConfiguration,
     PrinterDensity,
     PrinterLanguage,
     PrinterMechanicalAction,
+    PrinterModel,
     PrinterRendition,
     PrinterScript,
-    PrinterStatus,
-    PrinterType,
     PrinterUnderline,
     PrinterUnsolicitedReports,
-    ProPrinterCodePage,
     VirtualPrinter,
-    VirtualPrinterProfile,
     VirtualPrinterState,
 )
 
@@ -60,7 +64,7 @@ def test_virtual_printer_keeps_an_exact_raw_trace_and_memory_duplex():
 
 
 def test_profile_selects_physical_defaults_and_is_immutable():
-    profile = VirtualPrinterProfile(
+    profile = PrinterModel(
         "test-ppl3",
         device_type=PrinterType.DEC_AND_IBM,
         primary_device_attributes=[73, 23],
@@ -80,7 +84,7 @@ def test_profile_selects_physical_defaults_and_is_immutable():
 
 @pytest.mark.parametrize("introducer", (b"\x1b[", b"\x9b"))
 def test_dec_device_attribute_reports_use_profile_identity(introducer):
-    profile = VirtualPrinterProfile(
+    profile = PrinterModel(
         "reporting-test",
         primary_device_attributes=(73, 23),
         secondary_device_attributes=(53, 10, 0, 0, 0, 0, 0),
@@ -153,7 +157,7 @@ def test_cursor_position_report_is_profile_gated_and_uses_current_pitch_grid():
     unsupported.send_bytes(b"sentinel")
     assert asyncio.run(unsupported.read_bytes_async(1024)) == b"sentinel"
 
-    profile = VirtualPrinterProfile("ppl3-test", supports_cursor_position_report=True)
+    profile = PrinterModel("ppl3-test", supports_cursor_position_report=True)
     printer = VirtualPrinter(profile=profile)
     printer.write_bytes(b"AB\nC\x1b[6n")
     assert asyncio.run(printer.read_bytes_async(1024)) == b"\x1b[2;4R"

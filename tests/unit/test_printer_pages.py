@@ -2,7 +2,10 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from bittty import (
+from bittty.printer_config import (
+    PrinterType,
+)
+from bittty.peripherals.printer import (
     LETTER_PAGE_GEOMETRY,
     PRINT_UNITS_PER_INCH,
     PrintDirection,
@@ -16,12 +19,11 @@ from bittty import (
     PrinterRect,
     PrinterRenditionSpan,
     PrinterTextRun,
-    PrinterType,
     PrinterUnderline,
     VirtualPrinter,
     VirtualPrinterState,
 )
-from bittty.printer_pages import _PrinterPageStore
+from bittty.peripherals.printer.pages import _PrinterPageStore
 
 
 def _item(left: int) -> PrinterPageItem:
