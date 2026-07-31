@@ -115,12 +115,16 @@ half-duplex interface. That annotation is this document in miniature.
 
 The axes that have architectural consequences:
 
-- **Language** — DEC PPL and IBM PPDS are implemented, currently as two feed paths inside
-  one `_PrinterLanguageEngine`. Epson ESC/P, HP PCL and PostScript are the obvious next
-  ones, and a third feed path is where that design stops paying. The shape it wants: a
-  `PrinterMechanism` holding the physical state both languages share (rendition, direction,
-  autowrap, pitch, character sets) and one parser object per language owning only its own
-  state, so a new language is a new class rather than another branch. Not yet done.
+- **Language** — DEC PPL and IBM PPDS are implemented, one decoder module each under
+  `peripherals/printer/languages/`. A `PrinterMechanism` holds the physical state every
+  language shares — rendition, direction, autowrap, pitch, character sets — plus the print
+  head; each parser owns only its own state and drives the mechanism. Adding Epson ESC/P,
+  HP PCL or PostScript means a new parser module implementing `LanguageControl`'s
+  counterpart contract, not another branch in a shared feed loop.
+
+  The mechanism is what makes the language switch honest: DECIPEM (mode 58) snapshots it,
+  hands the stream to the PPDS decoder, and restores it on the way back, because those
+  settings belong to the machine rather than to whichever language is currently driving it.
 - **Connection** — serial EIA (RS232/RS423, 300/1200/2400/9600 baud on the VT aux port) or
   Centronics parallel. Modelled by `PrinterPortSelection`.
 - **Graphics** — the LA50 prints dot graphics at 72 dpi vertical, 144 or 180 horizontal; the
