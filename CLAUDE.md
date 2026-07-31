@@ -114,18 +114,26 @@ chrome a human looks at, and two full-duplex ports connect the board to its outs
 
 ## CODING STANDARDS
 
-* When there's a bug, write a test case for the component.
-* Failing tests are good tests.
-* The only functionality that is required, is functionality that is covered by a test. The only
-  exception to this is where it has a comment that explains what it supposed to do, why it is
-  important enough to exist yet simultaneously not important enough to be covered by a test.
-* Do not use mocks in tests. They make a mockery of our codebase.
-* The project will degrade into verbose, brittle spaghetti if left unchecked. Periodically propose
-  simplifications.
-* Branches are a source of shame and disgust. They should be used sparingly.
-* Defensive programming is for the weak.
-* Do not guess, read the docs. All the files are in source control or in the `.venv` dir at the
-  project root.
+* Observe the Zen of Python.
+* When there's a bug, write a failing test case for it.
+* Failing tests are good tests - they have earned their keep.
+* The only required functionality is functionality covered by tests. The only
+  exception to this is when it has a comment explaining what it supposed to do,
+  and why it is important enough to exist yet simultaneously not be important
+  enough to be covered by a test. Such excuses should be rare.
+* Do not invent mocks for tests. They affirm false assumptions and make a mockery
+  of the test suite.
+* The project will degrade into verbose, brittle spaghetti if left unchecked. This
+  applies at the architectural level too. Periodically propose simplifications
+  and feature freezes for refactoring.
+* Branches are a source of shame and disgust, and so should be used sparingly.
+  Branches at boundaries are often unavoidable pities towards an interface, they
+  are not our shame.
+* Defensive programming is for the weak; guards belong at trust boundaries, not
+  defending against our own code. Make our code trustworthy by defending our
+  borders.
+* Do not guess, read the docs and code. All the files are in source control or
+  in the `.venv` dir at the project root.
 
 ### Terminal Modes and Features
 
