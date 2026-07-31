@@ -8,6 +8,11 @@ from enum import IntEnum
 from typing import BinaryIO
 
 from .connections import PrinterStatus
+from .printer_languages import (
+    PrinterLanguage,
+    VirtualPrinterState,
+    _PrinterLanguageEngine,
+)
 
 
 class PrinterPortSelection(IntEnum):
@@ -19,7 +24,7 @@ class PrinterPortSelection(IntEnum):
 
 
 class PrinterType(IntEnum):
-    """Printer protocol selected by DECSPRTT."""
+    """Physical printer language capability."""
 
     DEC_ANSI = 1
     PROPRINTER = 2
@@ -134,6 +139,45 @@ class MemoryPrinter:
 
     def close(self) -> None:
         self.closed = True
+
+
+class VirtualPrinter(MemoryPrinter):
+    """A duplex virtual printer with streaming printer-language state."""
+
+    def __init__(
+        self,
+        device_type: PrinterType = PrinterType.DEC_ANSI,
+        *,
+        status: PrinterStatus = PrinterStatus.READY,
+    ) -> None:
+        super().__init__(status=status)
+        self._device_type = PrinterType(device_type)
+        initial_language = (
+            PrinterLanguage.IBM_PROPRINTER if self._device_type is PrinterType.PROPRINTER else PrinterLanguage.DEC_PPL
+        )
+        self._language_engine = _PrinterLanguageEngine(
+            initial_language,
+            supports_proprinter_switching=self._device_type is PrinterType.DEC_AND_IBM,
+        )
+
+    @property
+    def device_type(self) -> PrinterType:
+        """Return this virtual printer's immutable physical language capability."""
+        return self._device_type
+
+    @property
+    def state(self) -> VirtualPrinterState:
+        """Return an immutable snapshot of the interpreted printer state."""
+        return self._language_engine.state
+
+    def write_bytes(self, data: bytes) -> int:
+        written = super().write_bytes(data)
+        self._language_engine.feed(data)
+        return written
+
+    def reset(self) -> None:
+        """Restore the physical printer's power-on language state."""
+        self._language_engine.reset()
 
 
 class StreamPrinter:

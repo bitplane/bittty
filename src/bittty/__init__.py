@@ -24,6 +24,7 @@ from .devices.board import Board
 from .model import BITTTY, LINUX, VT100, VT220, VT510, XTERM, Model, PrinterCapabilities
 from .operations import Operation, OperationSink
 from .parser import Parser
+from .printer_languages import PrintDirection, PrinterLanguage, VirtualPrinterState
 from .printers import (
     MemoryPrinter,
     PrintedDataType,
@@ -35,6 +36,7 @@ from .printers import (
     PrinterType,
     ProPrinterCodePage,
     StreamPrinter,
+    VirtualPrinter,
 )
 from .style import (
     CURSOR_CODE,
@@ -61,26 +63,30 @@ __all__ = [
     "Connection",
     "DisplayPort",
     "HostPort",
-    "Model",
     "MemoryPrinter",
+    "Model",
     "Operation",
     "OperationSink",
     "Parser",
     "Presentable",
-    "PrinterConnection",
+    "PrintDirection",
+    "PrintedDataType",
     "PrinterCapabilities",
     "PrinterConfiguration",
+    "PrinterConnection",
     "PrinterFlowControl",
     "PrinterFlowThreshold",
+    "PrinterLanguage",
     "PrinterParity",
     "PrinterPort",
     "PrinterPortSelection",
     "PrinterStatus",
     "PrinterType",
-    "PrintedDataType",
     "ProPrinterCodePage",
     "StreamPrinter",
     "TerminalCaps",
     "Video",
+    "VirtualPrinter",
+    "VirtualPrinterState",
     "WidthPolicy",
 ]

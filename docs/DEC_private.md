@@ -43,7 +43,7 @@
 | 38 | DEC | DECTEK - Tektronix 4010/4014 Mode | X |
 | 40 | DEC PPL | DECCRNLM - Carriage Return/New Line Mode | X |
 | 40 | xterm | Allow 80 ⇒ 132 mode | ✅ |
-| 41 | DEC PPL | DECUPM - Unidirectional Print Mode | X |
+| 41 | DEC PPL | DECUPM - Unidirectional Print Mode | ✅ |
 | 41 | xterm | more(1) fix | X |
 | 42 | DEC | DECNRCM - National Replacement Character Set Mode | ✅ |
 | 43 | VT340 | DECGEPM - Graphics Expanded Print Mode | X |
@@ -62,7 +62,7 @@
 | 53 | DEC | DEC131TM - VT131 Transmit Mode | X |
 | 55 | DEC | DECBPM - Bold Page Mode | X |
 | 57 | DEC | DECNAKB - Greek/N-A Keyboard Mapping Mode | X |
-| 58 | DEC PPL | DECIPEM - Enter IBM ProPrinter Emulation Mode | X |
+| 58 | DEC PPL | DECIPEM - Enter IBM ProPrinter Emulation Mode | ✅ |
 | 59 | DEC | DECKKDM - Kanji/Katakana Display Mode | X |
 | 60 | DEC | DECHCCM - Horizontal Cursor Coupling | X |
 | 61 | DEC | DECVCCM - Vertical Cursor Coupling Mode | X |
