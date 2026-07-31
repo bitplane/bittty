@@ -12,6 +12,7 @@ from .printer_languages import (
     PrinterLanguage,
     VirtualPrinterState,
     _PrinterLanguageEngine,
+    _PrinterLayoutCommand,
 )
 from .printer_pages import (
     LETTER_PAGE_GEOMETRY,
@@ -173,6 +174,14 @@ class VirtualPrinter(MemoryPrinter):
         self._right_margin_flag = False
         self._horizontal_advance = PRINT_UNITS_PER_INCH // 10
         self._vertical_advance = PRINT_UNITS_PER_INCH // 6
+        self._logical_page_bottom = page_geometry.printable_area.bottom
+        self._no_forms = False
+        self._vertical_grid_pending = False
+        self._horizontal_tabs, self._vertical_tabs = self._initial_tab_tables(
+            page_geometry.printable_area,
+            self._horizontal_advance,
+            self._vertical_advance,
+        )
         self._pending_data = bytearray()
         self._pending_ascii = True
         self._pending_x = self._active_x
@@ -188,6 +197,8 @@ class VirtualPrinter(MemoryPrinter):
             on_printable=self._record_printable,
             on_control=self._record_control,
             on_crm_token=self._record_crm_token,
+            on_layout=self._record_layout,
+            on_reset=self._reset_layout,
         )
 
     @property
@@ -310,23 +321,29 @@ class VirtualPrinter(MemoryPrinter):
         return False
 
     def _vertical_cell_fits(self, top: int) -> bool:
+        if self._no_forms:
+            return True
         if self._bottom_margin - self._top_margin < self._vertical_advance:
             return top == self._top_margin
         return top + self._vertical_advance <= self._bottom_margin
 
     def _advance_line(self, *, home: bool) -> None:
         self._flush_pending_run()
+        self._align_vertical_grid()
         if home:
             self._active_x = self._left_margin
             self._right_margin_flag = False
         next_y = self._active_y + self._vertical_advance
-        if self._vertical_cell_fits(next_y):
+        if self._no_forms or self._vertical_cell_fits(next_y):
             self._active_y = next_y
         else:
             self._form_feed()
 
     def _form_feed(self) -> None:
         self._flush_pending_run()
+        if self._no_forms:
+            self._advance_line(home=False)
+            return
         self._page_store.complete(force=True)
         self._active_y = self._top_margin
 
@@ -335,18 +352,31 @@ class VirtualPrinter(MemoryPrinter):
         if byte == 0x08:  # BS
             if not self._right_margin_flag:
                 self._active_x = max(self._left_margin, self._active_x - self._horizontal_advance)
-        elif byte == 0x09:  # HT; initial stops are columns 9, 17, ...
-            column = max(0, (self._active_x - self._left_margin) // self._horizontal_advance)
-            target = self._left_margin + (column // 8 + 1) * 8 * self._horizontal_advance
-            if target + self._horizontal_advance > self._right_margin:
+        elif byte == 0x09:  # HT
+            targets = (
+                stop
+                for stop in self._horizontal_tabs
+                if self._active_x < stop < self._right_margin and stop >= self._left_margin
+            )
+            target = min(targets, default=self._right_margin)
+            if target >= self._right_margin:
                 self._active_x = self._right_margin
                 self._right_margin_flag = True
             else:
                 self._active_x = target
         elif byte == 0x0A:  # LF
             self._advance_line(home=self.state.control_representation or self.state.line_feed_new_line)
-        elif byte == 0x0B:  # VT; initial vertical stops occur every line
-            self._advance_line(home=False)
+        elif byte == 0x0B:  # VT
+            if self._no_forms:
+                self._advance_line(home=False)
+            else:
+                self._align_vertical_grid()
+                targets = (
+                    stop
+                    for stop in self._vertical_tabs
+                    if self._active_y < stop <= self._last_vertical_position() and stop >= self._top_margin
+                )
+                self._active_y = min(targets, default=self._last_vertical_position())
         elif byte == 0x0C:  # FF
             self._form_feed()
         elif byte == 0x0D:  # CR
@@ -356,6 +386,281 @@ class VirtualPrinter(MemoryPrinter):
                 self._advance_line(home=True)
         elif byte == 0x85:  # NEL
             self._advance_line(home=True)
+
+    def _record_layout(self, command: _PrinterLayoutCommand, parameters: tuple[int, ...]) -> None:
+        self._flush_pending_run()
+        parameter = parameters[0] if parameters else 0
+        if command is _PrinterLayoutCommand.HORIZONTAL_PITCH:
+            self._set_horizontal_pitch(parameter)
+        elif command is _PrinterLayoutCommand.VERTICAL_PITCH:
+            self._set_vertical_pitch(parameter)
+        elif command is _PrinterLayoutCommand.PAGE_LENGTH:
+            self._set_page_length(parameter)
+        elif command is _PrinterLayoutCommand.HORIZONTAL_MARGINS:
+            self._set_horizontal_margins(*parameters)
+        elif command is _PrinterLayoutCommand.VERTICAL_MARGINS:
+            self._set_vertical_margins(*parameters)
+        elif command is _PrinterLayoutCommand.HORIZONTAL_ABSOLUTE:
+            self._horizontal_absolute(parameter)
+        elif command is _PrinterLayoutCommand.HORIZONTAL_RELATIVE:
+            self._horizontal_relative(parameter)
+        elif command is _PrinterLayoutCommand.VERTICAL_ABSOLUTE:
+            self._vertical_absolute(parameter)
+        elif command is _PrinterLayoutCommand.VERTICAL_RELATIVE:
+            self._vertical_relative(parameter)
+        elif command is _PrinterLayoutCommand.SET_HORIZONTAL_TABS:
+            self._set_tab_parameters(self._horizontal_tabs, parameters, horizontal=True)
+        elif command is _PrinterLayoutCommand.SET_VERTICAL_TABS:
+            self._set_tab_parameters(self._vertical_tabs, parameters, horizontal=False)
+        elif command is _PrinterLayoutCommand.CLEAR_TABS:
+            self._clear_tabs(parameters)
+        elif command is _PrinterLayoutCommand.SET_HORIZONTAL_TAB_HERE:
+            self._horizontal_tabs.add(self._active_x)
+        elif command is _PrinterLayoutCommand.SET_VERTICAL_TAB_HERE:
+            self._vertical_tabs.add(self._active_y)
+        elif command is _PrinterLayoutCommand.CLEAR_HORIZONTAL_TABS:
+            self._horizontal_tabs.clear()
+        elif command is _PrinterLayoutCommand.CLEAR_VERTICAL_TABS:
+            self._vertical_tabs.clear()
+
+    def _reset_layout(self) -> None:
+        self._flush_pending_run()
+        area = self.page_geometry.printable_area
+        self._active_x = area.left
+        self._active_y = area.top
+        self._left_margin = area.left
+        self._right_margin = area.right
+        self._top_margin = area.top
+        self._bottom_margin = area.bottom
+        self._right_margin_flag = False
+        self._horizontal_advance = PRINT_UNITS_PER_INCH // 10
+        self._vertical_advance = PRINT_UNITS_PER_INCH // 6
+        self._logical_page_bottom = area.bottom
+        self._no_forms = False
+        self._vertical_grid_pending = False
+        self._horizontal_tabs, self._vertical_tabs = self._initial_tab_tables(
+            area,
+            self._horizontal_advance,
+            self._vertical_advance,
+        )
+
+    @staticmethod
+    def _initial_tab_tables(
+        area: PrinterRect, horizontal_advance: int, vertical_advance: int
+    ) -> tuple[set[int], set[int]]:
+        horizontal_capacity = area.width // (420 * 3) + 2
+        vertical_capacity = area.height // (600 * 3) + 2
+        horizontal_tabs = {
+            area.left + (column - 1) * horizontal_advance for column in range(9, horizontal_capacity + 1, 8)
+        }
+        vertical_tabs = {area.top + (line - 1) * vertical_advance for line in range(1, vertical_capacity + 1)}
+        return horizontal_tabs, vertical_tabs
+
+    def _set_horizontal_pitch(self, parameter: int) -> None:
+        advances = {
+            0: 720 * 3,
+            1: 720 * 3,
+            2: 600 * 3,
+            3: 545 * 3,
+            4: 436 * 3,
+            5: 1440 * 3,
+            6: 1200 * 3,
+            7: 1090 * 3,
+            8: 872 * 3,
+            9: 480 * 3,
+            11: 420 * 3,
+            12: 840 * 3,
+            13: 400 * 3,
+            14: 800 * 3,
+            15: 720 * 3,
+        }
+        old_advance = self._horizontal_advance
+        new_advance = advances.get(parameter)
+        area = self.page_geometry.printable_area
+        self._left_margin = area.left
+        self._right_margin = area.right
+        self._right_margin_flag = False
+        if new_advance is None:
+            return
+        self._horizontal_advance = new_advance
+        self._horizontal_tabs = {
+            area.left + (stop - area.left) * new_advance // old_advance for stop in self._horizontal_tabs
+        }
+        self._active_x = self._grid_ceiling(self._active_x, area.left, new_advance)
+
+    def _set_vertical_pitch(self, parameter: int) -> None:
+        advances = {
+            0: 1200 * 3,
+            1: 1200 * 3,
+            2: 900 * 3,
+            3: 600 * 3,
+            4: 3600 * 3,
+            5: 2400 * 3,
+            6: 1800 * 3,
+            10: 1200 * 3,
+            11: 1200 * 3,
+            12: 900 * 3,
+            13: 600 * 3,
+            14: 3600 * 3,
+            15: 2400 * 3,
+            16: 1800 * 3,
+            21: round(PRINT_UNITS_PER_INCH / 2.54 / 4),
+            22: round(PRINT_UNITS_PER_INCH / 2.54 / 2),
+            23: round(PRINT_UNITS_PER_INCH / 2.54),
+            31: round(PRINT_UNITS_PER_INCH / 2.54 / 4),
+            32: round(PRINT_UNITS_PER_INCH / 2.54 / 2),
+            33: round(PRINT_UNITS_PER_INCH / 2.54),
+        }
+        new_advance = advances.get(parameter)
+        if new_advance is None:
+            return
+        old_advance = self._vertical_advance
+        origin = self.page_geometry.printable_area.top
+        self._vertical_advance = new_advance
+        self._vertical_tabs = {origin + (stop - origin) * new_advance // old_advance for stop in self._vertical_tabs}
+        if not self._no_forms:
+            self._top_margin = min(
+                self._grid_ceiling(self._top_margin, origin, new_advance),
+                self._logical_page_bottom,
+            )
+            self._bottom_margin = min(
+                self._grid_ceiling(self._bottom_margin, origin, new_advance),
+                self._logical_page_bottom,
+            )
+            self._vertical_grid_pending = True
+
+    def _set_page_length(self, parameter: int) -> None:
+        area = self.page_geometry.printable_area
+        if parameter == 0:
+            self._no_forms = True
+            self._vertical_grid_pending = False
+            return
+        length = self._parameter_distance(parameter, horizontal=False)
+        self._no_forms = False
+        self._logical_page_bottom = area.top + min(length, area.height)
+        self._top_margin = area.top
+        self._bottom_margin = self._logical_page_bottom
+
+    def _set_horizontal_margins(self, left: int, right: int) -> None:
+        area = self.page_geometry.printable_area
+        new_left = self._left_margin if left == 0 else self._parameter_position(left, horizontal=True)
+        new_right = self._right_margin if right == 0 else (area.left + self._parameter_distance(right, horizontal=True))
+        new_right = min(new_right, area.right)
+        if new_left > new_right or new_left > area.right:
+            return
+        self._left_margin = new_left
+        self._right_margin = new_right
+        if self._active_x < new_left:
+            self._active_x = new_left
+        elif self._active_x > new_right:
+            self._active_x = new_right
+            self._right_margin_flag = True
+
+    def _set_vertical_margins(self, top: int, bottom: int) -> None:
+        if self._no_forms:
+            return
+        area = self.page_geometry.printable_area
+        new_top = self._top_margin if top == 0 else self._parameter_position(top, horizontal=False)
+        new_bottom = (
+            self._bottom_margin if bottom == 0 else (area.top + self._parameter_distance(bottom, horizontal=False))
+        )
+        new_bottom = min(new_bottom, self._logical_page_bottom)
+        if new_top > new_bottom or new_top > self._logical_page_bottom:
+            return
+        self._top_margin = new_top
+        self._bottom_margin = new_bottom
+        self._vertical_grid_pending = False
+        if self._active_y < new_top:
+            self._active_y = new_top
+        elif self._active_y > self._last_vertical_position():
+            self._form_feed()
+
+    def _horizontal_absolute(self, parameter: int) -> None:
+        target = self._parameter_position(max(1, parameter), horizontal=True)
+        target = max(target, self._left_margin)
+        if target > self._right_margin:
+            self._active_x = self._right_margin
+            self._right_margin_flag = True
+            return
+        self._active_x = target
+        if target < self._right_margin:
+            self._right_margin_flag = False
+
+    def _horizontal_relative(self, parameter: int) -> None:
+        if self._right_margin_flag:
+            return
+        target = self._active_x + self._parameter_distance(max(1, parameter), horizontal=True)
+        if target > self._right_margin:
+            self._active_x = self._right_margin
+            self._right_margin_flag = True
+        else:
+            self._active_x = target
+
+    def _vertical_absolute(self, parameter: int) -> None:
+        if self._no_forms:
+            self._advance_line(home=False)
+            return
+        self._align_vertical_grid()
+        target = self._parameter_position(max(1, parameter), horizontal=False)
+        if target < self._active_y:
+            return
+        self._active_y = min(max(target, self._top_margin), self._last_vertical_position())
+
+    def _vertical_relative(self, parameter: int) -> None:
+        self._align_vertical_grid()
+        count = max(1, parameter)
+        if self._no_forms:
+            count = min(count, 255)
+        target = self._active_y + self._parameter_distance(count, horizontal=False)
+        self._active_y = target if self._no_forms else min(target, self._last_vertical_position())
+
+    def _set_tab_parameters(self, table: set[int], parameters: tuple[int, ...], *, horizontal: bool) -> None:
+        for parameter in parameters:
+            if parameter > 0:
+                table.add(self._parameter_position(parameter, horizontal=horizontal))
+
+    def _clear_tabs(self, parameters: tuple[int, ...]) -> None:
+        for parameter in parameters:
+            if parameter == 0:
+                self._horizontal_tabs.discard(self._active_x)
+            elif parameter == 1:
+                self._align_vertical_grid()
+                self._vertical_tabs.discard(self._active_y)
+            elif parameter in (2, 3):
+                self._horizontal_tabs.clear()
+            elif parameter == 4:
+                self._vertical_tabs.clear()
+
+    def _parameter_distance(self, parameter: int, *, horizontal: bool) -> int:
+        if self.state.position_unit_mode:
+            return parameter * (PRINT_UNITS_PER_INCH // 720)
+        return parameter * (self._horizontal_advance if horizontal else self._vertical_advance)
+
+    def _parameter_position(self, parameter: int, *, horizontal: bool) -> int:
+        area = self.page_geometry.printable_area
+        origin = area.left if horizontal else area.top
+        return origin + self._parameter_distance(max(1, parameter) - 1, horizontal=horizontal)
+
+    def _align_vertical_grid(self) -> None:
+        if not self._vertical_grid_pending:
+            return
+        self._active_y = self._grid_ceiling(
+            self._active_y,
+            self.page_geometry.printable_area.top,
+            self._vertical_advance,
+        )
+        self._vertical_grid_pending = False
+
+    def _last_vertical_position(self) -> int:
+        if self._bottom_margin - self._top_margin < self._vertical_advance:
+            return self._top_margin
+        return self._bottom_margin - self._vertical_advance
+
+    @staticmethod
+    def _grid_ceiling(value: int, origin: int, increment: int) -> int:
+        if value <= origin:
+            return origin
+        return origin + (value - origin + increment - 1) // increment * increment
 
     def _record_crm_token(self, source: bytes, text: str) -> None:
         self._flush_pending_run()

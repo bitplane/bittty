@@ -21,6 +21,28 @@ class PrintDirection(Enum):
     UNIDIRECTIONAL = "unidirectional"
 
 
+class _PrinterLayoutCommand(Enum):
+    """Semantic DEC PPL layout operations emitted by the streaming parser."""
+
+    HORIZONTAL_PITCH = "horizontal-pitch"
+    VERTICAL_PITCH = "vertical-pitch"
+    PAGE_LENGTH = "page-length"
+    HORIZONTAL_MARGINS = "horizontal-margins"
+    VERTICAL_MARGINS = "vertical-margins"
+    HORIZONTAL_ABSOLUTE = "horizontal-absolute"
+    HORIZONTAL_RELATIVE = "horizontal-relative"
+    VERTICAL_ABSOLUTE = "vertical-absolute"
+    VERTICAL_RELATIVE = "vertical-relative"
+    SET_HORIZONTAL_TABS = "set-horizontal-tabs"
+    SET_VERTICAL_TABS = "set-vertical-tabs"
+    CLEAR_TABS = "clear-tabs"
+    SET_HORIZONTAL_TAB_HERE = "set-horizontal-tab-here"
+    SET_VERTICAL_TAB_HERE = "set-vertical-tab-here"
+    CLEAR_HORIZONTAL_TABS = "clear-horizontal-tabs"
+    CLEAR_VERTICAL_TABS = "clear-vertical-tabs"
+    POSITION_UNIT_MODE = "position-unit-mode"
+
+
 @dataclass(frozen=True)
 class VirtualPrinterState:
     """Observable language state of a virtual printer."""
@@ -33,6 +55,7 @@ class VirtualPrinterState:
     autowrap: bool = True
     control_representation: bool = False
     line_feed_new_line: bool = False
+    position_unit_mode: bool = False
 
 
 _ESC = 0x1B
@@ -48,6 +71,8 @@ _VT = 0x0B
 _FF = 0x0C
 _CR = 0x0D
 _NEL = 0x85
+_HTS = 0x88
+_VTS = 0x8A
 _BASIC_CONTROLS = frozenset((_BS, _HT, _LF, _VT, _FF, _CR))
 _DEC_SPECIAL_BYTES = (
     b"\x08",
@@ -58,6 +83,8 @@ _DEC_SPECIAL_BYTES = (
     b"\x0d",
     b"\x1b",
     b"\x85",
+    b"\x88",
+    b"\x8a",
     b"\x90",
     b"\x98",
     b"\x9b",
@@ -152,12 +179,16 @@ class _PrinterLanguageEngine:
         on_printable: Callable[[bytes], None] | None = None,
         on_control: Callable[[int], None] | None = None,
         on_crm_token: Callable[[bytes, str], None] | None = None,
+        on_layout: Callable[[_PrinterLayoutCommand, tuple[int, ...]], None] | None = None,
+        on_reset: Callable[[], None] | None = None,
     ) -> None:
         self._initial_language = initial_language
         self._supports_proprinter_switching = supports_proprinter_switching
         self._on_printable = on_printable
         self._on_control = on_control
         self._on_crm_token = on_crm_token
+        self._on_layout = on_layout
+        self._on_reset = on_reset
         self._language = initial_language
         self._direction = PrintDirection.BIDIRECTIONAL
         self._proportional_spacing = False
@@ -166,6 +197,7 @@ class _PrinterLanguageEngine:
         self._autowrap = True
         self._control_representation = False
         self._line_feed_new_line = False
+        self._position_unit_mode = False
         self._dec_state = "ground"
         self._dec_string_is_osc = False
         self._csi = bytearray()
@@ -183,12 +215,14 @@ class _PrinterLanguageEngine:
             autowrap=self._autowrap,
             control_representation=self._control_representation,
             line_feed_new_line=self._line_feed_new_line,
+            position_unit_mode=self._position_unit_mode,
         )
 
     def reset(self) -> None:
         """Apply a power-on reset and discard any partial input sequence."""
         self._language = self._initial_language
         self._reset_dec_modes()
+        self._emit_reset()
         self._dec_state = "ground"
         self._dec_string_is_osc = False
         self._csi.clear()
@@ -221,6 +255,14 @@ class _PrinterLanguageEngine:
                 self._csi.clear()
                 self._dec_state = "ground"
                 self._emit_control(byte)
+            elif byte in (_HTS, _VTS):
+                self._csi.clear()
+                self._dec_state = "ground"
+                self._emit_layout(
+                    _PrinterLayoutCommand.SET_HORIZONTAL_TAB_HERE
+                    if byte == _HTS
+                    else _PrinterLayoutCommand.SET_VERTICAL_TAB_HERE
+                )
             elif self._dec_state == "ground":
                 if byte == _ESC:
                     self._dec_state = "escape"
@@ -249,8 +291,21 @@ class _PrinterLanguageEngine:
                 elif byte == ord("E"):
                     self._emit_control(_NEL)
                     self._dec_state = "ground"
+                elif byte in (ord("H"), ord("1")):
+                    self._emit_layout(_PrinterLayoutCommand.SET_HORIZONTAL_TAB_HERE)
+                    self._dec_state = "ground"
+                elif byte in (ord("J"), ord("3")):
+                    self._emit_layout(_PrinterLayoutCommand.SET_VERTICAL_TAB_HERE)
+                    self._dec_state = "ground"
+                elif byte == ord("2"):
+                    self._emit_layout(_PrinterLayoutCommand.CLEAR_HORIZONTAL_TABS)
+                    self._dec_state = "ground"
+                elif byte == ord("4"):
+                    self._emit_layout(_PrinterLayoutCommand.CLEAR_VERTICAL_TABS)
+                    self._dec_state = "ground"
                 elif byte == ord("c"):
                     self._reset_dec_modes()
+                    self._emit_reset()
                     self._dec_state = "ground"
                 elif byte == _ESC:
                     pass
@@ -293,6 +348,14 @@ class _PrinterLanguageEngine:
         if self._on_control is not None:
             self._on_control(byte)
 
+    def _emit_layout(self, command: _PrinterLayoutCommand, *parameters: int) -> None:
+        if self._on_layout is not None:
+            self._on_layout(command, parameters)
+
+    def _emit_reset(self) -> None:
+        if self._on_reset is not None:
+            self._on_reset()
+
     def _begin_string(self, *, is_osc: bool) -> None:
         self._dec_string_is_osc = is_osc
         self._dec_state = "string"
@@ -328,6 +391,9 @@ class _PrinterLanguageEngine:
             for parameter in parameters:
                 if not private and parameter == 3:
                     self._control_representation = enabled
+                elif not private and parameter == 11:
+                    self._position_unit_mode = enabled
+                    self._emit_layout(_PrinterLayoutCommand.POSITION_UNIT_MODE, int(enabled))
                 elif not private and parameter == 20:
                     self._line_feed_new_line = enabled
                 elif private and parameter == 7:
@@ -349,6 +415,39 @@ class _PrinterLanguageEngine:
             parameters = self._numeric_parameters(body[:-1])
             if parameters is not None:
                 self._reset_dec_modes()
+                self._emit_reset()
+            return
+
+        parameters = self._numeric_parameters_preserving_zeros(body)
+        if parameters is None:
+            return
+        parameter = parameters[0] if parameters else 0
+        if final == ord("w"):
+            self._emit_layout(_PrinterLayoutCommand.HORIZONTAL_PITCH, parameter)
+        elif final == ord("z"):
+            self._emit_layout(_PrinterLayoutCommand.VERTICAL_PITCH, parameter)
+        elif final == ord("t"):
+            self._emit_layout(_PrinterLayoutCommand.PAGE_LENGTH, parameter)
+        elif final == ord("s"):
+            margins = (parameters + [0, 0])[:2]
+            self._emit_layout(_PrinterLayoutCommand.HORIZONTAL_MARGINS, *margins)
+        elif final == ord("r"):
+            margins = (parameters + [0, 0])[:2]
+            self._emit_layout(_PrinterLayoutCommand.VERTICAL_MARGINS, *margins)
+        elif final == ord("`"):
+            self._emit_layout(_PrinterLayoutCommand.HORIZONTAL_ABSOLUTE, parameter)
+        elif final == ord("a"):
+            self._emit_layout(_PrinterLayoutCommand.HORIZONTAL_RELATIVE, parameter)
+        elif final == ord("d"):
+            self._emit_layout(_PrinterLayoutCommand.VERTICAL_ABSOLUTE, parameter)
+        elif final == ord("e"):
+            self._emit_layout(_PrinterLayoutCommand.VERTICAL_RELATIVE, parameter)
+        elif final == ord("u") and body:
+            self._emit_layout(_PrinterLayoutCommand.SET_HORIZONTAL_TABS, *parameters[:16])
+        elif final == ord("v") and body:
+            self._emit_layout(_PrinterLayoutCommand.SET_VERTICAL_TABS, *parameters[:16])
+        elif final == ord("g"):
+            self._emit_layout(_PrinterLayoutCommand.CLEAR_TABS, *(parameters or [0]))
 
     @staticmethod
     def _numeric_parameters(data: bytes) -> list[int] | None:
@@ -358,6 +457,14 @@ class _PrinterLanguageEngine:
             return []
         return [int(part) for part in data.split(b";") if part]
 
+    @staticmethod
+    def _numeric_parameters_preserving_zeros(data: bytes) -> list[int] | None:
+        if any(byte not in b"0123456789;" for byte in data):
+            return None
+        if not data:
+            return []
+        return [int(part) if part else 0 for part in data.split(b";")]
+
     def _reset_dec_modes(self) -> None:
         self._direction = PrintDirection.BIDIRECTIONAL
         self._proportional_spacing = False
@@ -366,6 +473,7 @@ class _PrinterLanguageEngine:
         self._autowrap = True
         self._control_representation = False
         self._line_feed_new_line = False
+        self._position_unit_mode = False
 
     def _feed_crm(self, data: bytes, offset: int) -> int:
         patterns = (b"\x1b[3l", b"\x9b3l")

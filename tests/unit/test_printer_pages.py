@@ -483,6 +483,180 @@ def test_horizontal_and_vertical_tabs_use_dec_initial_stops():
     assert (third.bounds.left, third.bounds.top) == (9 * 2160, 3600)
 
 
+def test_decshorp_changes_hai_rounds_forward_and_resets_horizontal_margins():
+    printer = VirtualPrinter(page_geometry=_cell_geometry(12, 3))
+    printer.write_bytes(b"\x1b[2;5sA\x1b[2wB")
+
+    first, second = printer.current_page.items
+    assert first.bounds == PrinterRect(2160, 0, 4320, 3600)
+    assert second.bounds == PrinterRect(5400, 0, 7200, 3600)
+
+    printer.write_bytes(b"\rC")
+    assert printer.current_page.items[-1].bounds.left == 0
+
+
+@pytest.mark.parametrize(
+    "parameter, expected",
+    (
+        (0, 2160),
+        (2, 1800),
+        (3, 1635),
+        (4, 1308),
+        (11, 1260),
+        (13, 1200),
+    ),
+)
+def test_decshorp_uses_dec_centipoint_pitch_table(parameter, expected):
+    printer = VirtualPrinter()
+    printer.write_bytes(f"\x1b[{parameter}wA".encode())
+
+    assert printer.current_page.items[0].advance == expected
+
+
+def test_decverp_changes_vai_and_defers_grid_alignment_until_vertical_motion():
+    printer = VirtualPrinter()
+    printer.write_bytes(b"\n\x1b[2zA\nB")
+
+    first, second = printer.current_page.items
+    assert first.bounds == PrinterRect(0, 3600, 2160, 6300)
+    assert second.bounds == PrinterRect(2160, 8100, 4320, 10_800)
+
+
+def test_decslpp_limits_logical_pages_without_changing_physical_geometry():
+    geometry = _cell_geometry(2, 4)
+    printer = VirtualPrinter(page_geometry=geometry)
+    printer.write_bytes(b"\x1b[2tABCDE")
+
+    assert printer.page_geometry is geometry
+    assert [item.data for item in printer.completed_pages[0].items] == [b"AB", b"CD"]
+    assert printer.current_page.items[0].data == b"E"
+    assert printer.current_page.items[0].bounds.top == 0
+
+
+def test_no_forms_mode_treats_ff_vpa_and_vt_as_line_feeds():
+    printer = VirtualPrinter(page_geometry=_cell_geometry(20, 2))
+    printer.write_bytes(b"\x1b[0tA\fB\x1b[99dC\vD")
+
+    assert printer.completed_pages == ()
+    assert [item.bounds.top for item in printer.current_page.items] == [0, 3600, 7200, 10_800]
+
+
+def test_decslrm_preserves_zero_parameters_and_clamps_to_printable_width():
+    printer = VirtualPrinter(page_geometry=_cell_geometry(8, 2, left=1000, top=2000))
+    printer.write_bytes(b"\x1b[3;99sA\x1b[;4s\rB")
+
+    first, second = printer.current_page.items
+    assert first.bounds.left == 1000 + 2 * 2160
+    assert second.bounds.left == 1000 + 2 * 2160
+    assert second.bounds.right == 1000 + 3 * 2160
+
+
+def test_decstbm_constrains_vertical_positioning_and_implicit_page_feed():
+    printer = VirtualPrinter(page_geometry=_cell_geometry(4, 5))
+    printer.write_bytes(b"\x1b[2;4r\x1b[99dA\nB")
+
+    first = printer.completed_pages[0].items[0]
+    second = printer.current_page.items[0]
+    assert first.bounds.top == 3 * 3600
+    assert second.bounds.top == 3600
+
+
+def test_hpa_hpr_vpa_and_vpr_position_in_character_cells():
+    printer = VirtualPrinter(page_geometry=_cell_geometry(10, 10))
+    printer.write_bytes(b"\x1b[3`A\x1b[2aB\x1b[3dC\x1b[2eD\x1b[1dE")
+
+    a, b, c, d, e = printer.current_page.items
+    assert (a.bounds.left, a.bounds.top) == (2 * 2160, 0)
+    assert (b.bounds.left, b.bounds.top) == (5 * 2160, 0)
+    assert (c.bounds.left, c.bounds.top) == (6 * 2160, 2 * 3600)
+    assert (d.bounds.left, d.bounds.top) == (7 * 2160, 4 * 3600)
+    assert e.bounds.top == 4 * 3600  # VPA cannot move backwards.
+
+
+def test_position_unit_mode_uses_decipoints_for_absolute_and_relative_motion():
+    printer = VirtualPrinter()
+    printer.write_bytes(b"\x1b[11h\x1b[73`A\x1b[73aB")
+
+    first, second = printer.current_page.items
+    assert printer.state.position_unit_mode is True
+    assert first.bounds.left == 2160
+    assert second.bounds.left == 2160 + 2160 + 73 * 30
+
+    printer.write_bytes(b"\x1b[11l")
+    assert printer.state.position_unit_mode is False
+
+
+def test_programmable_horizontal_tabs_and_tbc_use_page_relative_positions():
+    printer = VirtualPrinter(page_geometry=_cell_geometry(10, 2))
+    printer.write_bytes(b"\x1b[3g\x1b[3;5u\tA\tB\x1b[3g\r\tC")
+
+    first, second, wrapped = printer.current_page.items
+    assert first.bounds.left == 2 * 2160
+    assert second.bounds.left == 4 * 2160
+    assert (wrapped.bounds.left, wrapped.bounds.top) == (0, 3600)
+
+
+@pytest.mark.parametrize("setter", (b"\x88", b"\x1bH", b"\x1b1"))
+def test_hts_and_legacy_dechts_set_a_tab_at_the_active_position(setter):
+    printer = VirtualPrinter(page_geometry=_cell_geometry(10, 2))
+    printer.write_bytes(b"\x1b[3g\x1b[4`" + setter + b"\r\tA")
+
+    assert printer.current_page.items[0].bounds.left == 3 * 2160
+
+
+@pytest.mark.parametrize("setter", (b"\x8a", b"\x1bJ", b"\x1b3"))
+def test_vts_and_legacy_decvts_set_a_vertical_tab_at_the_active_line(setter):
+    printer = VirtualPrinter(page_geometry=_cell_geometry(10, 5))
+    printer.write_bytes(b"\x1b[4g\x1b[3d" + setter + b"\f\vA")
+
+    assert printer.current_page.items[0].bounds.top == 2 * 3600
+
+
+def test_pitch_changes_rescale_programmed_tab_stops_by_logical_column_and_line():
+    printer = VirtualPrinter(page_geometry=_cell_geometry(20, 10))
+    printer.write_bytes(b"\x1b[3;4g\x1b[5u\x1b[4v\x1b[2w\x1b[2z\tA\vB")
+
+    first, second = printer.current_page.items
+    assert first.bounds.left == 4 * 1800
+    assert second.bounds.top == 3 * 2700
+
+
+def test_layout_command_assembly_is_invariant_across_every_stream_boundary():
+    payload = b"\x1b[2w\x1b[2z\x1b[2;8s\x1b[2;6r\x1b[3`\x1b[3dA\x1b[2aB"
+    whole = VirtualPrinter()
+    whole.write_bytes(payload)
+
+    for boundary in range(len(payload) + 1):
+        streamed = VirtualPrinter()
+        streamed.write_bytes(payload[:boundary])
+        streamed.write_bytes(payload[boundary:])
+        assert streamed.current_page == whole.current_page
+        assert streamed.completed_pages == whole.completed_pages
+        assert streamed.state == whole.state
+
+
+@pytest.mark.parametrize("reset", (b"\x1bc", b"\x1b[!p"))
+def test_dec_resets_restore_layout_defaults_without_discarding_page_marks(reset):
+    printer = VirtualPrinter()
+    printer.write_bytes(b"\x1b[2w\x1b[2z\x1b[3;20s\x1b[3;20rA" + reset + b"B")
+
+    first, second = printer.current_page.items
+    assert (first.bounds.left, first.bounds.top, first.advance, first.bounds.height) == (3600, 5400, 1800, 2700)
+    assert second.bounds == PrinterRect(0, 0, 2160, 3600)
+    assert printer.completed_pages == ()
+
+
+def test_public_printer_reset_restores_layout_defaults_without_clearing_pages():
+    printer = VirtualPrinter()
+    printer.write_bytes(b"\x1b[2w\x1b[2zA")
+    printer.reset()
+    printer.write_bytes(b"B")
+
+    first, second = printer.current_page.items
+    assert (first.advance, first.bounds.height) == (1800, 2700)
+    assert second.bounds == PrinterRect(0, 0, 2160, 3600)
+
+
 def test_explicit_form_feed_completes_even_a_blank_page_and_preserves_x():
     printer = VirtualPrinter()
     printer.write_bytes(b"\fA\fB")
