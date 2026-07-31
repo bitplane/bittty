@@ -24,6 +24,12 @@ def _item(left: int) -> PrinterPageItem:
     return PrinterPageItem(PrinterRect(left, 20, left + 10, 30))
 
 
+def _cell_geometry(columns: int, lines: int, *, left: int = 0, top: int = 0) -> PrinterPageGeometry:
+    right = left + columns * 2160
+    bottom = top + lines * 3600
+    return PrinterPageGeometry(right + left, bottom + top, PrinterRect(left, top, right, bottom))
+
+
 def test_letter_geometry_uses_exact_physical_units():
     assert PRINT_UNITS_PER_INCH == 21_600
     assert LETTER_PAGE_GEOMETRY == PrinterPageGeometry(
@@ -302,13 +308,116 @@ def test_page_assembly_is_deferred_in_ibm_mode():
     assert ibm.current_page.items == ()
 
 
-def test_printable_runs_advance_beyond_the_page_without_wrapping_yet():
-    geometry = PrinterPageGeometry(3000, 4000, PrinterRect(0, 0, 3000, 4000))
+def test_printable_runs_delay_wrap_until_the_next_character():
+    geometry = _cell_geometry(3, 2)
     printer = VirtualPrinter(page_geometry=geometry)
-    printer.write_bytes(b"AB")
+    printer.write_bytes(b"ABC")
 
     run = printer.current_page.items[0]
-    assert run.bounds == PrinterRect(0, 0, 4320, 3600)
+    assert run.bounds == PrinterRect(0, 0, 6480, 3600)
+
+    printer.write_bytes(b"D")
+    wrapped = printer.current_page.items[-1]
+    assert (wrapped.data, wrapped.bounds) == (b"D", PrinterRect(0, 3600, 2160, 7200))
+
+
+def test_wrapping_batches_runs_by_line_and_is_stream_fragment_invariant():
+    geometry = _cell_geometry(3, 2)
+    payload = b"ABCDEFGHIJ"
+    whole = VirtualPrinter(page_geometry=geometry)
+    whole.write_bytes(payload)
+
+    assert [item.data for item in whole.completed_pages[0].items] == [b"ABC", b"DEF"]
+    assert [item.data for item in whole.current_page.items] == [b"GHI", b"J"]
+
+    for boundary in range(len(payload) + 1):
+        streamed = VirtualPrinter(page_geometry=geometry)
+        streamed.write_bytes(payload[:boundary])
+        streamed.write_bytes(payload[boundary:])
+        assert streamed.completed_pages == whole.completed_pages
+        assert streamed.current_page == whole.current_page
+
+
+def test_deccawm_reset_truncates_overflow_until_an_absolute_return():
+    printer = VirtualPrinter(page_geometry=_cell_geometry(3, 2))
+    printer.write_bytes(b"\x1b[?7lABCD\bEF\rG")
+
+    first, returned = printer.current_page.items
+    assert (first.data, first.bounds.left, first.bounds.top) == (b"ABC", 0, 0)
+    assert (returned.data, returned.bounds.left, returned.bounds.top) == (b"G", 0, 0)
+
+
+def test_enabling_autowrap_consumes_a_retained_right_margin_flag():
+    printer = VirtualPrinter(page_geometry=_cell_geometry(3, 2))
+    printer.write_bytes(b"\x1b[?7lABCD\x1b[?7hE")
+
+    first, wrapped = printer.current_page.items
+    assert first.data == b"ABC"
+    assert (wrapped.data, wrapped.bounds.left, wrapped.bounds.top) == (b"E", 0, 3600)
+
+
+def test_backspace_after_an_exact_fill_allows_overstrike_without_wrapping():
+    printer = VirtualPrinter(page_geometry=_cell_geometry(2, 2))
+    printer.write_bytes(b"AB\bC")
+
+    first, overstrike = printer.current_page.items
+    assert first.data == b"AB"
+    assert (overstrike.data, overstrike.bounds.left, overstrike.bounds.top) == (b"C", 2160, 0)
+
+
+def test_horizontal_tab_beyond_the_last_stop_sets_the_right_margin_flag():
+    printer = VirtualPrinter(page_geometry=_cell_geometry(10, 2))
+    printer.write_bytes(b"A\tB\tC")
+
+    first, tabbed, wrapped = printer.current_page.items
+    assert first.data == b"A"
+    assert (tabbed.data, tabbed.bounds.left, tabbed.bounds.top) == (b"B", 8 * 2160, 0)
+    assert (wrapped.data, wrapped.bounds.left, wrapped.bounds.top) == (b"C", 0, 3600)
+
+
+def test_implicit_vertical_overflow_completes_the_physical_page():
+    printer = VirtualPrinter(page_geometry=_cell_geometry(2, 2))
+    printer.write_bytes(b"ABCDE")
+
+    page = printer.completed_pages[0]
+    assert [item.data for item in page.items] == [b"AB", b"CD"]
+    assert page.number == 1
+    assert printer.current_page.number == 2
+    assert printer.current_page.items[0].data == b"E"
+    assert printer.current_page.items[0].bounds.top == 0
+
+
+def test_line_feeds_over_the_bottom_complete_even_an_unmarked_page():
+    printer = VirtualPrinter(page_geometry=_cell_geometry(2, 2))
+    printer.write_bytes(b"\n\nA")
+
+    assert printer.completed_pages == (PrinterPage(1, printer.page_geometry),)
+    assert printer.current_page.number == 2
+    assert printer.current_page.items[0].data == b"A"
+    assert printer.current_page.items[0].bounds.top == 0
+
+
+def test_wrapping_uses_the_custom_printable_area_as_logical_margins():
+    geometry = PrinterPageGeometry(
+        20_000,
+        20_000,
+        PrinterRect(1000, 2000, 1000 + 2 * 2160, 2000 + 2 * 3600),
+    )
+    printer = VirtualPrinter(page_geometry=geometry)
+    printer.write_bytes(b"ABC")
+
+    first, wrapped = printer.current_page.items
+    assert first.bounds == PrinterRect(1000, 2000, 1000 + 2 * 2160, 5600)
+    assert wrapped.bounds == PrinterRect(1000, 5600, 3160, 9200)
+
+
+def test_printable_area_narrower_than_one_cell_discards_text_without_feeding_pages():
+    geometry = PrinterPageGeometry(2000, 7200, PrinterRect(0, 0, 2000, 7200))
+    printer = VirtualPrinter(page_geometry=geometry)
+    printer.write_bytes(b"ignored")
+
+    assert printer.current_page.items == ()
+    assert printer.completed_pages == ()
 
 
 def test_spaces_advance_and_are_recorded_without_marking_the_page():
@@ -465,6 +574,28 @@ def test_crm_shields_other_commands_while_imaging_their_bytes():
     assert (token.source, token.text) == (b"\x1b", "<ESC>")
     assert text.data == b"[?41h"
     assert printer.state.direction is PrintDirection.BIDIRECTIONAL
+
+
+def test_crm_tokens_wrap_as_graphic_text_even_when_deccawm_is_reset():
+    printer = VirtualPrinter(page_geometry=_cell_geometry(5, 2))
+    printer.write_bytes(b"\x1b[?7l\x1b[3h\x00A")
+
+    token, wrapped = printer.current_page.items
+    assert isinstance(token, PrinterControlToken)
+    assert (token.source, token.text, token.bounds.top) == (b"\x00", "<NUL>", 0)
+    assert (wrapped.data, wrapped.bounds.left, wrapped.bounds.top) == (b"A", 0, 3600)
+
+
+def test_long_crm_tokens_split_across_lines_without_losing_the_source():
+    printer = VirtualPrinter(page_geometry=_cell_geometry(5, 2))
+    printer.write_bytes(b"\x1b[3h\x9b3l")
+
+    first, second = printer.current_page.items
+    assert isinstance(first, PrinterControlToken)
+    assert isinstance(second, PrinterControlToken)
+    assert (first.source, first.text, first.bounds.top) == (b"\x9b3l", "<CSI>", 0)
+    assert (second.source, second.text, second.bounds.top) == (b"\x9b3l", "3l", 3600)
+    assert printer.state.control_representation is False
 
 
 def test_crm_assembly_is_invariant_across_every_stream_boundary():

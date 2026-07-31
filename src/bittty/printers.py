@@ -166,6 +166,11 @@ class VirtualPrinter(MemoryPrinter):
         self._page_store = _PrinterPageStore(page_geometry)
         self._active_x = page_geometry.printable_area.left
         self._active_y = page_geometry.printable_area.top
+        self._left_margin = page_geometry.printable_area.left
+        self._right_margin = page_geometry.printable_area.right
+        self._top_margin = page_geometry.printable_area.top
+        self._bottom_margin = page_geometry.printable_area.bottom
+        self._right_margin_flag = False
         self._horizontal_advance = PRINT_UNITS_PER_INCH // 10
         self._vertical_advance = PRINT_UNITS_PER_INCH // 6
         self._pending_data = bytearray()
@@ -230,14 +235,53 @@ class VirtualPrinter(MemoryPrinter):
             start = end
 
     def _record_text_run(self, data: bytes, *, ascii_run: bool) -> None:
-        advance = len(data) * self._horizontal_advance
         state = self._language_engine.state
         blank = 0x20 if ascii_run else 0xA0
-        marks = data.count(blank) != len(data)
+        offset = 0
+        size = len(data)
+        while offset < size:
+            if not self._prepare_to_image(state):
+                return
+            available = (self._right_margin - self._active_x) // self._horizontal_advance
+            if available <= 0:
+                self._right_margin_flag = True
+                return
+            end = min(size, offset + available)
+            segment = data[offset:end]
+            self._append_text_segment(
+                segment,
+                ascii_run=ascii_run,
+                state=state,
+                marks=segment.count(blank) != len(segment),
+                completes_line=len(segment) == available,
+            )
+            offset = end
+
+    def _append_text_segment(
+        self,
+        data: bytes,
+        *,
+        ascii_run: bool,
+        state: VirtualPrinterState,
+        marks: bool,
+        completes_line: bool,
+    ) -> None:
+        advance = len(data) * self._horizontal_advance
         if self._pending_data and (
             self._pending_ascii != ascii_run or self._pending_state != state or self._pending_y != self._active_y
         ):
             self._flush_pending_run()
+        if completes_line and not self._pending_data:
+            self._store_text_run(
+                data,
+                ascii_run=ascii_run,
+                x=self._active_x,
+                y=self._active_y,
+                state=state,
+                marks=marks,
+            )
+            self._active_x += advance
+            return
         if not self._pending_data:
             self._pending_ascii = ascii_run
             self._pending_x = self._active_x
@@ -247,73 +291,144 @@ class VirtualPrinter(MemoryPrinter):
         self._pending_data.extend(data)
         self._pending_marks = self._pending_marks or marks
         self._active_x += advance
+        if completes_line:
+            self._flush_pending_run()
+
+    def _prepare_to_image(self, state: VirtualPrinterState) -> bool:
+        if self._right_margin - self._left_margin < self._horizontal_advance:
+            self._right_margin_flag = True
+            return False
+        if not self._vertical_cell_fits(self._active_y):
+            self._form_feed()
+        if not self._right_margin_flag and self._active_x + self._horizontal_advance <= self._right_margin:
+            return True
+        if state.control_representation or state.autowrap:
+            self._right_margin_flag = False
+            self._advance_line(home=True)
+            return self._active_x + self._horizontal_advance <= self._right_margin
+        self._right_margin_flag = True
+        return False
+
+    def _vertical_cell_fits(self, top: int) -> bool:
+        if self._bottom_margin - self._top_margin < self._vertical_advance:
+            return top == self._top_margin
+        return top + self._vertical_advance <= self._bottom_margin
+
+    def _advance_line(self, *, home: bool) -> None:
+        self._flush_pending_run()
+        if home:
+            self._active_x = self._left_margin
+            self._right_margin_flag = False
+        next_y = self._active_y + self._vertical_advance
+        if self._vertical_cell_fits(next_y):
+            self._active_y = next_y
+        else:
+            self._form_feed()
+
+    def _form_feed(self) -> None:
+        self._flush_pending_run()
+        self._page_store.complete(force=True)
+        self._active_y = self._top_margin
 
     def _record_control(self, byte: int) -> None:
         self._flush_pending_run()
-        left = self._page_store.geometry.printable_area.left
         if byte == 0x08:  # BS
-            self._active_x = max(left, self._active_x - self._horizontal_advance)
+            if not self._right_margin_flag:
+                self._active_x = max(self._left_margin, self._active_x - self._horizontal_advance)
         elif byte == 0x09:  # HT; initial stops are columns 9, 17, ...
-            column = max(0, (self._active_x - left) // self._horizontal_advance)
-            self._active_x = left + (column // 8 + 1) * 8 * self._horizontal_advance
+            column = max(0, (self._active_x - self._left_margin) // self._horizontal_advance)
+            target = self._left_margin + (column // 8 + 1) * 8 * self._horizontal_advance
+            if target + self._horizontal_advance > self._right_margin:
+                self._active_x = self._right_margin
+                self._right_margin_flag = True
+            else:
+                self._active_x = target
         elif byte == 0x0A:  # LF
-            self._active_y += self._vertical_advance
-            if self.state.control_representation or self.state.line_feed_new_line:
-                self._active_x = left
+            self._advance_line(home=self.state.control_representation or self.state.line_feed_new_line)
         elif byte == 0x0B:  # VT; initial vertical stops occur every line
-            self._active_y += self._vertical_advance
+            self._advance_line(home=False)
         elif byte == 0x0C:  # FF
-            self._page_store.complete(force=True)
-            self._active_y = self._page_store.geometry.printable_area.top
+            self._form_feed()
         elif byte == 0x0D:  # CR
-            self._active_x = left
+            self._active_x = self._left_margin
+            self._right_margin_flag = False
             if self.state.carriage_return_new_line:
-                self._active_y += self._vertical_advance
+                self._advance_line(home=True)
         elif byte == 0x85:  # NEL
-            self._active_x = left
-            self._active_y += self._vertical_advance
+            self._advance_line(home=True)
 
     def _record_crm_token(self, source: bytes, text: str) -> None:
         self._flush_pending_run()
-        advance = len(text) * self._horizontal_advance
-        token = PrinterControlToken(
-            PrinterRect(
-                self._active_x,
-                self._active_y,
-                self._active_x + advance,
-                self._active_y + self._vertical_advance,
-            ),
-            source,
-            text,
-            advance,
-            self.state,
-        )
-        self._page_store.append(token)
-        self._active_x += advance
+        state = self.state
+        offset = 0
+        while offset < len(text):
+            if not self._prepare_to_image(state):
+                return
+            available = (self._right_margin - self._active_x) // self._horizontal_advance
+            if available <= 0:
+                self._right_margin_flag = True
+                return
+            end = min(len(text), offset + available)
+            segment = text[offset:end]
+            advance = len(segment) * self._horizontal_advance
+            token = PrinterControlToken(
+                PrinterRect(
+                    self._active_x,
+                    self._active_y,
+                    self._active_x + advance,
+                    self._active_y + self._vertical_advance,
+                ),
+                source,
+                segment,
+                advance,
+                state,
+            )
+            self._page_store.append(token)
+            self._active_x += advance
+            offset = end
 
     def _flush_pending_run(self) -> None:
         if not self._pending_data:
             return
         data = bytes(self._pending_data)
-        advance = len(data) * self._horizontal_advance
         state = self._pending_state
         assert state is not None
-        run = PrinterTextRun(
-            PrinterRect(
-                self._pending_x,
-                self._pending_y,
-                self._pending_x + advance,
-                self._pending_y + self._vertical_advance,
-            ),
+        self._store_text_run(
             data,
-            data.decode("ascii") if self._pending_ascii else None,
-            advance,
-            state,
+            ascii_run=self._pending_ascii,
+            x=self._pending_x,
+            y=self._pending_y,
+            state=state,
+            marks=self._pending_marks,
         )
-        self._page_store.append(run, marks=self._pending_marks)
         self._pending_data.clear()
         self._pending_state = None
         self._pending_marks = False
+
+    def _store_text_run(
+        self,
+        data: bytes,
+        *,
+        ascii_run: bool,
+        x: int,
+        y: int,
+        state: VirtualPrinterState,
+        marks: bool,
+    ) -> None:
+        advance = len(data) * self._horizontal_advance
+        run = PrinterTextRun(
+            PrinterRect(
+                x,
+                y,
+                x + advance,
+                y + self._vertical_advance,
+            ),
+            data,
+            data.decode("ascii") if ascii_run else None,
+            advance,
+            state,
+        )
+        self._page_store.append(run, marks=marks)
 
     def write_bytes(self, data: bytes) -> int:
         written = super().write_bytes(data)
