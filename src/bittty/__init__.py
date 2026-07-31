@@ -48,6 +48,9 @@ from .printer_pages import (
     PrinterTextRun,
 )
 from .printers import (
+    GENERIC_DEC_AND_IBM_PRINTER,
+    GENERIC_DEC_PPL2_PRINTER,
+    GENERIC_PROPRINTER,
     MemoryPrinter,
     PrintedDataType,
     PrinterConfiguration,
@@ -56,9 +59,11 @@ from .printers import (
     PrinterParity,
     PrinterPortSelection,
     PrinterType,
+    PrinterUnsolicitedReports,
     ProPrinterCodePage,
     StreamPrinter,
     VirtualPrinter,
+    VirtualPrinterProfile,
 )
 from .style import (
     CURSOR_CODE,
@@ -75,6 +80,9 @@ except PackageNotFoundError:
 __all__ = [
     "BITTTY",
     "CURSOR_CODE",
+    "GENERIC_DEC_AND_IBM_PRINTER",
+    "GENERIC_DEC_PPL2_PRINTER",
+    "GENERIC_PROPRINTER",
     "LETTER_PAGE_GEOMETRY",
     "LINUX",
     "PRINT_UNITS_PER_INCH",
@@ -120,11 +128,13 @@ __all__ = [
     "PrinterTextRun",
     "PrinterType",
     "PrinterUnderline",
+    "PrinterUnsolicitedReports",
     "ProPrinterCodePage",
     "StreamPrinter",
     "TerminalCaps",
     "Video",
     "VirtualPrinter",
+    "VirtualPrinterProfile",
     "VirtualPrinterState",
     "WidthPolicy",
 ]

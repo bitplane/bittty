@@ -14,11 +14,18 @@ from bittty import (
     PrinterLanguage,
     PrinterRendition,
     PrinterScript,
+    PrinterStatus,
     PrinterType,
     PrinterUnderline,
+    PrinterUnsolicitedReports,
     VirtualPrinter,
+    VirtualPrinterProfile,
     VirtualPrinterState,
 )
+
+
+async def _read_printer_chunks(printer, count):
+    return b"".join([await printer.read_bytes_async(1024) for _ in range(count)])
 
 
 def test_physical_type_selects_fixed_initial_language():
@@ -48,6 +55,118 @@ def test_virtual_printer_keeps_an_exact_raw_trace_and_memory_duplex():
     printer.close()
     with pytest.raises(ValueError, match="closed"):
         printer.write_bytes(b"x")
+
+
+def test_profile_selects_physical_defaults_and_is_immutable():
+    profile = VirtualPrinterProfile(
+        "test-ppl3",
+        device_type=PrinterType.DEC_AND_IBM,
+        primary_device_attributes=[73, 23],
+        secondary_device_attributes=[99, 10],
+        supports_cursor_position_report=True,
+    )
+    printer = VirtualPrinter(profile=profile)
+
+    assert printer.profile is profile
+    assert printer.device_type is PrinterType.DEC_AND_IBM
+    assert profile.primary_device_attributes == (73, 23)
+    with pytest.raises(AttributeError):
+        profile.name = "changed"
+    with pytest.raises(ValueError, match="must match"):
+        VirtualPrinter(PrinterType.PROPRINTER, profile=profile)
+
+
+@pytest.mark.parametrize("introducer", (b"\x1b[", b"\x9b"))
+def test_dec_device_attribute_reports_use_profile_identity(introducer):
+    profile = VirtualPrinterProfile(
+        "reporting-test",
+        primary_device_attributes=(73, 23),
+        secondary_device_attributes=(53, 10, 0, 0, 0, 0, 0),
+    )
+    printer = VirtualPrinter(profile=profile)
+    printer.write_bytes(b"before" + introducer + b"c" + introducer + b">0c")
+
+    assert asyncio.run(_read_printer_chunks(printer, 2)) == (b"\x1b[?73;23c\x1b[>53;10;0;0;0;0;0c")
+    assert printer.current_page.items[0].data == b"before"
+    assert bytes(printer.data) == b"before" + introducer + b"c" + introducer + b">0c"
+
+
+def test_unimplemented_and_malformed_device_attribute_requests_are_silent():
+    printer = VirtualPrinter()
+    printer.write_bytes(b"\x1b[>c\x1b[1c\x1b[0;0c\x1b[>1c")
+    printer.send_bytes(b"sentinel")
+    assert asyncio.run(printer.read_bytes_async(1024)) == b"sentinel"
+
+
+@pytest.mark.parametrize(
+    "status,brief,parameters",
+    (
+        (PrinterStatus.READY, b"\x1b[0n", b"\x1b[?20n"),
+        (PrinterStatus.ASSIGNED, b"\x1b[0n", b"\x1b[?20n"),
+        (PrinterStatus.OFFLINE, b"\x1b[3n", b"\x1b[?24n"),
+        (PrinterStatus.NOT_READY, b"\x1b[3n", b"\x1b[?59n"),
+        (PrinterStatus.BUSY, b"\x1b[3n", b"\x1b[?59n"),
+    ),
+)
+def test_dsr_returns_profile_driven_brief_and_extended_status(status, brief, parameters):
+    printer = VirtualPrinter(status=status)
+    printer.write_bytes(b"\x1b[5n")
+    assert asyncio.run(_read_printer_chunks(printer, 2)) == brief + parameters
+
+
+def test_dsr_unsolicited_modes_follow_status_changes_and_reset():
+    printer = VirtualPrinter()
+    printer.write_bytes(b"\x1b[?2n")
+    assert printer.unsolicited_reports is PrinterUnsolicitedReports.BRIEF
+    assert asyncio.run(_read_printer_chunks(printer, 2)) == b"\x1b[0n\x1b[?20n"
+
+    printer.status = PrinterStatus.OFFLINE
+    assert asyncio.run(printer.read_bytes_async(1024)) == b"\x1b[3n"
+    printer.status = PrinterStatus.OFFLINE
+
+    printer.write_bytes(b"\x1b[?3n")
+    assert printer.unsolicited_reports is PrinterUnsolicitedReports.EXTENDED
+    assert asyncio.run(_read_printer_chunks(printer, 2)) == b"\x1b[3n\x1b[?24n"
+    printer.status = PrinterStatus.READY
+    assert asyncio.run(_read_printer_chunks(printer, 2)) == b"\x1b[0n\x1b[?20n"
+
+    printer.reset()
+    assert printer.unsolicited_reports is PrinterUnsolicitedReports.DISABLED
+
+
+def test_private_dsr_one_disables_unsolicited_reports_without_reply():
+    printer = VirtualPrinter()
+    printer.write_bytes(b"\x1b[?2n")
+    assert asyncio.run(_read_printer_chunks(printer, 2)) == b"\x1b[0n\x1b[?20n"
+    printer.write_bytes(b"\x1b[?1n")
+    printer.status = PrinterStatus.OFFLINE
+    printer.send_bytes(b"sentinel")
+    assert printer.unsolicited_reports is PrinterUnsolicitedReports.DISABLED
+    assert asyncio.run(printer.read_bytes_async(1024)) == b"sentinel"
+
+
+def test_cursor_position_report_is_profile_gated_and_uses_current_pitch_grid():
+    unsupported = VirtualPrinter()
+    unsupported.write_bytes(b"AB\x1b[6n")
+    unsupported.send_bytes(b"sentinel")
+    assert asyncio.run(unsupported.read_bytes_async(1024)) == b"sentinel"
+
+    profile = VirtualPrinterProfile("ppl3-test", supports_cursor_position_report=True)
+    printer = VirtualPrinter(profile=profile)
+    printer.write_bytes(b"AB\nC\x1b[6n")
+    assert asyncio.run(printer.read_bytes_async(1024)) == b"\x1b[2;4R"
+
+
+def test_report_sequences_remain_fragment_safe_and_ibm_language_ignores_them():
+    printer = VirtualPrinter()
+    for byte in b"\x1b[0c":
+        printer.write_bytes(bytes((byte,)))
+    assert asyncio.run(printer.read_bytes_async(1024)) == b"\x1b[?72c"
+
+    ibm = VirtualPrinter(PrinterType.PROPRINTER)
+    ibm.write_bytes(b"\x1b[c\x1b[5n")
+    ibm.send_bytes(b"sentinel")
+    assert asyncio.run(ibm.read_bytes_async(1024)) == b"sentinel"
 
 
 @pytest.mark.parametrize("introducer", (b"\x1b[", b"\x9b"))

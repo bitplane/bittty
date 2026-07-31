@@ -137,6 +137,18 @@ class _PrinterLayoutCommand(Enum):
     POSITION_UNIT_MODE = "position-unit-mode"
 
 
+class _PrinterReportCommand(Enum):
+    """Semantic DEC PPL reports requested by the host."""
+
+    PRIMARY_ATTRIBUTES = "primary-attributes"
+    SECONDARY_ATTRIBUTES = "secondary-attributes"
+    EXTENDED_STATUS = "extended-status"
+    DISABLE_UNSOLICITED_STATUS = "disable-unsolicited-status"
+    ENABLE_BRIEF_STATUS = "enable-brief-status"
+    ENABLE_EXTENDED_STATUS = "enable-extended-status"
+    CURSOR_POSITION = "cursor-position"
+
+
 @dataclass(frozen=True)
 class VirtualPrinterState:
     """Observable language state of a virtual printer."""
@@ -284,6 +296,7 @@ class _PrinterLanguageEngine:
         on_control: Callable[[int], None] | None = None,
         on_crm_token: Callable[[bytes, str], None] | None = None,
         on_layout: Callable[[_PrinterLayoutCommand, tuple[int, ...]], None] | None = None,
+        on_report: Callable[[_PrinterReportCommand], None] | None = None,
         on_reset: Callable[[], None] | None = None,
     ) -> None:
         self._initial_language = initial_language
@@ -292,6 +305,7 @@ class _PrinterLanguageEngine:
         self._on_control = on_control
         self._on_crm_token = on_crm_token
         self._on_layout = on_layout
+        self._on_report = on_report
         self._on_reset = on_reset
         self._language = initial_language
         self._direction = PrintDirection.BIDIRECTIONAL
@@ -531,6 +545,10 @@ class _PrinterLanguageEngine:
         if self._on_layout is not None:
             self._on_layout(command, parameters)
 
+    def _emit_report(self, command: _PrinterReportCommand) -> None:
+        if self._on_report is not None:
+            self._on_report(command)
+
     def _emit_reset(self) -> None:
         if self._on_reset is not None:
             self._on_reset()
@@ -632,6 +650,39 @@ class _PrinterLanguageEngine:
         self._csi.append(byte)
 
     def _dispatch_dec_csi(self, body: bytes, final: int) -> None:
+        if final == ord("c"):
+            secondary = body.startswith(b">")
+            parameters = self._numeric_parameters(body[1:] if secondary else body)
+            if parameters is not None and (not parameters or parameters == [0]):
+                self._emit_report(
+                    _PrinterReportCommand.SECONDARY_ATTRIBUTES
+                    if secondary
+                    else _PrinterReportCommand.PRIMARY_ATTRIBUTES
+                )
+            return
+
+        if final == ord("n"):
+            private = body.startswith(b"?")
+            parameters = self._numeric_parameters(body[1:] if private else body)
+            if parameters is None or len(parameters) > 1:
+                return
+            parameter = parameters[0] if parameters else 0
+            if private:
+                command = {
+                    1: _PrinterReportCommand.DISABLE_UNSOLICITED_STATUS,
+                    2: _PrinterReportCommand.ENABLE_BRIEF_STATUS,
+                    3: _PrinterReportCommand.ENABLE_EXTENDED_STATUS,
+                }.get(parameter)
+            else:
+                command = {
+                    0: _PrinterReportCommand.EXTENDED_STATUS,
+                    5: _PrinterReportCommand.EXTENDED_STATUS,
+                    6: _PrinterReportCommand.CURSOR_POSITION,
+                }.get(parameter)
+            if command is not None:
+                self._emit_report(command)
+            return
+
         if final in (ord("h"), ord("l")):
             private = body.startswith(b"?")
             parameters = self._numeric_parameters(body[1:] if private else body)

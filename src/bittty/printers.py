@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from enum import IntEnum
+from enum import Enum, IntEnum
 from typing import BinaryIO
 
 from .connections import PrinterStatus
@@ -13,6 +13,7 @@ from .printer_languages import (
     VirtualPrinterState,
     _PrinterLanguageEngine,
     _PrinterLayoutCommand,
+    _PrinterReportCommand,
 )
 from .printer_pages import (
     LETTER_PAGE_GEOMETRY,
@@ -95,6 +96,75 @@ class PrinterFlowThreshold(IntEnum):
     HIGH = 2
 
 
+class PrinterUnsolicitedReports(Enum):
+    """Status reports emitted when the virtual printer's condition changes."""
+
+    DISABLED = "disabled"
+    BRIEF = "brief"
+    EXTENDED = "extended"
+
+
+@dataclass(frozen=True)
+class VirtualPrinterProfile:
+    """Immutable physical identity and report capabilities of a virtual printer.
+
+    Device-attribute tuples contain the parameters following ``CSI ?`` (DA) or
+    ``CSI >`` (DA2).  Status tuples contain DEC PPL extended-report parameters;
+    the virtual printer supplies the private CSI marker and the brief report.
+    ``None`` means the model does not implement that report.
+    """
+
+    name: str
+    device_type: PrinterType = PrinterType.DEC_ANSI
+    page_geometry: PrinterPageGeometry = LETTER_PAGE_GEOMETRY
+    primary_device_attributes: tuple[int, ...] | None = (72,)
+    secondary_device_attributes: tuple[int, ...] | None = None
+    ready_status_parameters: tuple[int, ...] = (20,)
+    offline_status_parameters: tuple[int, ...] = (24,)
+    unavailable_status_parameters: tuple[int, ...] = (59,)
+    supports_cursor_position_report: bool = False
+
+    def __post_init__(self) -> None:
+        if not self.name:
+            raise ValueError("profile name must not be empty")
+        object.__setattr__(self, "device_type", PrinterType(self.device_type))
+        for field_name in (
+            "primary_device_attributes",
+            "secondary_device_attributes",
+            "ready_status_parameters",
+            "offline_status_parameters",
+            "unavailable_status_parameters",
+        ):
+            parameters = getattr(self, field_name)
+            if parameters is None:
+                if field_name.endswith("status_parameters"):
+                    raise ValueError(f"{field_name} must contain one or more parameters from 0 to 999")
+                continue
+            parameters = tuple(parameters)
+            if not parameters or any(parameter < 0 or parameter > 999 for parameter in parameters):
+                raise ValueError(f"{field_name} must contain one or more parameters from 0 to 999")
+            object.__setattr__(self, field_name, parameters)
+
+
+GENERIC_DEC_PPL2_PRINTER = VirtualPrinterProfile("generic-dec-ppl2")
+GENERIC_PROPRINTER = VirtualPrinterProfile(
+    "generic-ibm-proprinter",
+    device_type=PrinterType.PROPRINTER,
+    primary_device_attributes=None,
+)
+GENERIC_DEC_AND_IBM_PRINTER = VirtualPrinterProfile(
+    "generic-dec-ppl2-and-ibm-proprinter",
+    device_type=PrinterType.DEC_AND_IBM,
+)
+
+
+_DEFAULT_PROFILES = {
+    PrinterType.DEC_ANSI: GENERIC_DEC_PPL2_PRINTER,
+    PrinterType.PROPRINTER: GENERIC_PROPRINTER,
+    PrinterType.DEC_AND_IBM: GENERIC_DEC_AND_IBM_PRINTER,
+}
+
+
 @dataclass(frozen=True)
 class PrinterConfiguration:
     """Complete physical printer configuration exposed to an adapter."""
@@ -118,11 +188,26 @@ class MemoryPrinter:
 
     def __init__(self, *, status: PrinterStatus = PrinterStatus.READY) -> None:
         self.data = bytearray()
-        self.status = status
+        self._status = PrinterStatus(status)
         self.closed = False
         self.configuration: PrinterConfiguration | None = None
         self.configuration_history: list[PrinterConfiguration] = []
         self._inbound: asyncio.Queue[bytes] = asyncio.Queue()
+
+    @property
+    def status(self) -> PrinterStatus:
+        return self._status
+
+    @status.setter
+    def status(self, status: PrinterStatus) -> None:
+        status = PrinterStatus(status)
+        previous = self._status
+        self._status = status
+        if status is not previous:
+            self._status_changed()
+
+    def _status_changed(self) -> None:
+        """Hook for duplex devices that report asynchronous status changes."""
 
     def write_bytes(self, data: bytes) -> int:
         if self.closed:
@@ -158,13 +243,22 @@ class VirtualPrinter(MemoryPrinter):
 
     def __init__(
         self,
-        device_type: PrinterType = PrinterType.DEC_ANSI,
+        device_type: PrinterType | None = None,
         *,
-        page_geometry: PrinterPageGeometry = LETTER_PAGE_GEOMETRY,
+        profile: VirtualPrinterProfile | None = None,
+        page_geometry: PrinterPageGeometry | None = None,
         status: PrinterStatus = PrinterStatus.READY,
     ) -> None:
+        if profile is None:
+            resolved_type = PrinterType.DEC_ANSI if device_type is None else PrinterType(device_type)
+            profile = _DEFAULT_PROFILES[resolved_type]
+        elif device_type is not None and PrinterType(device_type) is not profile.device_type:
+            raise ValueError("device_type must match profile.device_type")
+        page_geometry = profile.page_geometry if page_geometry is None else page_geometry
+        self._profile = profile
+        self._unsolicited_reports = PrinterUnsolicitedReports.DISABLED
         super().__init__(status=status)
-        self._device_type = PrinterType(device_type)
+        self._device_type = profile.device_type
         self._page_store = _PrinterPageStore(page_geometry)
         self._active_x = page_geometry.printable_area.left
         self._active_y = page_geometry.printable_area.top
@@ -199,6 +293,7 @@ class VirtualPrinter(MemoryPrinter):
             on_control=self._record_control,
             on_crm_token=self._record_crm_token,
             on_layout=self._record_layout,
+            on_report=self._record_report,
             on_reset=self._reset_layout,
         )
 
@@ -206,6 +301,16 @@ class VirtualPrinter(MemoryPrinter):
     def device_type(self) -> PrinterType:
         """Return this virtual printer's immutable physical language capability."""
         return self._device_type
+
+    @property
+    def profile(self) -> VirtualPrinterProfile:
+        """Return this printer's immutable model identity and capabilities."""
+        return self._profile
+
+    @property
+    def unsolicited_reports(self) -> PrinterUnsolicitedReports:
+        """Return the currently selected asynchronous status-report mode."""
+        return self._unsolicited_reports
 
     @property
     def state(self) -> VirtualPrinterState:
@@ -423,6 +528,54 @@ class VirtualPrinter(MemoryPrinter):
             self._horizontal_tabs.clear()
         elif command is _PrinterLayoutCommand.CLEAR_VERTICAL_TABS:
             self._vertical_tabs.clear()
+
+    def _record_report(self, command: _PrinterReportCommand) -> None:
+        if command is _PrinterReportCommand.PRIMARY_ATTRIBUTES:
+            self._flush_pending_run()
+            self._send_parameter_report(b"\x1b[?", self.profile.primary_device_attributes, b"c")
+        elif command is _PrinterReportCommand.SECONDARY_ATTRIBUTES:
+            self._flush_pending_run()
+            self._send_parameter_report(b"\x1b[>", self.profile.secondary_device_attributes, b"c")
+        elif command is _PrinterReportCommand.EXTENDED_STATUS:
+            self._send_status_report(extended=True)
+        elif command is _PrinterReportCommand.DISABLE_UNSOLICITED_STATUS:
+            self._unsolicited_reports = PrinterUnsolicitedReports.DISABLED
+        elif command is _PrinterReportCommand.ENABLE_BRIEF_STATUS:
+            self._unsolicited_reports = PrinterUnsolicitedReports.BRIEF
+            self._send_status_report(extended=True)
+        elif command is _PrinterReportCommand.ENABLE_EXTENDED_STATUS:
+            self._unsolicited_reports = PrinterUnsolicitedReports.EXTENDED
+            self._send_status_report(extended=True)
+        elif command is _PrinterReportCommand.CURSOR_POSITION and self.profile.supports_cursor_position_report:
+            self._flush_pending_run()
+            area = self.page_geometry.printable_area
+            row = (self._active_y - area.top) // self._vertical_advance + 1
+            column = (self._active_x - area.left) // self._horizontal_advance + 1
+            self.send_bytes(f"\x1b[{row};{column}R".encode("ascii"))
+
+    def _send_parameter_report(self, prefix: bytes, parameters: tuple[int, ...] | None, final: bytes) -> None:
+        if parameters is None:
+            return
+        body = b";".join(str(parameter).encode("ascii") for parameter in parameters)
+        self.send_bytes(prefix + body + final)
+
+    def _status_parameters(self) -> tuple[int, ...]:
+        if self.status in (PrinterStatus.READY, PrinterStatus.ASSIGNED):
+            return self.profile.ready_status_parameters
+        if self.status is PrinterStatus.OFFLINE:
+            return self.profile.offline_status_parameters
+        return self.profile.unavailable_status_parameters
+
+    def _send_status_report(self, *, extended: bool) -> None:
+        parameters = self._status_parameters()
+        error = self.status not in (PrinterStatus.READY, PrinterStatus.ASSIGNED)
+        self.send_bytes(b"\x1b[3n" if error else b"\x1b[0n")
+        if extended:
+            self._send_parameter_report(b"\x1b[?", parameters, b"n")
+
+    def _status_changed(self) -> None:
+        if self._unsolicited_reports is not PrinterUnsolicitedReports.DISABLED:
+            self._send_status_report(extended=self._unsolicited_reports is PrinterUnsolicitedReports.EXTENDED)
 
     def _reset_layout(self) -> None:
         self._flush_pending_run()
@@ -760,6 +913,7 @@ class VirtualPrinter(MemoryPrinter):
     def reset(self) -> None:
         """Restore the physical printer's power-on language state."""
         self._language_engine.reset()
+        self._unsolicited_reports = PrinterUnsolicitedReports.DISABLED
 
 
 class StreamPrinter:
