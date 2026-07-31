@@ -12,6 +12,7 @@ from bittty import (
     PrinterConfiguration,
     PrinterDensity,
     PrinterLanguage,
+    PrinterMechanicalAction,
     PrinterRendition,
     PrinterScript,
     PrinterStatus,
@@ -210,6 +211,19 @@ def test_ibm_configuration_selects_code_page_without_changing_identity():
 
     assert printer.device_type is PrinterType.PROPRINTER
     assert printer.state.ibm_code_page == 850
+
+
+def test_virtual_printer_exposes_drainable_mechanical_events_without_timing_delays():
+    printer = VirtualPrinter(PrinterType.PROPRINTER)
+    printer.write_bytes(b"A\x07\x0c")
+
+    bell, eject = printer.mechanical_events
+    assert bell.action is PrinterMechanicalAction.BELL
+    assert (bell.page_number, bell.x, bell.y) == (1, 2160, 0)
+    assert eject.action is PrinterMechanicalAction.PAGE_EJECT
+    assert eject.page_number == 1
+    assert printer.take_mechanical_events() == (bell, eject)
+    assert printer.take_mechanical_events() == ()
 
 
 def test_ibm_print_mode_direction_character_set_and_proportional_state():

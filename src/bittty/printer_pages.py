@@ -165,6 +165,58 @@ class PrinterRenditionSpan(PrinterPageItem):
 
 
 @dataclass(frozen=True)
+class PrinterBitImage(PrinterPageItem):
+    """Packed vertical slices emitted by an IBM PPDS bit-image command."""
+
+    data: bytes
+    horizontal_dpi: int
+    vertical_dpi: int
+    pins: int
+    adjacent_dots: bool
+    state: VirtualPrinterState
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if not isinstance(self.data, bytes) or not self.data:
+            raise ValueError("data must be nonempty bytes")
+        for name in ("horizontal_dpi", "vertical_dpi", "pins"):
+            _require_int(name, getattr(self, name))
+        if self.horizontal_dpi <= 0 or self.vertical_dpi <= 0:
+            raise ValueError("image density must be positive")
+        if self.pins not in (8, 24):
+            raise ValueError("pins must be 8 or 24")
+        if len(self.data) % (self.pins // 8):
+            raise ValueError("data must contain complete vertical slices")
+        if not isinstance(self.adjacent_dots, bool):
+            raise TypeError("adjacent_dots must be a boolean")
+        if not isinstance(self.state, VirtualPrinterState):
+            raise TypeError("state must be a VirtualPrinterState")
+        columns = len(self.data) // (self.pins // 8)
+        expected_width = columns * PRINT_UNITS_PER_INCH // self.horizontal_dpi
+        expected_height = self.pins * PRINT_UNITS_PER_INCH // self.vertical_dpi
+        if self.bounds.width != expected_width or self.bounds.height != expected_height:
+            raise ValueError("bounds must match packed image dimensions and density")
+
+
+@dataclass(frozen=True)
+class PrinterDownloadedGlyph:
+    """One retained 9-pin IBM downloadable character definition."""
+
+    code_point: int
+    attributes: bytes
+    columns: bytes
+
+    def __post_init__(self) -> None:
+        _require_int("code_point", self.code_point)
+        if not 0 <= self.code_point <= 255:
+            raise ValueError("code_point must be from 0 to 255")
+        if not isinstance(self.attributes, bytes) or len(self.attributes) != 2:
+            raise ValueError("attributes must contain exactly two bytes")
+        if not isinstance(self.columns, bytes) or len(self.columns) != 11:
+            raise ValueError("columns must contain exactly eleven bytes")
+
+
+@dataclass(frozen=True)
 class PrinterPage:
     """An immutable physical-page display-list snapshot."""
 
@@ -193,6 +245,7 @@ class _PrinterPageStore:
         self._geometry = geometry
         self._current_number = 1
         self._current_items: list[PrinterPageItem] = []
+        self._current_marks: list[bool] = []
         self._marked = False
         self._completed: list[PrinterPage] = []
 
@@ -216,7 +269,21 @@ class _PrinterPageStore:
         if not isinstance(item, PrinterPageItem):
             raise TypeError("item must be a PrinterPageItem")
         self._current_items.append(item)
+        self._current_marks.append(marks)
         self._marked = self._marked or marks
+
+    def checkpoint(self) -> int:
+        """Return a token that can roll back subsequently appended page items."""
+        return len(self._current_items)
+
+    def truncate(self, checkpoint: int) -> None:
+        """Discard items appended after a checkpoint on the current page."""
+        _require_int("checkpoint", checkpoint)
+        if not 0 <= checkpoint <= len(self._current_items):
+            raise ValueError("checkpoint is not on the current page")
+        del self._current_items[checkpoint:]
+        del self._current_marks[checkpoint:]
+        self._marked = any(self._current_marks)
 
     def complete(self, *, force: bool = False) -> PrinterPage | None:
         """Complete the current page, optionally including a blank page."""
@@ -226,6 +293,7 @@ class _PrinterPageStore:
         self._completed.append(page)
         self._current_number += 1
         self._current_items = []
+        self._current_marks = []
         self._marked = False
         return page
 

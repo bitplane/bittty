@@ -68,9 +68,10 @@ Ports are full-duplex jacks on the board; connections are the cables that plug i
   while retained rendition and G-set state plus semantic pitch, page, margin, positioning, tab,
   format-effector, and CRM events drive page layout. Immutable model profiles provide physical
   defaults and truthful DA/DA2, status, unsolicited-status, and optional CPR behaviour over the
-  duplex port. IBM text commands share the physical layout engine, while binary bit-image and
-  bracketed records are length-framed until graphical page items exist. Lined HPA/HPR movement is
-  retained as a rendition span rather than flattened into pixels.
+  duplex port. IBM text commands share the physical layout engine; bit images remain compact packed
+  slices, downloadable glyphs remain compact column data, and line checkpoints implement CAN without
+  rewinding the print head. Page ejects and bells produce untimed mechanical events for frontends or
+  hardware bridges. Lined HPA/HPR movement remains a rendition span rather than flattened pixels.
 - **DisplayPort** carries typed events both ways: present events down to the chrome,
   input/focus/caps up from it. Serialize its two event streams and the chrome can live in
   another process or another machine; the board never notices. The name is the

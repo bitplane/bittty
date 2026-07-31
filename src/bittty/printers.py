@@ -18,7 +18,9 @@ from .printer_languages import (
 from .printer_pages import (
     LETTER_PAGE_GEOMETRY,
     PRINT_UNITS_PER_INCH,
+    PrinterBitImage,
     PrinterControlToken,
+    PrinterDownloadedGlyph,
     PrinterPage,
     PrinterPageGeometry,
     PrinterRect,
@@ -102,6 +104,23 @@ class PrinterUnsolicitedReports(Enum):
     DISABLED = "disabled"
     BRIEF = "brief"
     EXTENDED = "extended"
+
+
+class PrinterMechanicalAction(Enum):
+    """Observable physical actions produced by the virtual mechanism."""
+
+    BELL = "bell"
+    PAGE_EJECT = "page-eject"
+
+
+@dataclass(frozen=True)
+class PrinterMechanicalEvent:
+    """One untimed mechanical action for a frontend or hardware bridge."""
+
+    action: PrinterMechanicalAction
+    page_number: int
+    x: int
+    y: int
 
 
 @dataclass(frozen=True)
@@ -260,6 +279,9 @@ class VirtualPrinter(MemoryPrinter):
         super().__init__(status=status)
         self._device_type = profile.device_type
         self._page_store = _PrinterPageStore(page_geometry)
+        self._line_checkpoint = self._page_store.checkpoint()
+        self._mechanical_events: list[PrinterMechanicalEvent] = []
+        self._downloaded_glyphs: dict[int, PrinterDownloadedGlyph] = {}
         self._active_x = page_geometry.printable_area.left
         self._active_y = page_geometry.printable_area.top
         self._left_margin = page_geometry.printable_area.left
@@ -270,6 +292,7 @@ class VirtualPrinter(MemoryPrinter):
         self._horizontal_advance = PRINT_UNITS_PER_INCH // 10
         self._ibm_base_horizontal_advance = self._horizontal_advance
         self._ibm_double_width = False
+        self._ibm_perforation_skip = 0
         self._dec_layout_snapshot: tuple[object, ...] | None = None
         self._vertical_advance = PRINT_UNITS_PER_INCH // 6
         self._logical_page_bottom = page_geometry.printable_area.bottom
@@ -299,6 +322,8 @@ class VirtualPrinter(MemoryPrinter):
             on_crm_token=self._record_crm_token,
             on_layout=self._record_layout,
             on_report=self._record_report,
+            on_bit_image=self._record_bit_image,
+            on_font_download=self._record_font_download,
             on_reset=self._reset_layout,
         )
 
@@ -341,6 +366,22 @@ class VirtualPrinter(MemoryPrinter):
     def take_completed_pages(self) -> tuple[PrinterPage, ...]:
         """Return completed pages and release the printer's references to them."""
         return self._page_store.take_completed_pages()
+
+    @property
+    def downloaded_glyphs(self) -> tuple[PrinterDownloadedGlyph, ...]:
+        """Return the current IBM downloadable-character definitions by code point."""
+        return tuple(self._downloaded_glyphs[code] for code in sorted(self._downloaded_glyphs))
+
+    @property
+    def mechanical_events(self) -> tuple[PrinterMechanicalEvent, ...]:
+        """Return queued physical actions without consuming them."""
+        return tuple(self._mechanical_events)
+
+    def take_mechanical_events(self) -> tuple[PrinterMechanicalEvent, ...]:
+        """Return and clear queued physical actions."""
+        events = tuple(self._mechanical_events)
+        self._mechanical_events.clear()
+        return events
 
     def configure(self, configuration: PrinterConfiguration) -> None:
         """Apply adapter configuration without changing the fixed printer identity."""
@@ -454,14 +495,25 @@ class VirtualPrinter(MemoryPrinter):
             self._active_y = next_y
         else:
             self._form_feed()
+        self._line_checkpoint = self._page_store.checkpoint()
 
     def _form_feed(self) -> None:
         self._flush_pending_run()
         if self._no_forms:
             self._advance_line(home=False)
             return
-        self._page_store.complete(force=True)
+        completed = self._page_store.complete(force=True)
+        assert completed is not None
+        self._mechanical_events.append(
+            PrinterMechanicalEvent(
+                PrinterMechanicalAction.PAGE_EJECT,
+                completed.number,
+                self._active_x,
+                self._active_y,
+            )
+        )
         self._active_y = self._top_margin
+        self._line_checkpoint = self._page_store.checkpoint()
 
     def _record_control(self, byte: int) -> None:
         self._flush_pending_run()
@@ -514,6 +566,8 @@ class VirtualPrinter(MemoryPrinter):
             self._right_margin_flag = False
             if self.state.carriage_return_new_line:
                 self._advance_line(home=True)
+            else:
+                self._line_checkpoint = self._page_store.checkpoint()
         elif byte == 0x85:  # NEL
             self._advance_line(home=True)
 
@@ -556,8 +610,10 @@ class VirtualPrinter(MemoryPrinter):
             self._set_ibm_horizontal_pitch(parameter)
         elif command is _PrinterLayoutCommand.IBM_LINE_SPACING:
             self._set_ibm_line_spacing(parameter)
+            self._apply_ibm_perforation_skip()
         elif command is _PrinterLayoutCommand.IBM_VERTICAL_MOTION:
             self._ibm_vertical_motion(parameter)
+            self._line_checkpoint = self._page_store.checkpoint()
         elif command is _PrinterLayoutCommand.IBM_DOUBLE_WIDTH:
             self._set_ibm_double_width(bool(parameter))
         elif command is _PrinterLayoutCommand.IBM_REPLACE_HORIZONTAL_TABS:
@@ -570,12 +626,79 @@ class VirtualPrinter(MemoryPrinter):
             self._reset_ibm_tabs()
         elif command is _PrinterLayoutCommand.IBM_FORM_LENGTH_LINES:
             self._set_page_length(parameter)
+            self._apply_ibm_perforation_skip()
         elif command is _PrinterLayoutCommand.IBM_FORM_LENGTH_INCHES:
             self._set_ibm_form_length_inches(parameter)
+            self._apply_ibm_perforation_skip()
         elif command is _PrinterLayoutCommand.IBM_LANGUAGE_ENTER:
             self._save_dec_layout()
         elif command is _PrinterLayoutCommand.IBM_LANGUAGE_LEAVE:
             self._restore_dec_layout()
+        elif command is _PrinterLayoutCommand.IBM_CANCEL_LINE:
+            self._page_store.truncate(self._line_checkpoint)
+        elif command is _PrinterLayoutCommand.IBM_SET_TOP_OF_FORM:
+            self._set_ibm_top_of_form()
+        elif command is _PrinterLayoutCommand.IBM_PERFORATION_SKIP:
+            self._ibm_perforation_skip = parameter
+            self._apply_ibm_perforation_skip()
+        elif command is _PrinterLayoutCommand.IBM_BELL:
+            self._mechanical_events.append(
+                PrinterMechanicalEvent(
+                    PrinterMechanicalAction.BELL,
+                    self._page_store.current_page.number,
+                    self._active_x,
+                    self._active_y,
+                )
+            )
+
+    def _record_bit_image(self, horizontal_dpi: int, pins: int, adjacent_dots: bool, data: bytes) -> None:
+        self._flush_pending_run()
+        bytes_per_column = pins // 8
+        complete_size = len(data) - len(data) % bytes_per_column
+        if complete_size == 0:
+            return
+        if not self._no_forms and self._active_y + pins * PRINT_UNITS_PER_INCH // 72 > self._bottom_margin:
+            self._form_feed()
+        column_advance = PRINT_UNITS_PER_INCH // horizontal_dpi
+        available_columns = max(0, (self._right_margin - self._active_x) // column_advance)
+        columns = min(complete_size // bytes_per_column, available_columns)
+        if columns == 0:
+            self._right_margin_flag = True
+            return
+        image_data = data[: columns * bytes_per_column]
+        width = columns * column_advance
+        height = pins * PRINT_UNITS_PER_INCH // 72
+        self._page_store.append(
+            PrinterBitImage(
+                PrinterRect(
+                    self._active_x,
+                    self._active_y,
+                    self._active_x + width,
+                    self._active_y + height,
+                ),
+                image_data,
+                horizontal_dpi,
+                72,
+                pins,
+                adjacent_dots,
+                self.state,
+            ),
+            marks=any(image_data),
+        )
+        self._active_x += width
+        self._right_margin_flag = self._active_x >= self._right_margin
+
+    def _record_font_download(self, data: bytes) -> None:
+        if not data:
+            self._downloaded_glyphs.clear()
+            return
+        if len(data) < 2 or (len(data) - 2) % 13:
+            return
+        start_code = data[1]
+        for offset in range(2, len(data), 13):
+            code_point = (start_code + (offset - 2) // 13) & 0xFF
+            entry = data[offset : offset + 13]
+            self._downloaded_glyphs[code_point] = PrinterDownloadedGlyph(code_point, entry[:2], entry[2:])
 
     def _record_report(self, command: _PrinterReportCommand) -> None:
         if command is _PrinterReportCommand.PRIMARY_ATTRIBUTES:
@@ -638,6 +761,7 @@ class VirtualPrinter(MemoryPrinter):
         self._horizontal_advance = PRINT_UNITS_PER_INCH // 10
         self._ibm_base_horizontal_advance = self._horizontal_advance
         self._ibm_double_width = False
+        self._ibm_perforation_skip = 0
         self._dec_layout_snapshot = None
         self._vertical_advance = PRINT_UNITS_PER_INCH // 6
         self._logical_page_bottom = area.bottom
@@ -650,6 +774,7 @@ class VirtualPrinter(MemoryPrinter):
         )
         if self.state.language is PrinterLanguage.IBM_PROPRINTER:
             self._vertical_tabs.clear()
+        self._line_checkpoint = self._page_store.checkpoint()
 
     @staticmethod
     def _initial_tab_tables(
@@ -747,6 +872,19 @@ class VirtualPrinter(MemoryPrinter):
         self._top_margin = area.top
         self._bottom_margin = self._logical_page_bottom
 
+    def _set_ibm_top_of_form(self) -> None:
+        area = self.page_geometry.printable_area
+        form_length = max(self._vertical_advance, self._logical_page_bottom - self._top_margin)
+        self._top_margin = min(max(self._active_y, area.top), area.bottom)
+        self._logical_page_bottom = min(self._top_margin + form_length, area.bottom)
+        self._apply_ibm_perforation_skip()
+
+    def _apply_ibm_perforation_skip(self) -> None:
+        if self._no_forms:
+            return
+        skipped = self._ibm_perforation_skip * self._vertical_advance
+        self._bottom_margin = max(self._top_margin, self._logical_page_bottom - skipped)
+
     def _save_dec_layout(self) -> None:
         self._dec_layout_snapshot = (
             self._left_margin,
@@ -769,6 +907,7 @@ class VirtualPrinter(MemoryPrinter):
         self._horizontal_advance = PRINT_UNITS_PER_INCH // 10
         self._ibm_base_horizontal_advance = self._horizontal_advance
         self._ibm_double_width = False
+        self._ibm_perforation_skip = 0
         self._vertical_advance = PRINT_UNITS_PER_INCH // 6
         self._logical_page_bottom = area.bottom
         self._no_forms = False

@@ -40,4 +40,4 @@ Do wtf you want, but don't blame me when it rips a hole in your trousers.
 
 - Resizing is not atomic with concurrent PTY output.
 - There is no scrollback buffer or reflow on resize.
-- Printer pages cover DEC PPL and IBM PPDS text, layout, rendition, reports, and status; bit images, downloaded fonts, perforation mechanics, and mechanical timing remain unsupported.
+- Printer pages retain DEC PPL and IBM PPDS text, packed bit images, downloaded glyphs, forms, reports, status, and untimed mechanical events; DEC graphics and real-time mechanism simulation remain unsupported.

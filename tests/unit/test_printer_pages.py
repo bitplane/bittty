@@ -6,7 +6,9 @@ from bittty import (
     LETTER_PAGE_GEOMETRY,
     PRINT_UNITS_PER_INCH,
     PrintDirection,
+    PrinterBitImage,
     PrinterControlToken,
+    PrinterDownloadedGlyph,
     PrinterLanguage,
     PrinterPage,
     PrinterPageGeometry,
@@ -143,6 +145,23 @@ def test_control_token_validates_source_text_advance_and_state():
         PrinterControlToken(bounds, b"\x08", "<BS>", 8640, "not state")
 
 
+def test_bit_image_and_downloaded_glyph_records_enforce_compact_raster_shape():
+    state = VirtualPrinterState(PrinterLanguage.IBM_PROPRINTER, PrintDirection.BIDIRECTIONAL)
+    image = PrinterBitImage(PrinterRect(0, 0, 720, 2400), b"\x80\x01", 60, 72, 8, True, state)
+    glyph = PrinterDownloadedGlyph(65, b"\x80\x00", bytes(range(11)))
+
+    assert image.data == b"\x80\x01"
+    assert glyph.code_point == 65
+    with pytest.raises(ValueError):
+        PrinterBitImage(PrinterRect(0, 0, 719, 2400), b"\x80\x01", 60, 72, 8, True, state)
+    with pytest.raises(ValueError):
+        PrinterBitImage(PrinterRect(0, 0, 360, 2400), b"\x80", 60, 72, 9, True, state)
+    with pytest.raises(ValueError):
+        PrinterDownloadedGlyph(256, b"\x00\x00", bytes(11))
+    with pytest.raises(ValueError):
+        PrinterDownloadedGlyph(65, b"\x00", bytes(11))
+
+
 def test_current_page_snapshots_do_not_alias_the_mutable_store():
     store = _PrinterPageStore(LETTER_PAGE_GEOMETRY)
     first = _item(10)
@@ -192,6 +211,20 @@ def test_completed_pages_can_be_observed_then_drained_exactly_once():
     assert store.take_completed_pages() == ()
     assert store.completed_pages == ()
     assert store.current_page == current_before
+
+
+def test_page_store_checkpoints_support_line_buffer_cancellation():
+    store = _PrinterPageStore(LETTER_PAGE_GEOMETRY)
+    retained = _item(10)
+    cancelled = _item(30)
+    store.append(retained)
+    checkpoint = store.checkpoint()
+    store.append(cancelled)
+
+    store.truncate(checkpoint)
+    assert store.current_page.items == (retained,)
+    with pytest.raises(ValueError):
+        store.truncate(checkpoint + 1)
 
 
 def test_page_items_are_not_clamped_to_the_physical_sheet():
@@ -360,7 +393,9 @@ def test_ibm_all_characters_payload_is_printed_but_bit_images_are_shielded():
     printer = VirtualPrinter(PrinterType.PROPRINTER)
     printer.write_bytes(b"A\x1b\\\x03\x00\x00\x0aB\x1bK\x04\x00\x1b\x0aXYC")
 
-    assert b"".join(item.data for item in printer.current_page.items) == b"A\x00\x0aBC"
+    assert (
+        b"".join(item.data for item in printer.current_page.items if isinstance(item, PrinterTextRun)) == b"A\x00\x0aBC"
+    )
 
 
 def test_ibm_parser_is_invariant_at_every_stream_boundary():
@@ -380,6 +415,84 @@ def test_unknown_ibm_bracket_command_does_not_capture_following_text():
     printer.write_bytes(b"\x1b[cOK")
 
     assert printer.current_page.items[0].data == b"OK"
+
+
+@pytest.mark.parametrize(
+    "command,dpi,adjacent,width",
+    (
+        (b"K", 60, True, 720),
+        (b"L", 120, True, 360),
+        (b"Y", 120, False, 360),
+        (b"Z", 240, False, 180),
+    ),
+)
+def test_ibm_classic_bit_images_retain_packed_slices_and_density(command, dpi, adjacent, width):
+    printer = VirtualPrinter(PrinterType.PROPRINTER)
+    printer.write_bytes(b"\x1b" + command + b"\x02\x00\x81\x42")
+
+    image = printer.current_page.items[0]
+    assert image == PrinterBitImage(
+        PrinterRect(0, 0, width, 2400),
+        b"\x81\x42",
+        dpi,
+        72,
+        8,
+        adjacent,
+        printer.state,
+    )
+
+
+def test_ibm_high_resolution_graphics_retain_24_pin_columns():
+    printer = VirtualPrinter(PrinterType.PROPRINTER)
+    payload = b"\x80\x00\x01\xff\x00\x00"
+    printer.write_bytes(b"\x1b[g\x07\x00\x0b" + payload)
+
+    image = printer.current_page.items[0]
+    assert isinstance(image, PrinterBitImage)
+    assert (image.data, image.horizontal_dpi, image.pins) == (payload, 180, 24)
+    assert image.bounds == PrinterRect(0, 0, 240, 7200)
+
+
+def test_ibm_bit_images_clip_complete_columns_at_the_right_margin():
+    geometry = PrinterPageGeometry(1000, 4000, PrinterRect(0, 0, 1000, 4000))
+    printer = VirtualPrinter(PrinterType.PROPRINTER, page_geometry=geometry)
+    printer.write_bytes(b"\x1bK\x04\x00\x01\x02\x03\x04")
+
+    image = printer.current_page.items[0]
+    assert isinstance(image, PrinterBitImage)
+    assert image.data == b"\x01\x02"
+    assert image.bounds.right == 720
+
+
+def test_ibm_font_downloads_are_retained_selected_and_clearable():
+    printer = VirtualPrinter(PrinterType.PROPRINTER)
+    entry = b"\x80\x01" + bytes(range(11))
+    payload = b"\x14A" + entry
+    printer.write_bytes(b"\x1b=\x0f\x00" + payload + b"\x1bI\x04")
+
+    assert printer.downloaded_glyphs == (PrinterDownloadedGlyph(65, b"\x80\x01", bytes(range(11))),)
+    assert printer.state.ibm_downloaded_font is True
+
+    printer.write_bytes(b"\x1b=\x00\x00")
+    assert printer.downloaded_glyphs == ()
+
+
+def test_ibm_can_removes_the_current_print_buffer_without_rewinding_head():
+    printer = VirtualPrinter(PrinterType.PROPRINTER)
+    printer.write_bytes(b"A\x18B")
+
+    run = printer.current_page.items[0]
+    assert (run.data, run.bounds.left) == (b"B", 2160)
+
+
+def test_ibm_top_of_form_and_perforation_skip_bound_the_printable_form():
+    geometry = _cell_geometry(10, 6)
+    printer = VirtualPrinter(PrinterType.PROPRINTER, page_geometry=geometry)
+    printer.write_bytes(b"\x1bC\x03\n\x1b4\x1bN\x01A\nB\nC")
+
+    assert [item.data for item in printer.completed_pages[0].items] == [b"A", b"B"]
+    assert printer.current_page.items[0].data == b"C"
+    assert printer.current_page.items[0].bounds.top == 3600
 
 
 def test_dual_language_layout_settings_are_isolated_but_paper_position_is_continuous():

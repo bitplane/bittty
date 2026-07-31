@@ -147,6 +147,10 @@ class _PrinterLayoutCommand(Enum):
     IBM_FORM_LENGTH_INCHES = "ibm-form-length-inches"
     IBM_LANGUAGE_ENTER = "ibm-language-enter"
     IBM_LANGUAGE_LEAVE = "ibm-language-leave"
+    IBM_CANCEL_LINE = "ibm-cancel-line"
+    IBM_SET_TOP_OF_FORM = "ibm-set-top-of-form"
+    IBM_PERFORATION_SKIP = "ibm-perforation-skip"
+    IBM_BELL = "ibm-bell"
 
 
 class _PrinterReportCommand(Enum):
@@ -181,6 +185,7 @@ class VirtualPrinterState:
     ibm_character_set: int = 1
     ibm_code_page: int = 437
     printer_selected: bool = True
+    ibm_downloaded_font: bool = False
 
 
 _ESC = 0x1B
@@ -319,6 +324,8 @@ class _PrinterLanguageEngine:
         on_crm_token: Callable[[bytes, str], None] | None = None,
         on_layout: Callable[[_PrinterLayoutCommand, tuple[int, ...]], None] | None = None,
         on_report: Callable[[_PrinterReportCommand], None] | None = None,
+        on_bit_image: Callable[[int, int, bool, bytes], None] | None = None,
+        on_font_download: Callable[[bytes], None] | None = None,
         on_reset: Callable[[], None] | None = None,
     ) -> None:
         self._initial_language = initial_language
@@ -328,6 +335,8 @@ class _PrinterLanguageEngine:
         self._on_crm_token = on_crm_token
         self._on_layout = on_layout
         self._on_report = on_report
+        self._on_bit_image = on_bit_image
+        self._on_font_download = on_font_download
         self._on_reset = on_reset
         self._language = initial_language
         self._direction = PrintDirection.BIDIRECTIONAL
@@ -350,6 +359,7 @@ class _PrinterLanguageEngine:
         self._csi = bytearray()
         self._crm_pending = bytearray()
         self._ibm_pending = bytearray()
+        self._ibm_binary = bytearray()
         self._ibm_state = "ground"
         self._ibm_command = 0
         self._ibm_expected = 0
@@ -360,6 +370,7 @@ class _PrinterLanguageEngine:
         self._ibm_character_set = 1
         self._ibm_code_page = 437
         self._ibm_selected = True
+        self._ibm_downloaded_font = False
         self._saved_dec_modes: tuple[object, ...] | None = None
 
     @property
@@ -385,6 +396,9 @@ class _PrinterLanguageEngine:
             ibm_character_set=self._ibm_character_set if self._language is PrinterLanguage.IBM_PROPRINTER else 1,
             ibm_code_page=self._ibm_code_page,
             printer_selected=self._ibm_selected if self._language is PrinterLanguage.IBM_PROPRINTER else True,
+            ibm_downloaded_font=(
+                self._ibm_downloaded_font if self._language is PrinterLanguage.IBM_PROPRINTER else False
+            ),
         )
 
     def reset(self) -> None:
@@ -400,6 +414,7 @@ class _PrinterLanguageEngine:
         self._csi.clear()
         self._crm_pending.clear()
         self._ibm_pending.clear()
+        self._ibm_binary.clear()
         self._reset_ibm_modes()
         self._saved_dec_modes = None
 
@@ -915,12 +930,14 @@ class _PrinterLanguageEngine:
         self._ibm_command = 0
         self._ibm_expected = 0
         self._ibm_pending.clear()
+        self._ibm_binary.clear()
         self._ibm_pending_line_spacing = 36
         self._ibm_line_double_width = False
         self._ibm_continuous_double_width = False
         self._ibm_double_height = False
         self._ibm_character_set = 1
         self._ibm_selected = True
+        self._ibm_downloaded_font = False
 
     def _feed_crm(self, data: bytes, offset: int) -> int:
         patterns = (b"\x1b[3l", b"\x9b3l")
@@ -994,8 +1011,10 @@ class _PrinterLanguageEngine:
                 offset += 1
                 if byte == _ESC:
                     self._ibm_state = "escape"
-                elif byte in (0x00, 0x07, 0x13):
+                elif byte in (0x00, 0x13):
                     pass
+                elif byte == 0x07:
+                    self._emit_layout(_PrinterLayoutCommand.IBM_BELL)
                 elif byte in (0x08, 0x09, 0x0A, 0x0B, 0x0C, 0x0D):
                     if byte in (0x0A, 0x0B, 0x0C, 0x0D):
                         self._set_ibm_line_double_width(False)
@@ -1010,6 +1029,8 @@ class _PrinterLanguageEngine:
                     self._emit_layout(_PrinterLayoutCommand.IBM_HORIZONTAL_PITCH, 100)
                 elif byte in (0x14, 0x18):
                     self._set_ibm_line_double_width(False)
+                    if byte == 0x18:
+                        self._emit_layout(_PrinterLayoutCommand.IBM_CANCEL_LINE)
                 else:
                     start = offset - 1
                     next_special = size
@@ -1048,6 +1069,15 @@ class _PrinterLanguageEngine:
                     self._dispatch_ibm_highlight()
                 continue
 
+            if self._ibm_state == "binary":
+                take = min(self._ibm_expected, size - offset)
+                self._ibm_binary.extend(data[offset : offset + take])
+                offset += take
+                self._ibm_expected -= take
+                if self._ibm_expected == 0:
+                    self._finish_ibm_binary()
+                continue
+
             byte = data[offset]
             offset += 1
             if self._ibm_state == "escape":
@@ -1082,10 +1112,15 @@ class _PrinterLanguageEngine:
                         self._ibm_state = "verbatim"
                     elif self._ibm_command == ord("@"):
                         self._ibm_state = "bracket-data"
+                    elif self._ibm_command in b"=KLYZg":
+                        self._ibm_binary.clear()
+                        self._ibm_state = "binary"
                     else:
                         self._ibm_state = "discard"
                     if count == 0:
                         self._ibm_state = "ground"
+                        if self._ibm_command == ord("=") and self._on_font_download is not None:
+                            self._on_font_download(b"")
         return offset
 
     def _begin_ibm_escape(self, command: int) -> None:
@@ -1104,6 +1139,9 @@ class _PrinterLanguageEngine:
         elif command == 0x0F:
             self._ibm_state = "ground"
             self._emit_layout(_PrinterLayoutCommand.IBM_HORIZONTAL_PITCH, 171)
+        elif command == 0x07:
+            self._ibm_state = "ground"
+            self._emit_layout(_PrinterLayoutCommand.IBM_BELL)
         elif command in b"AIJNPQSUW35-_^" or command == ord("C"):
             self._ibm_expected = 1
             self._ibm_state = "fixed"
@@ -1113,7 +1151,7 @@ class _PrinterLanguageEngine:
         elif command in b"BD":
             self._ibm_expected = 64 if command == ord("B") else 28
             self._ibm_state = "tab-list"
-        elif command in b"KLYZ\\":
+        elif command in b"=KLYZ\\":
             self._ibm_state = "length-header"
         else:
             self._ibm_state = "escape" if command == _ESC else "ground"
@@ -1128,7 +1166,7 @@ class _PrinterLanguageEngine:
         elif command == ord("H"):
             self._rendition = replace(self._rendition, double_strike=False)
         elif command == ord("O"):
-            pass  # Perforation skip is retained for the physical-fidelity pass.
+            self._emit_layout(_PrinterLayoutCommand.IBM_PERFORATION_SKIP, 0)
         elif command == ord("R"):
             self._emit_layout(_PrinterLayoutCommand.IBM_RESET_TABS)
         elif command == ord("T"):
@@ -1140,7 +1178,7 @@ class _PrinterLanguageEngine:
         elif command == ord("2"):
             self._emit_layout(_PrinterLayoutCommand.IBM_LINE_SPACING, self._ibm_pending_line_spacing)
         elif command == ord("4"):
-            pass  # The page snapshot has a fixed physical origin.
+            self._emit_layout(_PrinterLayoutCommand.IBM_SET_TOP_OF_FORM)
         elif command == ord("6"):
             self._ibm_character_set = 2
         elif command == ord("7"):
@@ -1165,13 +1203,14 @@ class _PrinterLanguageEngine:
             if value <= 7:
                 density = PrinterDensity.DRAFT if value in (0, 1, 4, 5) else PrinterDensity.NEAR_LETTER_QUALITY
                 self._rendition = replace(self._rendition, density=density)
+                self._ibm_downloaded_font = value >= 4
                 if value in (1, 5):
                     self._emit_layout(_PrinterLayoutCommand.IBM_HORIZONTAL_PITCH, 120)
         elif command == ord("J"):
             self._set_ibm_line_double_width(False)
             self._emit_layout(_PrinterLayoutCommand.IBM_VERTICAL_MOTION, value)
         elif command == ord("N"):
-            pass  # Perforation skip is retained for the physical-fidelity pass.
+            self._emit_layout(_PrinterLayoutCommand.IBM_PERFORATION_SKIP, value)
         elif command == ord("P") and (enabled := self._ibm_toggle(value)) is not None:
             self._proportional_spacing = enabled
         elif command == ord("Q") and value in (3, 22):
@@ -1254,6 +1293,42 @@ class _PrinterLanguageEngine:
             width = modes[3] & 0x0F
             if width in (1, 2):
                 self._set_ibm_continuous_double_width(width == 2)
+
+    def _finish_ibm_binary(self) -> None:
+        command = self._ibm_command
+        data = bytes(self._ibm_binary)
+        self._ibm_binary.clear()
+        self._ibm_state = "ground"
+        if command == ord("="):
+            if self._on_font_download is not None:
+                self._on_font_download(data)
+            return
+        if self._on_bit_image is None or not data:
+            return
+        if command == ord("g"):
+            mode = data[0]
+            payload = data[1:]
+            modes = {
+                0: (60, 8, True),
+                1: (120, 8, True),
+                2: (120, 8, False),
+                3: (240, 8, False),
+                8: (60, 24, True),
+                9: (120, 24, True),
+                11: (180, 24, True),
+                12: (360, 24, True),
+            }
+            specification = modes.get(mode)
+        else:
+            payload = data
+            specification = {
+                ord("K"): (60, 8, True),
+                ord("L"): (120, 8, True),
+                ord("Y"): (120, 8, False),
+                ord("Z"): (240, 8, False),
+            }.get(command)
+        if specification is not None and payload:
+            self._on_bit_image(*specification, payload)
 
     @staticmethod
     def _ibm_toggle(value: int) -> bool | None:
