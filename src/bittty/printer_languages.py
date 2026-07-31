@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 
@@ -41,14 +42,15 @@ _C1_CSI = 0x9B
 _C1_ST = 0x9C
 _C1_STRINGS = frozenset((0x90, 0x98, 0x9D, 0x9E, 0x9F))
 _DEC_SPECIAL_BYTES = (b"\x1b", b"\x90", b"\x98", b"\x9b", b"\x9d", b"\x9e", b"\x9f")
+_NON_PRINTABLE_BYTES = bytes(range(0x20)) + b"\x7f" + bytes(range(0x80, 0xA0))
 _MAX_CSI = 128
 
 
 class _PrinterLanguageEngine:
     """Incremental DEC PPL/IBM protocol-selection parser.
 
-    This deliberately models only language selection, print direction, and
-    resets. Ordinary print data remains on a fast path and is not interpreted.
+    This models retained language modes and resets. Ordinary DEC PPL print data
+    remains on a batched fast path to an optional page-assembly sink.
     """
 
     def __init__(
@@ -56,9 +58,11 @@ class _PrinterLanguageEngine:
         initial_language: PrinterLanguage,
         *,
         supports_proprinter_switching: bool,
+        on_printable: Callable[[bytes], None] | None = None,
     ) -> None:
         self._initial_language = initial_language
         self._supports_proprinter_switching = supports_proprinter_switching
+        self._on_printable = on_printable
         self._language = initial_language
         self._direction = PrintDirection.BIDIRECTIONAL
         self._proportional_spacing = False
@@ -126,11 +130,13 @@ class _PrinterLanguageEngine:
                 else:
                     # Most printer output is ordinary text. Scan it in C rather
                     # than returning to Python for every byte.
+                    start = offset - 1
                     next_special = size
                     for marker in _DEC_SPECIAL_BYTES:
                         found = data.find(marker, offset)
                         if found != -1 and found < next_special:
                             next_special = found
+                    self._emit_printable(data[start:next_special])
                     offset = next_special
             elif self._dec_state == "escape":
                 if byte == ord("["):
@@ -171,6 +177,13 @@ class _PrinterLanguageEngine:
     def _begin_csi(self) -> None:
         self._csi.clear()
         self._dec_state = "csi"
+
+    def _emit_printable(self, data: bytes) -> None:
+        if self._on_printable is None:
+            return
+        printable = data.translate(None, _NON_PRINTABLE_BYTES)
+        if printable:
+            self._on_printable(printable)
 
     def _begin_string(self, *, is_osc: bool) -> None:
         self._dec_string_is_osc = is_osc

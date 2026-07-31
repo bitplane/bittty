@@ -15,8 +15,11 @@ from .printer_languages import (
 )
 from .printer_pages import (
     LETTER_PAGE_GEOMETRY,
+    PRINT_UNITS_PER_INCH,
     PrinterPage,
     PrinterPageGeometry,
+    PrinterRect,
+    PrinterTextRun,
     _PrinterPageStore,
 )
 
@@ -160,12 +163,23 @@ class VirtualPrinter(MemoryPrinter):
         super().__init__(status=status)
         self._device_type = PrinterType(device_type)
         self._page_store = _PrinterPageStore(page_geometry)
+        self._active_x = page_geometry.printable_area.left
+        self._active_y = page_geometry.printable_area.top
+        self._horizontal_advance = PRINT_UNITS_PER_INCH // 10
+        self._vertical_advance = PRINT_UNITS_PER_INCH // 6
+        self._pending_data = bytearray()
+        self._pending_ascii = True
+        self._pending_x = self._active_x
+        self._pending_y = self._active_y
+        self._pending_state: VirtualPrinterState | None = None
+        self._pending_marks = False
         initial_language = (
             PrinterLanguage.IBM_PROPRINTER if self._device_type is PrinterType.PROPRINTER else PrinterLanguage.DEC_PPL
         )
         self._language_engine = _PrinterLanguageEngine(
             initial_language,
             supports_proprinter_switching=self._device_type is PrinterType.DEC_AND_IBM,
+            on_printable=self._record_printable,
         )
 
     @property
@@ -186,6 +200,7 @@ class VirtualPrinter(MemoryPrinter):
     @property
     def current_page(self) -> PrinterPage:
         """Return an immutable snapshot of the current page."""
+        self._flush_pending_run()
         return self._page_store.current_page
 
     @property
@@ -196,6 +211,63 @@ class VirtualPrinter(MemoryPrinter):
     def take_completed_pages(self) -> tuple[PrinterPage, ...]:
         """Return completed pages and release the printer's references to them."""
         return self._page_store.take_completed_pages()
+
+    def _record_printable(self, data: bytes) -> None:
+        if data.isascii():
+            self._record_text_run(data, ascii_run=True)
+            return
+        start = 0
+        size = len(data)
+        while start < size:
+            ascii_run = data[start] < 0x80
+            end = start + 1
+            while end < size and (data[end] < 0x80) == ascii_run:
+                end += 1
+            self._record_text_run(data[start:end], ascii_run=ascii_run)
+            start = end
+
+    def _record_text_run(self, data: bytes, *, ascii_run: bool) -> None:
+        advance = len(data) * self._horizontal_advance
+        state = self._language_engine.state
+        blank = 0x20 if ascii_run else 0xA0
+        marks = data.count(blank) != len(data)
+        if self._pending_data and (
+            self._pending_ascii != ascii_run or self._pending_state != state or self._pending_y != self._active_y
+        ):
+            self._flush_pending_run()
+        if not self._pending_data:
+            self._pending_ascii = ascii_run
+            self._pending_x = self._active_x
+            self._pending_y = self._active_y
+            self._pending_state = state
+            self._pending_marks = False
+        self._pending_data.extend(data)
+        self._pending_marks = self._pending_marks or marks
+        self._active_x += advance
+
+    def _flush_pending_run(self) -> None:
+        if not self._pending_data:
+            return
+        data = bytes(self._pending_data)
+        advance = len(data) * self._horizontal_advance
+        state = self._pending_state
+        assert state is not None
+        run = PrinterTextRun(
+            PrinterRect(
+                self._pending_x,
+                self._pending_y,
+                self._pending_x + advance,
+                self._pending_y + self._vertical_advance,
+            ),
+            data,
+            data.decode("ascii") if self._pending_ascii else None,
+            advance,
+            state,
+        )
+        self._page_store.append(run, marks=self._pending_marks)
+        self._pending_data.clear()
+        self._pending_state = None
+        self._pending_marks = False
 
     def write_bytes(self, data: bytes) -> int:
         written = super().write_bytes(data)

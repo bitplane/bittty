@@ -32,6 +32,7 @@ from .printer_pages import (
     PrinterPageGeometry,
     PrinterPageItem,
     PrinterRect,
+    PrinterTextRun,
 )
 from .printers import (
     MemoryPrinter,
@@ -95,6 +96,7 @@ __all__ = [
     "PrinterPortSelection",
     "PrinterRect",
     "PrinterStatus",
+    "PrinterTextRun",
     "PrinterType",
     "ProPrinterCodePage",
     "StreamPrinter",

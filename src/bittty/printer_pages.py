@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .printer_languages import VirtualPrinterState
+
 PRINT_UNITS_PER_INCH = 21_600
 
 
@@ -88,6 +90,37 @@ class PrinterPageItem:
 
 
 @dataclass(frozen=True)
+class PrinterTextRun(PrinterPageItem):
+    """One positioned run of printable source bytes."""
+
+    data: bytes
+    text: str | None
+    advance: int
+    state: VirtualPrinterState
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if not isinstance(self.data, bytes):
+            raise TypeError("data must be bytes")
+        if not self.data:
+            raise ValueError("data must not be empty")
+        if self.text is not None:
+            if not isinstance(self.text, str):
+                raise TypeError("text must be a string or None")
+            if not self.data.isascii() or self.text != self.data.decode("ascii"):
+                raise ValueError("text must be the exact ASCII decoding of data")
+        _require_int("advance", self.advance)
+        if self.advance <= 0:
+            raise ValueError("advance must be positive")
+        if self.bounds.width != self.advance:
+            raise ValueError("bounds width must equal advance")
+        if self.bounds.height <= 0:
+            raise ValueError("bounds height must be positive")
+        if not isinstance(self.state, VirtualPrinterState):
+            raise TypeError("state must be a VirtualPrinterState")
+
+
+@dataclass(frozen=True)
 class PrinterPage:
     """An immutable physical-page display-list snapshot."""
 
@@ -116,6 +149,7 @@ class _PrinterPageStore:
         self._geometry = geometry
         self._current_number = 1
         self._current_items: list[PrinterPageItem] = []
+        self._marked = False
         self._completed: list[PrinterPage] = []
 
     @property
@@ -134,19 +168,21 @@ class _PrinterPageStore:
     def completed_pages(self) -> tuple[PrinterPage, ...]:
         return tuple(self._completed)
 
-    def append(self, item: PrinterPageItem) -> None:
+    def append(self, item: PrinterPageItem, *, marks: bool = True) -> None:
         if not isinstance(item, PrinterPageItem):
             raise TypeError("item must be a PrinterPageItem")
         self._current_items.append(item)
+        self._marked = self._marked or marks
 
     def complete(self, *, force: bool = False) -> PrinterPage | None:
         """Complete the current page, optionally including a blank page."""
-        if not force and not self._current_items:
+        if not force and not self._marked:
             return None
         page = self.current_page
         self._completed.append(page)
         self._current_number += 1
         self._current_items = []
+        self._marked = False
         return page
 
     def take_completed_pages(self) -> tuple[PrinterPage, ...]:
