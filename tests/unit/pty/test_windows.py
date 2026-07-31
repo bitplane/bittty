@@ -4,6 +4,7 @@ import sys
 import time
 
 import pytest
+
 from bittty.pty import WindowsPTY
 
 
@@ -17,6 +18,21 @@ def read_until(real_pty, expected: tuple[str, ...], timeout: float = 2.0) -> str
             break
         time.sleep(0.02)
     return result
+
+
+def test_read_until_ignores_startup_mode_bursts_before_command_output():
+    """ConPTY may publish mode changes before the shell's command output."""
+
+    class ChunkedPTY:
+        def __init__(self):
+            self.chunks = iter(("\x1b[?9001h\x1b[?1004h", "echo hello\r\nhello\r\n"))
+
+        def read(self, _size):
+            return next(self.chunks, "")
+
+    result = read_until(ChunkedPTY(), ("hello", "echo"))
+
+    assert result == "\x1b[?9001h\x1b[?1004hecho hello\r\nhello\r\n"
 
 
 @pytest.mark.windows
