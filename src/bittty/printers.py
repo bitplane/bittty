@@ -13,6 +13,12 @@ from .printer_languages import (
     VirtualPrinterState,
     _PrinterLanguageEngine,
 )
+from .printer_pages import (
+    LETTER_PAGE_GEOMETRY,
+    PrinterPage,
+    PrinterPageGeometry,
+    _PrinterPageStore,
+)
 
 
 class PrinterPortSelection(IntEnum):
@@ -148,10 +154,12 @@ class VirtualPrinter(MemoryPrinter):
         self,
         device_type: PrinterType = PrinterType.DEC_ANSI,
         *,
+        page_geometry: PrinterPageGeometry = LETTER_PAGE_GEOMETRY,
         status: PrinterStatus = PrinterStatus.READY,
     ) -> None:
         super().__init__(status=status)
         self._device_type = PrinterType(device_type)
+        self._page_store = _PrinterPageStore(page_geometry)
         initial_language = (
             PrinterLanguage.IBM_PROPRINTER if self._device_type is PrinterType.PROPRINTER else PrinterLanguage.DEC_PPL
         )
@@ -169,6 +177,25 @@ class VirtualPrinter(MemoryPrinter):
     def state(self) -> VirtualPrinterState:
         """Return an immutable snapshot of the interpreted printer state."""
         return self._language_engine.state
+
+    @property
+    def page_geometry(self) -> PrinterPageGeometry:
+        """Return this printer's immutable physical sheet geometry."""
+        return self._page_store.geometry
+
+    @property
+    def current_page(self) -> PrinterPage:
+        """Return an immutable snapshot of the current page."""
+        return self._page_store.current_page
+
+    @property
+    def completed_pages(self) -> tuple[PrinterPage, ...]:
+        """Return completed pages without releasing them."""
+        return self._page_store.completed_pages
+
+    def take_completed_pages(self) -> tuple[PrinterPage, ...]:
+        """Return completed pages and release the printer's references to them."""
+        return self._page_store.take_completed_pages()
 
     def write_bytes(self, data: bytes) -> int:
         written = super().write_bytes(data)

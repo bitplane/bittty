@@ -25,6 +25,14 @@ from .model import BITTTY, LINUX, VT100, VT220, VT510, XTERM, Model, PrinterCapa
 from .operations import Operation, OperationSink
 from .parser import Parser
 from .printer_languages import PrintDirection, PrinterLanguage, VirtualPrinterState
+from .printer_pages import (
+    LETTER_PAGE_GEOMETRY,
+    PRINT_UNITS_PER_INCH,
+    PrinterPage,
+    PrinterPageGeometry,
+    PrinterPageItem,
+    PrinterRect,
+)
 from .printers import (
     MemoryPrinter,
     PrintedDataType,
@@ -53,7 +61,9 @@ except PackageNotFoundError:
 __all__ = [
     "BITTTY",
     "CURSOR_CODE",
+    "LETTER_PAGE_GEOMETRY",
     "LINUX",
+    "PRINT_UNITS_PER_INCH",
     "RESET_CODE",
     "VT100",
     "VT220",
@@ -77,9 +87,13 @@ __all__ = [
     "PrinterFlowControl",
     "PrinterFlowThreshold",
     "PrinterLanguage",
+    "PrinterPage",
+    "PrinterPageGeometry",
+    "PrinterPageItem",
     "PrinterParity",
     "PrinterPort",
     "PrinterPortSelection",
+    "PrinterRect",
     "PrinterStatus",
     "PrinterType",
     "ProPrinterCodePage",
