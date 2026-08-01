@@ -214,3 +214,201 @@ def test_mode_change_and_reset_discard_pending_assembly():
 
     board.parser.feed("\x1b[?2027h\u0600\x1b[!pA")
     assert cells(board)[0] == "A"
+
+
+# --- insert mode (IRM) under clustering --- #
+
+
+def test_insert_mode_shifts_existing_content_for_an_ascii_run():
+    """Clustering has its own insert-mode path, separate from the plain writer."""
+    board = clustered_board(width=12, height=1)
+    board.parser.feed("ABCDEFGH")
+    board.parser.feed("\x1b[1;1H\x1b[4h")  # home, IRM on
+
+    board.parser.feed("xyz")
+
+    assert board.capture_text() == "xyzABCDEFGH"
+    assert board.cursor.x == 3
+
+
+def test_insert_mode_run_ending_in_a_cluster_still_assembles_it():
+    """The last character of an inserted run stays a speculation candidate."""
+    board = clustered_board(width=12, height=1)
+    board.parser.feed("ABCDEFGH")
+    board.parser.feed("\x1b[1;1H\x1b[4h")
+
+    board.parser.feed("xye")
+    board.parser.feed("́")  # the combining mark arrives in the next chunk
+
+    assert board.capture_text() == "xýABCDEFGH".replace("ý", "yé")
+    assert cells(board)[2] == "é"
+    assert board.cursor.x == 3
+
+
+# --- oversized clusters --- #
+
+
+def test_oversized_cluster_arriving_whole_is_truncated_and_flagged():
+    """A >256-codepoint cluster in a single chunk, not assembled one mark at a time.
+
+    The incremental route is covered by test_cluster_growth_is_capped_...; this is
+    the other entry, where the whole ZWJ bomb lands inside one write.
+    """
+    board = clustered_board(width=8, height=1)
+
+    board.parser.feed("a" + "́" * 300)
+
+    assert len(cells(board)[0]) == 256
+    tail = board.blitter._cluster_tail
+    assert tail.overflow is True
+    assert len(tail.context) == 32
+
+
+def test_oversized_cluster_still_ends_at_the_next_boundary():
+    """Overflow must not swallow whatever follows it."""
+    board = clustered_board(width=8, height=1)
+
+    board.parser.feed("a" + "́" * 300 + "B")
+
+    assert len(cells(board)[0]) == 256
+    assert cells(board)[1] == "B"
+    assert board.cursor.x == 2
+
+
+# --- speculation over a replaced wide glyph --- #
+
+
+def test_keycap_completing_over_a_replaced_wide_glyph_does_not_resurrect_it():
+    """The retraction restores the run's own cells, not the glyph they replaced.
+
+    'A1' overwrites a wide glyph: 'A' lands on its head and '1' on its
+    continuation column. When the keycap tail arrives in the next chunk the '1'
+    is retracted and repainted two cells wide — and the ❌ it displaced must not
+    come back with it.
+    """
+    board = clustered_board(width=8, height=1)
+    board.parser.feed("❌")  # wide: head at col 0, continuation at col 1
+    board.parser.feed("\x1b[1;1H")
+    board.parser.feed("A1")
+
+    board.parser.feed("️⃣")  # variation selector + enclosing keycap
+
+    row = cells(board)
+    assert row[0] == "A"
+    assert row[1] == "1️⃣"
+    assert isinstance(board.blitter.current_buffer.grid[0][1][1], WideHead)
+    assert row[2] == ""  # its continuation, not a resurrected ❌
+    assert board.cursor.x == 3
+
+
+# --- mixed runs --- #
+
+
+def test_ascii_is_flushed_before_a_non_ascii_cluster_in_the_same_run():
+    """One write holding ASCII, a wide cluster, then more ASCII."""
+    board = clustered_board(width=12, height=1)
+
+    board.parser.feed("abc\U0001f600def")
+
+    assert [cell for cell in cells(board)[:8]] == ["a", "b", "c", "\U0001f600", "", "d", "e", "f"]
+    assert board.capture_text() == "abc\U0001f600def"
+    assert board.cursor.x == 8
+
+
+def test_empty_write_under_clustering_is_a_no_op():
+    board = clustered_board(width=5, height=1)
+    board.parser.feed("A")
+
+    board.blitter.write_text("")
+
+    assert cells(board)[0] == "A"
+    assert board.cursor.x == 1
+
+
+# --- retraction at the right margin --- #
+
+
+def test_retraction_that_reaches_the_right_margin_arms_a_pending_wrap():
+    """Widening a cluster can land it exactly on the margin.
+
+    'AB1' puts the candidate at the last column but one; the keycap tail widens
+    it to two cells, filling the row. The cursor must end armed for wrap rather
+    than already on the next line.
+    """
+    board = clustered_board(width=4, height=2)
+    board.parser.feed("AB1")
+
+    board.parser.feed("️⃣")
+
+    assert board.capture_text() == "AB1️⃣"
+    assert (board.cursor.x, board.cursor.y) == (4, 0)  # armed, not yet wrapped
+
+
+def test_retraction_at_the_margin_without_autowrap_clamps_instead():
+    """Same widening with DECAWM off parks the cursor inside the row."""
+    board = clustered_board(width=4, height=2)
+    board.parser.feed("\x1b[?7l")
+    board.parser.feed("AB1")
+
+    board.parser.feed("️⃣")
+
+    assert board.capture_text() == "AB1️⃣"
+    assert (board.cursor.x, board.cursor.y) == (3, 0)
+
+
+def test_a_pending_prefix_invalidated_by_a_cursor_move_is_discarded():
+    """A forward-joining prefix is held across chunks, but only where it was left.
+
+    U+0600 joins whatever follows, so it is parked rather than painted. If the
+    cursor moves before the next chunk arrives, the join can no longer happen
+    and the prefix must be dropped instead of teleporting to the new position.
+    """
+    board = clustered_board(width=10, height=3)
+    board.parser.feed("؀")
+    assert board.blitter._pending_prefix is not None
+
+    board.parser.feed("\x1b[2;5H")  # move away — the prefix is now stale
+    board.parser.feed("A")
+
+    assert board.blitter.current_buffer.get_line_text(0) == " " * 10
+    assert board.blitter.current_buffer.get_line_text(1) == "    A     "
+    assert (board.cursor.x, board.cursor.y) == (5, 1)
+
+
+def test_speculation_is_abandoned_when_its_cell_changed_underneath():
+    """The candidate cell is re-read before retracting, not trusted.
+
+    DECFRA can overwrite the cell without touching the cursor, so every other
+    validity check still passes. The stored text no longer matches what is on
+    screen, and the combining mark is dropped rather than corrupting the fill.
+    """
+    board = clustered_board(width=8, height=1)
+    board.parser.feed("e")
+    board.parser.feed("\x1b[88;1;1;1;1$x")  # fill (0,0) with 'X', cursor unmoved
+
+    board.parser.feed("́")
+
+    assert board.blitter.current_buffer.get_line_text(0) == "X       "
+    assert board.cursor.x == 1
+
+
+def test_widening_over_a_neighbouring_wide_glyph_leaves_no_orphan():
+    """The snapshot covers the displaced glyph's continuation column too.
+
+    The keycap candidate sits at column 0 with a wide glyph at columns 1-2. When
+    it widens it consumes that glyph's head, so the snapshot has to reach one
+    column further or the continuation is left stranded.
+    """
+    board = clustered_board(width=8, height=1)
+    board.parser.feed("\x1b[1;2H❌")
+    board.parser.feed("\x1b[1;1H")
+    board.parser.feed("1")
+
+    board.parser.feed("️⃣")
+
+    row = cells(board)
+    assert row[0] == "1️⃣"
+    assert isinstance(board.blitter.current_buffer.grid[0][0][1], WideHead)
+    assert row[1] == ""  # its own continuation
+    assert row[2] == " "  # the displaced glyph's continuation was cleared
+    assert board.cursor.x == 2

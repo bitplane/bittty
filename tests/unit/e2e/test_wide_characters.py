@@ -224,3 +224,25 @@ def test_copy_rectangle_does_not_copy_half_a_wide_glyph():
 
     assert board.blitter.current_buffer.get_cell(0, 1) == (Style(), " ")
     assert_valid_rows(board)
+
+
+def test_character_wider_than_the_terminal_is_skipped():
+    """A width-2 glyph cannot be represented on a one-column screen."""
+    board = Board(width=1, height=1)
+
+    board.parser.feed("a❌b")
+
+    assert board.capture_text() == "b"
+    assert board.cursor.x == 1
+
+
+def test_insert_mode_shifts_content_for_a_wide_character():
+    """IRM with a width-2 glyph, outside grapheme clustering."""
+    board = Board(width=10, height=1)
+    board.parser.feed("ABCDEF")
+    board.parser.feed("\x1b[1;1H\x1b[4h")
+
+    board.parser.feed("❌")
+
+    assert board.capture_text() == "❌ABCDEF"
+    assert board.cursor.x == 2
