@@ -49,7 +49,7 @@ def test_unicode_various():
     assert test_string in output
 
     # Check the actual characters were written
-    line_text = board.blitter.current_buffer.get_line_text(0)
+    line_text = board.blitter.current_page.get_line_text(0)
     assert "Hello" in line_text
     assert "café" in line_text
     assert "你好" in line_text

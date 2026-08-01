@@ -294,11 +294,11 @@ class QueryDevice(Device):
         left = max(0, min(at(3, 1) - 1, width - 1))
         bottom = max(top, min(at(4, height) - 1, height - 1))
         right = max(left, min(at(5, width) - 1, width - 1))
-        buffer = self.board.blitter.current_buffer
+        page = self.board.blitter.current_page
         total = 0
         for y in range(top, bottom + 1):
             for x in range(left, right + 1):
-                char = buffer.get_cell(x, y)[1]
+                char = page.get_cell(x, y)[1]
                 total += ord(char) if char else 0x20
         self.board.host.write(f"\x1bP{pid}!~{(-total) & 0xFFFF:04X}\x1b\\", flush=True)
 

@@ -11,7 +11,7 @@ def _term(width=10, height=4):
 
 
 def _attr(board, y):
-    return board.blitter.current_buffer.get_line_attribute(y)
+    return board.blitter.current_page.get_line_attribute(y)
 
 
 def test_decdwl_sets_double_width_on_the_cursor_line():

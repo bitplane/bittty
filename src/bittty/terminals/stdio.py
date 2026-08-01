@@ -239,7 +239,7 @@ class StdioTerminal(Terminal):
         child wants it visible (DECTCEM). The host hollows it on unfocus by
         itself, exactly like a real terminal.
         """
-        page = self.board.blitter.current_buffer
+        page = self.board.blitter.current_page
         if page is self._seen_page:
             rows = page.dirty_rows(self._seen_gen)
         else:

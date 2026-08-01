@@ -31,7 +31,7 @@ def test_selective_erase_keeps_protected_characters():
     parser.feed("\x1b[1;1H")  # home
     parser.feed("\x1b[?2J")  # DECSED: selective erase all
 
-    line = board.blitter.current_buffer.get_line_text(0)
+    line = board.blitter.current_page.get_line_text(0)
     assert line.startswith("KEEP")  # protected text survives
     assert "gone" not in line  # unprotected text erased
 

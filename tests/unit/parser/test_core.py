@@ -75,7 +75,7 @@ def test_charset_designation_split_across_chunks():
     board.parser.feed("0")
     board.parser.feed("q")  # DEC special graphics: q is '─'
     assert board.charset.g0_charset == "0"
-    assert board.blitter.current_buffer.get_line_text(0)[0] == "─"
+    assert board.blitter.current_page.get_line_text(0)[0] == "─"
 
 
 def test_decaln_split_across_chunks():
@@ -85,7 +85,7 @@ def test_decaln_split_across_chunks():
     board = Board(width=4, height=2)
     board.parser.feed("\x1b#")
     board.parser.feed("8")
-    assert board.blitter.current_buffer.get_line_text(0) == "EEEE"
+    assert board.blitter.current_page.get_line_text(0) == "EEEE"
 
 
 def test_flush_trailing_releases_held_bytes():

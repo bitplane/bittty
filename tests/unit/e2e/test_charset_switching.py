@@ -23,7 +23,7 @@ def test_g1_designation_and_switching():
     parser.feed("\x0f")  # SI
     parser.feed("DEF")
 
-    assert board.blitter.current_buffer.get_line_text(0).rstrip() == "ABC┌─┐DEF"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "ABC┌─┐DEF"
 
 
 def test_g2_g3_designation():
@@ -61,7 +61,7 @@ def test_single_shift_2():
     # Back to normal G0
     parser.feed("B")
 
-    assert board.blitter.current_buffer.get_line_text(0).rstrip() == "A┌B"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "A┌B"
 
 
 def test_single_shift_3():
@@ -83,7 +83,7 @@ def test_single_shift_3():
     # Back to normal G0
     parser.feed("B")
 
-    assert board.blitter.current_buffer.get_line_text(0).rstrip() == "A£B"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "A£B"
 
 
 def test_multiple_single_shifts():
@@ -114,7 +114,7 @@ def test_multiple_single_shifts():
 
     parser.feed("B")
 
-    assert board.blitter.current_buffer.get_line_text(0).rstrip() == "A┌£┐B"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "A┌£┐B"
 
 
 def test_locking_shift_2_invokes_g2_into_gl():
@@ -128,7 +128,7 @@ def test_locking_shift_2_invokes_g2_into_gl():
     parser.feed("\x0f")  # SI (LS0): back to G0 (ASCII)
     parser.feed("AB")
 
-    assert board.blitter.current_buffer.get_line_text(0).rstrip() == "┌─┐AB"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "┌─┐AB"
 
 
 def test_locking_shift_3_invokes_g3_into_gl():
@@ -142,7 +142,7 @@ def test_locking_shift_3_invokes_g3_into_gl():
     parser.feed("\x0f")  # SI back to G0
     parser.feed("X")
 
-    assert board.blitter.current_buffer.get_line_text(0).rstrip() == "┌─┐X"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "┌─┐X"
 
 
 def test_locking_shift_1_right_translates_gr_half():
@@ -155,7 +155,7 @@ def test_locking_shift_1_right_translates_gr_half():
     parser.feed("A")  # GL still ASCII
     parser.feed("\xec\xe1")  # 'l'+0x80, 'a'+0x80 -> box + checkerboard via GR
 
-    assert board.blitter.current_buffer.get_line_text(0).rstrip() == "A┌▒"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "A┌▒"
 
 
 def test_locking_shift_2_right_translates_gr_half():
@@ -167,7 +167,7 @@ def test_locking_shift_2_right_translates_gr_half():
     parser.feed("\x1b}")  # ESC } — LS2R
     parser.feed("\xec")  # 'l'+0x80 -> ┌
 
-    assert board.blitter.current_buffer.get_line_text(0).rstrip() == "┌"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "┌"
 
 
 def test_reset_clears_locking_shifts():
@@ -184,7 +184,7 @@ def test_reset_clears_locking_shifts():
     assert board.charset.current_charset == 0
     assert board.charset.gr == 1
     parser.feed("\xec")  # GR now ASCII -> passthrough, no translation
-    assert board.blitter.current_buffer.get_line_text(0).rstrip() == "\xec"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "\xec"
 
 
 def test_si_so_switching():
@@ -214,7 +214,7 @@ def test_si_so_switching():
     parser.feed("\x0f")  # SI
     parser.feed("C")
 
-    assert board.blitter.current_buffer.get_line_text(0).rstrip() == "A┌─┐B└┘─C"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "A┌─┐B└┘─C"
 
 
 def test_persistent_charset_state():
@@ -233,9 +233,9 @@ def test_persistent_charset_state():
     parser.feed("x  x\r\n")
     parser.feed("mqqj")
 
-    assert board.blitter.current_buffer.get_line_text(0).rstrip() == "┌──┐"
-    assert board.blitter.current_buffer.get_line_text(1).rstrip() == "│  │"
-    assert board.blitter.current_buffer.get_line_text(2).rstrip() == "└──┘"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "┌──┐"
+    assert board.blitter.current_page.get_line_text(1).rstrip() == "│  │"
+    assert board.blitter.current_page.get_line_text(2).rstrip() == "└──┘"
 
 
 def test_mixed_character_sets():
@@ -273,7 +273,7 @@ def test_mixed_character_sets():
     parser.feed("\x0f")  # Back to G0
     parser.feed(" End")  # G0 ASCII
 
-    assert board.blitter.current_buffer.get_line_text(0).rstrip() == "Text┌─ £ ┐┘ End"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "Text┌─ £ ┐┘ End"
 
 
 def test_charset_with_colors():
@@ -295,14 +295,14 @@ def test_charset_with_colors():
     parser.feed("TEXT")  # Blue text
 
     # Check characters
-    assert board.blitter.current_buffer.get_line_text(0).rstrip() == "┌──┐TEXT"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "┌──┐TEXT"
 
     # Check colors
-    style, char = board.blitter.current_buffer.get_cell(0, 0)
+    style, char = board.blitter.current_page.get_cell(0, 0)
     assert char == "┌"
     assert style.fg.value == 1  # Red
 
-    style, char = board.blitter.current_buffer.get_cell(4, 0)
+    style, char = board.blitter.current_page.get_cell(4, 0)
     assert char == "T"
     assert style.fg.value == 4  # Blue
 
@@ -320,7 +320,7 @@ def test_charset_reset_on_esc_c():
 
     # Verify we're in G1 with graphics
     parser.feed("l")
-    assert board.blitter.current_buffer.get_cell(0, 0)[1] == "┌"
+    assert board.blitter.current_page.get_cell(0, 0)[1] == "┌"
 
     # Reset terminal
     parser.feed("\x1bc")  # ESC c (RIS - Reset)
@@ -346,7 +346,7 @@ def test_all_dec_special_graphics_characters():
 
     parser.feed(test_chars)
 
-    result = board.blitter.current_buffer.get_line_text(0)
+    result = board.blitter.current_page.get_line_text(0)
     assert result[: len(expected)] == expected
 
 
@@ -360,13 +360,13 @@ def test_uk_national_character_set():
 
     parser.feed("Price: #10")
 
-    assert board.blitter.current_buffer.get_line_text(0).rstrip() == "Price: £10"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "Price: £10"
 
     # Other characters should be unchanged
     parser.feed("\r\n")
     parser.feed("ABC!@$%^&*()")
 
-    assert board.blitter.current_buffer.get_line_text(1).rstrip() == "ABC!@$%^&*()"
+    assert board.blitter.current_page.get_line_text(1).rstrip() == "ABC!@$%^&*()"
 
 
 def test_dec_technical_charset_designation():
@@ -396,7 +396,7 @@ def test_dec_technical_charset_designation():
     parser.feed("!")
 
     # Check the result
-    assert board.blitter.current_buffer.get_line_text(0).rstrip() == "Math: ΠΣ∫!"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "Math: ΠΣ∫!"
 
 
 def test_dec_technical_greek_letters():
@@ -417,7 +417,7 @@ def test_dec_technical_greek_letters():
     parser.feed("p")  # π (pi)
 
     # Check the result
-    assert board.blitter.current_buffer.get_line_text(0).rstrip() == "ΔΦΓαβπ"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "ΔΦΓαβπ"
 
 
 def test_dec_technical_mathematical_symbols():
@@ -438,7 +438,7 @@ def test_dec_technical_mathematical_symbols():
     parser.feed(">")  # ≥ (greater than or equal)
 
     # Check the result
-    assert board.blitter.current_buffer.get_line_text(0).rstrip() == "∞÷×√≤≥"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "∞÷×√≤≥"
 
 
 def test_german_national_charset():
@@ -454,7 +454,7 @@ def test_german_national_charset():
     parser.feed("@[\\]`{|}")  # @ÄÖÜäöüß
 
     # Check the result
-    assert board.blitter.current_buffer.get_line_text(0).rstrip() == "§ÄÖÜäöüß"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "§ÄÖÜäöüß"
 
 
 def test_french_national_charset():
@@ -470,7 +470,7 @@ def test_french_national_charset():
     parser.feed("#@[\\]`{|}~")
 
     # Check the result
-    assert board.blitter.current_buffer.get_line_text(0).rstrip() == "£à°ç§`éùè¨"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "£à°ç§`éùè¨"
 
 
 def test_spanish_national_charset():
@@ -486,7 +486,7 @@ def test_spanish_national_charset():
     parser.feed("#@[\\]`{|")
 
     # Check the result
-    assert board.blitter.current_buffer.get_line_text(0).rstrip() == "£§¡Ñ¿˚ñç"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "£§¡Ñ¿˚ñç"
 
 
 def test_italian_national_charset():
@@ -502,7 +502,7 @@ def test_italian_national_charset():
     parser.feed("#@[\\]`{|}~")
 
     # Check the result
-    assert board.blitter.current_buffer.get_line_text(0).rstrip() == "£§°çéùàòèì"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "£§°çéùàòèì"
 
 
 def test_swedish_national_charset():
@@ -518,7 +518,7 @@ def test_swedish_national_charset():
     parser.feed("@[\\]^`{|}~")
 
     # Check the result
-    assert board.blitter.current_buffer.get_line_text(0).rstrip() == "ÉÄÖÅÜéäöåü"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "ÉÄÖÅÜéäöåü"
 
 
 def test_danish_norwegian_charset():
@@ -534,7 +534,7 @@ def test_danish_norwegian_charset():
     parser.feed("[\\]`{|")
 
     # Check the result
-    assert board.blitter.current_buffer.get_line_text(0).rstrip() == "ÆØÅæøå"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "ÆØÅæøå"
 
 
 def test_finnish_national_charset():
@@ -550,7 +550,7 @@ def test_finnish_national_charset():
     parser.feed("[\\]^`{|}~")
 
     # Check the result
-    assert board.blitter.current_buffer.get_line_text(0).rstrip() == "ÄÖÅÜéäöåü"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "ÄÖÅÜéäöåü"
 
 
 def test_dutch_national_charset():
@@ -566,7 +566,7 @@ def test_dutch_national_charset():
     parser.feed("#@[\\]`{|}~")
 
     # Check the result
-    assert board.blitter.current_buffer.get_line_text(0).rstrip() == "£¾ĳ½¦`¨ƒ¼´"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "£¾ĳ½¦`¨ƒ¼´"
 
 
 def test_french_canadian_charset():
@@ -582,7 +582,7 @@ def test_french_canadian_charset():
     parser.feed("@[\\]^`{|}~")
 
     # Check the result
-    assert board.blitter.current_buffer.get_line_text(0).rstrip() == "àâçêîôéùèû"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "àâçêîôéùèû"
 
 
 def test_japanese_roman_charset():
@@ -598,7 +598,7 @@ def test_japanese_roman_charset():
     parser.feed("Price: \\100~")
 
     # Check the result
-    assert board.blitter.current_buffer.get_line_text(0).rstrip() == "Price: ¥100¯"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "Price: ¥100¯"
 
 
 def test_swiss_national_charset():
@@ -614,7 +614,7 @@ def test_swiss_national_charset():
     parser.feed("#@[\\]^_`{|}~")
 
     # Check the result
-    assert board.blitter.current_buffer.get_line_text(0).rstrip() == "ùàéçêîèôäöüû"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "ùàéçêîèôäöüû"
 
 
 def test_national_charset_switching():
@@ -639,4 +639,4 @@ def test_national_charset_switching():
     parser.feed("]")  # German: Ü
 
     # Check the result
-    assert board.blitter.current_buffer.get_line_text(0).rstrip() == "§Äà°Ü"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "§Äà°Ü"

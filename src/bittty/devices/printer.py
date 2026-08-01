@@ -349,14 +349,14 @@ class PrinterDevice(Device):
         return None
 
     def _screen_text(self, *, respect_extent: bool = False) -> str:
-        buffer = self.board.blitter.current_buffer
+        page = self.board.blitter.current_page
         if respect_extent and not self.print_extent:
             top = self.board.blitter.scroll_top
             bottom = self.board.blitter.scroll_bottom
         else:
             top = 0
             bottom = self.board.height - 1
-        lines = [buffer.get_line_text(y).rstrip() for y in range(top, bottom + 1)]
+        lines = [page.get_line_text(y).rstrip() for y in range(top, bottom + 1)]
         return "\r\n".join(lines) + "\r\n"
 
     def print_screen(self, *, respect_extent: bool = False) -> None:
@@ -375,12 +375,12 @@ class PrinterDevice(Device):
 
     def print_line(self, y: int) -> None:
         """Print a composed cursor line."""
-        text = self.board.blitter.current_buffer.get_line_text(y).rstrip()
+        text = self.board.blitter.current_page.get_line_text(y).rstrip()
         self.emit_text(text + "\r\n")
 
     def auto_print_line(self, y: int, trigger: str) -> None:
         """Print the line being left, ending in CR and the triggering control."""
-        text = self.board.blitter.current_buffer.get_line_text(y).rstrip()
+        text = self.board.blitter.current_page.get_line_text(y).rstrip()
         self.emit_text(text + "\r" + trigger)
 
     def feed_host_data(self, data: bytes | str, normal_sink: Callable[[str], None]) -> None:

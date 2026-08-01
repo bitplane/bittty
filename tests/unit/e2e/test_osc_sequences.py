@@ -101,9 +101,9 @@ def test_ps1_with_colors():
     assert "user@host:~/projects$ " in output
 
     # Check that styles were applied correctly
-    # We expect specific ANSI sequences to be present in the buffer
+    # We expect specific ANSI sequences to be present on the page
     # This is a simplified check, as full ANSI parsing is complex
-    line_cells = board.blitter.current_buffer.get_content()[0]
+    line_cells = board.blitter.current_page.get_content()[0]
 
     # Check for bold green for "user@host" - now using Style objects
     from bittty.style import Color, Style

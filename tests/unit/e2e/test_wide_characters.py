@@ -8,11 +8,11 @@ from bittty.video import WideHead
 
 
 def row_chars(board: Board, y: int = 0) -> list[str]:
-    return [char for _, char in board.blitter.current_buffer.grid[y]]
+    return [char for _, char in board.blitter.current_page.grid[y]]
 
 
 def assert_valid_rows(board: Board) -> None:
-    for row in board.blitter.current_buffer.grid:
+    for row in board.blitter.current_page.grid:
         for x, (_, char) in enumerate(row):
             if char == "":
                 assert x > 0
@@ -55,7 +55,7 @@ def test_stored_width_survives_policy_changes():
     board = Board(width=8, height=1, width_policy=WidthPolicy(ambiguous_width=2))
     board.parser.feed("·")
     board.set_ambiguous_width(1)
-    board.blitter.current_buffer.normalize_row(0)
+    board.blitter.current_page.normalize_row(0)
     board.parser.feed("·")
 
     assert row_chars(board)[:3] == ["·", "", "·"]
@@ -203,7 +203,7 @@ def test_attribute_change_applies_once_to_both_cells():
     board.parser.feed("❌")
     board.parser.feed("\x1b[1;1;1;2;1$t")  # DECRARA: toggle bold over both cells
 
-    head, continuation = board.blitter.current_buffer.grid[0][:2]
+    head, continuation = board.blitter.current_page.grid[0][:2]
     assert head[0].bold is True
     assert continuation == (head[0], "")
 
@@ -214,7 +214,7 @@ def test_hyperlink_lookup_from_continuation_uses_same_extent():
 
     assert board.link_at(0, 0) == ("https://example.com", "wide")
     assert board.link_at(1, 0) == ("https://example.com", "wide")
-    assert board.blitter.current_buffer.link_extent(1, 0) == ("https://example.com", "wide", 0, 1)
+    assert board.blitter.current_page.link_extent(1, 0) == ("https://example.com", "wide", 0, 1)
 
 
 def test_copy_rectangle_does_not_copy_half_a_wide_glyph():
@@ -222,7 +222,7 @@ def test_copy_rectangle_does_not_copy_half_a_wide_glyph():
     board.parser.feed("A❌BCD")
     board.blitter.copy_rectangle([1, 3, 1, 3, 1, 2, 1, 1])
 
-    assert board.blitter.current_buffer.get_cell(0, 1) == (Style(), " ")
+    assert board.blitter.current_page.get_cell(0, 1) == (Style(), " ")
     assert_valid_rows(board)
 
 

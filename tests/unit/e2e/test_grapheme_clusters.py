@@ -13,7 +13,7 @@ def clustered_board(*, width=12, height=3):
 
 
 def cells(board, y=0):
-    return [cell[1] for cell in board.blitter.current_buffer.grid[y]]
+    return [cell[1] for cell in board.blitter.current_page.grid[y]]
 
 
 def snapshot(board):
@@ -74,7 +74,7 @@ def test_safe_style_change_does_not_split_or_restyle_cluster():
     board = clustered_board()
     board.parser.feed("\x1b[31me\x1b[34m\u0301")
 
-    head = board.blitter.current_buffer.get_cell(0, 0)
+    head = board.blitter.current_page.get_cell(0, 0)
     assert head[1] == "e\u0301"
     assert head[0].fg.mode == "indexed"
     assert head[0].fg.value == 1
@@ -257,11 +257,15 @@ def test_oversized_cluster_arriving_whole_is_truncated_and_flagged():
     board = clustered_board(width=8, height=1)
 
     board.parser.feed("a" + "́" * 300)
-
     assert len(cells(board)[0]) == 256
-    tail = board.blitter._cluster_tail
-    assert tail.overflow is True
-    assert len(tail.context) == 32
+    assert board.cursor.x == 1
+
+    # Overflow keeps a tail of context so later marks still join this cluster
+    # rather than starting a fresh one in the next cell.
+    board.parser.feed("́" * 5)
+    assert len(cells(board)[0]) == 256
+    assert cells(board)[1] == " "
+    assert board.cursor.x == 1
 
 
 def test_oversized_cluster_still_ends_at_the_next_boundary():
@@ -296,7 +300,7 @@ def test_keycap_completing_over_a_replaced_wide_glyph_does_not_resurrect_it():
     row = cells(board)
     assert row[0] == "A"
     assert row[1] == "1️⃣"
-    assert isinstance(board.blitter.current_buffer.grid[0][1][1], WideHead)
+    assert isinstance(board.blitter.current_page.grid[0][1][1], WideHead)
     assert row[2] == ""  # its continuation, not a resurrected ❌
     assert board.cursor.x == 3
 
@@ -364,14 +368,13 @@ def test_a_pending_prefix_invalidated_by_a_cursor_move_is_discarded():
     and the prefix must be dropped instead of teleporting to the new position.
     """
     board = clustered_board(width=10, height=3)
-    board.parser.feed("؀")
-    assert board.blitter._pending_prefix is not None
+    board.parser.feed("؀")  # parked, not painted
 
     board.parser.feed("\x1b[2;5H")  # move away — the prefix is now stale
     board.parser.feed("A")
 
-    assert board.blitter.current_buffer.get_line_text(0) == " " * 10
-    assert board.blitter.current_buffer.get_line_text(1) == "    A     "
+    assert board.blitter.current_page.get_line_text(0) == " " * 10
+    assert board.blitter.current_page.get_line_text(1) == "    A     "
     assert (board.cursor.x, board.cursor.y) == (5, 1)
 
 
@@ -388,7 +391,7 @@ def test_speculation_is_abandoned_when_its_cell_changed_underneath():
 
     board.parser.feed("́")
 
-    assert board.blitter.current_buffer.get_line_text(0) == "X       "
+    assert board.blitter.current_page.get_line_text(0) == "X       "
     assert board.cursor.x == 1
 
 
@@ -408,7 +411,7 @@ def test_widening_over_a_neighbouring_wide_glyph_leaves_no_orphan():
 
     row = cells(board)
     assert row[0] == "1️⃣"
-    assert isinstance(board.blitter.current_buffer.grid[0][0][1], WideHead)
+    assert isinstance(board.blitter.current_page.grid[0][0][1], WideHead)
     assert row[1] == ""  # its own continuation
     assert row[2] == " "  # the displaced glyph's continuation was cleared
     assert board.cursor.x == 2

@@ -121,16 +121,16 @@ def test_cursor_device_tabs_and_basic_movement():
 
 def test_cursor_device_line_feed_scrolls_screen_region():
     board = Board(width=8, height=3)
-    board.blitter.current_buffer.set(0, 0, "top")
-    board.blitter.current_buffer.set(0, 1, "mid")
-    board.blitter.current_buffer.set(0, 2, "bot")
+    board.blitter.current_page.set(0, 0, "top")
+    board.blitter.current_page.set(0, 1, "mid")
+    board.blitter.current_page.set(0, 2, "bot")
 
     board.cursor.set_position(0, 2)
     board.cursor.line_feed()
 
     assert board.cursor.y == 2
-    assert board.blitter.current_buffer.get_line_text(0).startswith("mid")
-    assert board.blitter.current_buffer.get_line_text(1).startswith("bot")
+    assert board.blitter.current_page.get_line_text(0).startswith("mid")
+    assert board.blitter.current_page.get_line_text(1).startswith("bot")
 
 
 def test_cursor_device_text_write_wrap_preparation():

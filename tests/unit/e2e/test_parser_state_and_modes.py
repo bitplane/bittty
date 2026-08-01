@@ -77,7 +77,7 @@ def test_unknown_escape_sequences_ignored(board):
     parser.feed("End")
 
     # Text should still be processed normally
-    text_content = board.blitter.current_buffer.get_line_text(0).strip()
+    text_content = board.blitter.current_page.get_line_text(0).strip()
     assert "Before" in text_content
     assert "After" in text_content
     assert "End" in text_content
@@ -91,13 +91,13 @@ def test_invalid_csi_sequences_ignored(board):
     parser.feed("Hello\x1b[\x01World")  # Invalid control in CSI
 
     # Based on tmux behavior: "Hello" appears, CSI is abandoned, "orld" appears (W consumed)
-    text_content = board.blitter.current_buffer.get_line_text(0).strip()
+    text_content = board.blitter.current_page.get_line_text(0).strip()
     assert "Hello" in text_content
     assert "orld" in text_content
 
     # Test recovery with more text
     parser.feed("More")
-    text_content = board.blitter.current_buffer.get_line_text(0).strip()
+    text_content = board.blitter.current_page.get_line_text(0).strip()
     assert "More" in text_content
 
 
@@ -109,7 +109,7 @@ def test_malformed_csi_recovery(board):
     parser.feed("Start\x1b[999;999;999WEnd")  # Unknown CSI sequence
 
     # Should still write the text parts
-    text_content = board.blitter.current_buffer.get_line_text(0).strip()
+    text_content = board.blitter.current_page.get_line_text(0).strip()
     assert "Start" in text_content
     assert "End" in text_content
 
@@ -124,7 +124,7 @@ def test_incomplete_csi_sequences(board):
     parser.feed("H")  # CSI final byte - completes as cursor position
 
     # Should have processed "Test" and positioned cursor
-    text_content = board.blitter.current_buffer.get_line_text(0).strip()
+    text_content = board.blitter.current_page.get_line_text(0).strip()
     assert "Test" in text_content
 
     # Test actual incomplete sequences that stay incomplete
@@ -133,7 +133,7 @@ def test_incomplete_csi_sequences(board):
     parser.feed("3m")  # Complete with SGR
 
     # "Next" should appear (cursor was moved by H earlier)
-    assert "Next" in board.blitter.current_buffer.get_line_text(4).strip()
+    assert "Next" in board.blitter.current_page.get_line_text(4).strip()
 
 
 def test_parse_byte_csi_entry_intermediate_general(board):
@@ -173,7 +173,7 @@ def test_parse_byte_csi_intermediate_param_final(board):
     parser.feed("\x1b[?1;2@")
 
     # Verify that a space was inserted at position 1
-    line_text = board.blitter.current_buffer.get_line_text(0).rstrip()
+    line_text = board.blitter.current_page.get_line_text(0).rstrip()
     assert line_text == "A BC"  # Space inserted between A and BC
 
 
@@ -273,6 +273,6 @@ def test_deccolm_clears_the_screen_and_resets_the_region(board):
     parser.feed(f"{ESC}[?{DECCOLM_COLUMN_MODE}h")
 
     assert board.width == 132
-    assert board.blitter.current_buffer.get_line_text(0).strip() == ""
+    assert board.blitter.current_page.get_line_text(0).strip() == ""
     assert board.blitter.scroll_top == 0
     assert board.blitter.scroll_bottom == board.height - 1

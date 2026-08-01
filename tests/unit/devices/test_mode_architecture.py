@@ -147,7 +147,7 @@ def test_deccolm_semantics_are_selected_by_model():
     tmux_parser.feed("\x1b[?3h")
     assert tmux.width == 80
     assert (tmux.cursor.x, tmux.cursor.y) == (0, 0)
-    assert tmux.blitter.current_buffer.get_cell(0, 0)[1] == " "
+    assert tmux.blitter.current_page.get_cell(0, 0)[1] == " "
     assert tmux.modes.get_private_mode_status(3) == 4
 
     kitty, kitty_parser, _ = _board(KITTY)
@@ -161,7 +161,7 @@ def test_deccolm_semantics_are_selected_by_model():
     kitty.cursor.set_position(3, 1)
     kitty_parser.feed("\x1b[?3l")
     assert (kitty.cursor.x, kitty.cursor.y) == (3, 1)
-    assert kitty.blitter.current_buffer.get_cell(0, 0)[1] == "k"
+    assert kitty.blitter.current_page.get_cell(0, 0)[1] == "k"
     assert kitty.modes.get_private_mode_status(3) == 2
 
 

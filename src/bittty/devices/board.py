@@ -413,8 +413,8 @@ class Board:
     # --- screen capture --- #
 
     def get_content(self):
-        """Get current screen content as raw buffer data."""
-        return self.blitter.current_buffer.get_content()
+        """Get current screen content as raw page data."""
+        return self.blitter.current_page.get_content()
 
     def capture_pane(self) -> str:
         """Capture screen content: a pure pull of video memory as ANSI lines.
@@ -422,7 +422,7 @@ class Board:
         No cursor or pointer is composited in — the chrome renders those from
         the board's registers (cursor.x/y, modes.cursor_visible, mouse.x/y).
         """
-        page = self.blitter.current_buffer
+        page = self.blitter.current_page
         return "\n".join(page.get_line(y, width=self.width) for y in range(self.height))
 
     def capture_text(self, *, trim: bool = True) -> str:
@@ -432,7 +432,7 @@ class Board:
         at the bottom are omitted. Set ``trim=False`` to preserve trailing
         blank cells and rows; width-2 continuation cells emit no text.
         """
-        page = self.blitter.current_buffer
+        page = self.blitter.current_page
         lines = [page.get_line_text(y) for y in range(self.height)]
         if trim:
             lines = [line.rstrip(" ") for line in lines]
@@ -446,7 +446,7 @@ class Board:
         The chrome pulls this for hover and click arbitration — link data is
         model state; the hover effect and the click-through are chrome.
         """
-        style, _ = self.blitter.current_buffer.get_cell(x, y)
+        style, _ = self.blitter.current_page.get_cell(x, y)
         if style.hyperlink is None:
             return None
         return (style.hyperlink, style.hyperlink_id)

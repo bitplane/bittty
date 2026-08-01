@@ -32,21 +32,21 @@ def test_scroll_left_pans_data_left():
     board, parser = _term()
     parser.feed("ABCDE")  # row 0: "ABCDE"
     parser.feed("\x1b[2 @")  # SL 2 — data moves two columns left
-    assert board.blitter.current_buffer.get_line_text(0).rstrip() == "CDE"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "CDE"
 
 
 def test_scroll_right_pans_data_right():
     board, parser = _term()
     parser.feed("ABCDE")
     parser.feed("\x1b[2 A")  # SR 2 — data moves two columns right
-    assert board.blitter.current_buffer.get_line_text(0).rstrip() == "  ABCDE"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "  ABCDE"
 
 
 def test_scroll_left_defaults_to_one_column():
     board, parser = _term()
     parser.feed("ABCDE")
     parser.feed("\x1b[ @")  # SL with no parameter -> 1
-    assert board.blitter.current_buffer.get_line_text(0).rstrip() == "BCDE"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "BCDE"
 
 
 def test_bell_volume_registers():

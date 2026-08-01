@@ -134,7 +134,7 @@ class CursorDevice(Device):
                 self.y = bottom if self.y == top else self.y - 1
             else:
                 previous = self.y - 1
-                if previous < top or not screen.current_buffer.is_line_wrapped(previous):
+                if previous < top or not screen.current_page.is_line_wrapped(previous):
                     break
                 self.y = previous
             self.x = right
@@ -193,7 +193,7 @@ class CursorDevice(Device):
         screen = self.board.blitter
         within_columns = self._within_horizontal_margins()
         if is_wrapped:
-            screen.current_buffer.set_line_wrapped(self.y)
+            screen.current_page.set_line_wrapped(self.y)
         self.cancel_pending_wrap()
         if self.y == screen.scroll_bottom and within_columns:
             screen.scroll(1)

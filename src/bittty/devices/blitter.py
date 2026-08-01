@@ -2,65 +2,21 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from wcwidth import iter_graphemes
-
 from .. import constants
+from ..clusters import ClusterWriter
 from ..operations import Operation
 from ..style import Style, parse_sgr_sequence
-from ..video import Cell, Video
+from ..video import Video
 from .base import Device
 from .modes import ModeEffect
 
 _REVERSE_ATTRS = {1: "bold", 4: "underline", 5: "blink", 7: "reverse"}
-_MAX_CLUSTER_CODEPOINTS = 256
-_OVERFLOW_CONTEXT = 32
-_ASCII_KEYCAP_BASES = frozenset("#*0123456789")
 
 if TYPE_CHECKING:
     from ..width import WidthPolicy
     from .board import Board
-
-
-@dataclass(slots=True)
-class _ClusterTail:
-    page: Video
-    row: list
-    x: int
-    y: int
-    text: str
-    width: int
-    style: Style
-    cursor_x: int
-    cursor_y: int
-    insert_mode: bool
-    auto_wrap: bool
-    width_policy: WidthPolicy
-    board_width: int
-    board_height: int
-    write_left: int
-    write_right: int
-    overflow: bool = False
-    context: str = ""
-    restore_start: int = 0
-    restore_cells: tuple[Cell, ...] = ()
-    insert_restore: tuple[Cell, ...] = ()
-
-
-@dataclass(slots=True)
-class _PendingPrefix:
-    text: str
-    page: Video
-    row: list
-    cursor_x: int
-    cursor_y: int
-    insert_mode: bool
-    auto_wrap: bool
-    width_policy: WidthPolicy
-    board_width: int
-    board_height: int
 
 
 class Blitter(Device):
@@ -68,9 +24,9 @@ class Blitter(Device):
 
     def __init__(self, board: Board) -> None:
         self.board = board
-        self.primary_buffer = Video(board.width, board.height, board.width_policy)
-        self.alt_buffer = Video(board.width, board.height, board.width_policy)
-        self.current_buffer = self.primary_buffer
+        self.primary_page = Video(board.width, board.height, board.width_policy)
+        self.alt_page = Video(board.width, board.height, board.width_policy)
+        self.current_page = self.primary_page
         self.in_alt_screen = False
         self.scroll_top = 0
         self.scroll_bottom = board.height - 1
@@ -78,8 +34,7 @@ class Blitter(Device):
         self.right_margin = board.width - 1
         self.attr_change_extent = "rectangle"  # DECSACE: "rectangle" or "stream"
         self.last_printed_char = " "
-        self._cluster_tail: _ClusterTail | None = None
-        self._pending_prefix: _PendingPrefix | None = None
+        self._clusters = ClusterWriter(self)
         self.handlers = {
             "DECSLRM": self.apply_left_right_margins,
             "DECSCPP": lambda op: self.board.set_page_columns(op.args[0]),
@@ -120,7 +75,7 @@ class Blitter(Device):
         """DECDHL/DECDWL/DECSWL — set the cursor line's width/height attribute."""
         if self.board.modes.left_right_margin_mode:
             return
-        self.current_buffer.set_line_attribute(self.board.cursor.y, attribute)
+        self.current_page.set_line_attribute(self.board.cursor.y, attribute)
 
     def write_text(self, text: str, ansi_code: str = "") -> None:
         """Write printable text at the cursor, accounting for terminal columns.
@@ -142,9 +97,9 @@ class Blitter(Device):
                 space = bounds[1] - cursor.x
                 chunk, remaining = remaining[:space], remaining[space:]
                 if board.modes.insert_mode:
-                    self.current_buffer.insert(cursor.x, cursor.y, chunk, code_to_use, right=bounds[1])
+                    self.current_page.insert(cursor.x, cursor.y, chunk, code_to_use, right=bounds[1])
                 else:
-                    self.current_buffer.set(cursor.x, cursor.y, chunk, code_to_use)
+                    self.current_page.set(cursor.x, cursor.y, chunk, code_to_use)
                 cursor.advance_after_text_write(len(chunk), bounds)
 
         if translated_text.isascii():
@@ -172,9 +127,9 @@ class Blitter(Device):
                         cursor.x = bounds[1] - char_width
 
                 if board.modes.insert_mode:
-                    self.current_buffer.insert(cursor.x, cursor.y, char, code_to_use, right=bounds[1])
+                    self.current_page.insert(cursor.x, cursor.y, char, code_to_use, right=bounds[1])
                 else:
-                    self.current_buffer.set(cursor.x, cursor.y, char, code_to_use)
+                    self.current_page.set(cursor.x, cursor.y, char, code_to_use)
                 cursor.advance_after_text_write(char_width, bounds)
                 start = index + 1
 
@@ -188,420 +143,13 @@ class Blitter(Device):
         """Switch the write callable so disabled mode has no per-run branch."""
         self.reset_grapheme_state()
         if enabled:
-            self.write_text = self._write_clustered_entry
+            self.write_text = self._clusters.write
         else:
             self.__dict__.pop("write_text", None)
 
-    def _write_clustered_entry(self, text: str, ansi_code: str = "") -> None:
-        board = self.board
-        code_to_use = ansi_code if ansi_code else board.style.current
-        style = code_to_use if isinstance(code_to_use, Style) else parse_sgr_sequence(code_to_use)
-        self._write_clustered_text(board.charset.translate(text), style)
-
     def reset_grapheme_state(self) -> None:
         """Forget streaming state without changing already-written cells."""
-        self._cluster_tail = None
-        self._pending_prefix = None
-
-    def _tail_is_valid(self, tail: _ClusterTail) -> bool:
-        board = self.board
-        if (
-            self.current_buffer is not tail.page
-            or board.width != tail.board_width
-            or board.height != tail.board_height
-            or board.cursor.x != tail.cursor_x
-            or board.cursor.y != tail.cursor_y
-            or board.modes.insert_mode != tail.insert_mode
-            or board.modes.auto_wrap != tail.auto_wrap
-            or board.width_policy != tail.width_policy
-            or not (0 <= tail.y < tail.page.height and 0 <= tail.x < tail.page.width)
-            or tail.page.grid[tail.y] is not tail.row
-        ):
-            return False
-        head = tail.page.get_cell(tail.x, tail.y)
-        if head[0] != tail.style or str(head[1]) != tail.text:
-            return False
-        if tail.width == 2:
-            return tail.x + 1 < tail.page.width and tail.page.get_cell(tail.x + 1, tail.y) == (tail.style, "")
-        return type(head[1]) is str
-
-    def _prefix_is_valid(self, prefix: _PendingPrefix) -> bool:
-        board = self.board
-        return (
-            self.current_buffer is prefix.page
-            and board.width == prefix.board_width
-            and board.height == prefix.board_height
-            and board.cursor.x == prefix.cursor_x
-            and board.cursor.y == prefix.cursor_y
-            and board.modes.insert_mode == prefix.insert_mode
-            and board.modes.auto_wrap == prefix.auto_wrap
-            and board.width_policy == prefix.width_policy
-            and 0 <= prefix.cursor_y < prefix.page.height
-            and prefix.page.grid[prefix.cursor_y] is prefix.row
-        )
-
-    @staticmethod
-    def _is_prepend_cluster(text: str) -> bool:
-        """Whether a trailing cluster joins a following ordinary base."""
-        iterator = iter_graphemes(text + "A")
-        return next(iterator, "") == text + "A"
-
-    def _remember_prefix(self, text: str) -> None:
-        board = self.board
-        y = board.cursor.y
-        self._pending_prefix = _PendingPrefix(
-            text=text[-_MAX_CLUSTER_CODEPOINTS:],
-            page=self.current_buffer,
-            row=self.current_buffer.grid[y],
-            cursor_x=board.cursor.x,
-            cursor_y=y,
-            insert_mode=board.modes.insert_mode,
-            auto_wrap=board.modes.auto_wrap,
-            width_policy=board.width_policy,
-            board_width=board.width,
-            board_height=board.height,
-        )
-
-    def _snapshot_glyph_target(self, x: int, y: int, right: int) -> tuple[int, tuple[Cell, ...], tuple[Cell, ...]]:
-        page = self.current_buffer
-        row = page.grid[y]
-        if self.board.modes.insert_mode:
-            return x, (), tuple(row[max(x, right - 2) : right])
-
-        start = page.owner_x(x, y)
-        end = min(right, x + 2)
-        if end < right and row[end][1] == "":
-            end += 1
-        return start, tuple(row[start:end]), ()
-
-    def _remember_tail(
-        self,
-        x: int,
-        y: int,
-        text: str,
-        width: int,
-        style: Style,
-        bounds: tuple[int, int],
-        *,
-        overflow=False,
-        previous: _ClusterTail | None = None,
-        restore_start=0,
-        restore_cells=(),
-        insert_restore=(),
-    ) -> None:
-        board = self.board
-        if previous is not None:
-            restore_start = previous.restore_start
-            restore_cells = previous.restore_cells
-            insert_restore = previous.insert_restore
-        tail = self._cluster_tail
-        if tail is None:
-            self._cluster_tail = _ClusterTail(
-                page=self.current_buffer,
-                row=self.current_buffer.grid[y],
-                x=x,
-                y=y,
-                text=text,
-                width=width,
-                style=style,
-                cursor_x=board.cursor.x,
-                cursor_y=board.cursor.y,
-                insert_mode=board.modes.insert_mode,
-                auto_wrap=board.modes.auto_wrap,
-                width_policy=board.width_policy,
-                board_width=board.width,
-                board_height=board.height,
-                write_left=bounds[0],
-                write_right=bounds[1],
-                overflow=overflow,
-                context=text[-_OVERFLOW_CONTEXT:],
-                restore_start=restore_start,
-                restore_cells=restore_cells,
-                insert_restore=insert_restore,
-            )
-            return
-
-        tail.page = self.current_buffer
-        tail.row = self.current_buffer.grid[y]
-        tail.x = x
-        tail.y = y
-        tail.text = text
-        tail.width = width
-        tail.style = style
-        tail.cursor_x = board.cursor.x
-        tail.cursor_y = board.cursor.y
-        tail.insert_mode = board.modes.insert_mode
-        tail.auto_wrap = board.modes.auto_wrap
-        tail.width_policy = board.width_policy
-        tail.board_width = board.width
-        tail.board_height = board.height
-        tail.write_left = bounds[0]
-        tail.write_right = bounds[1]
-        tail.overflow = overflow
-        tail.context = text[-_OVERFLOW_CONTEXT:]
-        tail.restore_start = restore_start
-        tail.restore_cells = restore_cells
-        tail.insert_restore = insert_restore
-
-    def _write_ascii_cluster_run(self, run: str, style: Style) -> None:
-        if not run:
-            return
-        board = self.board
-        cursor = board.cursor
-        if board.modes.insert_mode:
-            if len(run) > 1:
-                remaining = run[:-1]
-                while remaining:
-                    bounds = cursor.prepare_for_text_write()
-                    space = bounds[1] - cursor.x
-                    chunk, remaining = remaining[:space], remaining[space:]
-                    self.current_buffer.insert(cursor.x, cursor.y, chunk, style, right=bounds[1])
-                    cursor.advance_after_text_write(len(chunk), bounds)
-            self._write_cluster_glyph(run[-1], 1, style)
-            return
-
-        remaining = run
-        while remaining:
-            bounds = cursor.prepare_for_text_write()
-            space = bounds[1] - cursor.x
-            chunk, remaining = remaining[:space], remaining[space:]
-            start_x, y = cursor.x, cursor.y
-            final_chunk = not remaining
-            if final_chunk:
-                x = start_x + len(chunk) - 1
-                if run[-1] in _ASCII_KEYCAP_BASES:
-                    restore_start, restore_cells, _ = self._snapshot_glyph_target(x, y, bounds[1])
-                else:
-                    restore_start, restore_cells = x, ()
-                # If this run's prefix overwrites the head of a wide glyph whose
-                # continuation is the candidate cell, record the post-prefix
-                # state rather than resurrecting that old glyph on relocation.
-                if restore_start < x:
-                    adjusted = list(restore_cells)
-                    for column in range(restore_start, x):
-                        offset = column - start_x
-                        if 0 <= offset < len(chunk) - 1:
-                            adjusted[column - restore_start] = (style, chunk[offset])
-                    adjusted[x - restore_start] = (style, " ")
-                    restore_cells = tuple(adjusted)
-            self.current_buffer.set(start_x, y, chunk, style)
-            cursor.advance_after_text_write(len(chunk), bounds)
-
-        self._remember_tail(
-            x,
-            y,
-            run[-1],
-            1,
-            style,
-            bounds,
-            restore_start=restore_start,
-            restore_cells=restore_cells,
-        )
-        self.last_printed_char = run[-1]
-
-    def _write_cluster_glyph(self, text: str, width: int, style: Style) -> None:
-        board = self.board
-        if width == 0 or width > board.width:
-            return
-        cursor = board.cursor
-        bounds = cursor.prepare_for_text_write()
-        if width > bounds[1] - cursor.x:
-            if board.modes.auto_wrap:
-                cursor.x = bounds[1]
-                cursor.mark_pending_wrap(bounds)
-                bounds = cursor.prepare_for_text_write()
-            else:
-                cursor.x = bounds[1] - width
-        x, y = cursor.x, cursor.y
-        restore_start, restore_cells, insert_restore = self._snapshot_glyph_target(x, y, bounds[1])
-        self.current_buffer.write_glyph(
-            x,
-            y,
-            text,
-            width,
-            style,
-            insert=board.modes.insert_mode,
-            right=bounds[1],
-        )
-        cursor.advance_after_text_write(width, bounds)
-        self._remember_tail(
-            x,
-            y,
-            text,
-            width,
-            style,
-            bounds,
-            restore_start=restore_start,
-            restore_cells=restore_cells,
-            insert_restore=insert_restore,
-        )
-        self.last_printed_char = text
-
-    def _extend_tail(self, tail: _ClusterTail, complete_text: str) -> None:
-        display_text = complete_text[:_MAX_CLUSTER_CODEPOINTS]
-        overflow = len(complete_text) > _MAX_CLUSTER_CODEPOINTS
-        if tail.overflow:
-            display_text = tail.text
-            overflow = True
-
-        new_width = tail.width_policy.grapheme_width(display_text)
-        if new_width == 0:
-            return
-        board = self.board
-        page = tail.page
-
-        if tail.x + new_width <= tail.write_right:
-            page.resize_glyph(
-                tail.x,
-                tail.y,
-                display_text,
-                tail.width,
-                new_width,
-                tail.style,
-                insert=tail.insert_mode,
-                right=tail.write_right,
-                restore_start=tail.restore_start,
-                restore_cells=tail.restore_cells,
-                insert_restore=tail.insert_restore,
-            )
-            if tail.auto_wrap:
-                board.cursor.x = tail.x + new_width
-                if board.cursor.x == tail.write_right:
-                    board.cursor.mark_pending_wrap((tail.write_left, tail.write_right))
-                else:
-                    board.cursor.cancel_pending_wrap()
-            else:
-                board.cursor.x = min(tail.write_right - 1, tail.x + new_width)
-            board.cursor.y = tail.y
-            self._remember_tail(
-                tail.x,
-                tail.y,
-                display_text,
-                new_width,
-                tail.style,
-                (tail.write_left, tail.write_right),
-                overflow=overflow,
-                previous=tail,
-            )
-        else:
-            page.remove_glyph(
-                tail.x,
-                tail.y,
-                tail.width,
-                tail.style,
-                inserted=tail.insert_mode,
-                right=tail.write_right,
-                restore_start=tail.restore_start,
-                restore_cells=tail.restore_cells,
-                insert_restore=tail.insert_restore,
-            )
-            if tail.auto_wrap:
-                board.cursor.x = tail.write_right
-                board.cursor.y = tail.y
-                board.cursor.mark_pending_wrap((tail.write_left, tail.write_right))
-            else:
-                board.cursor.x = tail.write_right - new_width
-                board.cursor.y = tail.y
-            self._write_cluster_glyph(display_text, new_width, tail.style)
-            if self._cluster_tail is not None:
-                self._cluster_tail.overflow = overflow
-                self._cluster_tail.context = complete_text[-_OVERFLOW_CONTEXT:]
-        if self._cluster_tail is not None:
-            self._cluster_tail.context = complete_text[-_OVERFLOW_CONTEXT:]
-        self.last_printed_char = display_text
-
-    def _attach_to_tail(self, text: str) -> str:
-        tail = self._cluster_tail
-        if tail is None or not self._tail_is_valid(tail):
-            self._cluster_tail = None
-            return text
-
-        base = tail.context if tail.overflow else tail.text
-        iterator = iter_graphemes(base + text)
-        first = next(iterator, "")
-        if not first.startswith(base) or len(first) == len(base):
-            return text
-
-        consumed = len(first) - len(base)
-        if tail.overflow:
-            complete = tail.text
-        else:
-            complete = first
-        self._extend_tail(tail, complete)
-        if self._cluster_tail is not None and tail.overflow:
-            self._cluster_tail.context = first[-_OVERFLOW_CONTEXT:]
-        return text[consumed:]
-
-    def _write_new_clusters(self, text: str, style: Style) -> None:
-        iterator = iter_graphemes(text)
-        pending = next(iterator, None)
-        if pending is None:
-            return
-
-        ascii_parts: list[str] = []
-
-        def flush_ascii() -> None:
-            if ascii_parts:
-                self._write_ascii_cluster_run("".join(ascii_parts), style)
-                ascii_parts.clear()
-
-        for cluster in iterator:
-            if pending.isascii() and len(pending) == 1:
-                ascii_parts.append(pending)
-            else:
-                flush_ascii()
-                width = self.board.width_policy.grapheme_width(pending)
-                if width:
-                    display = pending[:_MAX_CLUSTER_CODEPOINTS]
-                    self._write_cluster_glyph(display, self.board.width_policy.grapheme_width(display), style)
-                    if self._cluster_tail is not None and len(pending) > _MAX_CLUSTER_CODEPOINTS:
-                        self._cluster_tail.overflow = True
-                        self._cluster_tail.context = pending[-_OVERFLOW_CONTEXT:]
-            pending = cluster
-
-        if self._is_prepend_cluster(pending):
-            flush_ascii()
-            self._remember_prefix(pending)
-        elif pending.isascii() and len(pending) == 1:
-            ascii_parts.append(pending)
-            flush_ascii()
-        else:
-            flush_ascii()
-            width = self.board.width_policy.grapheme_width(pending)
-            if width:
-                display = pending[:_MAX_CLUSTER_CODEPOINTS]
-                self._write_cluster_glyph(display, self.board.width_policy.grapheme_width(display), style)
-                if self._cluster_tail is not None and len(pending) > _MAX_CLUSTER_CODEPOINTS:
-                    self._cluster_tail.overflow = True
-                    self._cluster_tail.context = pending[-_OVERFLOW_CONTEXT:]
-
-    def _write_clustered_text(self, text: str, style: Style) -> None:
-        if not text:
-            return
-
-        prefix = self._pending_prefix
-        if prefix is None and text.isascii():
-            # ASCII always starts a new cluster (the only forward-joining case,
-            # Prepend, is held separately), so avoid invoking the segmenter.
-            self._write_ascii_cluster_run(text, style)
-            return
-
-        if prefix is not None:
-            self._pending_prefix = None
-            if self._prefix_is_valid(prefix):
-                text = prefix.text + text
-            else:
-                prefix = None
-
-        if prefix is None:
-            text = self._attach_to_tail(text)
-            if not text:
-                return
-
-        if text.isascii():
-            self._write_ascii_cluster_run(text, style)
-        else:
-            self._write_new_clusters(text, style)
+        self._clusters.reset()
 
     def repeat_last_character(self, count: int) -> None:
         """Repeat the last printed character count times.
@@ -620,13 +168,13 @@ class Blitter(Device):
         self.write_text(self.last_printed_char * count)
 
     def resize(self, width: int, height: int) -> None:
-        """Resize terminal dimensions and screen buffers."""
+        """Resize terminal dimensions and both video pages."""
         self.reset_grapheme_state()
         self.board.width = width
         self.board.height = height
 
-        self.primary_buffer.resize(width, height)
-        self.alt_buffer.resize(width, height)
+        self.primary_page.resize(width, height)
+        self.alt_page.resize(width, height)
         # A resize restores the full page, both ways: keeping scroll_top while
         # clamping scroll_bottom can invert the region, and an inverted region
         # stops line feed scrolling at all.
@@ -647,8 +195,8 @@ class Blitter(Device):
 
         self.reset_grapheme_state()
         self.board.width = columns
-        self.primary_buffer.resize(columns, self.board.height)
-        self.alt_buffer.resize(columns, self.board.height)
+        self.primary_page.resize(columns, self.board.height)
+        self.alt_page.resize(columns, self.board.height)
 
         if full_width_region:
             self.left_margin = 0
@@ -661,8 +209,8 @@ class Blitter(Device):
     def set_width_policy(self, policy: WidthPolicy) -> None:
         """Use a new policy for future writes on both video pages."""
         self.reset_grapheme_state()
-        self.primary_buffer.width_policy = policy
-        self.alt_buffer.width_policy = policy
+        self.primary_page.width_policy = policy
+        self.alt_page.width_policy = policy
 
     def clear_screen(self, mode: int = constants.ERASE_FROM_CURSOR_TO_END) -> None:
         """Clear screen."""
@@ -670,37 +218,37 @@ class Blitter(Device):
         bg_ansi = self.board.style.background_ansi()
 
         if mode == constants.ERASE_FROM_CURSOR_TO_END:
-            self.current_buffer.clear_line(
+            self.current_page.clear_line(
                 self.board.cursor.y,
                 constants.ERASE_FROM_CURSOR_TO_END,
                 self.board.cursor.x,
                 bg_ansi,
             )
             for y in range(self.board.cursor.y + 1, self.board.height):
-                self.current_buffer.clear_line(y, constants.ERASE_ALL, 0, bg_ansi)
+                self.current_page.clear_line(y, constants.ERASE_ALL, 0, bg_ansi)
         elif mode == constants.ERASE_FROM_START_TO_CURSOR:
             for y in range(self.board.cursor.y):
-                self.current_buffer.clear_line(y, constants.ERASE_ALL, 0, bg_ansi)
+                self.current_page.clear_line(y, constants.ERASE_ALL, 0, bg_ansi)
             self.clear_line(constants.ERASE_FROM_START_TO_CURSOR)
         elif mode == constants.ERASE_ALL:
             for y in range(self.board.height):
-                self.current_buffer.clear_line(y, constants.ERASE_ALL, 0, bg_ansi)
+                self.current_page.clear_line(y, constants.ERASE_ALL, 0, bg_ansi)
 
     def clear_line(self, mode: int = constants.ERASE_FROM_CURSOR_TO_END) -> None:
         """Clear line."""
         self.board.cursor.cancel_pending_wrap()
         bg_ansi = self.board.style.background_ansi()
-        self.current_buffer.clear_line(self.board.cursor.y, mode, self.board.cursor.x, bg_ansi)
+        self.current_page.clear_line(self.board.cursor.y, mode, self.board.cursor.x, bg_ansi)
 
     def clear_rect(self, x1: int, y1: int, x2: int, y2: int, ansi_code: str = "") -> None:
         """Clear a rectangular region."""
-        self.current_buffer.clear_region(x1, y1, x2, y2, ansi_code)
+        self.current_page.clear_region(x1, y1, x2, y2, ansi_code)
 
     def _selective_clear(self, x: int, y: int) -> None:
         """Clear an intersected glyph only if it is not DECSCA-protected."""
-        owner = self.current_buffer.owner_x(x, y)
-        if not self.current_buffer.get_cell(owner, y)[0].protected:
-            self.current_buffer.set_cell(owner, y, " ", self.board.style.background_ansi())
+        owner = self.current_page.owner_x(x, y)
+        if not self.current_page.get_cell(owner, y)[0].protected:
+            self.current_page.set_cell(owner, y, " ", self.board.style.background_ansi())
 
     def selective_erase_display(self, mode: int) -> None:
         """DECSED — erase in display, leaving DECSCA-protected characters."""
@@ -764,10 +312,10 @@ class Blitter(Device):
         for y in range(t, b + 1):
             x = left
             while x + char_width - 1 <= r:
-                self.current_buffer.set_cell(x, y, char, self.board.style.current)
+                self.current_page.set_cell(x, y, char, self.board.style.current)
                 x += char_width
             if x <= r:
-                self.current_buffer.set_cell(x, y, " ", self.board.style.current)
+                self.current_page.set_cell(x, y, " ", self.board.style.current)
 
     def erase_rectangle(self, params) -> None:
         """DECERA — erase a rectangle (Pt;Pl;Pb;Pr)."""
@@ -775,7 +323,7 @@ class Blitter(Device):
         bg = self.board.style.background_ansi()
         for y in range(t, b + 1):
             for x in range(left, r + 1):
-                self.current_buffer.set_cell(x, y, " ", bg)
+                self.current_page.set_cell(x, y, " ", bg)
 
     def selective_erase_rectangle(self, params) -> None:
         """DECSERA — erase a rectangle, leaving DECSCA-protected characters."""
@@ -792,18 +340,18 @@ class Blitter(Device):
         dl = (p[6] - 1) if p[6] else 0
         cells = []
         for y in range(t, b + 1):
-            row = [self.current_buffer.get_cell(x, y) for x in range(left, r + 1)]
+            row = [self.current_page.get_cell(x, y) for x in range(left, r + 1)]
             # A rectangle containing only half of a wide glyph copies blanks
             # at that edge, never an orphaned fragment.
             if row and row[0][1] == "":
                 row[0] = (row[0][0], " ")
-            if row and r + 1 < self.board.width and self.current_buffer.get_cell(r + 1, y)[1] == "":
+            if row and r + 1 < self.board.width and self.current_page.get_cell(r + 1, y)[1] == "":
                 row[-1] = (row[-1][0], " ")
             cells.append(row)
         for dy, row in enumerate(cells):
             ty = dt + dy
             if 0 <= ty < self.board.height and 0 <= dl < self.board.width:
-                self.current_buffer.replace_cells(dl, ty, row)
+                self.current_page.replace_cells(dl, ty, row)
 
     def set_attr_change_extent(self, ps: int) -> None:
         """DECSACE — 1 = stream (wrapping run), else rectangle (default)."""
@@ -835,12 +383,12 @@ class Blitter(Device):
         delta = parse_sgr_sequence("\x1b[" + ";".join(sgr) + "m") if sgr else Style()
         changed = set()
         for x, y in self._extent_cells(params):
-            owner = self.current_buffer.owner_x(x, y)
+            owner = self.current_page.owner_x(x, y)
             if (owner, y) in changed:
                 continue
             changed.add((owner, y))
-            cell = self.current_buffer.get_cell(owner, y)
-            self.current_buffer.set_style(owner, y, cell[0].merge(delta))
+            cell = self.current_page.get_cell(owner, y)
+            self.current_page.set_style(owner, y, cell[0].merge(delta))
 
     def reverse_attributes_rectangle(self, params) -> None:
         """DECRARA — toggle the given attributes (1/4/5/7) across the area (rectangle or stream)."""
@@ -848,25 +396,25 @@ class Blitter(Device):
         attrs = [_REVERSE_ATTRS[p] for p in requested]
         changed = set()
         for x, y in self._extent_cells(params):
-            owner = self.current_buffer.owner_x(x, y)
+            owner = self.current_page.owner_x(x, y)
             if (owner, y) in changed:
                 continue
             changed.add((owner, y))
-            cell = self.current_buffer.get_cell(owner, y)
+            cell = self.current_page.get_cell(owner, y)
             style = cell[0]
             for attr in attrs:
                 style = style.replace(**{attr: not getattr(style, attr)})
-            self.current_buffer.set_style(owner, y, style)
+            self.current_page.set_style(owner, y, style)
 
     def switch_screen(self, alt: bool) -> None:
         """Switch between primary and alternate screen."""
         self.reset_grapheme_state()
         changed = alt != self.in_alt_screen
         if alt and not self.in_alt_screen:
-            self.current_buffer = self.alt_buffer
+            self.current_page = self.alt_page
             self.in_alt_screen = True
         elif not alt and self.in_alt_screen:
-            self.current_buffer = self.primary_buffer
+            self.current_page = self.primary_page
             self.in_alt_screen = False
         if changed:
             self.board.modes.reconcile(ModeEffect.MOUSE_CAPTURE)
@@ -875,7 +423,7 @@ class Blitter(Device):
         """Fill the screen with 'E' characters for alignment testing."""
         test_text = "E" * self.board.width
         for y in range(self.board.height):
-            self.current_buffer.set(0, y, test_text)
+            self.current_page.set(0, y, test_text)
 
     def set_scroll_region(self, top: int, bottom: int) -> None:
         """Set scroll region."""
@@ -897,9 +445,9 @@ class Blitter(Device):
             return
 
         if self.left_margin == 0 and self.right_margin == self.board.width - 1 and self.board.style.current.bg is None:
-            self.current_buffer.scroll_region_down(cursor.y, self.scroll_bottom, count)
+            self.current_page.scroll_region_down(cursor.y, self.scroll_bottom, count)
         else:
-            self.current_buffer.scroll_rectangle_down(
+            self.current_page.scroll_rectangle_down(
                 cursor.y,
                 self.scroll_bottom,
                 count,
@@ -918,9 +466,9 @@ class Blitter(Device):
             return
 
         if self.left_margin == 0 and self.right_margin == self.board.width - 1 and self.board.style.current.bg is None:
-            self.current_buffer.scroll_region_up(cursor.y, self.scroll_bottom, count)
+            self.current_page.scroll_region_up(cursor.y, self.scroll_bottom, count)
         else:
-            self.current_buffer.scroll_rectangle_up(
+            self.current_page.scroll_rectangle_up(
                 cursor.y,
                 self.scroll_bottom,
                 count,
@@ -957,13 +505,13 @@ class Blitter(Device):
         abs_lines = abs(lines)
         if self.left_margin == 0 and self.right_margin == self.board.width - 1 and self.board.style.current.bg is None:
             if lines > 0:
-                self.current_buffer.scroll_region_up(self.scroll_top, self.scroll_bottom, abs_lines)
+                self.current_page.scroll_region_up(self.scroll_top, self.scroll_bottom, abs_lines)
             else:
-                self.current_buffer.scroll_region_down(self.scroll_top, self.scroll_bottom, abs_lines)
+                self.current_page.scroll_region_down(self.scroll_top, self.scroll_bottom, abs_lines)
         else:
             background = self.board.style.background_ansi()
             if lines > 0:
-                self.current_buffer.scroll_rectangle_up(
+                self.current_page.scroll_rectangle_up(
                     self.scroll_top,
                     self.scroll_bottom,
                     abs_lines,
@@ -972,7 +520,7 @@ class Blitter(Device):
                     style_or_ansi=background,
                 )
             else:
-                self.current_buffer.scroll_rectangle_down(
+                self.current_page.scroll_rectangle_down(
                     self.scroll_top,
                     self.scroll_bottom,
                     abs_lines,
@@ -990,9 +538,9 @@ class Blitter(Device):
         style = parse_sgr_sequence(style_or_ansi) if isinstance(style_or_ansi, str) else style_or_ansi
         style = Style() if style is None else style
         blank = (style, " ")
-        seg = [self.current_buffer.get_cell(x, y) for x in range(x0, right + 1)]
+        seg = [self.current_page.get_cell(x, y) for x in range(x0, right + 1)]
         cells = seg[n:] + [blank] * n if columns > 0 else [blank] * n + seg[: span - n]
-        self.current_buffer.replace_cells(x0, y, cells, style)
+        self.current_page.replace_cells(x0, y, cells, style)
 
     def _shift_row_segment(
         self,
@@ -1081,15 +629,15 @@ class Blitter(Device):
         self.scroll(-count)
 
     def reset(self, hard: bool = True) -> None:
-        """Restore the full scroll region; a hard reset also clears both buffers to primary."""
+        """Restore the full scroll region; a hard reset also clears both pages to primary."""
         self.reset_grapheme_state()
         self.set_scroll_region(0, self.board.height - 1)
         self.reset_left_right_margins()
         if not hard:
             return
         self.in_alt_screen = False
-        self.current_buffer = self.primary_buffer
-        for buf in (self.primary_buffer, self.alt_buffer):
+        self.current_page = self.primary_page
+        for buf in (self.primary_page, self.alt_page):
             buf.reset_line_attributes()
             buf.reset_wrapped_lines()
             for y in range(self.board.height):
@@ -1114,4 +662,4 @@ class Blitter(Device):
         y = self.board.cursor.y
         style = self.board.style.current
         for x in range(self.board.cursor.x, min(self.board.cursor.x + count, self.board.width)):
-            self.current_buffer.set_cell(x, y, " ", style)
+            self.current_page.set_cell(x, y, " ", style)

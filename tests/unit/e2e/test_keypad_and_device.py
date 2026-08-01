@@ -86,7 +86,7 @@ def test_keypad_sequences_with_text():
     parser.feed("\x1b[p\x1b>Hello")
 
     # Only the text should appear
-    line_text = board.blitter.current_buffer.get_line_text(0)
+    line_text = board.blitter.current_page.get_line_text(0)
     assert line_text.startswith("Hello")
     assert line_text[0] == "H"
     assert line_text[1] == "e"

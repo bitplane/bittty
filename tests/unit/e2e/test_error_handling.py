@@ -14,7 +14,7 @@ def test_csi_invalid_characters():
     parser.feed("Hello")
 
     # Should continue normally after invalid sequence
-    content = board.blitter.current_buffer.get_line_text(0)
+    content = board.blitter.current_page.get_line_text(0)
     assert "Hello" in content
 
 
@@ -28,7 +28,7 @@ def test_csi_private_parameter_in_wrong_state():
     parser.feed("Test")
 
     # Should handle gracefully
-    content = board.blitter.current_buffer.get_line_text(0)
+    content = board.blitter.current_page.get_line_text(0)
     assert "Test" in content
 
 
@@ -43,7 +43,7 @@ def test_window_operations_ignored():
     parser.feed("Normal text")
 
     # Should work normally after window operations
-    content = board.blitter.current_buffer.get_line_text(0)
+    content = board.blitter.current_page.get_line_text(0)
     assert "Normal text" in content
 
 
@@ -58,7 +58,7 @@ def test_device_status_queries_ignored():
     parser.feed("\x1b[?25h")  # Show cursor
     parser.feed("Text")
 
-    content = board.blitter.current_buffer.get_line_text(0)
+    content = board.blitter.current_page.get_line_text(0)
     assert "Text" in content
 
 
@@ -71,7 +71,7 @@ def test_privacy_message_ignored():
     parser.feed("\x1b[1^")
     parser.feed("After PM")
 
-    content = board.blitter.current_buffer.get_line_text(0)
+    content = board.blitter.current_page.get_line_text(0)
     assert "After PM" in content
 
 
@@ -85,7 +85,7 @@ def test_device_attributes_ignored():
     parser.feed("\x1b[1;2c")
     parser.feed("Content")
 
-    content = board.blitter.current_buffer.get_line_text(0)
+    content = board.blitter.current_page.get_line_text(0)
     assert "Content" in content
 
 
@@ -103,7 +103,7 @@ def test_sgr_with_no_parameters():
     parser.feed("Default")
 
     # Check that style was reset for "Default" text
-    content = board.blitter.current_buffer.get_content()
+    content = board.blitter.current_page.get_content()
     red_style = content[0][0][0]  # First char style
     default_style = content[0][3][0]  # "Default" first char style
 
@@ -120,5 +120,5 @@ def test_unknown_csi_sequence_logged():
     parser.feed("\x1b[999z")  # Unknown final character
     parser.feed("After unknown")
 
-    content = board.blitter.current_buffer.get_line_text(0)
+    content = board.blitter.current_page.get_line_text(0)
     assert "After unknown" in content

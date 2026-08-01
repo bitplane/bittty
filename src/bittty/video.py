@@ -6,7 +6,7 @@ A Board has two pages of it (primary and alternate).
 from __future__ import annotations
 
 from . import constants
-from .style import RESET_CODE, Style, parse_sgr_sequence
+from .style import Style, parse_sgr_sequence
 from .width import DEFAULT_WIDTH_POLICY, WidthPolicy
 
 
@@ -42,7 +42,7 @@ class Video:
     """
 
     def __init__(self, width: int, height: int, width_policy: WidthPolicy | None = None) -> None:
-        """Initialize buffer with given dimensions."""
+        """Initialize the page with given dimensions."""
         self.width = width
         self.height = height
         self.width_policy = width_policy or DEFAULT_WIDTH_POLICY
@@ -238,7 +238,7 @@ class Video:
         self.wrapped_lines = [False] * self.height
 
     def get_content(self) -> list[list[Cell]]:
-        """Get buffer content as a 2D grid."""
+        """Get the page's content as a 2D grid."""
         return [row[:] for row in self.grid]
 
     def get_cell(self, x: int, y: int) -> Cell:
@@ -677,7 +677,7 @@ class Video:
         self._touch_scrolled(top, bottom)
 
     def resize(self, width: int, height: int) -> None:
-        """Resize buffer to new dimensions."""
+        """Resize the page to new dimensions."""
         # Adjust number of rows
         if len(self.grid) < height:
             # Add new rows
@@ -754,7 +754,7 @@ class Video:
         if not (0 <= y < self.height):
             return ""
 
-        # Use buffer width if not specified
+        # Use the page width if not specified
         if width is None:
             width = self.width
 
@@ -792,31 +792,3 @@ class Video:
         parts.append(final_reset)
 
         return "".join(parts)
-
-    def get_line_tuple(self, y: int, width: int = None) -> tuple:
-        """Get line as a hashable tuple for caching — a pure read of video memory."""
-        if not (0 <= y < self.height):
-            return tuple()
-
-        # Use buffer width if not specified
-        if width is None:
-            width = self.width
-
-        parts = []
-        row = self.grid[y]
-
-        # Process each cell up to specified width
-        for x in range(min(len(row), width)):
-            ansi_code, char = row[x]
-            parts.extend(("ansi", ansi_code, "char", char))
-
-        # Pad to width if needed
-        current_width = min(len(row), width)
-        if current_width < width:
-            # Reset all attributes for padding (including background)
-            parts.extend(("reset", RESET_CODE, "pad", " " * (width - current_width)))
-
-        # Always end with a reset to prevent bleeding to next line
-        parts.extend(("final_reset", RESET_CODE))
-
-        return tuple(parts)

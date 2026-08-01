@@ -6,13 +6,13 @@ def test_bell_character(board):
     """Test that the BEL character (0x07) processes without causing visible changes."""
     parser = Parser(board)
     initial_cursor = (board.cursor.x, board.cursor.y)
-    initial_text = board.blitter.current_buffer.get_line_text(0)
+    initial_text = board.blitter.current_page.get_line_text(0)
 
     parser.feed(BEL)
 
     # BEL should not cause visible terminal changes
     assert (board.cursor.x, board.cursor.y) == initial_cursor
-    assert board.blitter.current_buffer.get_line_text(0) == initial_text
+    assert board.blitter.current_page.get_line_text(0) == initial_text
 
 
 def test_escape_to_csi_entry(board):
@@ -28,7 +28,7 @@ def test_ris_reset_terminal(board):
     # Write some content and move cursor
     parser.feed("Hello World")
     parser.feed(f"{ESC}[5;10H")  # Move cursor to 5,10
-    initial_content = board.blitter.current_buffer.get_line_text(0)
+    initial_content = board.blitter.current_page.get_line_text(0)
     assert "Hello World" in initial_content
     assert board.cursor.y == 4  # 0-indexed
     assert board.cursor.x == 9  # 0-indexed
@@ -40,7 +40,7 @@ def test_ris_reset_terminal(board):
     assert board.cursor.x == 0
     assert board.cursor.y == 0
     # Screen should be cleared
-    cleared_content = board.blitter.current_buffer.get_line_text(0)
+    cleared_content = board.blitter.current_page.get_line_text(0)
     assert cleared_content.strip() == ""
 
 
@@ -92,15 +92,15 @@ def test_ri_reverse_index_with_scroll(board):
 
 def test_ri_above_scroll_region_moves_without_scrolling(board):
     parser = Parser(board)
-    buffer = board.blitter.current_buffer
+    page = board.blitter.current_page
     for y in range(board.height):
-        buffer.set(0, y, str(y % 10))
-    before = [buffer.get_line_text(y) for y in range(board.height)]
+        page.set(0, y, str(y % 10))
+    before = [page.get_line_text(y) for y in range(board.height)]
 
     parser.feed("\x1b[3;6r\x1b[2;1H\x1bM")
 
     assert board.cursor.y == 0
-    assert [buffer.get_line_text(y) for y in range(board.height)] == before
+    assert [page.get_line_text(y) for y in range(board.height)] == before
 
 
 def test_desc_save_cursor(board):

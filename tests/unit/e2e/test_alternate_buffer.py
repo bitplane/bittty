@@ -6,7 +6,7 @@ def test_alternate_buffer_enable(parser, board):
 
     # Write some text to primary buffer
     parser.feed("Primary buffer text")
-    primary_text = board.blitter.current_buffer.get_line_text(0).strip()
+    primary_text = board.blitter.current_page.get_line_text(0).strip()
     assert "Primary buffer text" in primary_text
 
     # Enable alternate screen buffer
@@ -17,7 +17,7 @@ def test_alternate_buffer_enable(parser, board):
 
     # Write text to alternate buffer
     parser.feed("Alternate buffer text")
-    alt_text = board.blitter.current_buffer.get_line_text(0).strip()
+    alt_text = board.blitter.current_page.get_line_text(0).strip()
     assert "Alternate buffer text" in alt_text
     assert "Primary buffer text" not in alt_text
 
@@ -38,7 +38,7 @@ def test_alternate_buffer_disable(parser, board):
     assert not board.blitter.in_alt_screen
 
     # Primary buffer content should be restored
-    primary_text = board.blitter.current_buffer.get_line_text(0).strip()
+    primary_text = board.blitter.current_page.get_line_text(0).strip()
     assert "Primary content" in primary_text
     assert "Alt content" not in primary_text
 
@@ -61,8 +61,8 @@ def test_alternate_buffer_persistence(parser, board):
     parser.feed(f"{ESC}[?{ALT_SCREEN_BUFFER}l")
 
     # Verify primary content is intact
-    line0 = board.blitter.current_buffer.get_line_text(0).strip()
-    line1 = board.blitter.current_buffer.get_line_text(1).strip()
+    line0 = board.blitter.current_page.get_line_text(0).strip()
+    line1 = board.blitter.current_page.get_line_text(1).strip()
     assert "Line 1 primary" in line0
     assert "Line 2 primary" in line1
 
@@ -71,8 +71,8 @@ def test_alternate_buffer_persistence(parser, board):
 
     # Content is preserved but appears at lines where it was written
     # (cursor was at line 1 when we switched to alt, so content is on lines 1 and 2)
-    alt_line1 = board.blitter.current_buffer.get_line_text(1).strip()
-    alt_line2 = board.blitter.current_buffer.get_line_text(2).strip()
+    alt_line1 = board.blitter.current_page.get_line_text(1).strip()
+    alt_line2 = board.blitter.current_page.get_line_text(2).strip()
     assert "Alt line 1" in alt_line1
     assert "Alt line 2" in alt_line2
 

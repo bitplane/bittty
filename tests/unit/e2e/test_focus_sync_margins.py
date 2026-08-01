@@ -17,7 +17,7 @@ def _sent(t):
 
 
 def _line(board, y=0):
-    return board.blitter.current_buffer.get_line_text(y).rstrip()
+    return board.blitter.current_page.get_line_text(y).rstrip()
 
 
 # --- focus events (mode 1004) --- #
@@ -87,7 +87,7 @@ def test_declrmm_reports_supported():
 
 def test_sl_pans_within_the_left_right_margins():
     board, parser, _ = _term()
-    board.blitter.current_buffer.set(0, 0, "ABCDEFGHIJ")
+    board.blitter.current_page.set(0, 0, "ABCDEFGHIJ")
     parser.feed("\x1b[?69h\x1b[3;6s")  # margins columns 3..6 (indices 2..5): C D E F
     parser.feed("\x1b[1 @")  # SL 1 — only cols 2..5 pan left: C D E F -> D E F <blank>
     assert _line(board) == "ABDEF GHIJ"  # index 5 blanked, cols outside margins untouched
@@ -135,7 +135,7 @@ def test_decfi_moves_right_but_stops_at_page_border():
     board.cursor.set_position(4, 0)
     parser.feed("\x1b9")  # DECFI below the right margin -> just move right
     assert board.cursor.x == 5
-    board.blitter.current_buffer.set(0, 0, "ABCDEFGHIJ")
+    board.blitter.current_page.set(0, 0, "ABCDEFGHIJ")
     board.cursor.set_position(9, 0)
     parser.feed("\x1b9")  # the physical page border takes precedence over the margin
     assert _line(board) == "ABCDEFGHIJ"
@@ -146,7 +146,7 @@ def test_decbi_moves_left_but_stops_at_page_border():
     board.cursor.set_position(3, 0)
     parser.feed("\x1b6")  # DECBI: not at left margin -> move left
     assert board.cursor.x == 2
-    board.blitter.current_buffer.set(0, 0, "ABCDEFGHIJ")
+    board.blitter.current_page.set(0, 0, "ABCDEFGHIJ")
     board.cursor.set_position(0, 0)
     parser.feed("\x1b6")  # the physical page border takes precedence over the margin
     assert _line(board) == "ABCDEFGHIJ"

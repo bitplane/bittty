@@ -77,7 +77,7 @@ def test_csi_el_erase_in_line(standard_board: Board):
     standard_board.blitter.write_text("some text")
     standard_board.cursor.x = 4
     parser.feed("\x1b[0K")  # ESC[0K -> clear from cursor to end of line
-    line = "".join(char for _, char in standard_board.blitter.current_buffer.get_content()[0])
+    line = "".join(char for _, char in standard_board.blitter.current_page.get_content()[0])
     assert line.startswith("some")
     assert line.strip() == "some"
 
@@ -88,7 +88,7 @@ def test_csi_ich_insert_characters(standard_board: Board):
     standard_board.blitter.write_text("abcdef")
     standard_board.cursor.x = 2
     parser.feed("\x1b[3@")  # ESC[3@ -> insert 3 spaces
-    line = "".join(char for _, char in standard_board.blitter.current_buffer.get_content()[0])
+    line = "".join(char for _, char in standard_board.blitter.current_page.get_content()[0])
     assert line.startswith("ab   cde")
 
 
@@ -98,7 +98,7 @@ def test_csi_dch_delete_characters(standard_board: Board):
     standard_board.blitter.write_text("abcdef")
     standard_board.cursor.x = 2
     parser.feed("\x1b[2P")  # ESC[2P -> delete 2 characters
-    line = "".join(char for _, char in standard_board.blitter.current_buffer.get_content()[0])
+    line = "".join(char for _, char in standard_board.blitter.current_page.get_content()[0])
     assert line.startswith("abef")
 
 
@@ -179,7 +179,7 @@ def test_csi_ech_erase_character(standard_board: Board):
     standard_board.blitter.write_text("before-text-after")
     standard_board.cursor.x = 7
     parser.feed("\x1b[4X")  # Erase 4 characters
-    line = "".join(char for _, char in standard_board.blitter.current_buffer.get_content()[0])
+    line = "".join(char for _, char in standard_board.blitter.current_page.get_content()[0])
     assert "before-    -after" in line
 
 
@@ -194,7 +194,7 @@ def test_csi_ech_erase_character_preserves_background_color(standard_board: Boar
     parser.feed("\x1b[3X")  # Erase 3 characters (ELL)
 
     # Check that erased characters have green background
-    row = standard_board.blitter.current_buffer.get_content()[0]
+    row = standard_board.blitter.current_page.get_content()[0]
     assert row[0] == (parse_sgr_sequence("\x1b[42m"), "H")  # Original H with green background
     assert row[1] == (parse_sgr_sequence("\x1b[42m"), " ")  # Erased E becomes space with green background
     assert row[2] == (parse_sgr_sequence("\x1b[42m"), " ")  # Erased L becomes space with green background
@@ -231,7 +231,7 @@ def test_csi_truly_unhandled_sequences(standard_board: Board):
         standard_board.blitter.write_text("before")
         parser.feed(seq)
         standard_board.blitter.write_text("after")
-        line = "".join(char for _, char in standard_board.blitter.current_buffer.get_content()[0])
+        line = "".join(char for _, char in standard_board.blitter.current_page.get_content()[0])
         assert "beforeafter" in line.strip()
         standard_board.blitter.clear_screen(2)  # Clear screen for next test
 
@@ -242,5 +242,5 @@ def test_csi_ech_does_not_move_the_cursor(standard_board: Board):
     standard_board.blitter.write_text("abcdefgh")
     standard_board.cursor.x = 2
     parser.feed("\x1b[3X")
-    assert standard_board.blitter.current_buffer.get_line_text(0).startswith("ab   fgh")
+    assert standard_board.blitter.current_page.get_line_text(0).startswith("ab   fgh")
     assert standard_board.cursor.x == 2

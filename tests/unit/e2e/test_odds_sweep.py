@@ -17,7 +17,7 @@ def _term(width=6, height=3):
 def test_deccara_rectangle_extent_is_the_default():
     board, parser, _ = _term()
     parser.feed("\x1b[1;2;2;4;1$r")  # DECCARA bold over rows 1-2, cols 2-4 (rectangle)
-    buf = board.blitter.current_buffer
+    buf = board.blitter.current_page
     assert buf.get_cell(0, 0)[0].bold is None  # outside the rectangle
     assert buf.get_cell(1, 0)[0].bold is True  # inside (col 2 -> index 1)
     assert buf.get_cell(5, 0)[0].bold is None  # outside on the right
@@ -30,7 +30,7 @@ def test_decsace_stream_extent_wraps():
     # stream from (row1,col2) to (row1,col4) = linear indices 1..3 on a width-6 row,
     # but a stream to (row2,col2) wraps across the full width
     parser.feed("\x1b[1;5;2;2;1$r")  # start (r1,c5)=idx4, end (r2,c2)=idx7 -> cols 4,5,0,1
-    buf = board.blitter.current_buffer
+    buf = board.blitter.current_page
     assert buf.get_cell(4, 0)[0].bold is True
     assert buf.get_cell(5, 0)[0].bold is True  # wrapped past the right edge
     assert buf.get_cell(0, 1)[0].bold is True  # onto the next row

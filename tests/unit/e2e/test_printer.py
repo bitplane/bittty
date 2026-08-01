@@ -12,10 +12,10 @@ def _term(width=6, height=3):
 
 
 def _line(board, y=0):
-    return board.blitter.current_buffer.get_line_text(y).rstrip()
+    return board.blitter.current_page.get_line_text(y).rstrip()
 
 
-def test_print_screen_dumps_the_buffer_to_the_sink():
+def test_print_screen_dumps_the_page_to_the_sink():
     board, parser = _term()
     paper = io.StringIO()
     board.printer.attach(paper)

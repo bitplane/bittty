@@ -11,7 +11,7 @@ def _term():
 
 
 def _rows(board):
-    buf = board.blitter.current_buffer
+    buf = board.blitter.current_page
     return [buf.get_line_text(y) for y in range(board.height)]
 
 
@@ -43,7 +43,7 @@ def test_deccara_changes_attributes_in_a_rectangle():
     board, parser = _term()
     parser.feed("\x1b[1;1Hhello")
     parser.feed("\x1b[1;1;1;3;31$r")  # make cols 1-3 of row 1 red
-    buf = board.blitter.current_buffer
+    buf = board.blitter.current_page
     assert buf.get_cell(0, 0)[0].fg == Color("indexed", 1)  # 'h' is red
     assert buf.get_cell(3, 0)[0].fg is None  # 'l' (col 4) unchanged
 

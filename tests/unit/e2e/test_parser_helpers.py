@@ -62,7 +62,7 @@ def test_mixed_escape_and_text_parsing(board):
     parser.feed("Hello \x1b[31mRed\x1b[0m World")
 
     # Should have written text and processed color changes
-    text_content = board.blitter.current_buffer.get_line_text(0).strip()
+    text_content = board.blitter.current_page.get_line_text(0).strip()
     assert "Hello" in text_content
     assert "Red" in text_content
     assert "World" in text_content

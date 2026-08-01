@@ -1,4 +1,4 @@
-"""Tests for buffer.py functionality to improve code coverage."""
+"""Video page behaviour: cells, wide glyphs, scrolling, resize."""
 
 from bittty.video import Video
 from bittty.style import Style
@@ -7,92 +7,92 @@ from bittty import constants
 
 def test_get_cell_out_of_bounds():
     """Test get_cell returns default cell for out of bounds coordinates."""
-    buffer = Video(width=5, height=3)
+    page = Video(width=5, height=3)
 
-    # Test coordinates outside buffer bounds (line 34)
-    default_cell = buffer.get_cell(10, 10)
+    # Test coordinates outside page bounds (line 34)
+    default_cell = page.get_cell(10, 10)
     assert default_cell == (Style(), " ")
 
     # Test negative coordinates
-    default_cell = buffer.get_cell(-1, -1)
+    default_cell = page.get_cell(-1, -1)
     assert default_cell == (Style(), " ")
 
 
 def test_set_cell_fallback_to_default_style():
     """Test set_cell with invalid style_or_ansi falls back to default Style."""
-    buffer = Video(width=5, height=3)
+    page = Video(width=5, height=3)
 
     # Pass an invalid type (not Style, str, or None) - hits line 53
-    buffer.set_cell(0, 0, "X", 123)  # Invalid type
-    style, char = buffer.get_cell(0, 0)
+    page.set_cell(0, 0, "X", 123)  # Invalid type
+    style, char = page.get_cell(0, 0)
     assert isinstance(style, Style)
     assert char == "X"
 
 
 def test_set_fallback_to_default_style():
     """Test set method with invalid style_or_ansi falls back to default Style."""
-    buffer = Video(width=5, height=3)
+    page = Video(width=5, height=3)
 
     # Pass an invalid type (not Style, str, or None) - hits line 70
-    buffer.set(0, 0, "Hello", 123)  # Invalid type
+    page.set(0, 0, "Hello", 123)  # Invalid type
 
     # Check all characters were set with default style
     for i in range(5):
-        style, char = buffer.get_cell(i, 0)
+        style, char = page.get_cell(i, 0)
         assert isinstance(style, Style)
         assert char == "Hello"[i]
 
 
 def test_insert_out_of_bounds_x():
-    """Test insert method with x coordinate at edge of buffer width."""
-    buffer = Video(width=5, height=3)
+    """Test insert method with x coordinate at edge of page width."""
+    page = Video(width=5, height=3)
 
     # Insert at x == width should return early (line 80)
-    buffer.insert(5, 0, "text")  # x >= width
+    page.insert(5, 0, "text")  # x >= width
 
-    # Buffer should remain unchanged
+    # The page should remain unchanged
     for i in range(5):
-        style, char = buffer.get_cell(i, 0)
+        style, char = page.get_cell(i, 0)
         assert char == " "
 
 
 def test_insert_fallback_to_default_style():
     """Test insert method with invalid style_or_ansi falls back to default Style."""
-    buffer = Video(width=5, height=3)
+    page = Video(width=5, height=3)
 
     # Pass an invalid type (not Style, str, or None) - hits line 90
-    buffer.insert(0, 0, "Hi", 123)  # Invalid type
+    page.insert(0, 0, "Hi", 123)  # Invalid type
 
     # Check characters were inserted with default style
-    style, char = buffer.get_cell(0, 0)
+    style, char = page.get_cell(0, 0)
     assert isinstance(style, Style)
     assert char == "H"
 
 
 def test_insert_with_padding_needed():
     """Test insert method when padding is needed beyond current row length."""
-    buffer = Video(width=10, height=3)
+    page = Video(width=10, height=3)
 
     # Insert at x position beyond current row content - triggers padding logic (lines 106-111)
-    buffer.insert(7, 0, "text")
+    page.insert(7, 0, "text")
 
     # Check that padding was added and text inserted (truncated to width)
-    assert buffer.get_line_text(0) == "       tex"  # Only fits 3 chars due to width=10
+    assert page.get_line_text(0) == "       tex"  # Only fits 3 chars due to width=10
 
     # Verify cells between start and insertion point are spaces with default style
     for i in range(7):
-        style, char = buffer.get_cell(i, 0)
+        style, char = page.get_cell(i, 0)
         assert isinstance(style, Style)
         assert char == " "
 
 
 def test_set_cell_ansi_string_conversion():
     """Test set_cell with ANSI string gets converted to Style."""
-    buffer = Video(width=5, height=3)
+    page = Video(width=5, height=3)
 
     # Test with actual ANSI string
-    buffer.set_cell(0, 0, "X", "\x1b[31m")  # Red color
-    style, char = buffer.get_cell(0, 0)
+    page.set_cell(0, 0, "X", "\x1b[31m")  # Red color
+    style, char = page.get_cell(0, 0)
     assert isinstance(style, Style)
     assert char == "X"
     # Style should have red foreground from ANSI parsing
@@ -100,37 +100,37 @@ def test_set_cell_ansi_string_conversion():
 
 def test_set_cell_empty_ansi_string():
     """Test set_cell with empty ANSI string."""
-    buffer = Video(width=5, height=3)
+    page = Video(width=5, height=3)
 
     # Test with empty string - should use default Style
-    buffer.set_cell(0, 0, "X", "")
-    style, char = buffer.get_cell(0, 0)
+    page.set_cell(0, 0, "X", "")
+    style, char = page.get_cell(0, 0)
     assert isinstance(style, Style)
     assert char == "X"
 
 
 def test_set_ansi_string_conversion():
     """Test set method with ANSI string gets converted to Style."""
-    buffer = Video(width=5, height=3)
+    page = Video(width=5, height=3)
 
     # Test with actual ANSI string
-    buffer.set(0, 0, "Hello", "\x1b[32m")  # Green color
+    page.set(0, 0, "Hello", "\x1b[32m")  # Green color
 
     for i in range(5):
-        style, char = buffer.get_cell(i, 0)
+        style, char = page.get_cell(i, 0)
         assert isinstance(style, Style)
         assert char == "Hello"[i]
 
 
 def test_insert_ansi_string_conversion():
     """Test insert method with ANSI string gets converted to Style."""
-    buffer = Video(width=10, height=3)
+    page = Video(width=10, height=3)
 
     # Test with actual ANSI string
-    buffer.insert(0, 0, "Hi", "\x1b[34m")  # Blue color
+    page.insert(0, 0, "Hi", "\x1b[34m")  # Blue color
 
-    style1, char1 = buffer.get_cell(0, 0)
-    style2, char2 = buffer.get_cell(1, 0)
+    style1, char1 = page.get_cell(0, 0)
+    style2, char2 = page.get_cell(1, 0)
     assert isinstance(style1, Style)
     assert isinstance(style2, Style)
     assert char1 == "H"
@@ -139,221 +139,221 @@ def test_insert_ansi_string_conversion():
 
 def test_delete_basic_functionality():
     """Test delete method basic functionality."""
-    buffer = Video(width=10, height=3)
-    buffer.set(0, 0, "Hello World")
+    page = Video(width=10, height=3)
+    page.set(0, 0, "Hello World")
 
     # Delete 2 characters starting at position 5 (space and W)
-    buffer.delete(5, 0, 2)
+    page.delete(5, 0, 2)
 
-    assert buffer.get_line_text(0) == "Helloorl  "
+    assert page.get_line_text(0) == "Helloorl  "
 
 
 def test_delete_beyond_row_length():
     """Test delete when end position exceeds row length."""
-    buffer = Video(width=10, height=3)
-    buffer.set(0, 0, "Hello")  # Only 5 characters
+    page = Video(width=10, height=3)
+    page.set(0, 0, "Hello")  # Only 5 characters
 
     # Try to delete from position 3 with count 10 (beyond row length)
-    buffer.delete(3, 0, 10)
+    page.delete(3, 0, 10)
 
-    assert buffer.get_line_text(0) == "Hel       "
+    assert page.get_line_text(0) == "Hel       "
 
 
 def test_scroll_up_basic():
     """Test scroll_up basic functionality."""
-    buffer = Video(width=5, height=3)
-    buffer.set(0, 0, "Line1")
-    buffer.set(0, 1, "Line2")
-    buffer.set(0, 2, "Line3")
+    page = Video(width=5, height=3)
+    page.set(0, 0, "Line1")
+    page.set(0, 1, "Line2")
+    page.set(0, 2, "Line3")
 
-    buffer.scroll_up(1)
+    page.scroll_up(1)
 
-    assert buffer.get_line_text(0) == "Line2"
-    assert buffer.get_line_text(1) == "Line3"
-    assert buffer.get_line_text(2) == "     "  # New blank line
+    assert page.get_line_text(0) == "Line2"
+    assert page.get_line_text(1) == "Line3"
+    assert page.get_line_text(2) == "     "  # New blank line
 
 
 def test_scroll_down_basic():
     """Test scroll_down basic functionality."""
-    buffer = Video(width=5, height=3)
-    buffer.set(0, 0, "Line1")
-    buffer.set(0, 1, "Line2")
-    buffer.set(0, 2, "Line3")
+    page = Video(width=5, height=3)
+    page.set(0, 0, "Line1")
+    page.set(0, 1, "Line2")
+    page.set(0, 2, "Line3")
 
-    buffer.scroll_down(1)
+    page.scroll_down(1)
 
-    assert buffer.get_line_text(0) == "     "  # New blank line
-    assert buffer.get_line_text(1) == "Line1"
-    assert buffer.get_line_text(2) == "Line2"
+    assert page.get_line_text(0) == "     "  # New blank line
+    assert page.get_line_text(1) == "Line1"
+    assert page.get_line_text(2) == "Line2"
 
 
 def test_resize_expand_height():
     """Test resize when expanding height."""
-    buffer = Video(width=5, height=2)
-    buffer.set(0, 0, "Line1")
-    buffer.set(0, 1, "Line2")
+    page = Video(width=5, height=2)
+    page.set(0, 0, "Line1")
+    page.set(0, 1, "Line2")
 
-    buffer.resize(5, 4)  # Expand height
+    page.resize(5, 4)  # Expand height
 
-    assert buffer.height == 4
-    assert buffer.get_line_text(0) == "Line1"
-    assert buffer.get_line_text(1) == "Line2"
-    assert buffer.get_line_text(2) == "     "  # New row
-    assert buffer.get_line_text(3) == "     "  # New row
+    assert page.height == 4
+    assert page.get_line_text(0) == "Line1"
+    assert page.get_line_text(1) == "Line2"
+    assert page.get_line_text(2) == "     "  # New row
+    assert page.get_line_text(3) == "     "  # New row
 
 
 def test_resize_shrink_height():
     """Test resize when shrinking height."""
-    buffer = Video(width=5, height=4)
-    buffer.set(0, 0, "Line1")
-    buffer.set(0, 1, "Line2")
-    buffer.set(0, 2, "Line3")
-    buffer.set(0, 3, "Line4")
+    page = Video(width=5, height=4)
+    page.set(0, 0, "Line1")
+    page.set(0, 1, "Line2")
+    page.set(0, 2, "Line3")
+    page.set(0, 3, "Line4")
 
-    buffer.resize(5, 2)  # Shrink height
+    page.resize(5, 2)  # Shrink height
 
-    assert buffer.height == 2
-    assert buffer.get_line_text(0) == "Line1"
-    assert buffer.get_line_text(1) == "Line2"
+    assert page.height == 2
+    assert page.get_line_text(0) == "Line1"
+    assert page.get_line_text(1) == "Line2"
 
 
 def test_resize_expand_width():
     """Test resize when expanding width."""
-    buffer = Video(width=3, height=2)
-    buffer.set(0, 0, "ABC")
-    buffer.set(0, 1, "DEF")
+    page = Video(width=3, height=2)
+    page.set(0, 0, "ABC")
+    page.set(0, 1, "DEF")
 
-    buffer.resize(6, 2)  # Expand width
+    page.resize(6, 2)  # Expand width
 
-    assert buffer.width == 6
-    assert buffer.get_line_text(0) == "ABC   "  # Extended with spaces
-    assert buffer.get_line_text(1) == "DEF   "
+    assert page.width == 6
+    assert page.get_line_text(0) == "ABC   "  # Extended with spaces
+    assert page.get_line_text(1) == "DEF   "
 
 
 def test_resize_expansion_reuses_the_cached_empty_cell():
-    buffer = Video(width=2, height=1)
-    buffer.set(0, 0, "AB")
+    page = Video(width=2, height=1)
+    page.set(0, 0, "AB")
 
-    buffer.resize(5, 3)
+    page.resize(5, 3)
 
-    assert all(cell is buffer._empty_cell for cell in buffer.grid[0][2:])
-    assert all(cell is buffer._empty_cell for row in buffer.grid[1:] for cell in row)
+    assert all(cell is page._empty_cell for cell in page.grid[0][2:])
+    assert all(cell is page._empty_cell for row in page.grid[1:] for cell in row)
 
 
 def test_resize_shrink_width():
     """Test resize when shrinking width."""
-    buffer = Video(width=6, height=2)
-    buffer.set(0, 0, "ABCDEF")
-    buffer.set(0, 1, "GHIJKL")
+    page = Video(width=6, height=2)
+    page.set(0, 0, "ABCDEF")
+    page.set(0, 1, "GHIJKL")
 
-    buffer.resize(3, 2)  # Shrink width
+    page.resize(3, 2)  # Shrink width
 
-    assert buffer.width == 3
-    assert buffer.get_line_text(0) == "ABC"  # Truncated
-    assert buffer.get_line_text(1) == "GHI"
+    assert page.width == 3
+    assert page.get_line_text(0) == "ABC"  # Truncated
+    assert page.get_line_text(1) == "GHI"
 
 
 def test_delete_out_of_bounds():
     """Test delete method with out of bounds coordinates."""
-    buffer = Video(width=5, height=3)
-    buffer.set(0, 0, "Hello")
+    page = Video(width=5, height=3)
+    page.set(0, 0, "Hello")
 
     # Delete with x >= width should return early (line 116)
-    buffer.delete(5, 0, 1)  # x == width
-    buffer.delete(10, 0, 1)  # x > width
+    page.delete(5, 0, 1)  # x == width
+    page.delete(10, 0, 1)  # x > width
 
-    # Buffer should be unchanged
-    assert buffer.get_line_text(0) == "Hello"
+    # The page should be unchanged
+    assert page.get_line_text(0) == "Hello"
 
 
 def test_clear_region_with_style_object():
     """Test clear_region with Style object (line 135)."""
-    buffer = Video(width=5, height=3)
-    buffer.set(0, 0, "XXXXX")
+    page = Video(width=5, height=3)
+    page.set(0, 0, "XXXXX")
 
     style = Style(bold=True)
-    buffer.clear_region(1, 0, 3, 0, style)
+    page.clear_region(1, 0, 3, 0, style)
 
     # Check that cleared region has the provided style
     for x in range(1, 4):
-        cell_style, char = buffer.get_cell(x, 0)
+        cell_style, char = page.get_cell(x, 0)
         assert char == " "
         assert isinstance(cell_style, Style)
 
 
 def test_clear_region_with_invalid_style():
     """Test clear_region with invalid style_or_ansi falls back to default (line 139)."""
-    buffer = Video(width=5, height=3)
-    buffer.set(0, 0, "XXXXX")
+    page = Video(width=5, height=3)
+    page.set(0, 0, "XXXXX")
 
     # Pass invalid type - should fall back to default Style
-    buffer.clear_region(1, 0, 3, 0, 123)
+    page.clear_region(1, 0, 3, 0, 123)
 
     # Should clear with default style
     for x in range(1, 4):
-        cell_style, char = buffer.get_cell(x, 0)
+        cell_style, char = page.get_cell(x, 0)
         assert char == " "
         assert isinstance(cell_style, Style)
 
 
 def test_clear_line_with_style_object():
     """Test clear_line with Style object (line 156)."""
-    buffer = Video(width=5, height=3)
-    buffer.set(0, 0, "XXXXX")
+    page = Video(width=5, height=3)
+    page.set(0, 0, "XXXXX")
 
     style = Style(italic=True)
-    buffer.clear_line(0, constants.ERASE_ALL, 0, style)
+    page.clear_line(0, constants.ERASE_ALL, 0, style)
 
     # Check that line was cleared with provided style
     for x in range(5):
-        cell_style, char = buffer.get_cell(x, 0)
+        cell_style, char = page.get_cell(x, 0)
         assert char == " "
         assert isinstance(cell_style, Style)
 
 
 def test_clear_line_with_invalid_style():
     """Test clear_line with invalid style_or_ansi falls back to default (line 160)."""
-    buffer = Video(width=5, height=3)
-    buffer.set(0, 0, "XXXXX")
+    page = Video(width=5, height=3)
+    page.set(0, 0, "XXXXX")
 
     # Pass invalid type - should fall back to default Style
-    buffer.clear_line(0, constants.ERASE_ALL, 0, 123)
+    page.clear_line(0, constants.ERASE_ALL, 0, 123)
 
     # Should clear with default style
     for x in range(5):
-        cell_style, char = buffer.get_cell(x, 0)
+        cell_style, char = page.get_cell(x, 0)
         assert char == " "
         assert isinstance(cell_style, Style)
 
 
 def test_get_line_text_out_of_bounds():
     """Test get_line_text with out of bounds y coordinate (line 215)."""
-    buffer = Video(width=5, height=3)
-    buffer.set(0, 0, "Hello")
+    page = Video(width=5, height=3)
+    page.set(0, 0, "Hello")
 
     # Out of bounds should return empty string
-    assert buffer.get_line_text(-1) == ""
-    assert buffer.get_line_text(3) == ""
-    assert buffer.get_line_text(10) == ""
+    assert page.get_line_text(-1) == ""
+    assert page.get_line_text(3) == ""
+    assert page.get_line_text(10) == ""
 
 
 def test_get_line_out_of_bounds():
     """Test get_line with out of bounds y coordinate (line 230)."""
-    buffer = Video(width=5, height=3)
+    page = Video(width=5, height=3)
 
     # Out of bounds should return empty string
-    assert buffer.get_line(-1) == ""
-    assert buffer.get_line(3) == ""
-    assert buffer.get_line(10) == ""
+    assert page.get_line(-1) == ""
+    assert page.get_line(3) == ""
+    assert page.get_line(10) == ""
 
 
 def test_get_line_with_explicit_width():
     """Test get_line with explicitly provided width (line 234)."""
-    buffer = Video(width=10, height=3)
-    buffer.set(0, 0, "Hello")
+    page = Video(width=10, height=3)
+    page.set(0, 0, "Hello")
 
-    # Use explicit width different from buffer width
-    result = buffer.get_line(0, width=3)
+    # Use explicit width different from page width
+    result = page.get_line(0, width=3)
 
     # Should only process first 3 characters
     # This tests the width override functionality
@@ -362,99 +362,39 @@ def test_get_line_with_explicit_width():
 
 def test_get_line_is_a_pure_video_read():
     """No cursor or pointer compositing: video memory in, ANSI out."""
-    buffer = Video(width=10, height=3)
-    buffer.set(0, 0, "Hello")
+    page = Video(width=10, height=3)
+    page.set(0, 0, "Hello")
 
-    result = buffer.get_line(0)
+    result = page.get_line(0)
     assert "Hello" in result
     assert "\033[7m" not in result  # no software cursor cell
 
 
-def test_get_line_tuple_out_of_bounds():
-    """Test get_line_tuple with out of bounds y coordinate (line 291-292)."""
-    buffer = Video(width=5, height=3)
-
-    # Out of bounds should return empty tuple
-    assert buffer.get_line_tuple(-1) == tuple()
-    assert buffer.get_line_tuple(3) == tuple()
-    assert buffer.get_line_tuple(10) == tuple()
-
-
-def test_get_line_tuple_with_explicit_width():
-    """Test get_line_tuple with explicit width (lines 294-296)."""
-    buffer = Video(width=10, height=3)
-    buffer.set(0, 0, "Hello")
-
-    # Use explicit width
-    result = buffer.get_line_tuple(0, width=3)
-
-    # Should be a tuple with content for first 3 characters only
-    assert isinstance(result, tuple)
-    assert result  # Should have some content
-
-
-def test_get_line_tuple_is_a_pure_video_read():
-    """No cursor or pointer markers in the cached-line tuple form."""
-    buffer = Video(width=10, height=3)
-    buffer.set(0, 0, "Hello")
-
-    result = buffer.get_line_tuple(0)
-    assert isinstance(result, tuple)
-    assert "cursor" not in result
-    assert "↖" not in result
-
-
-def test_get_line_tuple_with_padding():
-    """Test get_line_tuple padding logic (lines 318-321)."""
-    buffer = Video(width=5, height=3)
-    buffer.set(0, 0, "Hi")  # Only 2 characters
-
-    # Request wider width to trigger padding
-    result = buffer.get_line_tuple(0, width=8)
-
-    # Should contain padding information
-    assert isinstance(result, tuple)
-    assert "pad" in result  # Should have padding marker
-    assert "reset" in result  # Should have reset for padding
-
-
-def test_get_line_tuple_final_reset():
-    """Test get_line_tuple always ends with reset (lines 323-325)."""
-    buffer = Video(width=5, height=3)
-    buffer.set(0, 0, "Hello")
-
-    result = buffer.get_line_tuple(0)
-
-    # Should always end with final reset
-    assert isinstance(result, tuple)
-    assert "final_reset" in result
-
-
 def test_write_stamps_only_its_row():
-    buffer = Video(width=10, height=3)
-    seen = buffer.observe()
-    buffer.set(0, 1, "hi")
-    assert buffer.dirty_rows(seen) == [1]
-    assert buffer.dirty_rows(buffer.observe()) == []
+    page = Video(width=10, height=3)
+    seen = page.observe()
+    page.set(0, 1, "hi")
+    assert page.dirty_rows(seen) == [1]
+    assert page.dirty_rows(page.observe()) == []
 
 
 def test_full_height_scroll_dirties_the_page():
-    buffer = Video(width=10, height=3)
-    seen = buffer.observe()
-    buffer.scroll_region_up(0, 2, 1)
-    assert buffer.page_gen >= seen
-    assert buffer.dirty_rows(seen) == [0, 1, 2]
+    page = Video(width=10, height=3)
+    seen = page.observe()
+    page.scroll_region_up(0, 2, 1)
+    assert page.page_gen >= seen
+    assert page.dirty_rows(seen) == [0, 1, 2]
 
 
 def test_region_scroll_dirties_only_the_region():
-    buffer = Video(width=10, height=4)
-    seen = buffer.observe()
-    buffer.scroll_region_up(1, 2, 1)
-    assert buffer.dirty_rows(seen) == [1, 2]
+    page = Video(width=10, height=4)
+    seen = page.observe()
+    page.scroll_region_up(1, 2, 1)
+    assert page.dirty_rows(seen) == [1, 2]
 
 
 def test_resize_dirties_everything():
-    buffer = Video(width=10, height=3)
-    seen = buffer.observe()
-    buffer.resize(8, 4)
-    assert buffer.dirty_rows(seen) == [0, 1, 2, 3]
+    page = Video(width=10, height=3)
+    seen = page.observe()
+    page.resize(8, 4)
+    assert page.dirty_rows(seen) == [0, 1, 2, 3]

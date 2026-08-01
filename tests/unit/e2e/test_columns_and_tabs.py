@@ -10,7 +10,7 @@ def _term(width=10, height=6):
 
 
 def _line(board, y=0):
-    return board.blitter.current_buffer.get_line_text(y).rstrip()
+    return board.blitter.current_page.get_line_text(y).rstrip()
 
 
 def test_decic_inserts_columns_at_cursor():
@@ -85,7 +85,7 @@ def test_decscpp_changes_width_without_clearing_or_resetting_regions():
     parser.feed("\x1b[132$|")
 
     assert board.width == 132
-    assert board.blitter.current_buffer.get_line_text(0).startswith("hello")
+    assert board.blitter.current_page.get_line_text(0).startswith("hello")
     assert (board.cursor.x, board.cursor.y) == (4, 3)
     assert (board.blitter.scroll_top, board.blitter.scroll_bottom) == (1, 4)
     assert (board.blitter.left_margin, board.blitter.right_margin) == (2, 69)

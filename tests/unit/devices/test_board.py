@@ -32,14 +32,14 @@ def test_board_routes_operations_to_plugged_in_devices():
     board.handle_operation(Operation("CUP", (4, 1), "\x1b[2;5H"))
     board.handle_operation(Operation("SET_WINDOW_TITLE", ("Board",), "\x1b]2;Board\x07"))
 
-    assert board.blitter.current_buffer.get_line_text(0).startswith("red")
+    assert board.blitter.current_page.get_line_text(0).startswith("red")
     assert (board.cursor.x, board.cursor.y) == (4, 1)
     assert board.title.title == "Board"
 
 
 def test_capture_text_returns_trimmed_plain_text():
     board = Board(width=8, height=5)
-    page = board.blitter.current_buffer
+    page = board.blitter.current_page
     page.set(0, 0, "  hello")
     page.set(2, 2, "world")
     page.set(0, 3, "red", "\x1b[31m")
@@ -50,7 +50,7 @@ def test_capture_text_returns_trimmed_plain_text():
 
 def test_capture_text_can_preserve_the_exact_screen_rectangle():
     board = Board(width=5, height=3)
-    board.blitter.current_buffer.set(0, 0, "hi")
+    board.blitter.current_page.set(0, 0, "hi")
 
     assert board.capture_text(trim=False) == "hi   \n     \n     "
 
@@ -63,9 +63,9 @@ def test_capture_text_returns_empty_string_for_a_blank_trimmed_screen():
 
 def test_capture_text_reads_the_active_screen():
     board = Board(width=8, height=2)
-    board.blitter.current_buffer.set(0, 0, "primary")
+    board.blitter.current_page.set(0, 0, "primary")
     board.blitter.switch_screen(True)
-    board.blitter.current_buffer.set(0, 0, "alternate")
+    board.blitter.current_page.set(0, 0, "alternate")
 
     assert board.capture_text() == "alternat"
 

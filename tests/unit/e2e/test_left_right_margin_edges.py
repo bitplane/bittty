@@ -10,7 +10,7 @@ def _board(width=10, height=4, left=3, right=7):
 
 
 def _lines(board):
-    return [board.blitter.current_buffer.get_line_text(y) for y in range(board.height)]
+    return [board.blitter.current_page.get_line_text(y) for y in range(board.height)]
 
 
 def test_invalid_decslrm_is_ignored_without_homing_cursor():
@@ -116,7 +116,7 @@ def test_saving_at_delayed_wrap_saves_the_physical_cursor_position():
 def test_margin_wrap_scrolls_only_the_scrolling_rectangle():
     board = _board(height=3)
     for y, text in enumerate(("0000000000", "1111111111", "2222222222")):
-        board.blitter.current_buffer.set(0, y, text)
+        board.blitter.current_page.set(0, y, text)
     board.cursor.set_position(2, 2)
 
     board.parser.feed("ABCDEf")
@@ -135,14 +135,14 @@ def test_wide_glyph_wraps_whole_at_the_right_margin():
 
     board.parser.feed("❌")
 
-    assert board.blitter.current_buffer.get_cell(1, 1)[1] == "❌"
-    assert board.blitter.current_buffer.get_cell(2, 1)[1] == ""
+    assert board.blitter.current_page.get_cell(1, 1)[1] == "❌"
+    assert board.blitter.current_page.get_cell(2, 1)[1] == ""
     assert (board.cursor.x, board.cursor.y) == (3, 1)
 
 
 def test_ich_and_dch_stop_at_right_margin_and_preserve_neighbours():
     board = _board(width=10, height=3)
-    board.blitter.current_buffer.set(0, 1, "ABCDEFGHIJ")
+    board.blitter.current_page.set(0, 1, "ABCDEFGHIJ")
     board.cursor.set_position(3, 1)
 
     board.parser.feed("\x1b[2@")
@@ -156,7 +156,7 @@ def test_ich_and_dch_are_ignored_outside_scrolling_rectangle():
     board = _board(width=10, height=4)
     board.blitter.set_scroll_region(1, 2)
     for y in (0, 1):
-        board.blitter.current_buffer.set(0, y, "ABCDEFGHIJ")
+        board.blitter.current_page.set(0, y, "ABCDEFGHIJ")
 
     board.cursor.set_position(3, 0)
     board.parser.feed("\x1b[2@")
@@ -168,7 +168,7 @@ def test_ich_and_dch_are_ignored_outside_scrolling_rectangle():
 
 def test_insert_mode_printing_stops_at_right_margin():
     board = _board(width=10, height=3)
-    board.blitter.current_buffer.set(0, 1, "ABCDEFGHIJ")
+    board.blitter.current_page.set(0, 1, "ABCDEFGHIJ")
     board.cursor.set_position(3, 1)
     board.parser.feed("\x1b[4hXY")
 
@@ -179,7 +179,7 @@ def test_decbifi_shift_only_at_exact_margin_and_affect_every_row():
     board = _board(width=10, height=4)
     board.blitter.set_scroll_region(1, 2)
     for y in range(board.height):
-        board.blitter.current_buffer.set(0, y, "ABCDEFGHIJ")
+        board.blitter.current_page.set(0, y, "ABCDEFGHIJ")
 
     board.cursor.set_position(7, 0)  # outside and right of the margin
     board.parser.feed("\x1b9")
@@ -201,11 +201,11 @@ def test_decbifi_shift_only_at_exact_margin_and_affect_every_row():
 
 def test_declrmm_forces_single_width_lines_and_blocks_line_attributes():
     board = Board(width=10, height=3)
-    board.blitter.current_buffer.set_line_attribute(1, constants.LINE_DOUBLE_WIDTH)
+    board.blitter.current_page.set_line_attribute(1, constants.LINE_DOUBLE_WIDTH)
 
     board.parser.feed("\x1b[?69h")
-    assert board.blitter.current_buffer.get_line_attribute(1) == constants.LINE_SINGLE
+    assert board.blitter.current_page.get_line_attribute(1) == constants.LINE_SINGLE
 
     board.cursor.set_position(0, 1)
     board.parser.feed("\x1b#6")
-    assert board.blitter.current_buffer.get_line_attribute(1) == constants.LINE_SINGLE
+    assert board.blitter.current_page.get_line_attribute(1) == constants.LINE_SINGLE

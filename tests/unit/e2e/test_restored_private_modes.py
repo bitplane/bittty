@@ -14,15 +14,15 @@ def test_decnrcm_gates_national_charset_designation():
 
     parser.feed("\x1b(K@[")
     assert board.charset.g0_charset == "B"
-    assert board.blitter.current_buffer.get_line_text(0).startswith("@[")
+    assert board.blitter.current_page.get_line_text(0).startswith("@[")
 
     parser.feed("\r\x1b[?42h@[")
     assert board.charset.g0_charset == "B"  # an ignored designation is not retroactive
-    assert board.blitter.current_buffer.get_line_text(0).startswith("@[")
+    assert board.blitter.current_page.get_line_text(0).startswith("@[")
 
     parser.feed("\r\x1b(K@[")
     assert board.charset.g0_charset == "K"
-    assert board.blitter.current_buffer.get_line_text(0).startswith("§Ä")
+    assert board.blitter.current_page.get_line_text(0).startswith("§Ä")
 
 
 def test_decnrcm_does_not_gate_dec_special_graphics():
@@ -30,7 +30,7 @@ def test_decnrcm_does_not_gate_dec_special_graphics():
 
     parser.feed("\x1b(0q")
 
-    assert board.blitter.current_buffer.get_line_text(0).startswith("─")
+    assert board.blitter.current_page.get_line_text(0).startswith("─")
 
 
 def test_reverse_wrap_only_crosses_an_auto_wrapped_line():
@@ -115,9 +115,9 @@ def test_decncsm_preserves_content_during_column_switches():
     parser.feed("\x1b[?40h\x1b[?95hhello\x1b[?3h")
 
     assert board.width == 132
-    assert board.blitter.current_buffer.get_line_text(0).startswith("hello")
+    assert board.blitter.current_page.get_line_text(0).startswith("hello")
     assert (board.cursor.x, board.cursor.y) == (0, 0)
 
     parser.feed("\x1b[?95l\x1b[?3l")
     assert board.width == 80
-    assert board.blitter.current_buffer.get_line_text(0).strip() == ""
+    assert board.blitter.current_page.get_line_text(0).strip() == ""

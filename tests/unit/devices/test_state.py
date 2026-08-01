@@ -25,25 +25,25 @@ def test_resize():
 def test_alternate_screen_switching():
     board = Board(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
     assert not board.blitter.in_alt_screen
-    assert board.blitter.current_buffer == board.blitter.primary_buffer
+    assert board.blitter.current_page == board.blitter.primary_page
 
     board.blitter.switch_screen(True)
     assert board.blitter.in_alt_screen
-    assert board.blitter.current_buffer == board.blitter.alt_buffer
+    assert board.blitter.current_page == board.blitter.alt_page
 
     # Calling again should do nothing
     board.blitter.switch_screen(True)
     assert board.blitter.in_alt_screen
-    assert board.blitter.current_buffer == board.blitter.alt_buffer
+    assert board.blitter.current_page == board.blitter.alt_page
 
     board.blitter.switch_screen(False)
     assert not board.blitter.in_alt_screen
-    assert board.blitter.current_buffer == board.blitter.primary_buffer
+    assert board.blitter.current_page == board.blitter.primary_page
 
     # Calling again should do nothing
     board.blitter.switch_screen(False)
     assert not board.blitter.in_alt_screen
-    assert board.blitter.current_buffer == board.blitter.primary_buffer
+    assert board.blitter.current_page == board.blitter.primary_page
 
 
 def test_alignment_test():
@@ -52,18 +52,18 @@ def test_alignment_test():
 
     expected_char = "E"
     for y in range(board.height):
-        line_text = board.blitter.current_buffer.get_line_text(y)
+        line_text = board.blitter.current_page.get_line_text(y)
         assert len(line_text) == board.width
         assert all(char == expected_char for char in line_text)
 
 
 def test_alternate_screen_on_off_restores_lines():
     board = Board(width=10, height=5)
-    board.blitter.current_buffer.set(0, 0, "Hello")
+    board.blitter.current_page.set(0, 0, "Hello")
     board.blitter.switch_screen(True)
-    assert board.blitter.current_buffer.get_line_text(0) == "          "
+    assert board.blitter.current_page.get_line_text(0) == "          "
     board.blitter.switch_screen(False)
-    assert board.blitter.current_buffer.get_line_text(0) == "Hello     "
+    assert board.blitter.current_page.get_line_text(0) == "Hello     "
 
 
 def test_set_and_clear_modes():
