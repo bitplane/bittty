@@ -33,6 +33,12 @@ class PrinterCapabilities:
 NO_PRINTER = PrinterCapabilities(media_copy=False, configuration=False)
 
 
+# Capabilities that are not modes. A control function is either implemented or
+# not recognised at all, so these gate whether a device registers its handlers
+# rather than what a mode table resolves to.
+DEC_LOCATOR = "dec.locator"
+
+
 @dataclass(frozen=True)
 class Option:
     """One hardware option installed in a terminal.
@@ -43,6 +49,7 @@ class Option:
 
     name: str
     mode_capabilities: frozenset[str] = field(default_factory=frozenset)
+    provides: frozenset[str] = field(default_factory=frozenset)
     printer: PrinterCapabilities | None = None
 
 
@@ -67,3 +74,11 @@ XTERM_PRINTER_PIPE = Option(
     mode_capabilities=PRINTER_PORT_MODE_CAPABILITIES,
     printer=PrinterCapabilities(configuration=False, disconnected_status=PrinterStatus.NOT_READY),
 )
+
+
+# --- locator port ---------------------------------------------------------- #
+# DEC shipped two locator devices on one micro-DIN port: the VSXXX-AA mouse and
+# the VSXXX-AB graphics tablet (VT330/VT340). The port is what enables DECELR
+# and friends; whether a device is on the end of it only changes the report.
+
+LOCATOR_PORT = Option("locator-port", provides=frozenset({DEC_LOCATOR}))

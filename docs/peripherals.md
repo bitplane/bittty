@@ -117,10 +117,19 @@ one port — the VSXXX-AA mouse and the VSXXX-AB graphics tablet — which is th
 "one port, several device types" shape the printer port already has.
 
 The locator is *not* peripheral #2, though: the hardware on the far end is the user's own
-hand, so it wants a device and a port and leaves `peripherals/` empty. What it does want is
-a `LOCATOR_PORT` option, since whether the terminal has one is a tier-1 question, and its
-"no locator connected" report is a tier-3 one. `MouseProtocol.LOCATOR` and the existing
-locator tests are most of the device already.
+hand, so it is a device plus a port and leaves `peripherals/` empty. `LOCATOR_PORT` is the
+option, and it is the case that proved the tier model generalises past the printer — because
+DECELR, DECSLE, DECRQLP and DECEFR are **control functions, not modes**. An option therefore
+carries two kinds of capability: `mode_capabilities`, resolved through the mode table, and
+`provides`, which gates whether a device registers its handlers at all.
+
+That distinction buys a faithful three-way that a single flag could not express:
+
+| | DECRQLP answers |
+| :--- | :--- |
+| no locator port (VT100, linux, tmux) | *nothing* — the sequence is not recognised |
+| port fitted, no device or not enabled | `CSI 0 & w` — locator unavailable |
+| port fitted, locator enabled | `CSI Pe ; Pb ; Pr ; Pc ; Pp & w` |
 
 Mode 103 DECHDPXM is already annotated in `DEC_private.md` as requiring a transport-level
 half-duplex interface. That annotation is this document in miniature.
@@ -158,8 +167,9 @@ Recorded so nobody mistakes inference for research:
 
 - **DEC PPL levels.** `GENERIC_DEC_PPL2_PRINTER` asserts level 2. The level semantics have
   not been checked against the LA50/LA75/LN03 programmer reference manuals.
-- **Locator absence reporting.** The exact DECRQLP report when no locator is connected is
-  unconfirmed; needed before locator work starts.
+- ~~Locator absence reporting.~~ **Resolved:** xterm's `Pe = 0` means "locator unavailable"
+  and carries no further parameters, and is sent both when the locator is not enabled and
+  when it is absent. bittty's existing `CSI 0 & w` was already correct.
 
 ## References
 

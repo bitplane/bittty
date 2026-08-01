@@ -34,6 +34,7 @@ from .mode_profiles import (
 )
 from .options import (
     DEC_PRINTER_PORT,
+    LOCATOR_PORT,
     NO_PRINTER,
     VT510_PRINTER_PORT,
     XTERM_PRINTER_PIPE,
@@ -79,6 +80,13 @@ class Model:
         return self.mode_capabilities.union(*(option.mode_capabilities for option in self.options))
 
     @property
+    def provides(self) -> frozenset[str]:
+        """Non-mode capabilities contributed by installed options."""
+        if not self.options:
+            return frozenset()
+        return frozenset().union(*(option.provides for option in self.options))
+
+    @property
     def printer_capabilities(self) -> PrinterCapabilities:
         """The printer repertoire of the installed port, if one is fitted."""
         for option in self.options:
@@ -93,7 +101,7 @@ XTERM = Model(
     da1_response="\033[?62;1;6;8;9;15;18;21;22;23c",
     da2_response="\033[>1;10;0c",
     mode_capabilities=XTERM_MODE_CAPABILITIES,
-    options=frozenset({XTERM_PRINTER_PIPE}),
+    options=frozenset({XTERM_PRINTER_PIPE, LOCATOR_PORT}),
 )
 
 BITTTY = Model(
@@ -102,7 +110,7 @@ BITTTY = Model(
     term_name="xterm",
     da2_response=XTERM.da2_response,
     mode_capabilities=BITTTY_MODE_CAPABILITIES,
-    options=frozenset({VT510_PRINTER_PORT}),
+    options=frozenset({VT510_PRINTER_PORT, LOCATOR_PORT}),
 )
 
 VT100 = Model(

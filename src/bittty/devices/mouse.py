@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .. import constants
+from ..options import DEC_LOCATOR
 from .modes import MouseEncoding, MouseProtocol
 
 if TYPE_CHECKING:
@@ -32,12 +33,19 @@ class MouseDevice(Device):
         self.locator_filter: tuple[int, int, int, int] | None = None  # top, left, bottom, right
         self._button_mask = 0
         self._pressed: set[int] = set()  # buttons currently held (drives 1002 drag motion)
-        self.handlers = {
-            "DECELR": self.enable_locator,
-            "DECSLE": self.select_locator_events,
-            "DECRQLP": self.request_locator_position,
-            "DECEFR": self.set_filter_rectangle,
-        }
+        self.handlers = {}
+        if DEC_LOCATOR in board.model.provides:
+            # A terminal without a locator port does not recognise these at all,
+            # which is a different thing from having one with nothing attached:
+            # that answers DECRQLP with "locator unavailable" (CSI 0 & w).
+            self.handlers.update(
+                {
+                    "DECELR": self.enable_locator,
+                    "DECSLE": self.select_locator_events,
+                    "DECRQLP": self.request_locator_position,
+                    "DECEFR": self.set_filter_rectangle,
+                }
+            )
 
     # --- DEC locator control functions --- #
 

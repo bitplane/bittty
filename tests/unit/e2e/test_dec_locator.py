@@ -1,6 +1,8 @@
 """DEC locator: DECELR / DECSLE / DECRQLP / DECEFR and the DECLRP report."""
 
 from bittty import Board, MemoryConnection
+from bittty.model import LINUX, XTERM
+from bittty.options import DEC_LOCATOR, LOCATOR_PORT
 from bittty.parser import Parser
 
 
@@ -48,3 +50,43 @@ def test_one_shot_disables_after_one_report():
     parser.feed("\x1b['|")  # first request reports...
     parser.feed("\x1b['|")  # ...second finds the locator disabled again
     assert transport.data == ["\x1b[1;0;0;0;1&w", "\x1b[0&w"]
+
+
+# --- the locator port is an installed option (tier 1) --- #
+
+
+def test_a_terminal_without_a_locator_port_does_not_recognise_the_sequences():
+    """No port means the control functions do not exist, so nothing is answered.
+
+    That is a different thing from having a port with nothing on it, which
+    answers DECRQLP with "locator unavailable" — see the test below.
+    """
+    board = Board(model=LINUX)
+    transport = MemoryConnection()
+    board.host.attach(transport)
+    parser = Parser(board)
+
+    parser.feed("\x1b['|")  # DECRQLP
+    parser.feed("\x1b[1;2'z")  # DECELR
+    parser.feed("\x1b['|")
+
+    assert transport.data == []
+    assert "DECRQLP" not in board.registry
+
+
+def test_a_fitted_port_with_no_device_reports_locator_unavailable():
+    """xterm's Pe=0 means unavailable, and carries no further parameters."""
+    board = Board(model=XTERM)
+    transport = MemoryConnection()
+    board.host.attach(transport)
+
+    Parser(board).feed("\x1b['|")
+
+    assert transport.data == ["\x1b[0&w"]
+    assert "DECRQLP" in board.registry
+
+
+def test_the_port_is_what_decides_not_the_model_repertoire():
+    assert DEC_LOCATOR in XTERM.provides
+    assert DEC_LOCATOR not in LINUX.provides
+    assert LOCATOR_PORT in XTERM.options
