@@ -1,11 +1,11 @@
 """Tests for OSC (Operating System Command) sequences."""
 
-from bittty.parser import Parser
-from bittty import Board
+from bittty import Board, MemoryConnection
 from bittty.constants import (
-    DEFAULT_TERMINAL_WIDTH,
     DEFAULT_TERMINAL_HEIGHT,
+    DEFAULT_TERMINAL_WIDTH,
 )
+from bittty.parser import Parser
 
 
 def render_terminal_to_string(board: Board) -> str:
@@ -19,17 +19,6 @@ def render_lines_to_string(lines: list[list[tuple[str, str]]]) -> list[str]:
     for line in lines:
         output.append("".join(char for _, char in line))
     return output
-
-
-class RecordingTransport:
-    def __init__(self):
-        self.data = []
-
-    def write(self, data):
-        self.data.append(data)
-
-    def flush(self):
-        pass
 
 
 def test_osc_set_both_window_and_icon_title():
@@ -117,7 +106,7 @@ def test_ps1_with_colors():
     line_cells = board.blitter.current_buffer.get_content()[0]
 
     # Check for bold green for "user@host" - now using Style objects
-    from bittty.style import Style, Color
+    from bittty.style import Color, Style
 
     bold_green_style = Style(fg=Color("indexed", 2), bold=True)
     assert (bold_green_style, "u") in line_cells
@@ -248,7 +237,7 @@ def test_osc_repeated_query_runs_each_time():
     """Repeated OSC queries must not be skipped by function-level caching."""
     board = Board(width=80, height=24)
     parser = Parser(board)
-    transport = RecordingTransport()
+    transport = MemoryConnection()
     board.host.attach(transport)
 
     parser.feed("\x1b]10;?\x07")

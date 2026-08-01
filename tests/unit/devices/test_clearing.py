@@ -1,8 +1,8 @@
 from bittty import Board
 from bittty.constants import (
+    ERASE_ALL,
     ERASE_FROM_CURSOR_TO_END,
     ERASE_FROM_START_TO_CURSOR,
-    ERASE_ALL,
 )
 
 

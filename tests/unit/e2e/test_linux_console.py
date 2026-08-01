@@ -1,19 +1,8 @@
 """Linux console fidelity: ESC ] P / ESC ] R palette, DECID, and its charset mappings."""
 
-from bittty import Board
+from bittty import Board, MemoryConnection
 from bittty.model import LINUX
 from bittty.parser import Parser
-
-
-class RecordingTransport:
-    def __init__(self):
-        self.data = []
-
-    def write(self, data):
-        self.data.append(data)
-
-    def flush(self):
-        pass
 
 
 def _term(**kwargs):
@@ -49,7 +38,7 @@ def test_linux_reset_palette():
 
 def test_decid_answers_like_primary_da():
     board, parser = _term()
-    transport = RecordingTransport()
+    transport = MemoryConnection()
     board.host.attach(transport)
     parser.feed("\x1bZ")  # DECID
     assert transport.data == ["\033[?62;1;2;6;8;9;15;18;21;22;23c"]  # bittty's DA1

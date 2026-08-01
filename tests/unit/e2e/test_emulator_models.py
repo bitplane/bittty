@@ -1,24 +1,13 @@
 """Emulator models grabbed from real terminfo + a live tmux DA query."""
 
-from bittty import Board, constants
+from bittty import Board, MemoryConnection, constants
 from bittty.model import BITTTY, GNOME, KITTY, SCREEN, TMUX, URXVT, XTERM, get_model
 from bittty.parser import Parser
 
 
-class RecordingTransport:
-    def __init__(self):
-        self.data = []
-
-    def write(self, data):
-        self.data.append(data)
-
-    def flush(self):
-        pass
-
-
 def _term(model):
     board = Board(width=80, height=24, model=model)
-    transport = RecordingTransport()
+    transport = MemoryConnection()
     board.host.attach(transport)
     return board, Parser(board), transport
 

@@ -1,17 +1,4 @@
-from bittty import HostPort
-
-
-class RecordingConnection:
-    def __init__(self):
-        self.data = []
-        self.flush_count = 0
-
-    def write(self, data):
-        self.data.append(data)
-        return len(data)
-
-    def flush(self):
-        self.flush_count += 1
+from bittty import HostPort, MemoryConnection
 
 
 def test_host_port_ignores_writes_until_connection_is_attached():
@@ -22,7 +9,7 @@ def test_host_port_ignores_writes_until_connection_is_attached():
 
 
 def test_host_port_writes_and_flushes_attached_connection():
-    connection = RecordingConnection()
+    connection = MemoryConnection()
     port = HostPort(connection)
 
     result = port.write("abc", flush=True)
@@ -34,7 +21,7 @@ def test_host_port_writes_and_flushes_attached_connection():
 
 
 def test_host_port_can_detach_connection():
-    connection = RecordingConnection()
+    connection = MemoryConnection()
     port = HostPort(connection)
 
     port.detach()

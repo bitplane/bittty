@@ -1,24 +1,12 @@
 import io
 
-from bittty import constants
-from bittty import Board
+from bittty import Board, MemoryConnection, constants
 from bittty.pty import PTY
-
-
-class RecordingPTY:
-    def __init__(self):
-        self.data = []
-
-    def write(self, data):
-        self.data.append(data)
-
-    def flush(self):
-        pass
 
 
 def board_with_pty():
     board = Board(width=20, height=5)
-    board.pty = RecordingPTY()
+    board.pty = MemoryConnection()
     return board
 
 
@@ -288,17 +276,23 @@ def test_input_key_backspace():
 
 
 def test_mouse_device_legacy_encoding_without_sgr():
-    """Mode 1000 without 1006 reports in the X10 byte encoding, not silence."""
+    """Mode 1000 without 1006 reports in the X10 byte encoding, not silence.
+
+    X10 reports are bytes, not text: the coordinates are 8-bit and a real PTY
+    takes them through write_bytes. This asserted str while the old test double
+    lacked write_bytes and HostPort fell back to a latin-1 decode — a path no
+    real connection takes.
+    """
     board = board_with_pty()
     board.modes.mouse_tracking = True
 
     board.mouse.input_mouse(10, 5, 0, "press", set())
-    assert board.pty.data == ["\x1b[M" + chr(32 + 0) + chr(32 + 10) + chr(32 + 5)]
+    assert board.pty.data == [b"\x1b[M" + bytes((32 + 0, 32 + 10, 32 + 5))]
 
     board.pty.data.clear()
     board.mouse.input_mouse(10, 5, 0, "release", set())
     # A legacy release cannot name its button: low bits are 3.
-    assert board.pty.data == ["\x1b[M" + chr(32 + 3) + chr(32 + 10) + chr(32 + 5)]
+    assert board.pty.data == [b"\x1b[M" + bytes((32 + 3, 32 + 10, 32 + 5))]
 
 
 def test_legacy_mouse_uses_raw_bytes_on_a_real_pty_connection():

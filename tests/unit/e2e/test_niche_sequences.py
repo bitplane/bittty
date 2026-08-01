@@ -1,24 +1,13 @@
 """DA3, DECSCA + DECSED/DECSEL (selective erase), and DECUDK."""
 
-from bittty.parser import Parser
+from bittty import Board, MemoryConnection
 from bittty.model import VT100
-from bittty import Board
-
-
-class RecordingTransport:
-    def __init__(self):
-        self.data = []
-
-    def write(self, data):
-        self.data.append(data)
-
-    def flush(self):
-        pass
+from bittty.parser import Parser
 
 
 def _driver(**kwargs):
     board = Board(width=20, height=5, **kwargs)
-    transport = RecordingTransport()
+    transport = MemoryConnection()
     board.host.attach(transport)
     return board, Parser(board), transport
 

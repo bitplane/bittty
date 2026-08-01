@@ -1,24 +1,13 @@
 """DECRQSS (DCS $q ... ST): reporting the current setting back to the host."""
 
-from bittty import Board
+from bittty import Board, MemoryConnection
 from bittty.model import VT510
 from bittty.parser import Parser
 
 
-class RecordingTransport:
-    def __init__(self):
-        self.data = []
-
-    def write(self, data):
-        self.data.append(data)
-
-    def flush(self):
-        pass
-
-
 def _driver(model=None):
     board = Board(width=80, height=24, model=model)
-    transport = RecordingTransport()
+    transport = MemoryConnection()
     board.host.attach(transport)
     return Parser(board), transport
 
@@ -89,8 +78,8 @@ def test_vt510_decrqss_uses_dec_validity_for_existing_and_invalid_settings():
 
 
 def test_non_configurable_model_does_not_expose_attached_configuration():
-    from bittty.model import XTERM
     from bittty import MemoryPrinter
+    from bittty.model import XTERM
 
     parser, transport = _driver(XTERM)
     parser.sink.printer.attach(MemoryPrinter())

@@ -1,17 +1,5 @@
-from bittty import Board, constants
+from bittty import Board, MemoryConnection, constants
 from bittty.operations import Operation
-
-
-class RecordingTransport:
-    def __init__(self):
-        self.data = []
-        self.flush_count = 0
-
-    def write(self, data):
-        self.data.append(data)
-
-    def flush(self):
-        self.flush_count += 1
 
 
 def test_control_device_routes_c0_controls_to_devices():
@@ -52,7 +40,7 @@ def test_control_device_shift_and_tab_stop_controls():
 def test_query_device_reports_cursor_and_device_status():
     board = Board(width=80, height=24)
     query = board.parser.sink.query
-    transport = RecordingTransport()
+    transport = MemoryConnection()
     board.host.attach(transport)
 
     board.cursor.set_position(10, 5)
@@ -71,7 +59,7 @@ def test_query_device_reports_cursor_and_device_status():
 def test_query_device_reports_mode_status_from_mode_device():
     board = Board(width=80, height=24)
     query = board.parser.sink.query
-    transport = RecordingTransport()
+    transport = MemoryConnection()
     board.host.attach(transport)
 
     board.modes.cursor_application_mode = True
@@ -92,7 +80,7 @@ def test_query_device_reports_mode_status_from_mode_device():
 def test_palette_device_reports_osc_colors():
     board = Board(width=80, height=24)
     palette = board.palette
-    transport = RecordingTransport()
+    transport = MemoryConnection()
     board.host.attach(transport)
 
     palette.handle_operation(Operation("OSC_FOREGROUND", ("?",), "\x1b]10;?\x07"))

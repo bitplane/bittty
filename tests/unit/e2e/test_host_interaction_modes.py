@@ -2,25 +2,9 @@
 
 import pytest
 
-from bittty import BITTTY, VT100, VT220, VT510, XTERM, Board, TerminalCaps
+from bittty import BITTTY, VT100, VT220, VT510, XTERM, Board, MemoryConnection, TerminalCaps
 from bittty.parser import Parser
 from bittty.present import Bell, KeyboardLockChanged, WindowRequest
-
-
-class RecordingTransport:
-    def __init__(self, chunks=()):
-        self.data = []
-        self.chunks = list(chunks)
-        self.closed = False
-
-    def write(self, data):
-        self.data.append(data)
-
-    def flush(self):
-        pass
-
-    async def read_async(self, size):
-        return self.chunks.pop(0) if self.chunks else ""
 
 
 class Recorder:
@@ -33,7 +17,7 @@ class Recorder:
 
 def _term(*, width=20, height=4, model=None):
     board = Board(width=width, height=height, model=model)
-    transport = RecordingTransport()
+    transport = MemoryConnection()
     recorder = Recorder()
     board.host.attach(transport)
     board.display.attach(recorder)
@@ -97,11 +81,11 @@ async def test_auto_answerback_fires_only_on_real_connect():
     board.answerback = "VT510"
     board.modes.set_private_modes((100,), True)
 
-    attached = RecordingTransport()
+    attached = MemoryConnection()
     board.host.attach(attached)
     assert attached.data == []
 
-    connected = RecordingTransport()
+    connected = MemoryConnection()
     board.host.connect(connected, board._dispatch_pty_data, on_idle=lambda: True)
     await board.host._reader_task
     assert connected.data == ["VT510"]
@@ -111,13 +95,13 @@ async def test_auto_answerback_fires_only_on_real_connect():
 async def test_enabling_auto_answerback_on_a_live_connection_waits_for_reconnect():
     board = Board(model=VT510)
     board.answerback = "hello"
-    first = RecordingTransport()
+    first = MemoryConnection()
     board.host.connect(first, board._dispatch_pty_data, on_idle=lambda: True)
     await board.host._reader_task
     board.modes.set_private_modes((100,), True)
     assert first.data == []
 
-    second = RecordingTransport()
+    second = MemoryConnection()
     board.host.connect(second, board._dispatch_pty_data, on_idle=lambda: True)
     await board.host._reader_task
     assert second.data == ["hello"]

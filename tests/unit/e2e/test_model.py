@@ -1,20 +1,9 @@
 """Model-driven behaviour: the same board answers as different terminals."""
 
-from bittty import Board, constants
+from bittty import Board, MemoryConnection, constants
 from bittty.model import LINUX, VT100, VT220, VT510, XTERM
 from bittty.parser import Parser
 from bittty.style import Color
-
-
-class RecordingTransport:
-    def __init__(self):
-        self.data = []
-
-    def write(self, data):
-        self.data.append(data)
-
-    def flush(self):
-        pass
 
 
 def _replies(model, sequence):
@@ -22,7 +11,7 @@ def _replies(model, sequence):
     if model is not None:
         kwargs["model"] = model
     board = Board(**kwargs)
-    transport = RecordingTransport()
+    transport = MemoryConnection()
     board.host.attach(transport)
     Parser(board).feed(sequence)
     return transport.data
@@ -50,7 +39,7 @@ def test_vt510_identity_and_audited_private_modes():
     assert _replies(VT510, "\x1b[>c") == ["\033[>61;10;0c"]
     board = Board(model=VT510)
     parser = Parser(board)
-    transport = RecordingTransport()
+    transport = MemoryConnection()
     board.host.attach(transport)
     for mode in (66, 67, 69, 95, 102):
         parser.feed(f"\x1b[?{mode}$p")
@@ -96,7 +85,7 @@ def _fkey(model, num, modifier=constants.KEY_MOD_NONE):
     if model is not None:
         kwargs["model"] = model
     board = Board(**kwargs)
-    transport = RecordingTransport()
+    transport = MemoryConnection()
     board.host.attach(transport)
     board.input_fkey(num, modifier)
     return transport.data
@@ -107,7 +96,7 @@ def _key(model, char, modifier=constants.KEY_MOD_NONE):
     if model is not None:
         kwargs["model"] = model
     board = Board(**kwargs)
-    transport = RecordingTransport()
+    transport = MemoryConnection()
     board.host.attach(transport)
     board.input_key(char, modifier)
     return transport.data
@@ -173,7 +162,7 @@ def test_linux_console_is_distinct():
 
 def test_numpad_uses_the_keymap():
     board = Board(width=80, height=24)
-    transport = RecordingTransport()
+    transport = MemoryConnection()
     board.host.attach(transport)
 
     board.input_numpad_key("5")  # numeric keypad (default) sends the digit
@@ -211,13 +200,13 @@ def test_monochrome_model_ignores_sgr_colour():
 
 def test_decrqm_reports_unrecognised_for_omitted_mode():
     # DECRQM for a mode the model lacks must answer "not recognised" (0).
-    transport_xterm = RecordingTransport()
+    transport_xterm = MemoryConnection()
     xterm = Board(width=80, height=24)
     xterm.host.attach(transport_xterm)
     Parser(xterm).feed("\x1b[?2027$p")  # DECRQM for grapheme clustering
     assert transport_xterm.data == ["\033[?2027;2$y"]  # 2 = reset (recognised)
 
-    transport_vt100 = RecordingTransport()
+    transport_vt100 = MemoryConnection()
     vt100 = Board(width=80, height=24, model=VT100)
     vt100.host.attach(transport_vt100)
     Parser(vt100).feed("\x1b[?2027$p")
@@ -225,13 +214,13 @@ def test_decrqm_reports_unrecognised_for_omitted_mode():
 
 
 def test_decnrcm_is_vt220_but_not_vt100_capability():
-    transport_vt100 = RecordingTransport()
+    transport_vt100 = MemoryConnection()
     vt100 = Board(width=80, height=24, model=VT100)
     vt100.host.attach(transport_vt100)
     Parser(vt100).feed("\x1b[?42$p")
     assert transport_vt100.data == ["\033[?42;0$y"]
 
-    transport_vt220 = RecordingTransport()
+    transport_vt220 = MemoryConnection()
     vt220 = Board(width=80, height=24, model=VT220)
     vt220.host.attach(transport_vt220)
     Parser(vt220).feed("\x1b[?42$p")

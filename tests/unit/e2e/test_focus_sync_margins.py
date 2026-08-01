@@ -1,24 +1,13 @@
 """Focus events (1004), synchronized output (2026), left/right margins (69 + DECSLRM),
 XTVERSION, the SGR/colour stacks, and DECBI/DECFI."""
 
+from bittty import Board, MemoryConnection
 from bittty.parser import Parser
-from bittty import Board
-
-
-class RecordingTransport:
-    def __init__(self):
-        self.data = []
-
-    def write(self, data):
-        self.data.append(data)
-
-    def flush(self):
-        pass
 
 
 def _term(width=10, height=4):
     board = Board(width=width, height=height)
-    transport = RecordingTransport()
+    transport = MemoryConnection()
     board.host.attach(transport)
     return board, Parser(board), transport
 

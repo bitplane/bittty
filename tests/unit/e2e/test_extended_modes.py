@@ -2,20 +2,9 @@
 
 import pytest
 
-from bittty import Board, TerminalCaps
+from bittty import Board, MemoryConnection, TerminalCaps
 from bittty.model import VT220
 from bittty.parser import Parser
-
-
-class RecordingTransport:
-    def __init__(self):
-        self.data = []
-
-    def write(self, data):
-        self.data.append(data)
-
-    def flush(self):
-        pass
 
 
 def _term(model=None):
@@ -23,7 +12,7 @@ def _term(model=None):
     if model is not None:
         kwargs["model"] = model
     board = Board(**kwargs)
-    transport = RecordingTransport()
+    transport = MemoryConnection()
     board.host.attach(transport)
     return board, Parser(board), transport
 

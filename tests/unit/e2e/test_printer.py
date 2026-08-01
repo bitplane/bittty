@@ -2,7 +2,7 @@
 
 import io
 
-from bittty import Board, MemoryPrinter, PrinterStatus
+from bittty import Board, MemoryConnection, MemoryPrinter, PrinterStatus
 from bittty.parser import Parser
 
 
@@ -174,7 +174,7 @@ def test_eight_bit_csi_and_multiple_controller_transitions():
 def test_controller_mode_forwards_escape_sequences_without_answering_them():
     board, _ = _term()
     printer = MemoryPrinter()
-    host = RecordingByteHost()
+    host = MemoryConnection()
     board.printer.attach(printer)
     board.host.attach(host)
 
@@ -184,24 +184,9 @@ def test_controller_mode_forwards_escape_sequences_without_answering_them():
     assert host.data == []
 
 
-class RecordingByteHost:
-    def __init__(self):
-        self.data = []
-        self.flush_count = 0
-
-    def write(self, data):
-        self.data.append(data)
-
-    def write_bytes(self, data):
-        self.data.append(data)
-
-    def flush(self):
-        self.flush_count += 1
-
-
 def test_printer_status_dsr_and_detached_status():
     board, parser = _term()
-    host = RecordingByteHost()
+    host = MemoryConnection()
     board.host.attach(host)
 
     parser.feed("\x1b[?15n")
@@ -215,7 +200,7 @@ def test_printer_status_dsr_and_detached_status():
 
 def test_printer_to_host_modes_and_filtering():
     board, parser = _term()
-    host = RecordingByteHost()
+    host = MemoryConnection()
     board.host.attach(host)
 
     board.printer.receive_bytes(b"ignored")
@@ -232,7 +217,7 @@ def test_printer_to_host_modes_and_filtering():
 
 def test_mc2_sends_composed_screen_data_to_host():
     board, parser = _term()
-    host = RecordingByteHost()
+    host = MemoryConnection()
     board.host.attach(host)
     parser.feed("hello\x1b[2i")
     assert host.data[-1] == b"hello\r\n\r\n\r\n"

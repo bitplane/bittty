@@ -1,23 +1,12 @@
 """DECSACE attribute-change extent + OSC 5/6 special colours + OSC 15/16/18 Tektronix colours."""
 
+from bittty import Board, MemoryConnection
 from bittty.parser import Parser
-from bittty import Board
-
-
-class RecordingTransport:
-    def __init__(self):
-        self.data = []
-
-    def write(self, data):
-        self.data.append(data)
-
-    def flush(self):
-        pass
 
 
 def _term(width=6, height=3):
     board = Board(width=width, height=height)
-    transport = RecordingTransport()
+    transport = MemoryConnection()
     board.host.attach(transport)
     return board, Parser(board), transport
 

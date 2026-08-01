@@ -1,24 +1,12 @@
 """Test device query responses and capabilities."""
 
-from bittty import Board
+from bittty import Board, MemoryConnection
 from bittty.parser import Parser
-
-
-class RecordingTransport:
-    def __init__(self):
-        self.data = []
-        self.flush_count = 0
-
-    def write(self, data):
-        self.data.append(data)
-
-    def flush(self):
-        self.flush_count += 1
 
 
 def terminal_with_transport(width=80, height=24):
     board = Board(width=width, height=height)
-    transport = RecordingTransport()
+    transport = MemoryConnection()
     board.host.attach(transport)
     return board, Parser(board), transport
 

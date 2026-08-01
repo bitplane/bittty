@@ -293,6 +293,57 @@ class PrinterPort:
                 break
 
 
+class MemoryConnection:
+    """A Connection whose far end is memory, not a process.
+
+    The host-port sibling of MemoryPrinter: it records everything the board
+    transmits and can feed data back as if a child had produced it. Real enough
+    to test against — a board wired to one behaves exactly as it does on a PTY,
+    which is why the suite uses it instead of standing a mock in for the cable.
+    """
+
+    def __init__(self, receive=()) -> None:
+        self.data: list = []  # every write, in order, as it was given
+        self.flush_count = 0
+        self.closed = False
+        self.resizes: list[tuple[int, int]] = []
+        self._inbound = list(receive)
+
+    @property
+    def text(self) -> str:
+        """Everything transmitted so far, joined."""
+        return "".join(part if isinstance(part, str) else part.decode("latin-1") for part in self.data)
+
+    def write(self, data: str) -> int:
+        self.data.append(data)
+        return len(data)
+
+    def write_bytes(self, data: bytes) -> int:
+        self.data.append(data)
+        return len(data)
+
+    def send(self, data) -> None:
+        """Queue data as if the child had produced it."""
+        self._inbound.append(data)
+
+    async def read_async(self, size: int = 65536) -> str:
+        return self._inbound.pop(0) if self._inbound else ""
+
+    async def read_bytes_async(self, size: int = 65536) -> bytes:
+        data = self._inbound.pop(0) if self._inbound else b""
+        return data.encode() if isinstance(data, str) else data
+
+    def resize(self, rows: int, cols: int) -> None:
+        """Record a window-size change, as a PTY would apply one."""
+        self.resizes.append((rows, cols))
+
+    def flush(self) -> None:
+        self.flush_count += 1
+
+    def close(self) -> None:
+        self.closed = True
+
+
 # --- printer cables --------------------------------------------------- #
 # Not printers: an in-memory duplex byte sink and a BinaryIO adapter. The
 # thing that simulates a printer is bittty.peripherals.printer.VirtualPrinter.

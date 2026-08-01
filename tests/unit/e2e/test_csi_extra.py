@@ -2,8 +2,8 @@
 
 import pytest
 
-from bittty.parser import Parser
 from bittty import Board
+from bittty.parser import Parser
 
 
 def _term():

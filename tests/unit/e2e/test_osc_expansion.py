@@ -1,24 +1,13 @@
 """OSC expansion: pointer shape (22), font (50), dynamic colours (13/14/17/19),
 their resets (113/114/117/119), and Kitty notifications (99)."""
 
+from bittty import Board, MemoryConnection
 from bittty.parser import Parser
-from bittty import Board
-
-
-class RecordingTransport:
-    def __init__(self):
-        self.data = []
-
-    def write(self, data):
-        self.data.append(data)
-
-    def flush(self):
-        pass
 
 
 def _term():
     board = Board(width=20, height=3)
-    transport = RecordingTransport()
+    transport = MemoryConnection()
     board.host.attach(transport)
     return board, Parser(board), transport
 

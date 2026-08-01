@@ -1,11 +1,12 @@
 import pytest
-from bittty.parser import Parser
+
 from bittty.constants import (
     DECAWM_AUTOWRAP,
     DECCOLM_COLUMN_MODE,
     DECOM_ORIGIN_MODE,
     ESC,
 )
+from bittty.parser import Parser
 
 
 # Use real terminal instead of mock

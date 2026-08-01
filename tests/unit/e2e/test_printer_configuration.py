@@ -2,10 +2,13 @@
 
 from bittty import (
     Board,
+    MemoryConnection,
     MemoryPrinter,
     PrinterConfiguration,
     PrinterStatus,
 )
+from bittty.model import VT100, VT220, VT510, XTERM
+from bittty.parser import Parser
 from bittty.printer_config import (
     PrintedDataType,
     PrinterFlowControl,
@@ -14,22 +17,6 @@ from bittty.printer_config import (
     PrinterType,
     ProPrinterCodePage,
 )
-from bittty.model import VT100, VT220, VT510, XTERM
-from bittty.parser import Parser
-
-
-class RecordingHost:
-    def __init__(self):
-        self.data = []
-
-    def write(self, data):
-        self.data.append(data)
-
-    def write_bytes(self, data):
-        self.data.append(data)
-
-    def flush(self):
-        pass
 
 
 def test_configuration_defaults_and_full_snapshot_on_attach():
@@ -102,7 +89,7 @@ def test_model_gating_wins_over_an_attached_printer():
     for model in (VT100,):
         board = Board(model=model)
         printer = MemoryPrinter()
-        host = RecordingHost()
+        host = MemoryConnection()
         board.printer.attach(printer)
         board.host.attach(host)
         Parser(board).feed("\x1b[5iprint\x1b[3$s\x1b[?15n")
@@ -126,7 +113,7 @@ def test_detached_status_is_model_correct_and_attachment_does_not_change_da1():
     cases = ((VT220, "\x1b[?13n"), (VT510, "\x1b[?13n"), (XTERM, "\x1b[?11n"))
     for model, expected in cases:
         board = Board(model=model)
-        host = RecordingHost()
+        host = MemoryConnection()
         board.host.attach(host)
         parser = Parser(board)
         parser.feed("\x1b[?15n")
@@ -159,7 +146,7 @@ def test_configuration_failure_marks_not_ready_and_later_success_recovers():
 def test_decnulm_and_flow_control_filter_both_directions_and_reset():
     board = Board(model=VT510)
     printer = MemoryPrinter()
-    host = RecordingHost()
+    host = MemoryConnection()
     board.printer.attach(printer)
     board.host.attach(host)
     parser = Parser(board)
@@ -196,7 +183,7 @@ def test_resets_preserve_physical_configuration_but_clear_decnulm():
 
 def test_decnulm_is_unrecognised_outside_configurable_models():
     board = Board(model=VT220)
-    host = RecordingHost()
+    host = MemoryConnection()
     board.host.attach(host)
     Parser(board).feed("\x1b[?102h\x1b[?102$p")
     assert host.data == ["\x1b[?102;0$y"]
@@ -205,7 +192,7 @@ def test_decnulm_is_unrecognised_outside_configurable_models():
 def test_printer_language_and_vt340_graphics_modes_are_not_vt510_configuration():
     board = Board(model=VT510)
     printer = MemoryPrinter()
-    host = RecordingHost()
+    host = MemoryConnection()
     board.printer.attach(printer)
     board.host.attach(host)
 

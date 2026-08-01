@@ -1,25 +1,14 @@
 """Palette: seeding, OSC overrides/queries, resolution, and construction overrides."""
 
+from bittty import Board, MemoryConnection
 from bittty.palette import XTERM_16, format_rgb, parse_color_spec
 from bittty.parser import Parser
 from bittty.style import Color
-from bittty import Board
-
-
-class RecordingTransport:
-    def __init__(self):
-        self.data = []
-
-    def write(self, data):
-        self.data.append(data)
-
-    def flush(self):
-        pass
 
 
 def _terminal(**kwargs):
     board = Board(width=80, height=24, **kwargs)
-    transport = RecordingTransport()
+    transport = MemoryConnection()
     board.host.attach(transport)
     return board, Parser(board), transport
 

@@ -1,18 +1,7 @@
 """ENQ answerback, ECMA-48 SL/SR panning, and DEC bell-volume registers."""
 
+from bittty import Board, MemoryConnection
 from bittty.parser import Parser
-from bittty import Board
-
-
-class RecordingTransport:
-    def __init__(self):
-        self.data = []
-
-    def write(self, data):
-        self.data.append(data)
-
-    def flush(self):
-        pass
 
 
 def _term():
@@ -22,7 +11,7 @@ def _term():
 
 def test_enq_transmits_the_answerback_string():
     board, parser = _term()
-    transport = RecordingTransport()
+    transport = MemoryConnection()
     board.host.attach(transport)
     board.answerback = "bittty"
 
@@ -32,7 +21,7 @@ def test_enq_transmits_the_answerback_string():
 
 def test_enq_sends_nothing_when_unset():
     board, parser = _term()
-    transport = RecordingTransport()
+    transport = MemoryConnection()
     board.host.attach(transport)
 
     parser.feed("\x05")  # ENQ with the default empty answerback

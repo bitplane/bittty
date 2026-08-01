@@ -1,23 +1,12 @@
 """DEC locator: DECELR / DECSLE / DECRQLP / DECEFR and the DECLRP report."""
 
+from bittty import Board, MemoryConnection
 from bittty.parser import Parser
-from bittty import Board
-
-
-class RecordingTransport:
-    def __init__(self):
-        self.data = []
-
-    def write(self, data):
-        self.data.append(data)
-
-    def flush(self):
-        pass
 
 
 def _driver():
     board = Board(width=80, height=24)
-    transport = RecordingTransport()
+    transport = MemoryConnection()
     board.host.attach(transport)
     return board, Parser(board), transport
 

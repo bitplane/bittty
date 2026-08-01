@@ -1,23 +1,12 @@
 """DECRQCRA rectangle checksum and XTGETTCAP termcap query responders."""
 
+from bittty import Board, MemoryConnection
 from bittty.parser import Parser
-from bittty import Board
-
-
-class RecordingTransport:
-    def __init__(self):
-        self.data = []
-
-    def write(self, data):
-        self.data.append(data)
-
-    def flush(self):
-        pass
 
 
 def _term(width=10, height=3):
     board = Board(width=width, height=height)
-    transport = RecordingTransport()
+    transport = MemoryConnection()
     board.host.attach(transport)
     return board, Parser(board), transport
 
@@ -53,13 +42,13 @@ def _decode_tcap(reply):
 
 def test_xtgettcap_answers_terminal_name():
     board, parser, transport = _term()  # default model is xterm
-    parser.feed("\x1bP+q" + "TN".encode().hex() + "\x1b\\")
+    parser.feed("\x1bP+q" + b"TN".hex() + "\x1b\\")
     assert _decode_tcap(_reply(transport)) == (True, "TN", "xterm")
 
 
 def test_xtgettcap_answers_colour_count():
     board, parser, transport = _term()
-    parser.feed("\x1bP+q" + "Co".encode().hex() + "\x1b\\")
+    parser.feed("\x1bP+q" + b"Co".hex() + "\x1b\\")
     assert _decode_tcap(_reply(transport)) == (True, "Co", "256")
 
 
@@ -72,7 +61,7 @@ def test_xtgettcap_refuses_unknown_capability():
 
 def test_xtgettcap_answers_multiple_capabilities():
     board, parser, transport = _term()
-    query = "TN".encode().hex() + ";" + "Co".encode().hex()
+    query = b"TN".hex() + ";" + b"Co".hex()
     parser.feed("\x1bP+q" + query + "\x1b\\")
     replies = _reply(transport).split("\x1b\\")
     decoded = [_decode_tcap(r + "\x1b\\") for r in replies if r]

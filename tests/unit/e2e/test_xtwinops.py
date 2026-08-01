@@ -1,25 +1,13 @@
 """XTWINOPS window manipulation: state stored as board registers, plus reports."""
 
-from bittty import constants
+from bittty import Board, MemoryConnection, constants
 from bittty.caps import TerminalCaps
 from bittty.parser import Parser
-from bittty import Board
-
-
-class RecordingTransport:
-    def __init__(self):
-        self.data = []
-
-    def write(self, data):
-        self.data.append(data)
-
-    def flush(self):
-        pass
 
 
 def _term(width=80, height=24):
     board = Board(width=width, height=height)
-    transport = RecordingTransport()
+    transport = MemoryConnection()
     board.host.attach(transport)
     return board, Parser(board), transport
 

@@ -1,9 +1,7 @@
 """DECIC/DECDC column edits, HPB/VPB position-backward, and CTC/DECST8C tab control."""
 
-from unittest.mock import Mock
-
+from bittty import Board, MemoryConnection
 from bittty.parser import Parser
-from bittty import Board
 
 
 def _term(width=10, height=6):
@@ -118,8 +116,8 @@ def test_decscpp_ignores_unsupported_column_counts():
 
 def test_decscpp_reports_changed_dimensions_to_the_pty():
     board = Board(width=80, height=3)
-    board.pty = Mock()
+    board.pty = MemoryConnection()
 
     Parser(board).feed("\x1b[132$|")
 
-    board.pty.resize.assert_called_once_with(3, 132)
+    assert board.pty.resizes == [(3, 132)]

@@ -1,8 +1,8 @@
 """DEC rectangular-area functions: DECFRA/DECERA/DECSERA/DECCRA/DECCARA/DECRARA."""
 
+from bittty import Board
 from bittty.parser import Parser
 from bittty.style import Color
-from bittty import Board
 
 
 def _term():

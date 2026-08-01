@@ -1,6 +1,6 @@
 import pytest
 
-from bittty import Board
+from bittty import Board, MemoryConnection
 from bittty import mode_profiles as mp
 from bittty.devices.modes import (
     MODE_BY_CAPABILITY,
@@ -15,17 +15,6 @@ from bittty.parser import Parser
 from bittty.present import MouseCaptureChanged
 
 
-class RecordingTransport:
-    def __init__(self):
-        self.data = []
-
-    def write(self, data):
-        self.data.append(data)
-
-    def flush(self):
-        pass
-
-
 class Recorder:
     def __init__(self):
         self.events = []
@@ -36,7 +25,7 @@ class Recorder:
 
 def _board(model=None):
     board = Board(model=model)
-    transport = RecordingTransport()
+    transport = MemoryConnection()
     board.host.attach(transport)
     return board, Parser(board), transport
 
@@ -217,7 +206,8 @@ def test_x10_reports_presses_only_and_ignores_modifiers():
     board.input_mouse(10, 5, 0, "release", {"shift", "ctrl"})
     board.input_mouse(11, 5, 0, "move", {"shift", "ctrl"})
 
-    assert transport.data == ["\x1b[M" + chr(32) + chr(42) + chr(37)]
+    # X10 reports are bytes: a real connection takes them through write_bytes.
+    assert transport.data == [b"\x1b[M" + bytes((32, 42, 37))]
 
 
 def test_locator_and_xterm_tracking_replace_each_other_and_drive_capture():

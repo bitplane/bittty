@@ -1,6 +1,6 @@
 """Boundary semantics for DECLRMM and the DECSLRM scrolling rectangle."""
 
-from bittty import Board, constants
+from bittty import Board, MemoryConnection, constants
 
 
 def _board(width=10, height=4, left=3, right=7):
@@ -11,17 +11,6 @@ def _board(width=10, height=4, left=3, right=7):
 
 def _lines(board):
     return [board.blitter.current_buffer.get_line_text(y) for y in range(board.height)]
-
-
-class _Transport:
-    def __init__(self):
-        self.data = []
-
-    def write(self, data):
-        self.data.append(data)
-
-    def flush(self):
-        pass
 
 
 def test_invalid_decslrm_is_ignored_without_homing_cursor():
@@ -84,7 +73,7 @@ def test_ascii_text_wraps_from_right_to_left_margin():
 
 def test_inner_delayed_wrap_reports_the_right_margin_and_cursor_motion_cancels_it():
     board = _board()
-    transport = _Transport()
+    transport = MemoryConnection()
     board.host.attach(transport)
     board.cursor.set_position(2, 0)
     board.parser.feed("ABCDE")

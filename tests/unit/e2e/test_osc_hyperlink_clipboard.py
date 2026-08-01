@@ -2,20 +2,9 @@
 
 import base64
 
+from bittty import Board, MemoryConnection
 from bittty.parser import Parser
 from bittty.style import Color
-from bittty import Board
-
-
-class RecordingTransport:
-    def __init__(self):
-        self.data = []
-
-    def write(self, data):
-        self.data.append(data)
-
-    def flush(self):
-        pass
 
 
 def test_osc8_stamps_hyperlink_on_cells():
@@ -46,7 +35,7 @@ def test_hyperlink_survives_sgr_reset_but_colour_does_not():
 
 def test_osc52_set_and_query_clipboard():
     board = Board(width=20, height=3)
-    transport = RecordingTransport()
+    transport = MemoryConnection()
     board.host.attach(transport)
     parser = Parser(board)
 
