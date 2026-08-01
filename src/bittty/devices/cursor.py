@@ -266,8 +266,14 @@ class CursorDevice(Device):
         return 0
 
     def forward_tab(self, count: int) -> None:
-        """CHT — advance `count` tab stops."""
-        for _ in range(count):
+        """CHT — advance `count` tab stops.
+
+        A line holds at most one tab stop per column, and advancing past the
+        last one leaves the cursor on it, so any count beyond the width is
+        indistinguishable from the width. Clamping says so rather than looping
+        a billion times on a count that came off the wire.
+        """
+        for _ in range(min(count, self.board.width)):
             self.horizontal_tab()
 
     def backward_tab(self, count: int) -> None:
@@ -275,7 +281,9 @@ class CursorDevice(Device):
         self.cancel_pending_wrap()
         screen = self.board.blitter
         left = screen.left_margin if screen.left_margin <= self.x <= screen.right_margin else 0
-        for _ in range(count):
+        # Bounded for the same reason as CHT: retreating past the first tab
+        # stop parks the cursor on the left margin and stays there.
+        for _ in range(min(count, self.board.width)):
             self.x = max(left, self.previous_tab_stop())
 
     def clear_tab_stop(self, mode: int) -> None:

@@ -81,18 +81,3 @@ def test_clear_line_with_mixed_styles():
     board.cursor.y = 1
     board.blitter.clear_line(1)  # Clear from beginning to cursor
     assert board.blitter.current_buffer.get_line_text(1) == "    EFGHI "
-
-
-def test_clear_line_invalid_cursor():
-    board = Board(width=10, height=5)
-    board.cursor.y = 10  # Invalid cursor position
-    board.blitter.clear_line(ERASE_FROM_CURSOR_TO_END)
-    # Should not raise an error and do nothing
-
-
-def test_clear_screen_invalid_cursor():
-    board = Board(width=10, height=5)
-    board.cursor.y = 10  # Invalid cursor position
-    board.blitter.clear_screen(0)
-    # Should not raise an error but still clear the terminal below
-    assert all(c == " " for c in board.blitter.current_buffer.get_line_text(4))

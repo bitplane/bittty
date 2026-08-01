@@ -205,6 +205,14 @@ KEY_MOD_SHIFT_ALT_CTRL_META = 16
 # --- PTY and System Constants ---
 DEFAULT_TERMINAL_WIDTH = 80
 DEFAULT_TERMINAL_HEIGHT = 24
+
+# Ceiling on a *host-requested* resize (XTWINOPS 8, DECSLPP). No spec states a
+# maximum, so this is a practical one: far beyond any real terminal, and small
+# enough that `CSI 8;99999;99999 t` from a hostile child allocates a bounded
+# grid instead of the host process's entire address space. Resizes reported by
+# the chrome are physical facts and are not subject to it.
+MAX_HOST_COLUMNS = 1000
+MAX_HOST_ROWS = 1000
 DEFAULT_PTY_BUFFER_SIZE = 4096
 PTY_POLL_INTERVAL = 0.1
 DEFAULT_EXIT_CODE = 0

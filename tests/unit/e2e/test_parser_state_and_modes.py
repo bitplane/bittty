@@ -188,15 +188,22 @@ def test_csi_params_with_sub_parameters(board):
 
 
 def test_csi_params_with_invalid_main_param(board):
-    """Test CSI parsing with completely invalid parameters."""
+    """A non-numeric parameter reads as absent, never as a string.
+
+    ECMA-48 parameter values are digits. Preserving the raw text put a str in a
+    tuple every handler downstream does arithmetic on, so `CSI : M` reached
+    delete_lines() and raised TypeError on hostile input.
+    """
     from bittty.parser.csi import parse_csi_params
 
-    # Test invalid main parameter - should return empty result (invalid sequence)
     params, intermediates, final = parse_csi_params("\x1b[Xm")
-    # Invalid sequences return empty params as they don't match fast paths
-    # This is correct behavior - invalid sequences should be ignored
-    assert params == [] or params == ["X"]  # Either ignored or preserved as string
+    assert params == [None]  # absent -> the operation's default
     assert final == "m"
+
+    # The form that actually crashed: a leading sub-parameter separator.
+    params, _, final = parse_csi_params("\x1b[:M")
+    assert params == [None]
+    assert final == "M"
 
 
 def test_csi_dispatch_sm_rm_basic_modes(board):

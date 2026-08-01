@@ -604,9 +604,20 @@ class Blitter(Device):
             self._write_new_clusters(text, style)
 
     def repeat_last_character(self, count: int) -> None:
-        """Repeat the last printed character count times."""
-        if count > 0 and self.last_printed_char:
-            self.write_text(self.last_printed_char * count)
+        """Repeat the last printed character count times.
+
+        The count comes off the wire, so it is clamped before it becomes a
+        string. Once a screenful of one character has been written the rows
+        above are all that character whatever happens next, so only the
+        alignment of the final partial row still matters — keeping the clamp
+        congruent to the count modulo the width reproduces it exactly.
+        """
+        if count <= 0 or not self.last_printed_char:
+            return
+        screenful = self.board.width * self.board.height
+        if count > screenful:
+            count = screenful + count % self.board.width
+        self.write_text(self.last_printed_char * count)
 
     def resize(self, width: int, height: int) -> None:
         """Resize terminal dimensions and screen buffers."""
@@ -738,7 +749,15 @@ class Blitter(Device):
         return p[start], p[start + 1], p[start + 2], p[start + 3]
 
     def fill_rectangle(self, params) -> None:
-        """DECFRA — fill a rectangle with a character (Pch;Pt;Pl;Pb;Pr)."""
+        """DECFRA — fill a rectangle with a character (Pch;Pt;Pl;Pb;Pr).
+
+        Pch is a character code, and DEC restricts it to the printable ranges
+        32-126 and 160-255; a value outside them is not a character and the
+        whole operation is ignored. Pinning that is what keeps `CSI 999999999$x`
+        from reaching chr() and raising ValueError out of the parser feed.
+        """
+        if params and params[0] and not (32 <= params[0] <= 126 or 160 <= params[0] <= 255):
+            return
         char = chr(params[0]) if params and params[0] else " "
         t, left, b, r = self._rectangle(*self._four(params, 1))
         char_width = self.board.width_policy.width(char)

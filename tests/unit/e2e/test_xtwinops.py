@@ -1,5 +1,6 @@
 """XTWINOPS window manipulation: state stored as board registers, plus reports."""
 
+from bittty import constants
 from bittty.caps import TerminalCaps
 from bittty.parser import Parser
 from bittty import Board
@@ -91,3 +92,23 @@ def test_pixel_reports_zero_without_caps():
     board, parser, transport = _term()
     parser.feed("\x1b[16t")  # no caps pushed -> 0;0
     assert transport.data[-1] == "\x1b[6;0;0t"
+
+
+def test_host_requested_resize_is_bounded():
+    """XTWINOPS 8 and DECSLPP take dimensions off the wire.
+
+    `CSI 8;99999;99999 t` asked for a ten-billion-cell grid and took the
+    embedding process with it. The chrome's own resizes stay unbounded — those
+    are physical facts, not requests from the child.
+    """
+    board = Board(width=80, height=24)
+
+    board.parser.feed("\x1b[8;99999;99999t")
+    assert (board.width, board.height) == (constants.MAX_HOST_COLUMNS, constants.MAX_HOST_ROWS)
+
+    board.parser.feed("\x1b[999999999t")  # DECSLPP
+    assert board.height == constants.MAX_HOST_ROWS
+
+    # A chrome-reported resize is a physical fact and is not clamped.
+    board.resize(2000, 1500)
+    assert (board.width, board.height) == (2000, 1500)

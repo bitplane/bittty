@@ -73,8 +73,12 @@ class KeyboardDevice(Device):
         self.kitty_flags = operation.args[0] & 0b11111
 
     def kitty_pop(self, operation: Operation) -> None:
-        """CSI < n u — pop n saved flag-states off the stack."""
-        for _ in range(operation.args[0]):
+        """CSI < n u — pop n saved flag-states off the stack.
+
+        Popping an empty stack zeroes the flags, and doing it again changes
+        nothing, so one pop past the stack depth is the whole of the effect.
+        """
+        for _ in range(min(operation.args[0], max(len(self.kitty_stack), 1))):
             self.kitty_flags = self.kitty_stack.pop() if self.kitty_stack else 0
 
     def kitty_set(self, operation: Operation) -> None:

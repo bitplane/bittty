@@ -80,7 +80,11 @@ def parse_csi_params(data):
                 try:
                     params.append(int(main_part))
                 except ValueError:
-                    params.append(main_part)
+                    # ECMA-48 parameters are digits. Anything else is not a
+                    # parameter value, so it reads as absent and the operation
+                    # takes its default — never as a string, which every
+                    # handler downstream would then do arithmetic on.
+                    params.append(None)
 
     return params, private_markers + intermediates, final_char
 

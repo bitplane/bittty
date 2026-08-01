@@ -56,3 +56,21 @@ def test_decsera_rectangle_respects_protection():
     parser.feed("CD")
     parser.feed("\x1b[1;1;1;10${")  # selective-erase row 1
     assert _rows(board)[0].startswith("AB  ")  # AB protected, CD erased
+
+
+def test_decfra_ignores_a_character_code_outside_the_printable_ranges():
+    """DEC restricts DECFRA's Pch to 32-126 and 160-255; anything else is ignored.
+
+    999999999 used to reach chr() and raise ValueError straight out of the
+    parser feed, into whatever application was embedding the board.
+    """
+    board = Board(width=6, height=3)
+    parser = Parser(board)
+    parser.feed("\x1b[88;1;1;3;6$x")  # 'X' (88) is in range, so this must land
+    assert board.capture_text() == "\n".join(["XXXXXX"] * 3)
+
+    parser.feed("\x1b[999999999;1;1;3;6$x")
+    parser.feed("\x1b[127;1;1;3;6$x")  # DEL: outside the printable ranges too
+    parser.feed("\x1b[159;1;1;3;6$x")  # the C1 gap between 126 and 160
+
+    assert board.capture_text() == "\n".join(["XXXXXX"] * 3)

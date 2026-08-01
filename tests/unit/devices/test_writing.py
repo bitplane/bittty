@@ -192,13 +192,6 @@ def test_write_cell_insert_beyond_end_of_line_with_style():
     assert board.blitter.current_buffer.get_cell(5, 0) == (parse_sgr_sequence("\x1b[31m"), "X")
 
 
-def test_write_cell_invalid_cursor():
-    board = Board(width=10, height=5)
-    board.cursor.y = 10  # Invalid cursor position
-    board.blitter.write_text("a")
-    # Should not raise an error and do nothing
-
-
 def test_long_print_run_wraps_across_lines():
     """A single PRINT run longer than the width wraps instead of truncating."""
     board = Board(width=10, height=5)

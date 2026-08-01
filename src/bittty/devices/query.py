@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 from typing import TYPE_CHECKING
 
+from .. import constants
 from ..operations import Operation
 from ..present import (
     ClipboardChanged,
@@ -184,7 +185,7 @@ class QueryDevice(Device):
             kind = {5: "raise", 6: "lower", 7: "refresh"}[op]
             board.request_window(kind)
         elif op == 8 and len(params) >= 3:  # resize text area to rows;cols
-            board.resize(params[2] or board.width, params[1] or board.height)
+            self._resize_from_host(params[2] or board.width, params[1] or board.height)
         elif op == 9:  # maximize (0 restore, 1 maximize)
             board.window_maximized = at(1) == 1
             self._present_window_state()
@@ -213,7 +214,21 @@ class QueryDevice(Device):
         elif op == 23:  # restore title from the stack
             board.title.pop()
         elif op >= 24:  # DECSLPP — resize to Ps (>= 24) lines
-            board.resize(board.width, op)
+            self._resize_from_host(board.width, op)
+
+    def _resize_from_host(self, width: int, height: int) -> None:
+        """Apply a resize the *child* asked for, within the host-request ceiling.
+
+        XTWINOPS 8 and DECSLPP take their dimensions straight off the wire, so
+        `CSI 8;99999;99999 t` would otherwise allocate a ten-billion-cell grid
+        and take the embedding application down with it. A resize reported by
+        the chrome is a physical fact and goes through Board.resize unbounded.
+        """
+        board = self.board
+        board.resize(
+            max(1, min(width, constants.MAX_HOST_COLUMNS)),
+            max(1, min(height, constants.MAX_HOST_ROWS)),
+        )
 
     def _present_window_state(self) -> None:
         board = self.board

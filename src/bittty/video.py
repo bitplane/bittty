@@ -30,7 +30,16 @@ def _coerce_style(style_or_ansi) -> Style:
 
 
 class Video:
-    """A 2D grid that stores terminal content."""
+    """A 2D grid that stores terminal content.
+
+    Two halves with different contracts. The **read** side is a boundary: the
+    chrome pulls it on its own cadence and may ask about a cell that resized
+    away underneath it, so every coordinate has a defined meaning and reads
+    outside the grid come back blank. The **write** side belongs to the blitter
+    alone, which addresses it through a clamped cursor and clamped rectangles;
+    it takes in-range coordinates and will raise on anything else rather than
+    silently dropping the write.
+    """
 
     def __init__(self, width: int, height: int, width_policy: WidthPolicy | None = None) -> None:
         """Initialize buffer with given dimensions."""
@@ -128,14 +137,10 @@ class Video:
 
     def owner_x(self, x: int, y: int) -> int:
         """Return the head column of the glyph occupying (x, y)."""
-        if not (0 <= y < self.height and 0 <= x < self.width):
-            return x
         return self._owner_in_row(self.grid[y], x)
 
     def _clear_glyph(self, row: list[Cell], x: int, style: Style) -> None:
         """Blank the complete glyph intersecting x."""
-        if not (0 <= x < len(row)):
-            return
         owner = self._owner_in_row(row, x)
         row[owner] = (style, " ")
         if owner + 1 < len(row) and row[owner + 1][1] == CONTINUATION:
@@ -164,8 +169,6 @@ class Video:
 
     def normalize_row(self, y: int, style_or_ansi=None) -> None:
         """Repair orphaned heads/continuations after a bulk cell movement."""
-        if not (0 <= y < self.height):
-            return
         row = self.grid[y]
         style = _coerce_style(style_or_ansi)
         x = 0
@@ -186,7 +189,7 @@ class Video:
 
     def replace_cells(self, x: int, y: int, cells: list[Cell], style_or_ansi=None) -> None:
         """Paste raw cells at x, erase split destination glyphs, then normalize."""
-        if not (0 <= y < self.height and 0 <= x < self.width) or not cells:
+        if not cells:  # pasting nothing changes nothing
             return
         right = min(x + len(cells), self.width)
         style = _coerce_style(style_or_ansi)
@@ -198,8 +201,6 @@ class Video:
 
     def set_style(self, x: int, y: int, style: Style) -> None:
         """Apply a style atomically to the glyph occupying one cell."""
-        if not (0 <= y < self.height and 0 <= x < self.width):
-            return
         row = self.grid[y]
         owner = self._owner_in_row(row, x)
         char = row[owner][1]
@@ -210,12 +211,11 @@ class Video:
 
     def set_line_attribute(self, y: int, attribute: str) -> None:
         """Set a line's DECDHL/DECDWL/DECSWL attribute."""
-        if 0 <= y < self.height:
-            self.line_attributes[y] = attribute
-            self._touch_row(y)
+        self.line_attributes[y] = attribute
+        self._touch_row(y)
 
     def get_line_attribute(self, y: int) -> str:
-        """Return a line's width/height attribute (single by default)."""
+        """Return a line's width/height attribute; outside the grid is single."""
         if 0 <= y < self.height:
             return self.line_attributes[y]
         return constants.LINE_SINGLE
@@ -227,8 +227,7 @@ class Video:
 
     def set_line_wrapped(self, y: int, wrapped: bool = True) -> None:
         """Record whether row ``y`` continued through an automatic wrap."""
-        if 0 <= y < self.height:
-            self.wrapped_lines[y] = wrapped
+        self.wrapped_lines[y] = wrapped
 
     def is_line_wrapped(self, y: int) -> bool:
         """Return the automatic-wrap marker for row ``y``."""
@@ -243,7 +242,11 @@ class Video:
         return [row[:] for row in self.grid]
 
     def get_cell(self, x: int, y: int) -> Cell:
-        """Get cell at position."""
+        """Get the cell at a position; outside the grid reads as blank.
+
+        A read boundary: the chrome pulls this for hover and link arbitration
+        and may still be holding coordinates from before a resize.
+        """
         if 0 <= y < self.height and 0 <= x < self.width:
             return self.grid[y][x]
         return (Style(), " ")
@@ -256,16 +259,13 @@ class Video:
             char: Character to store
             style_or_ansi: Either a Style object or ANSI string (for backward compatibility)
         """
-        if not (0 <= y < self.height and 0 <= x < self.width) or not char:
+        if not char:  # writing nothing writes nothing
             return
         self.set(x, y, char[0], style_or_ansi)
 
     def set(self, x: int, y: int, text: str, style_or_ansi=None) -> None:
         """Set text at position, overwriting existing content."""
-        if not (0 <= y < self.height):
-            return
-
-        if x < 0 or x >= self.width or not text:
+        if not text:  # writing nothing writes nothing
             return
         style = _coerce_style(style_or_ansi)
         cells = self._text_cells(text, style, self.width - x)
@@ -297,7 +297,7 @@ class Video:
     ) -> None:
         """Write one already-segmented glyph as an atomic one/two-cell unit."""
         limit = self.width if right is None else min(right, self.width)
-        if not (0 <= y < self.height and 0 <= x < self.width) or not text or cell_width not in (1, 2):
+        if not text or cell_width not in (1, 2):  # a glyph is one or two cells
             return
         if x + cell_width > limit:
             return
@@ -339,8 +339,7 @@ class Video:
         """Replace the last glyph and adjust its occupied columns atomically."""
         limit = self.width if right is None else min(right, self.width)
         if (
-            not (0 <= y < self.height and 0 <= x < self.width)
-            or not text
+            not text
             or old_width not in (1, 2)
             or new_width not in (1, 2)
             or x + old_width > limit
@@ -384,7 +383,7 @@ class Video:
         insert_restore: tuple[Cell, ...] = (),
     ) -> None:
         """Remove a speculative glyph before relocating a changed-width cluster."""
-        if not (0 <= y < self.height and 0 <= x < self.width) or cell_width not in (1, 2):
+        if cell_width not in (1, 2):  # a glyph is one or two cells
             return
         limit = self.width if right is None else min(right, self.width)
         row = self.grid[y]
@@ -404,10 +403,7 @@ class Video:
     def insert(self, x: int, y: int, text: str, style_or_ansi=None, *, right: int | None = None) -> None:
         """Insert text at position, shifting existing content right."""
         limit = self.width if right is None else min(right, self.width)
-        if not (0 <= y < self.height) or x >= limit:
-            return
-
-        if x < 0 or not text:
+        if x >= limit or not text:  # nothing to insert, or nowhere to insert it
             return
         style = _coerce_style(style_or_ansi)
         row = self.grid[y]
@@ -422,10 +418,7 @@ class Video:
 
     def delete(self, x: int, y: int, count: int = 1) -> None:
         """Delete characters at position."""
-        if not (0 <= y < self.height) or x >= self.width:
-            return
-
-        if count <= 0:
+        if x >= self.width or count <= 0:  # deleting nothing, or past the end
             return
         row = self.grid[y]
         end_pos = min(x + count, len(row))
@@ -456,9 +449,6 @@ class Video:
         self, y: int, mode: int = constants.ERASE_FROM_CURSOR_TO_END, cursor_x: int = 0, style_or_ansi=None
     ) -> None:
         """Clear line content."""
-        if not (0 <= y < self.height):
-            return
-
         style = _coerce_style(style_or_ansi)
 
         self._touch_row(y)
@@ -747,7 +737,10 @@ class Video:
         return (uri, style.hyperlink_id, x0, x1)
 
     def get_line_text(self, y: int) -> str:
-        """Get logical text, omitting width-2 continuation markers."""
+        """Get logical text, omitting width-2 continuation markers.
+
+        A read boundary: a row outside the grid reads as the empty string.
+        """
         if 0 <= y < self.height:
             return "".join(cell[1] for cell in self.grid[y])
         return ""
