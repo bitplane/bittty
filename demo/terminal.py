@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """bittty terminal emulator demo — a thin entry point over the stdio terminal.
 
-The chrome logic lives in bittty.terminals.stdio.StdioTerminal, the reference
-Terminal implementation. This file only wires up logging + signals and runs it,
-so it stays a working `python3 demo/terminal.py` entry point.
+The emulation lives in bittty.terminals.stdio.StdioTerminal, the reference
+Terminal implementation, which uses the whole venue. The status bar and the row
+it occupies are the demo's own chrome and live here, which is what the
+reserved_rows / draw_chrome() seam on StdioTerminal is for.
 """
 
 import asyncio
@@ -16,6 +17,17 @@ from bittty.terminals.stdio import StdioTerminal
 
 LOG_PATH = Path(__file__).resolve().parents[1] / "logs" / "demo" / "terminal.log"
 logger = logging.getLogger(__name__)
+
+
+class DemoTerminal(StdioTerminal):
+    """A StdioTerminal with a status bar along the bottom of the venue."""
+
+    reserved_rows = 1
+
+    def draw_chrome(self) -> None:
+        """Paint the status bar on the row kept back from the board."""
+        status = f"bittty demo | {self.width}x{self.height} | exit normally to quit"
+        print(f"\033[{self.height + 1}H\033[7m{status:<{self.width}}\033[0m", end="")
 
 
 def setup_logging() -> None:
@@ -41,7 +53,7 @@ async def main() -> None:
     if hasattr(signal, "SIGTERM"):
         signal.signal(signal.SIGTERM, _signal_handler)
 
-    await StdioTerminal().run()
+    await DemoTerminal().run()
 
 
 if __name__ == "__main__":

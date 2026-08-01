@@ -4,6 +4,8 @@ Construction allocates no PTY and spawns no process (that happens in start_proce
 so these exercise the composition and the Display hooks in isolation.
 """
 
+import shutil
+
 from bittty import TerminalCaps
 from bittty.parser import Parser
 from bittty.terminals import StdioTerminal, Terminal
@@ -292,3 +294,36 @@ def test_render_repaints_only_dirty_rows():
     display.board.parser.feed("\033[2;1HWORLD")  # touches row 1 only
     out = render()
     assert "\033[2H" in out and "\033[1H" not in out
+
+
+def test_the_reference_terminal_uses_the_whole_venue(capsys):
+    """No status bar, no reserved rows: chrome of its own belongs to a subclass."""
+    display = StdioTerminal()
+    assert display.reserved_rows == 0
+
+    size = shutil.get_terminal_size()
+    assert display.height == size.lines
+
+    display.render_screen()
+    out = capsys.readouterr().out
+    assert "bittty demo" not in out
+    assert "\033[7m" not in out  # nothing painted in reverse video
+
+
+def test_a_subclass_reserves_rows_and_paints_its_own_chrome(capsys):
+    """The seam the demo's status bar uses: rows kept back, plus a paint hook."""
+
+    class Chromed(StdioTerminal):
+        reserved_rows = 2
+
+        def draw_chrome(self) -> None:
+            print("STATUS", end="")
+
+    display = Chromed()
+    size = shutil.get_terminal_size()
+
+    assert display.height == size.lines - 2
+    assert display.board.height == display.height  # the board never sees those rows
+
+    display.render_screen()
+    assert "STATUS" in capsys.readouterr().out

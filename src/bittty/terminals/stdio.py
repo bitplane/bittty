@@ -77,12 +77,20 @@ class HostInputSink:
 
 
 class StdioTerminal(Terminal):
-    """Render a bittty Board to the real terminal this program is running in."""
+    """Render a bittty Board to the real terminal this program is running in.
+
+    Uses the whole venue. A subclass that wants chrome of its own — a status
+    bar, a border — sets ``reserved_rows`` to keep rows off the emulated screen
+    and overrides ``draw_chrome()`` to paint them.
+    """
+
+    # Rows at the bottom of the venue that are the terminal's own, not the board's.
+    reserved_rows = 0
 
     def __init__(self) -> None:
         size = shutil.get_terminal_size()
         self.width = size.columns
-        self.height = size.lines - 2  # reserve 2 lines for the status/instructions
+        self.height = size.lines - self.reserved_rows
         self.is_windows = platform.system() == "Windows"
         board = Board(command=self.get_default_shell(), width=self.width, height=self.height)
         super().__init__(board)
@@ -243,13 +251,19 @@ class StdioTerminal(Terminal):
         for y in rows:
             if y < self.height:
                 print(f"\033[{y + 1}H{page.get_line(y, width=self.width)}\033[K", end="")
-        status = f"bittty demo | {self.width}x{self.height} | exit normally to quit"
-        print(f"\033[{self.height + 1}H\033[7m{status:<{self.width}}\033[0m", end="")
+        self.draw_chrome()
         board = self.board
         if board.modes.cursor_visible and board.cursor.y < self.height:
             print(f"\033[{board.cursor.y + 1};{board.cursor.display_x + 1}H\033[?25h", end="", flush=True)
         else:
             print("", end="", flush=True)
+
+    def draw_chrome(self) -> None:
+        """Paint the terminal's own rows, if it reserved any.
+
+        Called after the board's rows and before the hardware cursor is placed,
+        so a subclass can leave the cursor where the child put it.
+        """
 
     def handle_pty_data(self, data: str) -> None:
         """Feed child output into the emulator and mark the screen dirty.
@@ -324,7 +338,7 @@ class StdioTerminal(Terminal):
         """Re-read the host size and resize the emulator (called from a SIGWINCH handler)."""
         size = shutil.get_terminal_size()
         self.width = size.columns
-        self.height = size.lines - 2
+        self.height = size.lines - self.reserved_rows
         logger.info("Resize: %sx%s", self.width, self.height)
         self.board.display.resize(self.width, self.height)
 
