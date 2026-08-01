@@ -69,6 +69,12 @@ chrome a human looks at, and two full-duplex ports connect the board to its outs
   is what you plug into it. Core imports nothing from here — `tests/unit/test_peripheral_boundary.py`
   enforces it. See `docs/peripherals.md` for the option/configuration/connection tiers
 
+**Options** (`src/bittty/options.py`)
+- Hardware fitted at power-on: what the terminal *is*. An `Option` contributes mode
+  capabilities (and, for a port, its protocol repertoire), so `Model.capabilities` is the
+  model's own set unioned with its options. Fitting a port enables modes; plugging something
+  into it only changes status reports. See `docs/peripherals.md`
+
 **Model** (`src/bittty/model.py`)
 - The model number: the emulation profile as data (XTERM, VT220, LINUX, ...) — DA
   responses, keymaps, mode repertoire, charsets

@@ -27,8 +27,9 @@ from .connections import (
     StreamPrinter,
 )
 from .devices.board import Board
-from .model import BITTTY, LINUX, VT100, VT220, VT510, XTERM, Model, PrinterCapabilities
+from .model import BITTTY, LINUX, VT100, VT220, VT510, XTERM, Model
 from .operations import Operation, OperationSink
+from .options import Option, PrinterCapabilities
 from .parser import Parser
 from .printer_config import PrinterConfiguration
 from .style import (
@@ -61,6 +62,7 @@ __all__ = [
     "Model",
     "Operation",
     "OperationSink",
+    "Option",
     "Parser",
     "Presentable",
     "PrinterCapabilities",

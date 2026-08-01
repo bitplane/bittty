@@ -539,7 +539,7 @@ class ModeDevice(Device):
 
     def __init__(self, board: Board) -> None:
         self.board = board
-        self._modes = resolve_mode_specs(board.model.mode_capabilities, board.model.unsupported_modes)
+        self._modes = resolve_mode_specs(board.model.capabilities, board.model.unsupported_modes)
         self._runtime_mode_status: dict[tuple[bool, int], int] = {}
         # None marks an action-mode whose save/restore hooks own the snapshot.
         self._saved_private_modes: dict[int, bool | None] = {}

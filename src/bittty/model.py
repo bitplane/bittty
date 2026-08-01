@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .connections import PrinterStatus
 from .keymap import (
     LINUX_KEYMAP,
     SCREEN_KEYMAP,
@@ -33,21 +32,15 @@ from .mode_profiles import (
     VTE_MODE_CAPABILITIES,
     XTERM_MODE_CAPABILITIES,
 )
+from .options import (
+    DEC_PRINTER_PORT,
+    NO_PRINTER,
+    VT510_PRINTER_PORT,
+    XTERM_PRINTER_PIPE,
+    Option,
+    PrinterCapabilities,
+)
 from .palette import VGA_PALETTE, XTERM_PALETTE, PaletteDefaults
-
-
-@dataclass(frozen=True)
-class PrinterCapabilities:
-    """Printer protocol repertoire implemented by a terminal model."""
-
-    media_copy: bool = True
-    configuration: bool = True
-    disconnected_status: PrinterStatus = PrinterStatus.OFFLINE
-
-
-NO_PRINTER = PrinterCapabilities(media_copy=False, configuration=False)
-DEC_MEDIA_COPY = PrinterCapabilities(configuration=False)
-XTERM_MEDIA_COPY = PrinterCapabilities(configuration=False, disconnected_status=PrinterStatus.NOT_READY)
 
 
 @dataclass(frozen=True)
@@ -73,9 +66,25 @@ class Model:
     mode_capabilities: frozenset[str] = BITTTY_MODE_CAPABILITIES
     # TERM-compatible name reported by XTGETTCAP; defaults to the model name.
     term_name: str | None = None
-    printer_capabilities: PrinterCapabilities = field(default_factory=PrinterCapabilities)
+    # Hardware fitted at power-on; contributes to the repertoire below.
+    options: frozenset[Option] = field(default_factory=frozenset)
     # DEC hardware uses 0 for a valid DECRQSS request; modern emulators use 1.
     decrqss_valid_is_one: bool = True
+
+    @property
+    def capabilities(self) -> frozenset[str]:
+        """Everything this terminal implements: its own repertoire plus its options."""
+        if not self.options:
+            return self.mode_capabilities
+        return self.mode_capabilities.union(*(option.mode_capabilities for option in self.options))
+
+    @property
+    def printer_capabilities(self) -> PrinterCapabilities:
+        """The printer repertoire of the installed port, if one is fitted."""
+        for option in self.options:
+            if option.printer is not None:
+                return option.printer
+        return NO_PRINTER
 
 
 # Primary DA responses per vt100.net / xterm ctlseqs.
@@ -84,7 +93,7 @@ XTERM = Model(
     da1_response="\033[?62;1;6;8;9;15;18;21;22;23c",
     da2_response="\033[>1;10;0c",
     mode_capabilities=XTERM_MODE_CAPABILITIES,
-    printer_capabilities=XTERM_MEDIA_COPY,
+    options=frozenset({XTERM_PRINTER_PIPE}),
 )
 
 BITTTY = Model(
@@ -93,6 +102,7 @@ BITTTY = Model(
     term_name="xterm",
     da2_response=XTERM.da2_response,
     mode_capabilities=BITTTY_MODE_CAPABILITIES,
+    options=frozenset({VT510_PRINTER_PORT}),
 )
 
 VT100 = Model(
@@ -101,7 +111,6 @@ VT100 = Model(
     da2_response=None,  # secondary DA was introduced with the VT220
     da3_response=None,
     mode_capabilities=VT100_MODE_CAPABILITIES,
-    printer_capabilities=NO_PRINTER,
     # VT100 knows ASCII, UK, DEC Special Graphics and the alternate ROM sets;
     # DEC Supplemental and the national replacement sets arrived with the VT220.
     charsets=frozenset({"B", "A", "0", "1", "2"}),
@@ -122,7 +131,7 @@ VT220 = Model(
     ),
     color_depth="monochrome",
     keymap=VT220_KEYMAP,
-    printer_capabilities=DEC_MEDIA_COPY,
+    options=frozenset({DEC_PRINTER_PORT}),
 )
 
 VT510 = Model(
@@ -134,6 +143,7 @@ VT510 = Model(
     charsets=VT220.charsets,
     color_depth="monochrome",
     keymap=VT220_KEYMAP,
+    options=frozenset({VT510_PRINTER_PORT}),
     decrqss_valid_is_one=False,
 )
 
@@ -147,7 +157,6 @@ LINUX = Model(
     color_depth="256",
     palette=VGA_PALETTE,
     keymap=LINUX_KEYMAP,
-    printer_capabilities=NO_PRINTER,
 )
 
 # GNU screen — a VT100+AVO emulator; keymap and colours from terminfo (screen-256color).
@@ -161,7 +170,6 @@ SCREEN = Model(
     mode_capabilities=SCREEN_MODE_CAPABILITIES,
     color_depth="256",
     keymap=SCREEN_KEYMAP,
-    printer_capabilities=NO_PRINTER,
 )
 
 # tmux — live-verified against a running tmux: DA1 ?1;2;4c (VT100+AVO, and it advertises
@@ -174,7 +182,6 @@ TMUX = Model(
     mode_capabilities=TMUX_MODE_CAPABILITIES,
     color_depth="256",
     keymap=SCREEN_KEYMAP,
-    printer_capabilities=NO_PRINTER,
 )
 
 # rxvt-unicode — keymap and colours from terminfo (rxvt-unicode-256color). DA1 is VT100+AVO;
@@ -187,7 +194,6 @@ URXVT = Model(
     mode_capabilities=URXVT_MODE_CAPABILITIES,
     color_depth="256",
     keymap=URXVT_KEYMAP,
-    printer_capabilities=NO_PRINTER,
 )
 
 # GNOME Terminal / VTE — live-verified against gnome-terminal (VTE 0.84): DA1 reports
@@ -201,7 +207,6 @@ GNOME = Model(
     mode_capabilities=VTE_MODE_CAPABILITIES,
     color_depth="truecolor",
     keymap=XTERM_KEYMAP,
-    printer_capabilities=NO_PRINTER,
 )
 
 # kitty — live-verified (TERM=xterm-kitty). DA2 firmware field 4000 is the kitty version
@@ -215,7 +220,6 @@ KITTY = Model(
     mode_capabilities=KITTY_MODE_CAPABILITIES,
     color_depth="truecolor",
     keymap=XTERM_KEYMAP,
-    printer_capabilities=NO_PRINTER,
 )
 
 DEFAULT = BITTTY

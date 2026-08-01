@@ -67,6 +67,11 @@ INBAND_RESIZE = "bittty.inband-resize"
 
 ANSI_MODE_CAPABILITIES = frozenset({ANSI_INSERT, ANSI_NEWLINE})
 
+# Contributed by an installed printer port rather than by the model itself
+# (see options.py and docs/peripherals.md); a terminal without the port does
+# not recognise them at all.
+PRINTER_PORT_MODE_CAPABILITIES = frozenset({DEC_PRINT_FORM_FEED, DEC_PRINT_EXTENT})
+
 # Hardware profiles are the intersection of the model's documented repertoire
 # and the mode semantics bittty currently implements.
 VT100_MODE_CAPABILITIES = ANSI_MODE_CAPABILITIES | frozenset(
@@ -82,8 +87,6 @@ VT220_MODE_CAPABILITIES = VT100_MODE_CAPABILITIES | frozenset(
     {
         ANSI_KEYBOARD_ACTION,
         ANSI_SEND_RECEIVE,
-        DEC_PRINT_FORM_FEED,
-        DEC_PRINT_EXTENT,
         DEC_CURSOR_VISIBLE,
         DEC_NATIONAL_CHARSET,
     }
@@ -113,8 +116,6 @@ XTERM_MODE_CAPABILITIES = frozenset(
         DEC_AUTOWRAP,
         XTERM_MOUSE_X10,
         XTERM_CURSOR_BLINK,
-        DEC_PRINT_FORM_FEED,
-        DEC_PRINT_EXTENT,
         DEC_CURSOR_VISIBLE,
         DEC_NATIONAL_CHARSET,
         XTERM_MARGIN_BELL,
@@ -310,7 +311,8 @@ BITTTY_MODE_CAPABILITIES = XTERM_MODE_CAPABILITIES | frozenset(
 
 # Registry catalogue, including mutually exclusive same-number semantics.
 ALL_MODE_CAPABILITIES = (
-    BITTTY_MODE_CAPABILITIES
+    PRINTER_PORT_MODE_CAPABILITIES
+    | BITTTY_MODE_CAPABILITIES
     | VT100_MODE_CAPABILITIES
     | VT220_MODE_CAPABILITIES
     | VT510_MODE_CAPABILITIES

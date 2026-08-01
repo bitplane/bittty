@@ -2,6 +2,7 @@ import pytest
 
 from bittty import Board, MemoryConnection
 from bittty import mode_profiles as mp
+from bittty.connections import PrinterStatus
 from bittty.devices.modes import (
     MODE_BY_CAPABILITY,
     MODE_SPECS,
@@ -10,7 +11,8 @@ from bittty.devices.modes import (
     MouseProtocol,
     resolve_mode_specs,
 )
-from bittty.model import BITTTY, GNOME, KITTY, LINUX, SCREEN, TMUX, URXVT, VT100, VT220, XTERM, Model
+from bittty.model import BITTTY, GNOME, KITTY, LINUX, SCREEN, TMUX, URXVT, VT100, VT220, VT510, XTERM, Model
+from bittty.options import DEC_PRINTER_PORT
 from bittty.parser import Parser
 from bittty.present import MouseCaptureChanged
 
@@ -56,8 +58,9 @@ def test_hardware_profiles_expose_only_documented_implemented_modes():
 
 @pytest.mark.parametrize("model", [BITTTY, XTERM, VT100, VT220, LINUX, SCREEN, TMUX, URXVT, GNOME, KITTY])
 def test_every_builtin_model_resolves_its_declared_positive_profile(model):
+    """What a board resolves is the model's own repertoire plus its installed options."""
     board = Board(model=model)
-    expected = {MODE_BY_CAPABILITY[capability].key for capability in model.mode_capabilities}
+    expected = {MODE_BY_CAPABILITY[capability].key for capability in model.capabilities}
     expected.difference_update(model.unsupported_modes)
 
     assert set(board.modes._modes) == expected
@@ -307,3 +310,57 @@ def test_ris_clears_private_mode_cache_but_soft_reset_preserves_it():
 
     parser.feed("\x1bc\x1b[?5l\x1b[?5r")
     assert board.modes.reverse_screen is False
+
+
+# --- installed options (tier 1: what the terminal *is*) --- #
+
+
+def test_an_option_contributes_modes_the_model_does_not_declare():
+    """Fitting a printer port to a VT100 makes it recognise the print modes.
+
+    Tier 1 of the peripheral model: an option changes the mode repertoire. The
+    same modes are unrecognised on the bare model.
+    """
+    bare = Board(model=VT100)
+    assert bare.modes.get_private_mode_status(18) == 0  # DECPFF: not recognised
+    assert bare.modes.get_private_mode_status(19) == 0  # DECPEX
+
+    fitted = Model(
+        name="vt100+printer",
+        da1_response=VT100.da1_response,
+        mode_capabilities=VT100.mode_capabilities,
+        keymap=VT100.keymap,
+        options=frozenset({DEC_PRINTER_PORT}),
+    )
+    board = Board(model=fitted)
+    assert board.modes.get_private_mode_status(18) == 2  # recognised, reset
+    assert board.modes.get_private_mode_status(19) == 2
+
+
+def test_the_printer_repertoire_comes_from_the_installed_port():
+    """One mechanism, not two: the port carries both the modes and the protocol level."""
+    assert VT100.printer_capabilities.media_copy is False
+
+    assert VT220.printer_capabilities.media_copy is True
+    assert VT220.printer_capabilities.configuration is False  # DEC media copy only
+    assert VT510.printer_capabilities.configuration is True  # VT510 adds DECSPRTT & co
+    assert XTERM.printer_capabilities.disconnected_status is PrinterStatus.NOT_READY
+
+
+def test_a_fitted_port_with_nothing_plugged_in_still_recognises_its_modes():
+    """Tier 1 enables modes; tier 3 only changes the status report.
+
+    A VT220 honours DECPFF with an empty cable — the port is what the terminal
+    has. Only DSR changes when nothing is attached.
+    """
+    board = Board(model=VT220)
+
+    assert board.modes.get_private_mode_status(18) == 2  # known, despite no printer
+    assert board.printer.port.connected is False
+    assert board.printer.status is PrinterStatus.OFFLINE
+
+
+def test_capabilities_is_the_model_repertoire_unioned_with_its_options():
+    assert mp.DEC_PRINT_FORM_FEED not in VT220.mode_capabilities  # not the model's own
+    assert mp.DEC_PRINT_FORM_FEED in VT220.capabilities  # contributed by the port
+    assert VT100.capabilities == VT100.mode_capabilities  # no options, no difference

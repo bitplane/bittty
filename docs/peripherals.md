@@ -45,26 +45,35 @@ DECPFF because you unplugged the printer.
 
 ## Tier 1: installed options
 
-Capabilities are already semantic identifiers (`mode_profiles.py`) that models select by
-repertoire, and models already compose by set union (`VT220 = VT100 | {...}`). Options
-extend that composition to hardware:
+Capabilities are semantic identifiers (`mode_profiles.py`) that models select by repertoire,
+and models compose by set union (`VT220 = VT100 | {...}`). `options.py` extends that
+composition to hardware:
 
+```python
+Model.capabilities = mode_capabilities | ⋃(option.mode_capabilities)
 ```
-active capabilities = model.mode_capabilities | ⋃(option.mode_capabilities)
-```
 
-An option carries what it contributes to the mode repertoire, what it adds to the DA
-response, and which other options it depends on. The dependency edge is not speculative: the
-VT340 graphics-print modes (43 DECGEPM, 44 DECGPCM, 45 DECGPCS, 46 DECGPBM, 47 DECGRPM)
-require **both** a graphics option and a printer port.
+An `Option` carries what it contributes to the mode repertoire and, where it is a port, the
+protocol repertoire that port implements. Three printer ports are defined: `DEC_PRINTER_PORT`
+(media copy), `VT510_PRINTER_PORT` (adds DECSPRTT and the configuration family), and
+`XTERM_PRINTER_PIPE` (media copy, reporting NOT_READY rather than OFFLINE when empty).
 
-The archetype is the VT100 Advanced Video Option — a board that gave a VT100 132 columns and
-simultaneous attributes, and changed its DA response from `?1;0c` to `?1;2c`. bittty
-currently expresses this as a hardcoded DA string with a comment; it is an option.
+This subsumes what was a second, printer-shaped capability mechanism sitting beside the
+general one. The two described the same fact twice — across all eleven built-in models,
+carrying the print modes correlated *exactly* with `media_copy` being set — so the printer
+port is one option, not two declarations. `disconnected_status` stays with the port because
+it is what the port reports, and only tier 3 changes it.
 
-This tier also subsumes `PrinterCapabilities`, which is a second, printer-shaped capability
-mechanism sitting beside the general one. `media_copy` and `configuration` are capability
-identifiers; `disconnected_status` is tier 3 and belongs on the port.
+**Not yet built**, deliberately, because neither has an instance to justify it:
+
+- **DA composition.** The archetype option is the VT100 Advanced Video Option — a board
+  giving 132 columns and simultaneous attributes, which changed the DA response from `?1;0c`
+  to `?1;2c`. bittty still expresses that as a hardcoded string with a comment. Making
+  options contribute DA parameters means composing eleven models' replies from parts, which
+  risks every DA answer for no capability that anything asks for yet.
+- **`requires`.** The VT340 graphics-print modes (43 DECGEPM, 44 DECGPCM, 45 DECGPCS,
+  46 DECGPBM, 47 DECGRPM) need *both* a graphics option and a printer port. There is no
+  graphics option, so a dependency edge would have nothing to depend on.
 
 ## Tier 2: configuration
 
@@ -105,8 +114,13 @@ Grouping it that way turns a long list of orphan modes into a roadmap:
 The **locator** does not appear there because it is CSI sequences rather than private modes:
 DECELR, DECSLE, DECRQLP, DECLRP, DECLBD, and locator DSR. DEC shipped two locator devices on
 one port — the VSXXX-AA mouse and the VSXXX-AB graphics tablet — which is the same
-"one port, several device types" shape the printer port already has. `MouseProtocol.LOCATOR`
-and the existing locator tests are the start of peripheral #2.
+"one port, several device types" shape the printer port already has.
+
+The locator is *not* peripheral #2, though: the hardware on the far end is the user's own
+hand, so it wants a device and a port and leaves `peripherals/` empty. What it does want is
+a `LOCATOR_PORT` option, since whether the terminal has one is a tier-1 question, and its
+"no locator connected" report is a tier-3 one. `MouseProtocol.LOCATOR` and the existing
+locator tests are most of the device already.
 
 Mode 103 DECHDPXM is already annotated in `DEC_private.md` as requiring a transport-level
 half-duplex interface. That annotation is this document in miniature.
