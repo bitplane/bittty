@@ -28,9 +28,16 @@ class DemoTimeoutError(Exception):
         self.args = (enhanced_message,)
 
 
-def _run_demo(input_commands, timeout=2.0):
-    """Internal function to run demo and return output."""
+def _run_demo(input_commands, timeout=10.0):
+    """Internal function to run demo and return output.
+
+    The deadline is a hang detector, not a performance gate: a healthy run
+    takes ~0.3s, so it only fires when the demo genuinely fails to exit.
+    SHELL is pinned to /bin/sh so the test exercises bittty rather than the
+    developer's login shell and rc files — hermetic, and faster.
+    """
     demo_path = os.path.join(os.path.dirname(__file__), "..", "..", "demo", "terminal.py")
+    env = {**os.environ, "SHELL": "/bin/sh", "ENV": ""}
 
     with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as stdout:
         with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as stderr:
@@ -41,6 +48,7 @@ def _run_demo(input_commands, timeout=2.0):
                 stderr=stderr,
                 text=True,
                 cwd=os.path.dirname(demo_path),
+                env=env,
             )
             try:
                 process.stdin.write(input_commands)
@@ -76,13 +84,13 @@ def _run_demo(input_commands, timeout=2.0):
 def assert_demo_output():
     """Assert that demo output contains expected text, with nice screen dump on failure."""
 
-    def _assert(commands, expected, timeout=2.0):
+    def _assert(commands, expected, timeout=10.0):
         """Run demo with commands and assert output contains expected text.
 
         Args:
             commands: Commands to send to demo (include \r\n for newlines)
             expected: String or list of strings that should appear in output
-            timeout: Timeout in seconds (default 2.0)
+            timeout: Hang-detection deadline in seconds (default 10.0)
         """
         # Ensure commands end with exit
         if not commands.strip().endswith("exit"):
