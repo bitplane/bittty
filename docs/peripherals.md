@@ -96,6 +96,21 @@ to parse.
 and a `BinaryIO` adapter. They live with the other connections. The thing that *simulates a
 printer* is `bittty.peripherals.printer.VirtualPrinter`.
 
+### Mechanical events do not come back up the cable
+
+A `VirtualPrinter` produces `PrinterMechanicalEvent`s — the bell, a page ejecting. It is
+tempting to route these to the chrome as present events, and that would be wrong twice over:
+core cannot name the type (`test_core_never_imports_a_peripheral`), and the board would have
+to inspect its `PrinterConnection` for peripheral-specific attributes to find them.
+
+The physical reason is the better one. **A real printer's bell rings at the printer**, and a
+serial cable carries no signal for it. What *does* travel back up the wire is status — paper
+out, offline — which is why `PrinterUnsolicitedReports` exists and a bell event does not.
+
+So mechanical events go to whoever plugged the printer in, through `on_actuate`, and nowhere
+else. Attaching a listener stops the queue: you either poll `take_mechanical_events()` or you
+subscribe, because keeping both grows an unbounded list when the child spams form feeds.
+
 ## What is still missing, by cluster
 
 The unsupported column of `DEC_private.md` is largely an inventory of unmodelled hardware.

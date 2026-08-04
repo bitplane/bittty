@@ -230,6 +230,48 @@ def test_virtual_printer_exposes_drainable_mechanical_events_without_timing_dela
     assert printer.take_mechanical_events() == ()
 
 
+def test_a_mechanical_listener_sees_actions_as_they_happen():
+    """These reach whoever plugged the printer in, never the board.
+
+    A bell rings at the printer, and a serial cable carries no signal for it, so
+    the owner of the peripheral is the only thing that can observe one.
+    """
+    seen = []
+    printer = VirtualPrinter(PrinterType.PROPRINTER, on_actuate=seen.append)
+
+    printer.write_bytes(b"A\x07")
+    assert [event.action for event in seen] == [PrinterMechanicalAction.BELL]
+    assert (seen[0].page_number, seen[0].x, seen[0].y) == (1, 2160, 0)
+
+    printer.write_bytes(b"\x0c")
+    assert [event.action for event in seen] == [
+        PrinterMechanicalAction.BELL,
+        PrinterMechanicalAction.PAGE_EJECT,
+    ]
+
+
+def test_a_listening_printer_does_not_also_queue_events_forever():
+    """The queue is the no-listener fallback; keeping both leaks on a spammer."""
+    printer = VirtualPrinter(PrinterType.PROPRINTER, on_actuate=lambda event: None)
+
+    printer.write_bytes(b"\x07\x0c" * 50)
+
+    assert printer.mechanical_events == ()
+
+
+def test_a_mechanical_listener_can_be_attached_after_construction():
+    """A printer is usually built before the thing that plugs it in exists."""
+    seen = []
+    printer = VirtualPrinter(PrinterType.PROPRINTER)
+
+    printer.write_bytes(b"\x07")
+    printer.on_actuate = seen.append
+    printer.write_bytes(b"\x07")
+
+    assert [event.action for event in printer.mechanical_events] == [PrinterMechanicalAction.BELL]
+    assert [event.action for event in seen] == [PrinterMechanicalAction.BELL]
+
+
 def test_ibm_print_mode_direction_character_set_and_proportional_state():
     printer = VirtualPrinter(PrinterType.PROPRINTER)
     printer.write_bytes(b"\x1bI\x02\x1bP\x01\x1bU\x01\x1b6")

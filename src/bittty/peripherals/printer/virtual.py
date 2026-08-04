@@ -8,6 +8,7 @@ printer's equivalent of the terminal's Model.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 
@@ -52,7 +53,12 @@ class PrinterMechanicalAction(Enum):
 
 @dataclass(frozen=True)
 class PrinterMechanicalEvent:
-    """One untimed mechanical action for a frontend or hardware bridge."""
+    """One untimed mechanical action for a frontend or hardware bridge.
+
+    These never reach the board. A real printer's bell rings at the printer, and
+    a serial cable carries no signal for it — so they go to whoever plugged the
+    printer in, never up the port. See docs/peripherals.md.
+    """
 
     action: PrinterMechanicalAction
     page_number: int
@@ -131,6 +137,7 @@ class VirtualPrinter(MemoryPrinter):
         profile: PrinterModel | None = None,
         page_geometry: PrinterPageGeometry | None = None,
         status: PrinterStatus = PrinterStatus.READY,
+        on_actuate: Callable[[PrinterMechanicalEvent], None] | None = None,
     ) -> None:
         if profile is None:
             resolved_type = PrinterType.DEC_ANSI if device_type is None else PrinterType(device_type)
@@ -144,6 +151,7 @@ class VirtualPrinter(MemoryPrinter):
         self._device_type = profile.device_type
         self._page_store = _PrinterPageStore(page_geometry)
         self._line_checkpoint = self._page_store.checkpoint()
+        self.on_actuate = on_actuate
         self._mechanical_events: list[PrinterMechanicalEvent] = []
         self._downloaded_glyphs: dict[int, PrinterDownloadedGlyph] = {}
         self._active_x = page_geometry.printable_area.left
@@ -238,7 +246,11 @@ class VirtualPrinter(MemoryPrinter):
 
     @property
     def mechanical_events(self) -> tuple[PrinterMechanicalEvent, ...]:
-        """Return queued physical actions without consuming them."""
+        """Return queued physical actions without consuming them.
+
+        Empty while an on_actuate listener is attached: you either poll or you
+        subscribe, and queueing for a subscriber nobody drains is a leak.
+        """
         return tuple(self._mechanical_events)
 
     def take_mechanical_events(self) -> tuple[PrinterMechanicalEvent, ...]:
@@ -246,6 +258,14 @@ class VirtualPrinter(MemoryPrinter):
         events = tuple(self._mechanical_events)
         self._mechanical_events.clear()
         return events
+
+    def _actuate(self, action: PrinterMechanicalAction, page_number: int) -> None:
+        """Announce a physical action to a listener, or queue it for a poller."""
+        event = PrinterMechanicalEvent(action, page_number, self._active_x, self._active_y)
+        if self.on_actuate is None:
+            self._mechanical_events.append(event)
+        else:
+            self.on_actuate(event)
 
     def configure(self, configuration: PrinterConfiguration) -> None:
         """Apply adapter configuration without changing the fixed printer identity."""
@@ -368,14 +388,7 @@ class VirtualPrinter(MemoryPrinter):
             return
         completed = self._page_store.complete(force=True)
         assert completed is not None
-        self._mechanical_events.append(
-            PrinterMechanicalEvent(
-                PrinterMechanicalAction.PAGE_EJECT,
-                completed.number,
-                self._active_x,
-                self._active_y,
-            )
-        )
+        self._actuate(PrinterMechanicalAction.PAGE_EJECT, completed.number)
         self._active_y = self._top_margin
         self._line_checkpoint = self._page_store.checkpoint()
 
@@ -506,14 +519,7 @@ class VirtualPrinter(MemoryPrinter):
             self._ibm_perforation_skip = parameter
             self._apply_ibm_perforation_skip()
         elif command is _PrinterLayoutCommand.IBM_BELL:
-            self._mechanical_events.append(
-                PrinterMechanicalEvent(
-                    PrinterMechanicalAction.BELL,
-                    self._page_store.current_page.number,
-                    self._active_x,
-                    self._active_y,
-                )
-            )
+            self._actuate(PrinterMechanicalAction.BELL, self._page_store.current_page.number)
 
     def _record_bit_image(self, horizontal_dpi: int, pins: int, adjacent_dots: bool, data: bytes) -> None:
         self._flush_pending_run()
