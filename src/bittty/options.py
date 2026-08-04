@@ -35,8 +35,10 @@ NO_PRINTER = PrinterCapabilities(media_copy=False, configuration=False)
 
 # Capabilities that are not modes. A control function is either implemented or
 # not recognised at all, so these gate whether a device registers its handlers
-# rather than what a mode table resolves to.
+# rather than what a mode table resolves to. They come from an installed option
+# (the locator port) or from the model's own software (the kitty protocol).
 DEC_LOCATOR = "dec.locator"
+KITTY_KEYBOARD = "kitty.keyboard"
 
 
 @dataclass(frozen=True)

@@ -34,6 +34,7 @@ from .mode_profiles import (
 )
 from .options import (
     DEC_PRINTER_PORT,
+    KITTY_KEYBOARD,
     LOCATOR_PORT,
     NO_PRINTER,
     VT510_PRINTER_PORT,
@@ -69,6 +70,9 @@ class Model:
     term_name: str | None = None
     # Hardware fitted at power-on; contributes to the repertoire below.
     options: frozenset[Option] = field(default_factory=frozenset)
+    # Non-mode control functions in the model's own software (e.g. the kitty
+    # keyboard protocol), as opposed to being contributed by a fitted option.
+    control_capabilities: frozenset[str] = frozenset()
     # DEC hardware uses 0 for a valid DECRQSS request; modern emulators use 1.
     decrqss_valid_is_one: bool = True
 
@@ -81,10 +85,10 @@ class Model:
 
     @property
     def provides(self) -> frozenset[str]:
-        """Non-mode capabilities contributed by installed options."""
+        """Non-mode capabilities: the model's own plus its installed options'."""
         if not self.options:
-            return frozenset()
-        return frozenset().union(*(option.provides for option in self.options))
+            return self.control_capabilities
+        return self.control_capabilities.union(*(option.provides for option in self.options))
 
     @property
     def printer_capabilities(self) -> PrinterCapabilities:
@@ -111,6 +115,7 @@ BITTTY = Model(
     da2_response=XTERM.da2_response,
     mode_capabilities=BITTTY_MODE_CAPABILITIES,
     options=frozenset({VT510_PRINTER_PORT, LOCATOR_PORT}),
+    control_capabilities=frozenset({KITTY_KEYBOARD}),
 )
 
 VT100 = Model(
@@ -228,6 +233,7 @@ KITTY = Model(
     mode_capabilities=KITTY_MODE_CAPABILITIES,
     color_depth="truecolor",
     keymap=XTERM_KEYMAP,
+    control_capabilities=frozenset({KITTY_KEYBOARD}),
 )
 
 DEFAULT = BITTTY

@@ -25,6 +25,7 @@ uvx textual-tty
 * [🏠 home](https://bitplane.net/dev/python/bittty)
   * [📖 pydoc](https://bitplane.net/dev/python/bittty/pydoc)
   * [🚦 terminal mode support](https://bitplane.net/dev/python/bittty/DEC_private.html)
+  * [⌨️ kitty keyboard protocol](https://bitplane.net/dev/python/bittty/kitty_keyboard.html)
 * [🐍 pypi](https://pypi.org/project/bittty)
 * [🐱 github](https://github.com/bitplane/bittty)
 
