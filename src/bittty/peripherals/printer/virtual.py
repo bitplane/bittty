@@ -248,8 +248,9 @@ class VirtualPrinter(MemoryPrinter):
     def mechanical_events(self) -> tuple[PrinterMechanicalEvent, ...]:
         """Return queued physical actions without consuming them.
 
-        Empty while an on_actuate listener is attached: you either poll or you
-        subscribe, and queueing for a subscriber nobody drains is a leak.
+        Nothing queues while an on_actuate listener is attached: you either poll
+        or you subscribe, and queueing for a subscriber nobody drains is a leak.
+        Events from before a late attach stay here until taken.
         """
         return tuple(self._mechanical_events)
 

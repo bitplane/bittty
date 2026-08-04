@@ -319,6 +319,20 @@ def test_ascii_is_flushed_before_a_non_ascii_cluster_in_the_same_run():
     assert board.cursor.x == 8
 
 
+def test_cluster_wider_than_the_terminal_is_skipped():
+    """A width-2 cluster cannot be shown on a one-column screen.
+
+    The clustered writer has its own copy of this rule; the plain writer's is
+    covered in test_wide_characters.
+    """
+    board = clustered_board(width=1, height=1)
+
+    board.parser.feed("a❌b")
+
+    assert board.capture_text() == "b"
+    assert board.cursor.x == 1
+
+
 def test_empty_write_under_clustering_is_a_no_op():
     board = clustered_board(width=5, height=1)
     board.parser.feed("A")

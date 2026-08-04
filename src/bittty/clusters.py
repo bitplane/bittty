@@ -353,7 +353,12 @@ class ClusterWriter:
 
         new_width = tail.width_policy.grapheme_width(display_text)
         if new_width == 0:
-            return  # the extension left nothing displayable
+            # Untestable today: every cluster-extending character measures 0 and
+            # every base measures >=1, so a joined cluster cannot measure <=0.
+            # Kept because grapheme_width's contract includes 0 and its tables
+            # are Unicode-version data — a wcwidth upgrade may create the case,
+            # and acting on width 0 here would corrupt the row.
+            return
         board = blitter.board
         page = tail.page
 
@@ -412,7 +417,6 @@ class ClusterWriter:
             self._write_cluster_glyph(display_text, new_width, tail.style)
             if self._tail is not None:
                 self._tail.overflow = overflow
-                self._tail.context = complete_text[-_OVERFLOW_CONTEXT:]
         if self._tail is not None:
             self._tail.context = complete_text[-_OVERFLOW_CONTEXT:]
         blitter.last_printed_char = display_text
