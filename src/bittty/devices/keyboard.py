@@ -7,7 +7,8 @@ from typing import TYPE_CHECKING
 
 from .. import constants
 from ..keymap import apply_modifier
-from ..options import KITTY_KEYBOARD
+from ..options import DEC_KEYBOARD_LEDS, KITTY_KEYBOARD
+from .modes import ModeEffect
 
 if TYPE_CHECKING:
     from ..operations import Operation
@@ -92,10 +93,17 @@ class KeyboardDevice(Device):
         self.modify_other_keys = 0  # xterm modifyOtherKeys level (0/1/2)
         # Built directly: the blitter these key off does not exist yet.
         self._kitty = {False: _KittyState(), True: _KittyState()}
+        # DECLL-loaded host indications. One set, not per-screen: LEDs are physical.
+        self.led_num = False
+        self.led_caps = False
+        self.led_scroll = False
+        self.leds_fitted = DEC_KEYBOARD_LEDS in board.model.provides
         self.handlers = {
             "DECUDK": self.set_user_keys,
             "XTMODKEYS": self.set_modify_keys,
         }
+        if self.leds_fitted:
+            self.handlers["DECLL"] = self.load_leds
         if KITTY_KEYBOARD in board.model.provides:
             # A terminal that does not speak the protocol does not answer its
             # negotiation at all — real xterm never replies to CSI ? u.
@@ -174,6 +182,45 @@ class KeyboardDevice(Device):
         """CSI ? u — report the current Kitty flags as CSI ? flags u."""
         self.board.host.write(f"{constants.ESC}[?{self.kitty_flags}u", flush=True)
 
+    # --- keyboard indicator LEDs (DECLL, modes 108/109/110) --- #
+
+    def load_leds(self, operation: Operation) -> None:
+        """DECLL (CSI Ps q) — load the host keyboard indications."""
+        for ps in operation.args[0]:
+            match ps or 0:
+                case 0:
+                    self.led_num = self.led_caps = self.led_scroll = False
+                case 1:
+                    self.led_num = True
+                case 2:
+                    self.led_caps = True
+                case 3:
+                    self.led_scroll = True
+                case 21:
+                    self.led_num = False
+                case 22:
+                    self.led_caps = False
+                case 23:
+                    self.led_scroll = False
+        self.board.modes.reconcile(ModeEffect.KEYBOARD_INDICATOR)
+
+    def indicator_lights(self) -> tuple[bool, bool, bool]:
+        """What the keyboard LEDs display: (num, caps, scroll).
+
+        DECKLHIM arbitrates: set, the LEDs show the DECLL-loaded host
+        indications; reset, they show keyboard state (modes 108/109; Scroll
+        Lock has no local state in bittty, so it is dark). A model without
+        DECKLHIM in its repertoire (xterm) is host-driven unconditionally —
+        its DECLL "functions" without the mode the VT510 requires.
+
+        DECLL bits are stored even while DECKLHIM is reset: the mode selects
+        what is displayed, so setting it later reveals loaded indications.
+        """
+        modes = self.board.modes
+        if modes.get_private_mode_status(110) == 2:  # DECKLHIM known and reset
+            return (modes.num_lock_mode, modes.caps_lock_mode, False)
+        return (self.led_num, self.led_caps, self.led_scroll)
+
     @staticmethod
     def _kitty_code(char: str) -> int:
         """The unshifted codepoint: ctrl+shift+a is CSI 97, never 65.
@@ -248,6 +295,7 @@ class KeyboardDevice(Device):
             self.modify_other_keys = 0
             for state in self._kitty.values():
                 state.clear()
+            self.led_num = self.led_caps = self.led_scroll = False
 
     def _csi_key(self, body: str, modifier: int) -> str:
         """Build a CSI cursor/nav sequence, folding in a modifier if the terminal supports it."""

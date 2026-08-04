@@ -179,6 +179,9 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
         mode = param(params, 0, 0)
         return Operation("DECSCA", (mode,), raw_csi_data)
 
+    if final_char == "q" and not intermediates:  # DECLL - Load LEDs
+        return Operation("DECLL", (tuple(params) or (0,),), raw_csi_data)
+
     if final_char == "y" and "*" in intermediates:  # DECRQCRA - Request Checksum of Rectangular Area
         return Operation("DECRQCRA", (tuple(params),), raw_csi_data)
 

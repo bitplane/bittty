@@ -26,6 +26,7 @@ from ..present import (
     CwdChanged,
     FontChanged,
     GraphemeClusteringChanged,
+    KeyboardIndicatorChanged,
     KeyboardLockChanged,
     MouseCaptureChanged,
     Notification,
@@ -83,6 +84,7 @@ class Terminal:
     def on_cwd(self, cwd: str) -> None: ...
     def on_window_request(self, kind: str) -> None: ...
     def on_keyboard_lock(self, locked: bool) -> None: ...
+    def on_keyboard_indicator(self, num_lock: bool, caps_lock: bool, scroll_lock: bool) -> None: ...
     def on_window_state(self, event: WindowStateChanged) -> None: ...
     def on_console_request(self, kind: str, index: int) -> None: ...
     def on_mouse_capture(self, mode: str) -> None: ...
@@ -106,6 +108,7 @@ _DISPATCH = {
     CwdChanged: lambda d, e: d.on_cwd(e.cwd),
     WindowRequest: lambda d, e: d.on_window_request(e.kind),
     KeyboardLockChanged: lambda d, e: d.on_keyboard_lock(e.locked),
+    KeyboardIndicatorChanged: lambda d, e: d.on_keyboard_indicator(e.num_lock, e.caps_lock, e.scroll_lock),
     WindowStateChanged: lambda d, e: d.on_window_state(e),
     ConsoleRequest: lambda d, e: d.on_console_request(e.kind, e.index),
     MouseCaptureChanged: lambda d, e: d.on_mouse_capture(e.mode),

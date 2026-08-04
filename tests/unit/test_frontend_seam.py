@@ -7,6 +7,7 @@ from bittty.connections import DisplayPort, HostPort
 from bittty.present import (
     Bell,
     GraphemeClusteringChanged,
+    KeyboardIndicatorChanged,
     KeyboardLockChanged,
     MouseCaptureChanged,
     Notification,
@@ -36,6 +37,9 @@ class RecordingTerminal(Terminal):
 
     def on_keyboard_lock(self, locked):
         self.events.append(("keyboard-lock", locked))
+
+    def on_keyboard_indicator(self, num_lock, caps_lock, scroll_lock):
+        self.events.append(("keyboard-indicator", num_lock, caps_lock, scroll_lock))
 
     # on_notify deliberately NOT overridden -> should be a safe no-op
 
@@ -125,6 +129,14 @@ def test_keyboard_lock_event_dispatch():
     display.attach()
     board.present(KeyboardLockChanged(True))
     assert display.events == [("keyboard-lock", True)]
+
+
+def test_keyboard_indicator_event_dispatch():
+    board = _term()
+    display = RecordingTerminal(board)
+    display.attach()
+    board.present(KeyboardIndicatorChanged(True, False, True))
+    assert display.events == [("keyboard-indicator", True, False, True)]
 
 
 class QueueConnection:

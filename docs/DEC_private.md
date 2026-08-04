@@ -94,9 +94,9 @@ Related ANSI modes: KAM (`CSI 2 h/l`) and SRM (`CSI 12 h/l`) implement keyboard 
 | 103 | DEC | DECHDPXM - Half Duplex Mode (requires a transport-level half-duplex interface) | X |
 | 104 | DEC | DECESKM - Secondary Keyboard Language Mode | X |
 | 106 | DEC | DECOSCNM - Overscan Mode | X |
-| 108 | DEC | DECNUMLK - NumLock Mode | X |
-| 109 | DEC | DECCAPSLK - Caps Lock Mode | X |
-| 110 | DEC | DECKLHIM - Keyboard LEDs Host Indicator Mode | X |
+| 108 | DEC | DECNUMLK - NumLock Mode | ✅ |
+| 109 | DEC | DECCAPSLK - Caps Lock Mode | ✅ |
+| 110 | DEC | DECKLHIM - Keyboard LEDs Host Indicator Mode | ✅ |
 | 111 | DEC | DECFWM - Framed Windows Mode | X |
 | 112 | DEC | DECRPL - Review Previous Lines Mode | X |
 | 113 | DEC | DECHWUM - Host Wake-Up Mode | X |

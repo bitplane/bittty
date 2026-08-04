@@ -33,6 +33,7 @@ from .mode_profiles import (
     XTERM_MODE_CAPABILITIES,
 )
 from .options import (
+    DEC_KEYBOARD_LEDS,
     DEC_PRINTER_PORT,
     KITTY_KEYBOARD,
     LOCATOR_PORT,
@@ -106,6 +107,7 @@ XTERM = Model(
     da2_response="\033[>1;10;0c",
     mode_capabilities=XTERM_MODE_CAPABILITIES,
     options=frozenset({XTERM_PRINTER_PIPE, LOCATOR_PORT}),
+    control_capabilities=frozenset({DEC_KEYBOARD_LEDS}),
 )
 
 BITTTY = Model(
@@ -115,7 +117,7 @@ BITTTY = Model(
     da2_response=XTERM.da2_response,
     mode_capabilities=BITTTY_MODE_CAPABILITIES,
     options=frozenset({VT510_PRINTER_PORT, LOCATOR_PORT}),
-    control_capabilities=frozenset({KITTY_KEYBOARD}),
+    control_capabilities=frozenset({KITTY_KEYBOARD, DEC_KEYBOARD_LEDS}),
 )
 
 VT100 = Model(
@@ -157,6 +159,7 @@ VT510 = Model(
     color_depth="monochrome",
     keymap=VT220_KEYMAP,
     options=frozenset({VT510_PRINTER_PORT}),
+    control_capabilities=frozenset({DEC_KEYBOARD_LEDS}),
     decrqss_valid_is_one=False,
 )
 

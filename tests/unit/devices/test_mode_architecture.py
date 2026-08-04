@@ -121,6 +121,8 @@ def test_native_extensions_are_not_misattributed_to_xterm():
         (URXVT, {9, 12, 40, 66, 67, 1005, 1015, 1048, 2004}, {69, 1007, 2026}),
         (GNOME, {9, 40, 66, 69, 1004, 1006, 1007, 1036, 1048, 2004}, {12, 42, 1005, 1015, 2026}),
         (KITTY, {12, 1004, 1005, 1006, 1015, 1048, 2004, 2026}, {9, 40, 66, 69, 1007}),
+        (VT510, {66, 67, 69, 95, 100, 102, 108, 109, 110}, {9, 1000, 1004, 2026}),
+        (BITTTY, {100, 102, 108, 109, 110, 2026, 2027, 8840}, {4, 38, 103, 104}),
     ],
 )
 def test_emulator_profiles_match_their_audited_private_mode_repertoires(model, present, absent):

@@ -39,6 +39,7 @@ NO_PRINTER = PrinterCapabilities(media_copy=False, configuration=False)
 # (the locator port) or from the model's own software (the kitty protocol).
 DEC_LOCATOR = "dec.locator"
 KITTY_KEYBOARD = "kitty.keyboard"
+DEC_KEYBOARD_LEDS = "dec.keyboard-leds"
 
 
 @dataclass(frozen=True)

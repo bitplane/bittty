@@ -143,6 +143,11 @@ class StdioTerminal(Terminal):
         """Mirror the child's cursor-blink selection."""
         print(f"\033[?12{'h' if enabled else 'l'}", end="", flush=True)
 
+    def on_keyboard_indicator(self, num_lock: bool, caps_lock: bool, scroll_lock: bool) -> None:
+        """Mirror the keyboard LEDs onto the outer terminal via DECLL."""
+        lit = "".join(f"\033[{n}q" for n, on in ((1, num_lock), (2, caps_lock), (3, scroll_lock)) if on)
+        print(f"\033[0q{lit}", end="", flush=True)
+
     def on_ambiguous_width(self, width: int) -> None:
         """Mirror the child's ambiguous-width policy onto the outer terminal."""
         if width == self.host_ambiguous_width:
@@ -202,7 +207,9 @@ class StdioTerminal(Terminal):
             self.on_grapheme_clustering(self.initial_grapheme_clustering)
         if HAS_UNIX_TERMIOS and self.old_termios:
             termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, self.old_termios)
-        print("\033[?1004l\033[?25h\033[2J\033[H\033[?5;12r", end="", flush=True)
+        # 0q: DECLL has no save/restore analogue, so extinguish the LEDs rather
+        # than leak the child's indications onto the outer terminal.
+        print("\033[?1004l\033[?25h\033[2J\033[H\033[?5;12r\033[0q", end="", flush=True)
 
     # --- rendering --- #
 

@@ -64,6 +64,9 @@ XTERM_SYNC_OUTPUT = "xterm.sync-output"
 UNICODE_GRAPHEME_CLUSTERING = "unicode.grapheme-clustering"
 UNICODE_AMBIGUOUS_WIDTH = "unicode.ambiguous-width"
 INBAND_RESIZE = "bittty.inband-resize"
+DEC_NUMLOCK = "dec.numlock"
+DEC_CAPSLOCK = "dec.capslock"
+DEC_LED_HOST_INDICATOR = "dec.led-host-indicator"
 
 ANSI_MODE_CAPABILITIES = frozenset({ANSI_INSERT, ANSI_NEWLINE})
 
@@ -100,6 +103,9 @@ VT510_MODE_CAPABILITIES = VT220_MODE_CAPABILITIES | frozenset(
         DEC_LEFT_RIGHT_MARGINS,
         DEC_NO_CLEAR_COLUMN,
         DEC_IGNORE_NULL,
+        DEC_NUMLOCK,
+        DEC_CAPSLOCK,
+        DEC_LED_HOST_INDICATOR,
     }
 )
 
@@ -306,6 +312,9 @@ BITTTY_MODE_CAPABILITIES = XTERM_MODE_CAPABILITIES | frozenset(
         DEC_AUTO_ANSWERBACK,
         DEC_CONCEAL_ANSWERBACK,
         INBAND_RESIZE,
+        DEC_NUMLOCK,
+        DEC_CAPSLOCK,
+        DEC_LED_HOST_INDICATOR,
     }
 )
 

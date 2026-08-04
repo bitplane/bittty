@@ -83,6 +83,15 @@ class KeyboardLockChanged:
 
 
 @dataclass(frozen=True)
+class KeyboardIndicatorChanged:
+    """The terminal's keyboard indicator LEDs changed (DECLL / modes 108-110)."""
+
+    num_lock: bool
+    caps_lock: bool
+    scroll_lock: bool
+
+
+@dataclass(frozen=True)
 class WindowStateChanged:
     """Window iconify/maximize/fullscreen/position state changed (XTWINOPS)."""
 
@@ -160,6 +169,7 @@ PresentEvent = (
     | CwdChanged
     | WindowRequest
     | KeyboardLockChanged
+    | KeyboardIndicatorChanged
     | WindowStateChanged
     | ConsoleRequest
     | MouseCaptureChanged

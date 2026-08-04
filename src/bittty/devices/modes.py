@@ -14,6 +14,7 @@ from ..present import (
     CursorBlinkChanged,
     CursorVisibilityChanged,
     GraphemeClusteringChanged,
+    KeyboardIndicatorChanged,
     KeyboardLockChanged,
     MouseCaptureChanged,
     ReverseScreenChanged,
@@ -36,6 +37,7 @@ class ModeEffect(Enum):
     WIDTH = "width"
     GRAPHEME = "grapheme"
     KEYBOARD_LOCK = "keyboard-lock"
+    KEYBOARD_INDICATOR = "keyboard-indicator"
 
 
 class MouseProtocol(Enum):
@@ -351,6 +353,32 @@ MODE_SPECS: tuple[ModeSpec, ...] = (
         apply_fn=_ignore_null,
         status_fn=_ignore_null_status,
     ),
+    # Keyboard indicators: 108/109 are keyboard state the host may drive; 110
+    # selects whether the LEDs show that state or DECLL-loaded host indications.
+    ModeSpec(
+        mp.DEC_NUMLOCK,
+        108,
+        True,
+        "num_lock_mode",
+        queryable=True,
+        effects=frozenset({ModeEffect.KEYBOARD_INDICATOR}),
+    ),
+    ModeSpec(
+        mp.DEC_CAPSLOCK,
+        109,
+        True,
+        "caps_lock_mode",
+        queryable=True,
+        effects=frozenset({ModeEffect.KEYBOARD_INDICATOR}),
+    ),
+    ModeSpec(
+        mp.DEC_LED_HOST_INDICATOR,
+        110,
+        True,
+        "led_host_indicator_mode",
+        queryable=True,
+        effects=frozenset({ModeEffect.KEYBOARD_INDICATOR}),
+    ),
     ModeSpec(
         mp.XTERM_MOUSE_NORMAL,
         1000,
@@ -554,6 +582,9 @@ class ModeDevice(Device):
         self._last_ambiguous_width: int | None = None
         self._last_grapheme_clustering: bool | None = None
         self._last_keyboard_locked: bool | None = None
+        # Not the None idiom above: an all-off "change" carries no information,
+        # and a DECLL write that leaves the display unchanged must emit nothing.
+        self._last_keyboard_indicators: tuple[bool, bool, bool] = (False, False, False)
         self._set_defaults()
         self.handlers = {
             "SM": self.apply_mode_operation,
@@ -751,6 +782,14 @@ class ModeDevice(Device):
             if force or self.keyboard_locked != self._last_keyboard_locked:
                 self._last_keyboard_locked = self.keyboard_locked
                 self.board.present(KeyboardLockChanged(self.keyboard_locked))
+        elif effect is ModeEffect.KEYBOARD_INDICATOR:
+            keyboard = self.board.keyboard
+            if not keyboard.leds_fitted and (True, 110) not in self._modes:
+                return  # this terminal has no keyboard LEDs to speak of
+            lights = keyboard.indicator_lights()
+            if force or lights != self._last_keyboard_indicators:
+                self._last_keyboard_indicators = lights
+                self.board.present(KeyboardIndicatorChanged(*lights))
 
     def set_cursor_blinking(self, enabled: bool) -> None:
         """Set cursor blink state and notify the attached terminal on an edge."""
