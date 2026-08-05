@@ -149,7 +149,6 @@ def test_bell_window_policies_are_ordered_and_queryable():
     board, parser, _, recorder = _term()
     parser.feed("\x1b[?1042h\x1b[?1043h\x07")
     assert recorder.events[-3:] == [Bell(), WindowRequest("urgent"), WindowRequest("raise")]
-    assert board.window_requests == ["urgent", "raise"]
     assert board.modes.get_private_mode_status(1042) == 1
     assert board.modes.get_private_mode_status(1043) == 1
 

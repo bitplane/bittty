@@ -2,6 +2,15 @@
 
 from bittty import Board, MemoryConnection
 from bittty.parser import Parser
+from bittty.present import Notification, PromptMark
+
+
+class _Recorder:
+    def __init__(self):
+        self.events = []
+
+    def present(self, event):
+        self.events.append(event)
 
 
 def _driver(width=80, height=24):
@@ -33,6 +42,17 @@ def test_xtwinops_title_stack():
     assert board.title.title == "first"
 
 
+def test_title_stack_is_bounded_like_real_hardware():
+    board, parser, _ = _driver()
+    for n in range(12):
+        parser.feed(f"\x1b]2;t{n}\x07\x1b[22;0t")  # set title, push it
+    for _ in range(10):
+        parser.feed("\x1b[23;0t")
+    assert board.title.title == "t2"  # the two oldest entries were evicted
+    parser.feed("\x1b[23;0t")  # the stack is empty now: a further pop is a no-op
+    assert board.title.title == "t2"
+
+
 def test_decscl_records_conformance_level():
     board, parser, _ = _driver()
     parser.feed('\x1b[62"p')
@@ -41,12 +61,15 @@ def test_decscl_records_conformance_level():
 
 def test_shell_integration_osc():
     board, parser, _ = _driver()
+    recorder = _Recorder()
+    board.display.attach(recorder)
     parser.feed("\x1b]7;file:///home/gaz\x07")
     assert board.cwd == "file:///home/gaz"
 
     parser.feed("\x1b]9;build finished\x07")
     parser.feed("\x1b]777;notify;Title;Body\x07")
-    assert board.notifications == ["build finished", "Title; Body"]
+    notified = [e for e in recorder.events if isinstance(e, Notification)]
+    assert notified == [Notification("build finished"), Notification("Title; Body")]
 
     parser.feed("\x1b[3;1H\x1b]133;A\x07")  # prompt mark at row 3 (0-based 2)
-    assert board.prompt_marks == [("A", 2)]
+    assert PromptMark("A", 2) in recorder.events

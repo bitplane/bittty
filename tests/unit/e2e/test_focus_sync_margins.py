@@ -127,6 +127,31 @@ def test_xtpush_xtpop_colors_restores_palette():
     assert board.palette.colors[1] == before
 
 
+def test_sgr_stack_is_bounded():
+    board, parser, _ = _term()
+    for n in range(12):
+        parser.feed(f"\x1b[38;5;{n}m\x1b[#{{")  # set colour n, push it
+    for _ in range(10):
+        parser.feed("\x1b[#}")
+    assert board.style.current.fg.value == 2  # the two oldest entries were evicted
+    parser.feed("\x1b[#}")  # the stack is empty now: a further pop is a no-op
+    assert board.style.current.fg.value == 2
+
+
+def test_color_stack_is_bounded():
+    board, parser, _ = _term()
+    saved = []
+    for n in range(12):
+        parser.feed(f"\x1b]4;1;#0000{n:02x}\x07")  # recolour palette entry 1
+        saved.append(board.palette.colors[1])
+        parser.feed("\x1b[#P")
+    for _ in range(10):
+        parser.feed("\x1b[#Q")
+    assert board.palette.colors[1] == saved[2]  # the two oldest entries were evicted
+    parser.feed("\x1b[#Q")  # the stack is empty now: a further pop is a no-op
+    assert board.palette.colors[1] == saved[2]
+
+
 # --- DECBI / DECFI --- #
 
 

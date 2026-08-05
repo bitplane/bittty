@@ -1,8 +1,17 @@
 """linux `setterm` CSI...] directives as board hardware registers, and ESC[8]."""
 
-from bittty.parser import Parser
-from bittty.style import Color
 from bittty import Board
+from bittty.parser import Parser
+from bittty.present import ConsoleRequest
+from bittty.style import Color
+
+
+class _Recorder:
+    def __init__(self):
+        self.events = []
+
+    def present(self, event):
+        self.events.append(event)
 
 
 def _term():
@@ -25,9 +34,12 @@ def test_setterm_updates_board_registers():
 
 def test_setterm_console_switch_is_a_signal():
     board, parser = _term()
+    recorder = _Recorder()
+    board.display.attach(recorder)
     parser.feed("\x1b[12;3]")  # bring console 3 to the front
     parser.feed("\x1b[15]")  # bring the previous console to the front
-    assert board.console_requests == [("switch", 3), ("previous", 0)]
+    requests = [e for e in recorder.events if isinstance(e, ConsoleRequest)]
+    assert requests == [ConsoleRequest("switch", 3), ConsoleRequest("previous", 0)]
 
 
 def test_setterm_8_sets_default_attributes_for_sgr_reset():

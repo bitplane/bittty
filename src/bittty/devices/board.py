@@ -93,8 +93,6 @@ class Board:
         self.cwd: str = ""  # OSC 7 reported working directory
         self.pointer_shape: str = ""  # OSC 22 mouse-pointer shape
         self.font: str = ""  # OSC 50 font selection
-        self.notifications: list[str] = []  # OSC 9 / 777 messages
-        self.prompt_marks: list[tuple[str, int]] = []  # OSC 133 (mark, row)
         self.conformance_level: int = 62  # DECSCL
         self.c1_eightbit: bool = False  # S7C1T/S8C1T: transmit C1 controls as 8-bit
         self.ansi_conformance_level: int = 1  # ESC SP L/M/N
@@ -105,7 +103,6 @@ class Board:
         self.window_maximized: bool = False
         self.window_fullscreen: bool = False
         self.window_position: tuple[int, int] = (0, 0)
-        self.window_requests: list[str] = []  # "raise" / "lower" / "refresh"
         # linux console setterm hardware registers; a display/audio backend actuates these.
         self.screen_blanked: bool = False
         self.blank_timeout: int = 0  # minutes; 0 = never
@@ -115,7 +112,6 @@ class Board:
         self.cursor_blink_ms: int = 0
         self.default_underline_color: int | None = None
         self.default_dim_color: int | None = None
-        self.console_requests: list[tuple[str, int]] = []  # ("switch", n) / ("previous", 0)
         self._answerback: str = ""
         self._answerback_concealed = False
         self.margin_bell_columns = margin_bell_columns
@@ -238,8 +234,7 @@ class Board:
             self.request_window("raise")
 
     def request_window(self, kind: str) -> None:
-        """Record and present one window-manager action request."""
-        self.window_requests.append(kind)
+        """Present one window-manager action request; delivered, never stored."""
         self.present(WindowRequest(kind))
 
     def reset_margin_bell(self) -> None:

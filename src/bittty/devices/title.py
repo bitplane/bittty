@@ -10,6 +10,8 @@ from .base import Device
 if TYPE_CHECKING:
     from .board import Board
 
+_TITLE_STACK_MAX = 10  # xterm's depth: XTWINOPS 22/23 address stack slots 1-10
+
 
 class TitleDevice(Device):
     """Owns terminal title state and applies title operations."""
@@ -46,6 +48,8 @@ class TitleDevice(Device):
 
     def push(self) -> None:
         """XTWINOPS 22 — save the current window and icon titles."""
+        if len(self._stack) >= _TITLE_STACK_MAX:
+            self._stack.pop(0)  # evict the oldest rather than grow forever
         self._stack.append((self.title, self.icon_title))
 
     def pop(self) -> None:

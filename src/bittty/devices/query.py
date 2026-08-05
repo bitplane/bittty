@@ -60,13 +60,11 @@ class QueryDevice(Device):
         self.board.present(CwdChanged(self.board.cwd))
 
     def handle_notify(self, operation: Operation) -> None:
-        """OSC 9 / 777 / 99 — a desktop notification."""
-        self.board.notifications.append(operation.args[0])
+        """OSC 9 / 777 / 99 — a desktop notification; delivered, never stored."""
         self.board.present(Notification(operation.args[0]))
 
     def handle_shell_mark(self, operation: Operation) -> None:
-        """OSC 133 — a shell-integration prompt/command mark."""
-        self.board.prompt_marks.append((operation.args[0], self.board.cursor.y))
+        """OSC 133 — a shell-integration prompt/command mark; delivered, never stored."""
         self.board.present(PromptMark(operation.args[0], self.board.cursor.y))
 
     def handle_pointer_shape(self, operation: Operation) -> None:
@@ -263,14 +261,12 @@ class QueryDevice(Device):
         elif op == 11:
             board.bell_ms = arg
         elif op == 12:
-            board.console_requests.append(("switch", arg))
             board.present(ConsoleRequest("switch", arg))
         elif op == 13:
             board.screen_blanked = False
         elif op == 14:
             board.vesa_powerdown = arg
         elif op == 15:
-            board.console_requests.append(("previous", 0))
             board.present(ConsoleRequest("previous", 0))
         elif op == 16:
             board.cursor_blink_ms = arg

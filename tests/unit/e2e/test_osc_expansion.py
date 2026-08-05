@@ -3,6 +3,15 @@ their resets (113/114/117/119), and Kitty notifications (99)."""
 
 from bittty import Board, MemoryConnection
 from bittty.parser import Parser
+from bittty.present import Notification
+
+
+class _Recorder:
+    def __init__(self):
+        self.events = []
+
+    def present(self, event):
+        self.events.append(event)
 
 
 def _term():
@@ -53,5 +62,7 @@ def test_dynamic_colour_reset():
 
 def test_osc_99_is_a_desktop_notification():
     board, parser, _ = _term()
+    recorder = _Recorder()
+    board.display.attach(recorder)
     parser.feed("\x1b]99;i=1:d=0;Build finished\x07")  # kitty: metadata ; payload
-    assert board.notifications == ["Build finished"]
+    assert Notification("Build finished") in recorder.events

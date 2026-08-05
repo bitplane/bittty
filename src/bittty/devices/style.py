@@ -11,6 +11,8 @@ from ..style import Style, get_background, parse_sgr_sequence, style_to_ansi
 if TYPE_CHECKING:
     from .board import Board
 
+_SGR_STACK_MAX = 10  # xterm: "The stack is limited to 10 levels."
+
 
 class StyleDevice(Device):
     """Owns current style state and applies style operations."""
@@ -27,9 +29,15 @@ class StyleDevice(Device):
             "DECSCA": lambda op: self.set_protected(op.args[0]),
             "SPA": lambda op: self.set_protected(1),  # start protected area
             "EPA": lambda op: self.set_protected(0),  # end protected area
-            "XTPUSHSGR": lambda op: self.stack.append(self.current),
+            "XTPUSHSGR": lambda op: self.push_sgr(),
             "XTPOPSGR": lambda op: self.pop_sgr(),
         }
+
+    def push_sgr(self) -> None:
+        """XTPUSHSGR — save the current SGR attributes."""
+        if len(self.stack) >= _SGR_STACK_MAX:
+            self.stack.pop(0)  # evict the oldest rather than grow forever
+        self.stack.append(self.current)
 
     def pop_sgr(self) -> None:
         """XTPOPSGR — restore the SGR attributes saved by the matching XTPUSHSGR."""

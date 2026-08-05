@@ -13,6 +13,8 @@ if TYPE_CHECKING:
 
 _SPECIALS = ("foreground", "background", "cursor")
 
+_COLOR_STACK_MAX = 10  # bounded like xterm's other stacks (SGR, title): ten levels
+
 
 class PaletteDevice(Device):
     """Holds the current 256-colour table plus fg/bg/cursor, and applies OSC colour ops."""
@@ -125,6 +127,8 @@ class PaletteDevice(Device):
 
     def push_colors(self) -> None:
         """XTPUSHCOLORS — save the whole palette (256 entries plus fg/bg/cursor)."""
+        if len(self.stack) >= _COLOR_STACK_MAX:
+            self.stack.pop(0)  # evict the oldest rather than grow forever
         self.stack.append((list(self.colors), self.foreground, self.background, self.cursor))
 
     def pop_colors(self) -> None:

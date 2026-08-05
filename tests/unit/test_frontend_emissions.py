@@ -58,7 +58,7 @@ def test_cwd_notify_pointer_font_events_and_registers():
     parser.feed("\x1b]22;pointer\x07")
     parser.feed("\x1b]50;Fira 12\x07")
     assert board.cwd == "file:///tmp" and CwdChanged("file:///tmp") in rec.events
-    assert "ding" in board.notifications and Notification("ding") in rec.events
+    assert Notification("ding") in rec.events
     assert board.pointer_shape == "pointer" and PointerShapeChanged("pointer") in rec.events
     assert board.font == "Fira 12" and FontChanged("Fira 12") in rec.events
 
@@ -76,14 +76,12 @@ def test_window_state_and_request_events():
     assert board.window_iconified is True
     assert any(isinstance(e, WindowStateChanged) and e.iconified for e in rec.events)
     parser.feed("\x1b[5t")  # raise
-    assert "raise" in board.window_requests
     assert WindowRequest("raise") in rec.events
 
 
 def test_console_switch_event():
-    board, parser, rec = _term()
+    _board, parser, rec = _term()
     parser.feed("\x1b[12;3]")  # setterm: switch to console 3
-    assert ("switch", 3) in board.console_requests
     assert ConsoleRequest("switch", 3) in rec.events
 
 

@@ -3,6 +3,15 @@
 from bittty import Board, MemoryConnection, constants
 from bittty.caps import TerminalCaps
 from bittty.parser import Parser
+from bittty.present import WindowRequest
+
+
+class _Recorder:
+    def __init__(self):
+        self.events = []
+
+    def present(self, event):
+        self.events.append(event)
 
 
 def _term(width=80, height=24):
@@ -48,8 +57,11 @@ def test_maximize_and_fullscreen():
 
 def test_raise_lower_refresh_are_signals():
     board, parser, _ = _term()
+    recorder = _Recorder()
+    board.display.attach(recorder)
     parser.feed("\x1b[5t\x1b[6t\x1b[7t")
-    assert board.window_requests == ["raise", "lower", "refresh"]
+    requests = [e for e in recorder.events if isinstance(e, WindowRequest)]
+    assert requests == [WindowRequest("raise"), WindowRequest("lower"), WindowRequest("refresh")]
 
 
 def test_report_window_title():
