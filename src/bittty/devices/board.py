@@ -10,11 +10,13 @@ from __future__ import annotations
 import logging
 import subprocess
 import sys
-from typing import Any, Callable
+from collections.abc import Callable
+from typing import Any
 
 from .. import constants
 from ..caps import TerminalCaps
 from ..connections import DisplayPort, HostPort
+from ..keys import KeyEvent
 from ..model import DEFAULT, Model
 from ..operations import Operation
 from ..parser import Parser
@@ -458,6 +460,14 @@ class Board:
 
     # --- input: thin pass-through to the input devices --- #
 
+    def input_key_event(self, event: KeyEvent) -> None:
+        """A key event with explicit identity, text and event type."""
+        self.keyboard.input_key_event(event)
+
+    def input_text(self, text: str) -> None:
+        """Committed text with no physical key identity."""
+        self.keyboard.input_text(text)
+
     def input_key(self, char: str, modifier: int = constants.KEY_MOD_NONE) -> None:
         """Convert key + modifier to standard control codes, then send to the host."""
         self.keyboard.input_key(char, modifier)
@@ -478,13 +488,12 @@ class Board:
         margin_key = bool(data) and data.isprintable()
         self.keyboard.input(data, local_text=local_text, margin_key=margin_key)
 
-    def input_paste(self, text: str) -> None:
+    def input_paste(self, text: str, *, phase: str = "complete") -> None:
         """Pasted text from the terminal: bracketed when mode 2004 is on, else raw.
 
         Bypasses keyboard translation — a paste is data, not keystrokes.
         """
-        data = f"\x1b[200~{text}\x1b[201~" if self.modes.bracketed_paste else text
-        self.transmit_keyboard(data, local_text=text)
+        self.keyboard.input_paste(text, phase)
 
     def input_mouse(self, x: int, y: int, button: int, event_type: str, modifiers: set[str]) -> None:
         """

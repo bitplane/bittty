@@ -70,6 +70,18 @@ def test_probe_timeout_keeps_width_unknown(monkeypatch):
     assert written == [PROBE_QUERY]
 
 
+def test_probe_does_not_consume_reply_shaped_paste_or_terminate_on_it(monkeypatch):
+    pasted = b"\x1b[200~\x1b[?31u\x1b[?62;c\x1b[201~"
+    chunks = iter((pasted, b"\x1b[?5u\x1b[?62;c"))
+    monkeypatch.setattr(probe_module.os, "isatty", lambda fd: True)
+    monkeypatch.setattr(probe_module.select, "select", lambda *args: ([7], [], []))
+    monkeypatch.setattr(probe_module.os, "read", lambda fd, size: next(chunks))
+    typed = []
+    caps = probe_caps(7, lambda data: None, {}, timeout=0.1, on_input=typed.append)
+    assert caps.kitty_keyboard_flags == 5
+    assert typed == [pasted]
+
+
 @pytest.mark.parametrize(
     ("status", "expected"),
     [

@@ -6,7 +6,9 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from .. import constants
+from ..keyboard_protocol import ALIASES, KEYPAD_LEGACY, KEYPAD_NAMES, encode_key
 from ..keymap import apply_modifier
+from ..keys import KeyEvent, KeyModifiers, legacy_modifiers, valid_text
 from ..options import DEC_KEYBOARD_LEDS, KITTY_KEYBOARD
 from .modes import ModeEffect
 
@@ -15,37 +17,12 @@ if TYPE_CHECKING:
     from .board import Board
 from .base import Device
 
-# Kitty keyboard protocol. Only the enhancements the char+modifier input API can
-# express are negotiable: 1 disambiguate, 8 report-all-keys, 16 associated-text.
-# Flags 2 (event types) and 4 (alternate keys) need a key-event input layer that
-# does not exist, so they are ignored on push/set and therefore absent from the
-# query report — feature detection tells applications the truth.
-_KITTY_SUPPORTED = 0b11001
+# All five enhancements are implemented by the explicit key-event encoder.
+_KITTY_SUPPORTED = 31
 # The spec: "Terminals should limit the size of the stack as appropriate, to
 # prevent Denial-of-Service attacks." Full stack evicts its oldest entry.
 _KITTY_STACK_MAX = 8
-# Keys that keep their legacy bytes under flag 1 so `reset` stays typeable
-# after a crash; flag 8 or a beyond-shift modifier turns them into CSI u.
-_KITTY_LEGACY_CODES = {"\r": 13, "\t": 9, constants.BS: 127, constants.DEL: 127}
-# Keypad keys get Private Use Area functional codes under flag 8.
-_KITTY_NUMPAD_CODES = {
-    "0": 57399,
-    "1": 57400,
-    "2": 57401,
-    "3": 57402,
-    "4": 57403,
-    "5": 57404,
-    "6": 57405,
-    "7": 57406,
-    "8": 57407,
-    "9": 57408,
-    ".": 57409,
-    "/": 57410,
-    "*": 57411,
-    "-": 57412,
-    "+": 57413,
-    "Enter": 57414,
-}
+_CONTROL_TEXT = dict(zip(" @2345678?[/\\]^_~", (0, 0, 0, 27, 28, 29, 30, 31, 127, 127, 27, 31, 28, 29, 30, 31, 30)))
 
 
 @dataclass(slots=True)
@@ -91,6 +68,7 @@ class KeyboardDevice(Device):
         self.board = board
         self.user_defined_keys: dict[int, str] = {}  # DECUDK: F-number -> sequence
         self.modify_other_keys = 0  # xterm modifyOtherKeys level (0/1/2)
+        self.paste_bracketed = False
         # Built directly: the blitter these key off does not exist yet.
         self._kitty = {False: _KittyState(), True: _KittyState()}
         # DECLL-loaded host indications. One set, not per-screen: LEDs are physical.
@@ -243,34 +221,6 @@ class KeyboardDevice(Device):
             return f"{constants.ESC}[{code};{modifier}u"
         return f"{constants.ESC}[{code}u"
 
-    def _kitty_key(self, char: str, modifier: int) -> str | None:
-        """Encode one key per the active Kitty flags, or None for the legacy path.
-
-        Flag 1 turns the Esc key and beyond-shift-modified keys into CSI u;
-        plain and shift-only text keys stay text, and unmodified Enter, Tab and
-        Backspace keep their legacy bytes so `reset` stays typeable. Flag 8
-        encodes everything; flag 16 (meaningful only with 8) appends the text.
-        """
-        flags = self.kitty_flags
-        if not flags or len(char) != 1:
-            return None
-        beyond_shift = self._modifier_bits(modifier) & ~1
-        if char == constants.ESC:
-            return self._kitty_sequence(27, modifier, None)
-        legacy_code = _KITTY_LEGACY_CODES.get(char)
-        if legacy_code is not None:
-            if flags & 8 or beyond_shift:
-                return self._kitty_sequence(legacy_code, modifier, None)
-            return None
-        if not char.isprintable():
-            return None  # a bare C0 is already an encoding, not a key
-        if flags & 8:
-            text = char if flags & 16 else None
-            return self._kitty_sequence(self._kitty_code(char), modifier, text)
-        if beyond_shift:
-            return self._kitty_sequence(self._kitty_code(char), modifier, None)
-        return None
-
     def _enhanced_key(self, char: str, modifier: int) -> str | None:
         """Encode a modified character key via xterm modifyOtherKeys, else None.
 
@@ -334,12 +284,16 @@ class KeyboardDevice(Device):
 
     def input_key(self, char: str, modifier: int = constants.KEY_MOD_NONE) -> None:
         """Convert key + modifier to standard control codes, then send to input()."""
-        keymap = self.board.model.keymap
-
-        kitty = self._kitty_key(char, modifier)
-        if kitty is not None:
-            self.input(kitty, local_text=char, margin_key=char.isprintable())
+        if self.kitty_flags:
+            key = chr(self._kitty_code(char)) if len(char) == 1 and char not in ALIASES else char
+            self.input_key_event(
+                KeyEvent(key, legacy_modifiers(modifier), text=char if len(char) == 1 and valid_text(char) else None)
+            )
             return
+        self._legacy_key(char, modifier)
+
+    def _legacy_key(self, char: str, modifier: int) -> None:
+        keymap = self.board.model.keymap
 
         # Sending raw DEL for Delete recreates the ambiguity Kitty flag 1
         # removes; the named key falls through to nav_keys' CSI 3~ instead.
@@ -379,8 +333,10 @@ class KeyboardDevice(Device):
 
         if control and len(char) == 1:
             upper_char = char.upper()
-            if "A" <= upper_char <= "Z":
+            if len(upper_char) == 1 and "A" <= upper_char <= "Z":
                 char = chr(ord(upper_char) - ord("A") + 1)
+            elif char in _CONTROL_TEXT:
+                char = chr(_CONTROL_TEXT[char])
 
         if len(char) == 1:
             local_text = char
@@ -400,6 +356,12 @@ class KeyboardDevice(Device):
 
     def input_fkey(self, num: int, modifier: int = constants.KEY_MOD_NONE) -> None:
         """Encode a function key using any user-defined string, else the keymap."""
+        if self.kitty_flags:
+            self.input_key_event(KeyEvent(f"f{num}", legacy_modifiers(modifier)))
+            return
+        self._legacy_fkey(num, modifier)
+
+    def _legacy_fkey(self, num: int, modifier: int) -> None:
         if num in self.user_defined_keys:
             self.input(self.user_defined_keys[num])
             return
@@ -414,18 +376,97 @@ class KeyboardDevice(Device):
 
     def input_numpad_key(self, key: str) -> None:
         """Convert numpad key to the sequence for the current keypad mode."""
-        if self.kitty_flags & 8:
-            code = _KITTY_NUMPAD_CODES.get(key)
-            if code is not None:
-                # Report-all-keys gives keypad keys their own functional codes.
-                self.input(self._kitty_sequence(code, constants.KEY_MOD_NONE, None))
-                return
+        if self.kitty_flags and key in KEYPAD_NAMES:
+            text = key if self.board.modes.numeric_keypad and len(key) == 1 else None
+            self.input_key_event(KeyEvent(KEYPAD_NAMES[key], text=text))
+            return
+        self._legacy_numpad(key)
+
+    def _legacy_numpad(self, key: str, modifier: int = constants.KEY_MOD_NONE) -> None:
         keymap = self.board.model.keymap
         table = keymap.numpad_numeric if self.board.modes.numeric_keypad else keymap.numpad_application
         sequence = table.get(key, key)
 
+        if modifier != constants.KEY_MOD_NONE:
+            if self.board.modes.numeric_keypad:
+                self._legacy_key(sequence, modifier)
+            else:
+                special_modifier, legacy_bits = self._special_modifier(modifier)
+                if special_modifier != constants.KEY_MOD_NONE and keymap.modifiers:
+                    sequence = apply_modifier(sequence, special_modifier)
+                self._input_special(sequence, legacy_bits)
+            return
+
         local_text = key if self.board.modes.numeric_keypad and len(key) == 1 else None
         self.input(sequence, local_text=local_text, margin_key=bool(local_text and local_text.isprintable()))
+
+    def input_key_event(self, event: KeyEvent) -> None:
+        """Encode supplied key facts using the child's active keyboard policy."""
+        flags = self.kitty_flags
+        # Extended modifiers have no legacy encoding. Kitty-capable models can
+        # express them even before an application opts into enhancements.
+        if not flags and event.modifiers & (KeyModifiers.SUPER | KeyModifiers.HYPER):
+            if KITTY_KEYBOARD not in self.board.model.provides:
+                return
+            flags = 1
+        sequence = encode_key(event, flags)
+        if sequence is not None:
+            if sequence:
+                text = event.text if event.event_type != "release" else None
+                local_text = text
+                if event.event_type != "release" and local_text is None:
+                    key = ALIASES.get(event.key, event.key)
+                    local_text = {"enter": "\r", "kp_enter": "\r", "tab": "\t", "backspace": "\x08"}.get(key)
+                self.board.transmit_keyboard(sequence, local_text=local_text, margin_key=bool(text))
+            return
+        key = ALIASES.get(event.key, event.key)
+        bits = int(event.modifiers)
+        modifier = (bits & 7) + (8 if bits & KeyModifiers.META else 0) + 1
+        if key.startswith("f") and key[1:].isdigit():
+            self._legacy_fkey(int(key[1:]), modifier)
+        elif key in KEYPAD_LEGACY:
+            self._legacy_numpad(KEYPAD_LEGACY[key], modifier)
+        elif key.startswith("kp_"):
+            self._legacy_key(key[3:], modifier)
+        elif event.text and not bits & 62:
+            self.board.transmit_keyboard(event.text, local_text=event.text, margin_key=True)
+        elif event.text and len(event.text) > 1 and not bits & KeyModifiers.CTRL:
+            prefix = constants.ESC if self._legacy_escape_prefix(modifier - 1) else ""
+            self.board.transmit_keyboard(prefix + event.text, local_text=event.text, margin_key=True)
+        else:
+            char = {"escape": "\x1b", "enter": "\r", "tab": "\t", "backspace": "\x08"}.get(key, key)
+            if event.text and len(event.text) == 1 and not bits & KeyModifiers.CTRL:
+                char = event.text
+            self._legacy_key(char, modifier)
+
+    def input_text(self, text: str) -> None:
+        """Committed text without a physical key (for example from an IME)."""
+        if not valid_text(text):
+            raise ValueError("committed text must not contain controls or surrogates")
+        if not text:
+            return
+        if self.kitty_flags & 8:
+            if self.kitty_flags & 16:
+                for offset in range(0, len(text), 128):
+                    chunk = text[offset : offset + 128]
+                    self.board.transmit_keyboard(self._kitty_sequence(0, 1, chunk), local_text=chunk)
+            return
+        self.board.transmit_keyboard(text, local_text=text)
+
+    def input_paste(self, text: str, phase: str = "complete") -> None:
+        """A complete paste or bounded chunks of one bracketed transaction."""
+        if phase not in ("complete", "start", "chunk", "end"):
+            raise ValueError("invalid paste phase")
+        if phase == "complete":
+            data = f"\x1b[200~{text}\x1b[201~" if self.board.modes.bracketed_paste else text
+        else:
+            if phase == "start":
+                self.paste_bracketed = self.board.modes.bracketed_paste
+            prefix = "\x1b[200~" if phase == "start" and self.paste_bracketed else ""
+            suffix = "\x1b[201~" if phase == "end" and self.paste_bracketed else ""
+            data = prefix + text + suffix
+        if data:
+            self.board.transmit_keyboard(data, local_text=text)
 
     def input(self, data: str, *, local_text: str | None = None, margin_key: bool = False) -> None:
         """Translate control codes based on terminal modes and send to the host."""

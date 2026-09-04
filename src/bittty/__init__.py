@@ -27,6 +27,7 @@ from .connections import (
     StreamPrinter,
 )
 from .devices.board import Board
+from .keys import KeyEvent, KeyModifiers
 from .model import BITTTY, LINUX, VT100, VT220, VT510, XTERM, Model
 from .operations import Operation, OperationSink
 from .options import Option, PrinterCapabilities
@@ -57,6 +58,8 @@ __all__ = [
     "Connection",
     "DisplayPort",
     "HostPort",
+    "KeyEvent",
+    "KeyModifiers",
     "MemoryConnection",
     "MemoryPrinter",
     "Model",

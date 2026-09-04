@@ -19,6 +19,7 @@ from . import constants
 if TYPE_CHECKING:
     from .caps import TerminalCaps
     from .devices.board import Board
+    from .keys import KeyEvent
     from .present import PresentEvent
     from .printer_config import PrinterConfiguration
 
@@ -470,6 +471,14 @@ class DisplayPort:
 
     # --- receive side: events from the terminal (chrome) --- #
 
+    def input_key_event(self, event: KeyEvent) -> None:
+        """A key event supplied by the frontend."""
+        self.board.input_key_event(event)
+
+    def input_text(self, text: str) -> None:
+        """Committed text supplied by the frontend."""
+        self.board.input_text(text)
+
     def input(self, data: str) -> None:
         """Keystrokes from the terminal, translated per keyboard modes."""
         self.board.input(data)
@@ -486,9 +495,9 @@ class DisplayPort:
         """A numpad key from the terminal."""
         self.board.input_numpad_key(key)
 
-    def input_paste(self, text: str) -> None:
+    def input_paste(self, text: str, *, phase: str = "complete") -> None:
         """Pasted text from the terminal, bracketed per mode 2004."""
-        self.board.input_paste(text)
+        self.board.input_paste(text, phase=phase)
 
     def input_mouse(self, x: int, y: int, button: int, event_type: str, modifiers: set[str]) -> None:
         """A mouse event from the terminal."""

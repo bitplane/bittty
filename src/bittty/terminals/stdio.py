@@ -17,8 +17,8 @@ import signal
 import sys
 
 from ..devices.board import Board
-from ..parser import Parser
 from .base import Terminal
+from .keyboard_input import KeyboardInput
 from .probe import probe_caps
 
 try:
@@ -45,35 +45,6 @@ _HOST_MOUSE_ENABLE = {
     "button": "\033[?1002h\033[?1006h",
     "basic": "\033[?1000h\033[?1006h",
 }
-
-
-class HostInputSink:
-    """Sink for the input-direction parser: host bytes in, board events out.
-
-    Every operation carries its raw bytes, so anything we don't intercept is
-    forwarded to the child verbatim and in order — arrow keys, control chars,
-    pastes, whole unknown sequences. Interception is by raw prefix, not
-    operation name: on the input direction CSI I is a focus report, never CHT.
-    """
-
-    def __init__(self, terminal: "StdioTerminal") -> None:
-        self.terminal = terminal
-
-    def handle_operation(self, op) -> None:
-        raw = op.raw
-        if raw is None:
-            logger.warning("Host input operation without raw bytes dropped: %s", op)
-            return
-        terminal = self.terminal
-        if raw.startswith("\033[<") and terminal.handle_sgr_mouse_sequence(raw):
-            return
-        if raw == "\033[I":
-            terminal.handle_focus(True)
-            return
-        if raw == "\033[O":
-            terminal.handle_focus(False)
-            return
-        terminal.board.display.input(raw)
 
 
 class StdioTerminal(Terminal):
@@ -104,7 +75,10 @@ class StdioTerminal(Terminal):
         self.host_grapheme_mutable = False
         self.initial_grapheme_clustering: bool | None = None
         self.host_grapheme_clustering: bool | None = None
-        self.input_parser = Parser(HostInputSink(self))  # host keystrokes/reports in
+        self.host_keyboard_flags: int | None = None
+        self.host_keyboard_pushed = False
+        self.startup_input = b""
+        self.input_parser = KeyboardInput(self)
         self.dirty = False  # PTY data arrived; the run loop repaints on its tick
         self._seen_page = None  # video page rendered last frame
         self._seen_gen = -1  # its generation when we rendered it
@@ -196,11 +170,15 @@ class StdioTerminal(Terminal):
                 self.old_termios = None
         # ?1004: the host reports focus in/out (CSI I / CSI O) — drives our own
         # software cursor and is forwarded to a child that enabled 1004 itself.
-        print("\033[?5;12s\033[?5l\033[?12l\033[?25l\033[?1004h\033[2J\033[H", end="", flush=True)
+        print("\033[?5;12;2004s\033[?2004h\033[?5l\033[?12l\033[?25l\033[?1004h\033[2J\033[H", end="", flush=True)
 
     def restore_terminal(self) -> None:
         """Restore the host terminal to its original state."""
         logger.info("Restoring terminal")
+        if self.host_keyboard_pushed:
+            print("\033[<u", end="", flush=True)
+            self.host_keyboard_pushed = False
+        self.host_keyboard_flags = None
         self.disable_host_mouse()
         self.on_ambiguous_width(self.initial_ambiguous_width or 1)
         if self.initial_grapheme_clustering is not None:
@@ -209,7 +187,7 @@ class StdioTerminal(Terminal):
             termios.tcsetattr(sys.stdin.fileno(), termios.TCSADRAIN, self.old_termios)
         # 0q: DECLL has no save/restore analogue, so extinguish the LEDs rather
         # than leak the child's indications onto the outer terminal.
-        print("\033[?1004l\033[?25h\033[2J\033[H\033[?5;12r\033[0q", end="", flush=True)
+        print("\033[?1004l\033[?25h\033[2J\033[H\033[?5;12;2004r\033[0q", end="", flush=True)
 
     # --- rendering --- #
 
@@ -224,7 +202,15 @@ class StdioTerminal(Terminal):
             fd = sys.stdin.fileno()
         except (OSError, ValueError):
             fd = None
-        caps = probe_caps(fd, write, os.environ)
+        pending_input = []
+        caps = probe_caps(fd, write, os.environ, on_input=pending_input.append)
+        if caps.kitty_keyboard_flags is not None:
+            self.host_keyboard_flags = caps.kitty_keyboard_flags
+            # Own one stack entry on the outer terminal's current screen.
+            # Child screen changes are rendered, not mirrored as screen switches.
+            self.host_keyboard_pushed = True
+            write("\033[>31u\033[?u")
+        self.startup_input = b"".join(pending_input)
         self.initial_ambiguous_width = caps.ambiguous_width
         self.host_ambiguous_width = caps.ambiguous_width
         self.host_grapheme_mutable = caps.grapheme_mode in ("set", "reset")
@@ -263,7 +249,7 @@ class StdioTerminal(Terminal):
         if board.modes.cursor_visible and board.cursor.y < self.height:
             print(f"\033[{board.cursor.y + 1};{board.cursor.display_x + 1}H\033[?25h", end="", flush=True)
         else:
-            print("", end="", flush=True)
+            print(end="", flush=True)
 
     def draw_chrome(self) -> None:
         """Paint the terminal's own rows, if it reserved any.
@@ -323,22 +309,12 @@ class StdioTerminal(Terminal):
             self.board.display.focus_out()
         self.dirty = True
 
-    def handle_input(self, data: str) -> None:
-        """Feed host input through the input-direction parser.
-
-        The parser reassembles sequences split across reads; HostInputSink
-        intercepts SGR mouse reports and focus events and forwards everything
-        else to the child verbatim.
-        """
+    def handle_input(self, data: str | bytes) -> None:
+        """Decode outer input into keyboard, text, paste, mouse and focus events."""
         self.input_parser.feed(data)
 
     def flush_pending_input(self) -> None:
-        """Release a held incomplete sequence that never completed.
-
-        A lone ESC keypress looks like a sequence prefix, so the parser holds
-        it; when no follow-up arrives within an input-loop tick it was a real
-        ESC and must reach the child.
-        """
+        """Resolve a legacy lone Escape on idle; explicit reports stay pending."""
         self.input_parser.flush_trailing()
 
     def handle_resize(self) -> None:
@@ -359,13 +335,13 @@ class StdioTerminal(Terminal):
                 if self.is_windows and HAS_MSVCRT:
                     if msvcrt.kbhit():
                         char = msvcrt.getch()
-                        return char.decode("utf-8", errors="replace") if isinstance(char, bytes) else char
+                        return char
                     return None
                 readable, _, _ = select.select([sys.stdin.fileno()], [], [], 0)
                 if not readable:
                     return None
                 raw = os.read(sys.stdin.fileno(), 4096)
-                return "" if raw == b"" else raw.decode("utf-8", errors="replace")
+                return "" if raw == b"" else raw
             except (OSError, BlockingIOError):
                 return None
 
@@ -373,6 +349,7 @@ class StdioTerminal(Terminal):
             try:
                 data = read_input()
                 if data == "":
+                    self.input_parser.finish()
                     self.running = False
                     break
                 if data:
@@ -395,6 +372,8 @@ class StdioTerminal(Terminal):
             self.probe_capabilities()
             self.board.set_pty_data_callback(self.handle_pty_data)
             await self.board.start_process()
+            self.handle_input(self.startup_input)
+            self.startup_input = b""
             self.render_screen()
 
             input_task = asyncio.create_task(self.input_loop())

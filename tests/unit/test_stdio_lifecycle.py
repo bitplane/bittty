@@ -12,9 +12,8 @@ import sys
 
 import pytest
 
-from bittty.operations import Operation
+from bittty import MemoryConnection
 from bittty.terminals import StdioTerminal
-from bittty.terminals.stdio import HostInputSink
 
 termios = pytest.importorskip("termios", reason="the lifecycle runs on a real Unix pty")
 
@@ -112,6 +111,33 @@ def test_probe_parses_a_cooperative_terminals_replies(capsys):
     assert "\033[c" in capsys.readouterr().out  # the DA query went out
 
 
+def test_keyboard_probe_preserves_input_and_restores_its_stack(capsys):
+    import tty
+
+    stdin = _PtyStdin()
+    try:
+        tty.setraw(stdin.slave)
+        # Typing arrives interleaved with replies; a UTF-8 codepoint straddles
+        # the boundary between the startup probe and the normal read loop.
+        os.write(stdin.master, b"typed" + _PROBE_REPLIES.removesuffix(b"\x1b[?62;1c") + b"\x1b[?5u\x1b[?62;1c\xf0\x9f")
+        term = StdioTerminal()
+        term.probe_capabilities()
+        assert term.host_keyboard_pushed
+        assert term.host_keyboard_flags == 5
+        connection = MemoryConnection()
+        term.board.host.attach(connection)
+        term.handle_input(term.startup_input)
+        term.handle_input(b"\x99\x82\x1b[?31u\x1b[97;5u\x1b[97;5:3u")
+        assert "".join(connection.data) == "typed🙂\x01"
+        term.restore_terminal()
+        term.restore_terminal()
+    finally:
+        stdin.close()
+    out = capsys.readouterr().out
+    assert out.count("\x1b[>31u") == 1
+    assert out.count("\x1b[<u") == 1
+
+
 def test_input_loop_stops_on_stdin_eof():
     """A closed stdin (read returns empty) ends the loop rather than spinning."""
     read_fd, write_fd = os.pipe()
@@ -125,6 +151,33 @@ def test_input_loop_stops_on_stdin_eof():
     finally:
         sys.stdin = old_stdin
         os.close(read_fd)
+
+
+def test_real_input_loop_decodes_fragmented_keys_and_utf8(capsys):
+    import tty
+
+    stdin = _PtyStdin()
+    try:
+        tty.setraw(stdin.slave)
+        term = StdioTerminal()
+        term.host_keyboard_flags = 31
+        connection = MemoryConnection()
+        term.board.host.attach(connection)
+        term.board.parser.feed("\x1b[=31u")
+
+        async def type_keys():
+            for chunk in (b"\x1b", b"[97;1:2;97u", b"\xf0\x9f", b"\x99\x82"):
+                os.write(stdin.master, chunk)
+                await asyncio.sleep(0.03)  # at least one idle tick between fragments
+            term.running = False
+
+        async def main():
+            await asyncio.gather(term.input_loop(), type_keys())
+
+        asyncio.run(asyncio.wait_for(main(), timeout=5))
+        assert "".join(connection.data) == "\x1b[97;1:2;97u\x1b[0;;128578u"
+    finally:
+        stdin.close()
 
 
 def test_setup_without_a_tty_degrades_gracefully(capsys):
@@ -141,15 +194,6 @@ def test_probe_without_a_tty_yields_env_caps_only():
     term.probe_capabilities()
     assert term.host_grapheme_mutable is False
     assert term.initial_grapheme_clustering is None
-
-
-def test_host_input_operation_without_raw_bytes_is_dropped():
-    """The input direction routes by raw prefix; an op with no raw has no route."""
-    term = StdioTerminal()
-    sent = []
-    term.board.input = sent.append
-    HostInputSink(term).handle_operation(Operation("PRINT", ("x",), None))
-    assert sent == []
 
 
 def test_windows_shell_fallbacks_name_a_known_shell():

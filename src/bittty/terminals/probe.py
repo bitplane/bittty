@@ -34,6 +34,38 @@ _WINDOW = re.compile(r"\[4;(\d+);(\d+)t")
 _CPR = re.compile(r"\[(\d+);(\d+)R")
 _GRAPHEME_MODE = re.compile(r"\[\?2027;([0-4])\$y")
 _DA1 = re.compile(r"\[\?[0-9;]*c")
+_KEYBOARD = re.compile(r"\[\?([0-9]{1,10})u")
+# Only replies to our startup queries are consumed. Other bytes (including
+# partial UTF-8 after the final DA) belong to the input decoder unchanged.
+_REPLIES = re.compile(
+    rb"\x1b(?:\[\?[0-9;]*c|\[\?[0-9]+u|\[\?2027;[0-4]\$y|\[[0-9]+;[0-9]+R|"
+    rb"\[(?:4|6);[0-9]+;[0-9]+t|\]11;rgb:[0-9a-fA-F/]+(?:\x07|\x1b\\))"
+)
+_PROBE_PARTS = re.compile(rb"\x1b\[20[01]~|" + _REPLIES.pattern)
+
+
+def _split_probe(raw: bytes) -> tuple[bytes, bytes]:
+    """Separate query replies from typing without interpreting pasted contents."""
+    replies, typed = [], []
+    pasting = False
+    position = 0
+    for match in _PROBE_PARTS.finditer(raw):
+        typed.append(raw[position : match.start()])
+        part = match.group()
+        if part == b"\x1b[200~":
+            pasting = True
+            typed.append(part)
+        elif part == b"\x1b[201~":
+            pasting = False
+            typed.append(part)
+        elif pasting:
+            typed.append(part)
+        else:
+            replies.append(part)
+        position = match.end()
+    typed.append(raw[position:])
+    return b"".join(replies), b"".join(typed)
+
 
 # Measure U+00A7 SECTION SIGN (East Asian Width=A), then a complex ZWJ emoji
 # whose grapheme width is 2 but whose legacy codepoint widths sum to more.
@@ -42,7 +74,7 @@ _DA1 = re.compile(r"\[\?[0-9;]*c")
 _WIDTH_QUERY = "\0337\033[1;1H\033[6n§\033[6n\033[1;1H\033[2K\0338"
 _GRAPHEME_SAMPLE = "⛓️‍💥"
 _GRAPHEME_WIDTH_QUERY = f"\0337\033[1;1H\033[6n{_GRAPHEME_SAMPLE}\033[6n\033[1;1H\033[2K\0338"
-PROBE_QUERY = _WIDTH_QUERY + _GRAPHEME_WIDTH_QUERY + "\033]11;?\007\033[16t\033[14t\033[?2027$p\033[c"
+PROBE_QUERY = _WIDTH_QUERY + _GRAPHEME_WIDTH_QUERY + "\033]11;?\007\033[16t\033[14t\033[?2027$p\033[?u\033[c"
 
 
 def color_depth_from_env(env) -> str:
@@ -108,10 +140,11 @@ def parse_probe_replies(buf: str, env) -> TerminalCaps:
         background=background,
         ambiguous_width=ambiguous_width,
         grapheme_mode=grapheme_mode,
+        kitty_keyboard_flags=int(m.group(1)) if (m := _KEYBOARD.search(buf)) else None,
     )
 
 
-def probe_caps(stdin_fd, write, env=None, timeout: float = 0.5) -> TerminalCaps:
+def probe_caps(stdin_fd, write, env=None, timeout: float = 0.5, *, on_input=None) -> TerminalCaps:
     """Query the real terminal and return TerminalCaps; env-only on a non-tty/timeout.
 
     `write` is a callable that writes a str to the outer terminal (and flushes).
@@ -121,7 +154,7 @@ def probe_caps(stdin_fd, write, env=None, timeout: float = 0.5) -> TerminalCaps:
         return parse_probe_replies("", env)
 
     write(PROBE_QUERY)
-    buf = ""
+    raw = bytearray()
     end = time.monotonic() + timeout
     while time.monotonic() < end:
         readable, _, _ = select.select([stdin_fd], [], [], max(0.0, end - time.monotonic()))
@@ -130,10 +163,15 @@ def probe_caps(stdin_fd, write, env=None, timeout: float = 0.5) -> TerminalCaps:
         chunk = os.read(stdin_fd, 4096)
         if not chunk:
             break
-        buf += chunk.decode("utf-8", errors="replace")
-        if _DA1.search(buf):  # the DA reply terminates the handshake
+        raw.extend(chunk)
+        replies, _ = _split_probe(raw)
+        if _DA1.search(replies.decode("utf-8", errors="replace")) or len(raw) >= 16384:
             break
+    replies, typed = _split_probe(raw)
+    buf = replies.decode("utf-8", errors="replace")
     caps = parse_probe_replies(buf, env)
+    if on_input is not None:
+        on_input(typed)
     if caps.grapheme_mode is None:
         # The query was sent on a real tty. No reply before the DA terminator
         # (or timeout) is a conservative "not supported", not "no opinion".

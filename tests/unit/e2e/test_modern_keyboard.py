@@ -62,22 +62,16 @@ def test_kitty_set_modes_add_and_remove_bits():
 # --- only the implemented enhancements are negotiable --- #
 
 
-def test_unsupported_flag_bits_are_ignored_not_stored():
-    """Flags 2 and 4 need a key-event input layer bittty does not have.
-
-    The spec's detection scheme is "set flags, query, trust the answer", so
-    accepting bits the encoder ignores would be a lie. Ignored on push and on
-    set, they never show up in the query report.
-    """
+def test_all_five_flags_are_supported_and_unknown_bits_are_ignored():
     _board, parser, transport = _term()
-    parser.feed("\x1b[>31u")  # push all five bits
+    parser.feed("\x1b[>63u")  # all five enhancements plus an unknown bit
     parser.feed("\x1b[?u")
-    assert _sent(transport) == "\x1b[?25u"  # 1 | 8 | 16 survive
+    assert _sent(transport) == "\x1b[?31u"
 
     transport.data.clear()
     parser.feed("\x1b[=2;1u")  # set event-types alone
     parser.feed("\x1b[?u")
-    assert _sent(transport) == "\x1b[?0u"
+    assert _sent(transport) == "\x1b[?2u"
 
 
 def test_kitty_stack_is_bounded_against_push_spam():

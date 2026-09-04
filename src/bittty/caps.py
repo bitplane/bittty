@@ -41,6 +41,7 @@ class TerminalCaps:
     background: tuple[int, int, int] | None = None  # actual background colour (OSC 11)
     ambiguous_width: Literal[1, 2] | None = None  # measured width of East Asian Ambiguous characters
     grapheme_mode: GraphemeMode | None = None  # destination's DECRQM state for mode 2027
+    kitty_keyboard_flags: int | None = None  # outer terminal's query reply; None means no reply
 
     def __post_init__(self) -> None:
         if self.ambiguous_width not in (None, 1, 2):
@@ -51,6 +52,6 @@ class TerminalCaps:
             )
 
     @classmethod
-    def unknown(cls) -> "TerminalCaps":
+    def unknown(cls) -> TerminalCaps:
         """Caps that assert nothing — the backend keeps its current behaviour."""
         return cls()
