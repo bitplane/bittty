@@ -118,7 +118,7 @@ Grouping it that way turns a long list of orphan modes into a roadmap:
 
 | Cluster | Modes | Count |
 | :--- | :--- | ---: |
-| Keyboard (LK201/401/450, national variants) | 12, 16, 23, 35, 49, 57, 68, 81, 104, 108, 109, 110 | 12 |
+| Keyboard (LK201/401/450, national variants) | 12, 16, 23, 35, 49, 57, 68, 81, 104 | 9 |
 | CRT / display hardware | 4, 9, 51, 55, 97, 106, 114–117 | 10 |
 | Comms / transport | 11, 14, 53, 73, 99, 103 | 6 |
 | Graphics option | 38, 80, 1070, 8452 | 4 |
@@ -182,9 +182,6 @@ Recorded so nobody mistakes inference for research:
 
 - **DEC PPL levels.** `GENERIC_DEC_PPL2_PRINTER` asserts level 2. The level semantics have
   not been checked against the LA50/LA75/LN03 programmer reference manuals.
-- ~~Locator absence reporting.~~ **Resolved:** xterm's `Pe = 0` means "locator unavailable"
-  and carries no further parameters, and is sent both when the locator is not enabled and
-  when it is absent. bittty's existing `CSI 0 & w` was already correct.
 
 ## References
 
