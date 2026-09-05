@@ -60,8 +60,8 @@ class StdioTerminal(Terminal):
 
     def __init__(self) -> None:
         size = shutil.get_terminal_size()
-        self.width = size.columns
-        self.height = size.lines - self.reserved_rows
+        self.width = max(1, size.columns)
+        self.height = max(1, size.lines - self.reserved_rows)
         self.is_windows = platform.system() == "Windows"
         board = Board(command=self.get_default_shell(), width=self.width, height=self.height)
         super().__init__(board)
@@ -320,10 +320,11 @@ class StdioTerminal(Terminal):
     def handle_resize(self) -> None:
         """Re-read the host size and resize the emulator (called from a SIGWINCH handler)."""
         size = shutil.get_terminal_size()
-        self.width = size.columns
-        self.height = size.lines - self.reserved_rows
+        self.width = max(1, size.columns)
+        self.height = max(1, size.lines - self.reserved_rows)
         logger.info("Resize: %sx%s", self.width, self.height)
         self.board.display.resize(self.width, self.height)
+        self.dirty = True
 
     # --- run loop --- #
 

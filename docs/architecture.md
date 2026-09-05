@@ -35,6 +35,14 @@ never imported by core — see [peripherals.md](peripherals.md).
 Registers on the board hold physical facts reported by the chrome (focus, window state,
 caps) and hardware state the child can set (bell pitch, blank timeout, console requests).
 
+Host-output chunks (`feed_host_data` and `board.parser.feed`) and board resize calls
+share a reentrant lock. Both pages, cursor/margins, PTY sizing and frontend resize
+reports finish before another thread's output is processed. This does not order
+bytes already buffered by the child against its resize signal. Other device access
+and rendering still belong on the owning event loop; the board is not generally
+thread-safe. Receive callbacks run synchronously under this lock and must not wait
+for another thread to feed or resize the board.
+
 ## Video (`bittty.Video`)
 
 Video memory: a 2D cell grid, each cell a (Style, char) pair, in two pages (primary and

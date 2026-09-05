@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 import re
 from functools import lru_cache
+from threading import RLock
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -142,7 +143,8 @@ class Parser:
     Uses small, state-specific scanners for speed.
     """
 
-    def __init__(self, sink: OperationSink) -> None:
+    def __init__(self, sink: OperationSink, *, feed_lock=None) -> None:
+        self._feed_lock = feed_lock if feed_lock is not None else RLock()
         self.sink = sink
         self.buffer = ""
         self.pos = 0
@@ -178,6 +180,11 @@ class Parser:
 
     # ---- main entry ----
     def feed(self, chunk: str) -> None:
+        """Consume a chunk without interleaving another feed or board resize."""
+        with self._feed_lock:
+            self._feed(chunk)
+
+    def _feed(self, chunk: str) -> None:
         self.buffer += chunk
 
         handle = self._handle

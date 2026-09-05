@@ -4,6 +4,7 @@ Construction allocates no PTY and spawns no process (that happens in start_proce
 so these exercise the composition and the Display hooks in isolation.
 """
 
+import os
 import shutil
 
 from bittty import TerminalCaps
@@ -267,8 +268,18 @@ def test_handle_resize_tracks_the_outer_terminal():
     """Resize re-reads the venue's size and pushes it down to the board."""
     display = StdioTerminal()
     display.board.resize(5, 5)  # knock the board out of sync
+    display.dirty = False
     display.handle_resize()
     assert (display.board.width, display.board.height) == (display.width, display.height)
+    assert display.dirty
+
+
+def test_resize_keeps_a_positive_viewport(monkeypatch):
+    display = StdioTerminal()
+    display.reserved_rows = 2
+    monkeypatch.setattr(shutil, "get_terminal_size", lambda: os.terminal_size((0, 1)))
+    display.handle_resize()
+    assert (display.board.width, display.board.height) == (1, 1)
 
 
 def test_render_repaints_only_dirty_rows():

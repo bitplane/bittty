@@ -11,6 +11,7 @@ import logging
 import subprocess
 import sys
 from collections.abc import Callable
+from threading import RLock
 from typing import Any
 
 from .. import constants
@@ -77,6 +78,7 @@ class Board:
         if margin_bell_columns < 0:
             raise ValueError("margin_bell_columns must be non-negative")
         self.command = command
+        self._output_lock = RLock()
         self.width = width
         self.height = height
         self.stdin = stdin
@@ -155,7 +157,7 @@ class Board:
         }
 
         self.registry = self._build_registry()
-        self.parser = Parser(self)
+        self.parser = Parser(self, feed_lock=self._output_lock)
 
     def _build_registry(self) -> dict:
         """Merge every device's operation handlers into one name -> handler table."""
@@ -192,20 +194,25 @@ class Board:
 
     def feed_host_data(self, data: bytes | str) -> None:
         """Canonical host-output entry point, preserving raw printer-controller bytes."""
-        sink = self._pty_data_callback or self.parser.feed
-        self.printer.feed_host_data(data, sink)
+        with self._output_lock:
+            sink = self._pty_data_callback or self.parser.feed
+            self.printer.feed_host_data(data, sink)
 
     def resize(self, width: int, height: int) -> None:
         """Resize for an internal/host request, without an in-band notification."""
-        self.blitter.resize(width, height)
-        if self.pty is not None:
-            self.pty.resize(height, width)
+        if width < 1 or height < 1:
+            raise ValueError("terminal dimensions must be positive")
+        with self._output_lock:
+            self.blitter.resize(width, height)
+            if self.pty is not None:
+                self.pty.resize(height, width)
 
     def resize_from_frontend(self, width: int, height: int) -> None:
         """Apply an observed outer-terminal resize, then notify an opted-in child."""
-        self.resize(width, height)
-        if self.modes.inband_resize:
-            self.report_resize()
+        with self._output_lock:
+            self.resize(width, height)
+            if self.modes.inband_resize:
+                self.report_resize()
 
     def report_resize(self) -> None:
         """Send the mode-2048 text-area size report using known cell geometry."""
@@ -222,10 +229,11 @@ class Board:
 
     def set_page_columns(self, columns: int) -> None:
         """Apply DECSCPP and report the resulting page size to the PTY."""
-        old_width = self.width
-        self.blitter.set_page_columns(columns)
-        if self.width != old_width and self.pty is not None:
-            self.pty.resize(self.height, self.width)
+        with self._output_lock:
+            old_width = self.width
+            self.blitter.set_page_columns(columns)
+            if self.width != old_width and self.pty is not None:
+                self.pty.resize(self.height, self.width)
 
     def bell(self) -> None:
         """Ring the terminal bell: pushed to the terminal (chrome) as a present event."""
