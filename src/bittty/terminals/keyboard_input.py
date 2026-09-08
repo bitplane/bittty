@@ -4,6 +4,7 @@ import codecs
 import re
 
 from ..keyboard_protocol import FUNCTIONAL, UNICODE_KEYS
+from ..keyboard_styles import KeyboardStyle
 from ..keys import KeyEvent, KeyModifiers
 
 _CSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
@@ -165,7 +166,11 @@ class KeyboardInput:
             terminal.handle_focus(raw == "\x1b[I")
         elif raw == "\x1bO[":
             terminal.board.display.input_key_event(KeyEvent("escape"))
-        elif terminal.host_keyboard_flags is not None or terminal.board.keyboard.kitty_flags:
+        elif (
+            terminal.host_keyboard_flags is not None
+            or terminal.board.keyboard.kitty_flags
+            or terminal.board.keyboard.style is not KeyboardStyle.DEFAULT
+        ):
             event = decode_key(raw)
             if isinstance(event, KeyEvent):
                 terminal.board.display.input_key_event(event)

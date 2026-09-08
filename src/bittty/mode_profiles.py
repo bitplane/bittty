@@ -25,6 +25,11 @@ DEC_AUTOWRAP = "dec.autowrap"
 DEC_AUTO_REPEAT = "dec.auto-repeat"
 MINTTY_APPLICATION_ESCAPE = "mintty.application-escape"
 MINTTY_ESCAPE_FS = "mintty.escape-fs"
+XTERM_SUN_KEYS = "xterm.sun-keys"
+XTERM_HP_KEYS = "xterm.hp-keys"
+XTERM_SCO_KEYS = "xterm.sco-keys"
+XTERM_LEGACY_KEYS = "xterm.legacy-keys"
+XTERM_VT220_KEYS = "xterm.vt220-keys"
 DEC_AUTO_ANSWERBACK = "dec.auto-answerback"
 DEC_CONCEAL_ANSWERBACK = "dec.conceal-answerback"
 XTERM_MARGIN_BELL = "xterm.margin-bell"
@@ -115,6 +120,11 @@ VT510_MODE_CAPABILITIES = VT220_MODE_CAPABILITIES | frozenset(
 
 XTERM_MODE_CAPABILITIES = frozenset(
     {
+        XTERM_SUN_KEYS,
+        XTERM_HP_KEYS,
+        XTERM_SCO_KEYS,
+        XTERM_LEGACY_KEYS,
+        XTERM_VT220_KEYS,
         ANSI_KEYBOARD_ACTION,
         ANSI_INSERT,
         ANSI_SEND_RECEIVE,

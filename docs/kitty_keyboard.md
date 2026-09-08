@@ -40,6 +40,14 @@ precedence, as does modifyOtherKeys for modified character keys. Raw input and
 paste are unchanged. Mode 7727 also maps explicitly identified keypad navigation
 keys to application-keypad codes when DECKPAM is active and DECCKM is reset.
 
+Xterm and bittty support keyboard selections 1051/1052/1053 (Sun/HP/SCO) and
+1060/1061 (X11R6/VT220). One selection and one shared save slot cover all five;
+resetting any selector restores the model keymap. Selection survives RIS/DECSTR
+and screen switches; RIS clears the save slot. VT220 selection maps Ctrl-Fn to
+Fn+12 and Shift-Fn to UDKs, and adapts explicitly identified keypad keys.
+These use xterm's default modifier formats and Ctrl-function-key offset, not
+its full configurable modifier-resource family. Mode 1050 remains unsupported.
+
 ## Kitty protocol
 
 The `BITTTY` and `KITTY` models implement all five

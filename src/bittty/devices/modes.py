@@ -8,6 +8,7 @@ from enum import Enum
 from typing import TYPE_CHECKING
 
 from .. import mode_profiles as mp
+from ..keyboard_styles import KeyboardStyle
 from ..operations import Operation
 from ..present import (
     AmbiguousWidthChanged,
@@ -107,6 +108,47 @@ class ModeSpec:
 
 
 # --- side effects for modes that do more than flip a flag --- #
+
+
+_KEYBOARD_MODES = (1051, 1052, 1053, 1060, 1061)
+
+
+def _save_keyboard_style(device: ModeDevice) -> None:
+    keyboard = device.board.keyboard
+    keyboard.saved_style = keyboard.style
+    # Xterm uses one shared save slot for this entire selection family.
+    for number in _KEYBOARD_MODES:
+        if (True, number) in device._modes:
+            device._saved_private_modes[number] = None
+
+
+def _restore_keyboard_style(device: ModeDevice) -> None:
+    device.board.keyboard.style = device.board.keyboard.saved_style
+
+
+def _keyboard_style(capability: str, number: int, style: KeyboardStyle) -> ModeSpec:
+    return ModeSpec(
+        capability,
+        number,
+        True,
+        queryable=True,
+        apply_fn=lambda d, enabled: setattr(d.board.keyboard, "style", style if enabled else KeyboardStyle.DEFAULT),
+        status_fn=lambda d: 1 if d.board.keyboard.style is style else 2,
+        save_fn=_save_keyboard_style,
+        restore_fn=_restore_keyboard_style,
+    )
+
+
+def _explicit_delete(device: ModeDevice, value: bool) -> None:
+    device.board.keyboard.delete_policy_explicit = True
+
+
+def _save_delete(device: ModeDevice) -> None:
+    device.board.keyboard.saved_delete = (device.delete_sends_del, device.board.keyboard.delete_policy_explicit)
+
+
+def _restore_delete(device: ModeDevice) -> None:
+    device.delete_sends_del, device.board.keyboard.delete_policy_explicit = device.board.keyboard.saved_delete
 
 
 def _dec_deccolm(device: ModeDevice, value: bool) -> None:
@@ -452,7 +494,16 @@ MODE_SPECS: tuple[ModeSpec, ...] = (
         queryable=True,
     ),
     ModeSpec(mp.XTERM_META_ESCAPE, 1036, True, "meta_sends_escape", queryable=True),
-    ModeSpec(mp.XTERM_DELETE, 1037, True, "delete_sends_del", queryable=True),
+    ModeSpec(
+        mp.XTERM_DELETE,
+        1037,
+        True,
+        "delete_sends_del",
+        queryable=True,
+        apply_fn=_explicit_delete,
+        save_fn=_save_delete,
+        restore_fn=_restore_delete,
+    ),
     ModeSpec(mp.XTERM_ALT_ESCAPE, 1039, True, "alt_sends_escape", queryable=True),
     ModeSpec(mp.XTERM_BELL_URGENT, 1042, True, "bell_urgent", queryable=True),
     ModeSpec(mp.XTERM_BELL_RAISE, 1043, True, "bell_raise", queryable=True),
@@ -531,6 +582,14 @@ MODE_SPECS: tuple[ModeSpec, ...] = (
     ),
 )
 
+
+MODE_SPECS += (
+    _keyboard_style(mp.XTERM_SUN_KEYS, 1051, KeyboardStyle.SUN),
+    _keyboard_style(mp.XTERM_HP_KEYS, 1052, KeyboardStyle.HP),
+    _keyboard_style(mp.XTERM_SCO_KEYS, 1053, KeyboardStyle.SCO),
+    _keyboard_style(mp.XTERM_LEGACY_KEYS, 1060, KeyboardStyle.LEGACY),
+    _keyboard_style(mp.XTERM_VT220_KEYS, 1061, KeyboardStyle.VT220),
+)
 
 MODE_BY_CAPABILITY = {mode.capability: mode for mode in MODE_SPECS}
 if len(MODE_BY_CAPABILITY) != len(MODE_SPECS):

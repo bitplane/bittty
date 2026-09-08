@@ -134,11 +134,11 @@ Related ANSI modes: KAM (`CSI 2 h/l`) and SRM (`CSI 12 h/l`) implement keyboard 
 | 1048 | xterm | Save cursor as in DECSC | ✅ |
 | 1049 | xterm | Save cursor as in DECSC and use alternate screen buffer | ✅ |
 | 1050 | xterm | Set terminfo/termcap function-key mode | X |
-| 1051 | xterm | Set Sun function-key mode | X |
-| 1052 | xterm | Set HP function-key mode | X |
-| 1053 | xterm | Set SCO function-key mode | X |
-| 1060 | xterm | Set legacy keyboard emulation, i.e, X11R6 | X |
-| 1061 | xterm | Set VT220 keyboard emulation | X |
+| 1051 | xterm | Set Sun function-key mode | ✅ |
+| 1052 | xterm | Set HP function-key mode | ✅ |
+| 1053 | xterm | Set SCO function-key mode | ✅ |
+| 1060 | xterm | Set legacy keyboard emulation, i.e, X11R6 | ✅ |
+| 1061 | xterm | Set VT220 keyboard emulation | ✅ |
 | 1070 | xterm | Use private color registers for each graphic | X |
 | 1243 | VTE | Arrow keys swapping (BiDi) | X |
 | 1337 | iTerm2 | Report Key Up | X |

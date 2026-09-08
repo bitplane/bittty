@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from .. import constants
 from ..keyboard_protocol import ALIASES, KEYPAD_LEGACY, KEYPAD_NAMES, encode_key
+from ..keyboard_styles import KEYPAD_POSITIONS, KeyboardStyle, function_sequence, modify_sequence, special_sequence
 from ..keymap import apply_modifier
 from ..keys import KeyEvent, KeyModifiers, legacy_modifiers, valid_text
 from ..options import DEC_KEYBOARD_LEDS, DEC_USER_KEYS, KITTY_KEYBOARD
@@ -23,19 +24,6 @@ _KITTY_SUPPORTED = 31
 # prevent Denial-of-Service attacks." Full stack evicts its oldest entry.
 _KITTY_STACK_MAX = 8
 _CONTROL_TEXT = dict(zip(" @2345678?[/\\]^_~", (0, 0, 0, 27, 28, 29, 30, 31, 127, 127, 27, 31, 28, 29, 30, 31, 30)))
-_KEYPAD_POSITIONS = {
-    "insert": "0",
-    "end": "1",
-    "down": "2",
-    "pagedown": "3",
-    "left": "4",
-    "begin": "5",
-    "right": "6",
-    "home": "7",
-    "up": "8",
-    "pageup": "9",
-    "delete": ".",
-}
 
 
 @dataclass(slots=True)
@@ -81,6 +69,10 @@ class KeyboardDevice(Device):
         self.board = board
         self.user_defined_keys: dict[int, bytes] = {}  # DECUDK: F-number -> wire bytes
         self.user_keys_locked = False
+        self.style = KeyboardStyle.DEFAULT
+        self.saved_style = KeyboardStyle.DEFAULT
+        self.delete_policy_explicit = False
+        self.saved_delete = (False, False)
         self.modify_other_keys = 0  # xterm modifyOtherKeys level (0/1/2)
         self.paste_bracketed = False
         # Built directly: the blitter these key off does not exist yet.
@@ -276,6 +268,10 @@ class KeyboardDevice(Device):
     def reset(self, hard: bool = True) -> None:
         """RIS clears the modern-keyboard negotiation state, on both screens."""
         if hard:
+            # Xterm keyboard selection survives RIS, unlike its saved slot.
+            self.saved_style = KeyboardStyle.DEFAULT
+            self.delete_policy_explicit = False
+            self.saved_delete = (False, False)
             self.user_defined_keys.clear()
             self.user_keys_locked = False
             self.modify_other_keys = 0
@@ -332,6 +328,9 @@ class KeyboardDevice(Device):
         if char == "escape":
             char = constants.ESC
         keymap = self.board.model.keymap
+
+        if self.style is not KeyboardStyle.DEFAULT and len(char) > 1 and self._style_key(char, modifier):
+            return
 
         # Sending raw DEL for Delete recreates the ambiguity Kitty flag 1
         # removes; the named key falls through to nav_keys' CSI 3~ instead.
@@ -406,6 +405,9 @@ class KeyboardDevice(Device):
         self._legacy_fkey(num, modifier)
 
     def _legacy_fkey(self, num: int, modifier: int) -> None:
+        if self.style is not KeyboardStyle.DEFAULT:
+            self._style_fkey(num, modifier)
+            return
         if modifier == constants.KEY_MOD_SHIFT and num in self.user_defined_keys:
             self.board.transmit_keyboard_bytes(self.user_defined_keys[num])
             return
@@ -418,6 +420,78 @@ class KeyboardDevice(Device):
             sequence = apply_modifier(sequence, special_modifier)
         self._input_special(sequence, legacy_bits)
 
+    def _style_send(self, sequence: str, modifier: int) -> None:
+        if self.style in (KeyboardStyle.LEGACY, KeyboardStyle.VT220):
+            modifier, legacy_bits = 1, 0
+        else:
+            modifier, legacy_bits = self._special_modifier(modifier)
+        sequence = modify_sequence(sequence, modifier)
+        if self._legacy_escape_prefix(legacy_bits):
+            sequence = constants.ESC + sequence
+        # Already encoded: DECCKM must not rewrite SCO cursor codes.
+        self.board.transmit_keyboard(sequence)
+
+    def _style_key(self, key: str, modifier: int) -> bool:
+        modes = self.board.modes
+        if key == "delete" and self.style in (KeyboardStyle.LEGACY, KeyboardStyle.VT220):
+            legacy_default = self.style is KeyboardStyle.LEGACY and not self.delete_policy_explicit
+            if modes.delete_sends_del or legacy_default:
+                self.board.transmit_keyboard(constants.DEL)
+                return True
+        if key.startswith("pf") and key[2:] in ("1", "2", "3", "4"):
+            self._style_keypad_send("\x1bO" + "PQRS"[int(key[2:]) - 1], modifier)
+            return True
+        sequence = special_sequence(self.style, key, modes.cursor_application_mode)
+        if sequence is None:
+            return False
+        self._style_send(sequence, modifier)
+        return True
+
+    def _style_fkey(self, number: int, modifier: int) -> None:
+        bits = modifier - 1
+        if self.style in (KeyboardStyle.LEGACY, KeyboardStyle.VT220) and bits & 4:
+            number += 12  # xterm's default ctrlFKeys bank
+            modifier = (bits & ~4) + 1
+        if (
+            self.style is KeyboardStyle.VT220
+            and modifier == constants.KEY_MOD_SHIFT
+            and number in self.user_defined_keys
+        ):
+            self.board.transmit_keyboard_bytes(self.user_defined_keys[number])
+            return
+        sequence = function_sequence(self.style, number)
+        if sequence is not None:
+            self._style_send(sequence, modifier)
+
+    def _style_numpad(self, key: str, modifier: int, *, numeric_override: bool = False) -> None:
+        bits = modifier - 1
+        if self.style is KeyboardStyle.VT220 and not bits & 1:
+            if key == "+":
+                key = ","
+            if key == "," and bits & 4:
+                key = "-"
+                modifier = (bits & ~4) + 1
+        if self.board.modes.numeric_keypad or numeric_override:
+            text = {"Enter": "\r", "Tab": "\t", "Space": " "}.get(key, key)
+            if len(text) == 1:
+                self.board.transmit_keyboard(text, local_text=text, margin_key=text.isprintable())
+            return
+        final = {"=": "X", ",": "l", "Tab": "I", "Space": " "}.get(key)
+        sequence = "\x1bO" + final if final else self.board.model.keymap.numpad_application.get(key)
+        if sequence is not None:
+            self._style_keypad_send(sequence, modifier)
+
+    def _style_keypad_send(self, sequence: str, modifier: int) -> None:
+        # Unlike cursor/function keys, keypad modifiers use original SS3 params.
+        if self.style in (KeyboardStyle.LEGACY, KeyboardStyle.VT220):
+            modifier, legacy_bits = 1, 0
+        else:
+            modifier, legacy_bits = self._special_modifier(modifier)
+        sequence = modify_sequence(sequence, modifier, 0)
+        if self._legacy_escape_prefix(legacy_bits):
+            sequence = constants.ESC + sequence
+        self.board.transmit_keyboard(sequence)
+
     def input_numpad_key(self, key: str) -> None:
         """Convert numpad key to the sequence for the current keypad mode."""
         if self.kitty_flags and key in KEYPAD_NAMES:
@@ -427,6 +501,9 @@ class KeyboardDevice(Device):
         self._legacy_numpad(key)
 
     def _legacy_numpad(self, key: str, modifier: int = constants.KEY_MOD_NONE) -> None:
+        if self.style is not KeyboardStyle.DEFAULT:
+            self._style_numpad(key, modifier)
+            return
         keymap = self.board.model.keymap
         table = keymap.numpad_numeric if self.board.modes.numeric_keypad else keymap.numpad_application
         sequence = table.get(key, key)
@@ -471,15 +548,22 @@ class KeyboardDevice(Device):
         if key.startswith("f") and key[1:].isdigit():
             self._legacy_fkey(int(key[1:]), modifier)
         elif key in KEYPAD_LEGACY:
-            self._legacy_numpad(KEYPAD_LEGACY[key], modifier)
+            if (
+                self.style is not KeyboardStyle.DEFAULT
+                and bits & KeyModifiers.NUM_LOCK
+                and self.board.modes.special_modifiers
+                and event.text
+                and len(event.text) == 1
+            ):
+                self._style_numpad(KEYPAD_LEGACY[key], modifier, numeric_override=True)
+            else:
+                self._legacy_numpad(KEYPAD_LEGACY[key], modifier)
         elif key.startswith("kp_"):
             modes = self.board.modes
-            position = _KEYPAD_POSITIONS.get(key[3:])
-            if (
-                position is not None
-                and modes.application_escape
-                and not modes.numeric_keypad
-                and not modes.cursor_application_mode
+            position = KEYPAD_POSITIONS.get(key[3:])
+            if position is not None and (
+                self.style is KeyboardStyle.VT220
+                or (modes.application_escape and not modes.numeric_keypad and not modes.cursor_application_mode)
             ):
                 self._legacy_numpad(position, modifier)
             else:
