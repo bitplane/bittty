@@ -41,7 +41,7 @@ def test_decudk_redefines_a_function_key():
     # DECUDK: define key 17 (F6) to send "HELLO"; St is the hex of the string.
     hexstr = "HELLO".encode("latin-1").hex().upper()
     parser.feed(f"\x1bP0;0|17/{hexstr}\x1b\\")
-    assert board.keyboard.user_defined_keys[6] == "HELLO"
+    assert board.keyboard.user_defined_keys[6] == b"HELLO"
 
-    board.input_fkey(6)  # F6 now sends the user string, not the keymap default
-    assert transport.data == ["HELLO"]
+    board.input_fkey(6, 2)  # Shift-F6 sends the user string; plain F6 is unchanged.
+    assert transport.data == [b"HELLO"]

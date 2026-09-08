@@ -22,6 +22,9 @@ KITTY_COLUMN_MODE = "kitty.column-mode"
 DEC_REVERSE_SCREEN = "dec.reverse-screen"
 DEC_ORIGIN = "dec.origin"
 DEC_AUTOWRAP = "dec.autowrap"
+DEC_AUTO_REPEAT = "dec.auto-repeat"
+MINTTY_APPLICATION_ESCAPE = "mintty.application-escape"
+MINTTY_ESCAPE_FS = "mintty.escape-fs"
 DEC_AUTO_ANSWERBACK = "dec.auto-answerback"
 DEC_CONCEAL_ANSWERBACK = "dec.conceal-answerback"
 XTERM_MARGIN_BELL = "xterm.margin-bell"
@@ -84,6 +87,7 @@ VT100_MODE_CAPABILITIES = ANSI_MODE_CAPABILITIES | frozenset(
         DEC_REVERSE_SCREEN,
         DEC_ORIGIN,
         DEC_AUTOWRAP,
+        DEC_AUTO_REPEAT,
     }
 )
 VT220_MODE_CAPABILITIES = VT100_MODE_CAPABILITIES | frozenset(
@@ -305,6 +309,9 @@ KITTY_MODE_CAPABILITIES = frozenset(
 # The native model keeps bittty extensions separate from the xterm profile.
 BITTTY_MODE_CAPABILITIES = XTERM_MODE_CAPABILITIES | frozenset(
     {
+        DEC_AUTO_REPEAT,
+        MINTTY_APPLICATION_ESCAPE,
+        MINTTY_ESCAPE_FS,
         XTERM_SYNC_OUTPUT,
         UNICODE_GRAPHEME_CLUSTERING,
         UNICODE_AMBIGUOUS_WIDTH,

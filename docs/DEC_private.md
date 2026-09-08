@@ -14,7 +14,7 @@ Related ANSI modes: KAM (`CSI 2 h/l`) and SRM (`CSI 12 h/l`) implement keyboard 
 | 5 | DEC | DECSCNM - Screen Mode (light or dark screen) | ✅ |
 | 6 | DEC | DECOM - Origin Mode | ✅ |
 | 7 | DEC | DECAWM - Auto Wrap Mode | ✅ |
-| 8 | DEC | DECARM - Auto Repeat Mode | X |
+| 8 | DEC | DECARM - Auto Repeat Mode (explicit repeat events; hardware timing deferred) | ✅ |
 | 9 | DEC | DECINLM - Interlace Mode | X |
 | 9 | xterm | Mouse Tracking | ✅ |
 | 10 | DEC | DECEDM - Editing Mode | X |
@@ -161,8 +161,8 @@ Related ANSI modes: KAM (`CSI 2 h/l`) and SRM (`CSI 12 h/l`) implement keyboard 
 | 7700 | mintty | Ambiguous width reporting | X |
 | 7711 | mintty | Scroll markers (prompt start) | X |
 | 7723 | mintty | Rewrap on resize | X |
-| 7727 | mintty | Application escape key mode | X |
-| 7728 | mintty | Send send ^\ instead of the standard ^[ for the ESC key | X |
+| 7727 | mintty | Application escape key mode (bittty profile) | ✅ |
+| 7728 | mintty | Send ^\ instead of the standard ^[ for the ESC key (bittty profile) | ✅ |
 | 7730 | mintty | Graphics position | X |
 | 7765 | mintty | Alt-modified mousewheel mode | X |
 | 7766 | mintty | Show/hide scrollbar | X |

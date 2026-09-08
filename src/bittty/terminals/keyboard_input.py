@@ -21,6 +21,7 @@ _REPLY = re.compile(
 _TEXT_RUN = re.compile(r"[^\x00-\x1f\x7f-\x9f]+|[\x00-\x1f\x7f-\x9f]+")
 _KEYBOARD_REPLY = re.compile(r"\x1b\[\?([0-9]{1,10})u")
 _SS3_KEYS = dict(zip("ABCDHFPQRS", ("up", "down", "right", "left", "home", "end", "f1", "f2", "f3", "f4")))
+_SS3_KEYS["["] = "escape"
 MAX_SEQUENCE = 4096
 
 
@@ -162,6 +163,8 @@ class KeyboardInput:
             return
         elif raw in ("\x1b[I", "\x1b[O"):
             terminal.handle_focus(raw == "\x1b[I")
+        elif raw == "\x1bO[":
+            terminal.board.display.input_key_event(KeyEvent("escape"))
         elif terminal.host_keyboard_flags is not None or terminal.board.keyboard.kitty_flags:
             event = decode_key(raw)
             if isinstance(event, KeyEvent):
@@ -198,7 +201,11 @@ class KeyboardInput:
         ):
             pending = self.pending
             self.pending = ""
-            self.terminal.board.display.input(pending)
+            board = self.terminal.board
+            if pending == "\x1b" and (board.modes.application_escape or board.modes.escape_sends_fs):
+                board.display.input_key_event(KeyEvent("escape"))
+            else:
+                board.display.input(pending)
 
     def finish(self):
         self.feed(self.utf8.decode(b"", final=True))

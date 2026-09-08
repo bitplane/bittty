@@ -40,6 +40,7 @@ NO_PRINTER = PrinterCapabilities(media_copy=False, configuration=False)
 DEC_LOCATOR = "dec.locator"
 KITTY_KEYBOARD = "kitty.keyboard"
 DEC_KEYBOARD_LEDS = "dec.keyboard-leds"
+DEC_USER_KEYS = "dec.user-keys"
 
 
 @dataclass(frozen=True)

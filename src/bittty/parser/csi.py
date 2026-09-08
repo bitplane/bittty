@@ -129,6 +129,8 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
         code = param(params, 0, 0)
         if intermediates == ["?"] and code == 15:
             return Operation("DSR_PRINTER", (code,), raw_csi_data)
+        if intermediates == ["?"] and code == 25:
+            return Operation("DSR_USER_KEYS", (), raw_csi_data)
         if code == 5:
             return Operation("DSR", (code,), raw_csi_data)
         if code == 6:

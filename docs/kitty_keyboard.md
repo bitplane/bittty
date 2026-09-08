@@ -23,6 +23,23 @@ retains its original meaning (in particular, bit 8 means Meta, not Super).
 Hardware/layout adapters can map their identities into events without adding
 platform-specific codes to the board. Historical keyboard layouts remain unimplemented.
 
+DECARM (mode 8, bittty and DEC hardware profiles) filters explicit repeat events;
+legacy bytes cannot distinguish repeats. Repeat timing and historical per-key
+exceptions remain frontend/hardware-profile work.
+
+DECUDK on bittty, xterm, VT220 and VT510 defines Shift-F6–F20 byte strings, with
+clear/merge, download locking and DSR 25. RIS clears definitions and unlocks;
+DECSTR preserves them. `keyboard.set_user_keys_locked(False)` is the operator
+Set-Up unlock. Storage is bounded by `Model.udk_capacity` (256 bytes on VT220,
+4,096 otherwise; the latter is an implementation budget, not a hardware claim).
+
+The bittty profile supports mintty modes 7727/7728: application Escape (`ESC O [`)
+takes precedence over Escape-as-Ctrl-Backslash. Existing modifier policies apply
+to normal Escape; application Escape carries no modifiers. Kitty encoding takes
+precedence, as does modifyOtherKeys for modified character keys. Raw input and
+paste are unchanged. Mode 7727 also maps explicitly identified keypad navigation
+keys to application-keypad codes when DECKPAM is active and DECCKM is reset.
+
 ## Kitty protocol
 
 The `BITTTY` and `KITTY` models implement all five

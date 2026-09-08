@@ -286,6 +286,9 @@ MODE_SPECS: tuple[ModeSpec, ...] = (
     ),
     ModeSpec(mp.DEC_ORIGIN, 6, True, "origin_mode", queryable=True),
     ModeSpec(mp.DEC_AUTOWRAP, 7, True, "auto_wrap", default=True, queryable=True),
+    ModeSpec(mp.DEC_AUTO_REPEAT, 8, True, "auto_repeat", default=True, queryable=True),
+    ModeSpec(mp.MINTTY_APPLICATION_ESCAPE, 7727, True, "application_escape", queryable=True),
+    ModeSpec(mp.MINTTY_ESCAPE_FS, 7728, True, "escape_sends_fs", queryable=True),
     ModeSpec(
         mp.XTERM_MOUSE_X10,
         9,
@@ -611,8 +614,6 @@ class ModeDevice(Device):
 
         # DECKPAM/DECKPNM are escape controls, not SM/RM modes.
         self.application_keypad = False
-        # DECARM remains a hardware register until repeat events carry enough metadata.
-        self.auto_repeat = True
 
     def reset(self, hard: bool = True, *, reconcile: bool = True) -> None:
         """Reset modes. hard restores every flag (RIS); soft is the DECSTR subset."""

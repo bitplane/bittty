@@ -22,7 +22,6 @@ def _term(model=None):
     [
         2,
         4,
-        8,
         20,
         68,
         80,
@@ -36,7 +35,6 @@ def _term(model=None):
         1070,
         2028,
         2031,
-        7727,
         7786,
         8452,
     ],
@@ -249,7 +247,7 @@ def test_ambiguous_width_mode_reports_its_state():
 
 def test_decrqm_now_reports_mouse_and_paste_modes():
     # These modes were previously supported but silently answered DECRQM 0.
-    board, parser, transport = _term()
+    _board, parser, transport = _term()
     parser.feed("\x1b[?1000h\x1b[?1000$p")  # mouse tracking on
     assert transport.data[-1] == "\x1b[?1000;1$y"
     parser.feed("\x1b[?1006h\x1b[?1006$p")  # SGR mouse encoding on

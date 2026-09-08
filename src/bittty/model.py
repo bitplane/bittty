@@ -35,6 +35,7 @@ from .mode_profiles import (
 from .options import (
     DEC_KEYBOARD_LEDS,
     DEC_PRINTER_PORT,
+    DEC_USER_KEYS,
     KITTY_KEYBOARD,
     LOCATOR_PORT,
     NO_PRINTER,
@@ -76,6 +77,7 @@ class Model:
     control_capabilities: frozenset[str] = frozenset()
     # DEC hardware uses 0 for a valid DECRQSS request; modern emulators use 1.
     decrqss_valid_is_one: bool = True
+    udk_capacity: int = 4096  # byte budget for downloaded function-key strings
 
     @property
     def capabilities(self) -> frozenset[str]:
@@ -107,7 +109,7 @@ XTERM = Model(
     da2_response="\033[>1;10;0c",
     mode_capabilities=XTERM_MODE_CAPABILITIES,
     options=frozenset({XTERM_PRINTER_PIPE, LOCATOR_PORT}),
-    control_capabilities=frozenset({DEC_KEYBOARD_LEDS}),
+    control_capabilities=frozenset({DEC_KEYBOARD_LEDS, DEC_USER_KEYS}),
 )
 
 BITTTY = Model(
@@ -117,7 +119,7 @@ BITTTY = Model(
     da2_response=XTERM.da2_response,
     mode_capabilities=BITTTY_MODE_CAPABILITIES,
     options=frozenset({VT510_PRINTER_PORT, LOCATOR_PORT}),
-    control_capabilities=frozenset({KITTY_KEYBOARD, DEC_KEYBOARD_LEDS}),
+    control_capabilities=frozenset({KITTY_KEYBOARD, DEC_KEYBOARD_LEDS, DEC_USER_KEYS}),
 )
 
 VT100 = Model(
@@ -147,6 +149,8 @@ VT220 = Model(
     color_depth="monochrome",
     keymap=VT220_KEYMAP,
     options=frozenset({DEC_PRINTER_PORT}),
+    control_capabilities=frozenset({DEC_USER_KEYS}),
+    udk_capacity=256,
 )
 
 VT510 = Model(
@@ -159,7 +163,7 @@ VT510 = Model(
     color_depth="monochrome",
     keymap=VT220_KEYMAP,
     options=frozenset({VT510_PRINTER_PORT}),
-    control_capabilities=frozenset({DEC_KEYBOARD_LEDS}),
+    control_capabilities=frozenset({DEC_KEYBOARD_LEDS, DEC_USER_KEYS}),
     decrqss_valid_is_one=False,
 )
 

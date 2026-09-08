@@ -9,7 +9,7 @@ from .. import constants
 from ..keyboard_protocol import ALIASES, KEYPAD_LEGACY, KEYPAD_NAMES, encode_key
 from ..keymap import apply_modifier
 from ..keys import KeyEvent, KeyModifiers, legacy_modifiers, valid_text
-from ..options import DEC_KEYBOARD_LEDS, KITTY_KEYBOARD
+from ..options import DEC_KEYBOARD_LEDS, DEC_USER_KEYS, KITTY_KEYBOARD
 from .modes import ModeEffect
 
 if TYPE_CHECKING:
@@ -23,6 +23,19 @@ _KITTY_SUPPORTED = 31
 # prevent Denial-of-Service attacks." Full stack evicts its oldest entry.
 _KITTY_STACK_MAX = 8
 _CONTROL_TEXT = dict(zip(" @2345678?[/\\]^_~", (0, 0, 0, 27, 28, 29, 30, 31, 127, 127, 27, 31, 28, 29, 30, 31, 30)))
+_KEYPAD_POSITIONS = {
+    "insert": "0",
+    "end": "1",
+    "down": "2",
+    "pagedown": "3",
+    "left": "4",
+    "begin": "5",
+    "right": "6",
+    "home": "7",
+    "up": "8",
+    "pageup": "9",
+    "delete": ".",
+}
 
 
 @dataclass(slots=True)
@@ -66,7 +79,8 @@ class KeyboardDevice(Device):
 
     def __init__(self, board: Board) -> None:
         self.board = board
-        self.user_defined_keys: dict[int, str] = {}  # DECUDK: F-number -> sequence
+        self.user_defined_keys: dict[int, bytes] = {}  # DECUDK: F-number -> wire bytes
+        self.user_keys_locked = False
         self.modify_other_keys = 0  # xterm modifyOtherKeys level (0/1/2)
         self.paste_bracketed = False
         # Built directly: the blitter these key off does not exist yet.
@@ -77,9 +91,11 @@ class KeyboardDevice(Device):
         self.led_scroll = False
         self.leds_fitted = DEC_KEYBOARD_LEDS in board.model.provides
         self.handlers = {
-            "DECUDK": self.set_user_keys,
             "XTMODKEYS": self.set_modify_keys,
         }
+        if DEC_USER_KEYS in board.model.provides:
+            self.handlers["DECUDK"] = self.set_user_keys
+            self.handlers["DSR_USER_KEYS"] = self.report_user_keys
         if self.leds_fitted:
             self.handlers["DECLL"] = self.load_leds
         if KITTY_KEYBOARD in board.model.provides:
@@ -114,10 +130,28 @@ class KeyboardDevice(Device):
 
     def set_user_keys(self, operation: Operation) -> None:
         """DECUDK — install user-defined strings for function keys."""
-        for code, value in operation.args[0]:
+        if self.user_keys_locked:
+            return
+        clear, lock, definitions = operation.args
+        if clear == 0:
+            self.user_defined_keys.clear()
+        used = sum(map(len, self.user_defined_keys.values()))
+        for code, value in definitions:
             fkey = _DECUDK_CODE_TO_FKEY.get(code)
             if fkey is not None:
-                self.user_defined_keys[fkey] = value
+                used -= len(self.user_defined_keys.pop(fkey, b""))
+                if value and used + len(value) <= self.board.model.udk_capacity:
+                    self.user_defined_keys[fkey] = value
+                    used += len(value)
+        self.user_keys_locked = lock == 0
+
+    def report_user_keys(self, operation: Operation) -> None:
+        """DSR 25 reports the download lock, not the keyboard action lock."""
+        self.board.host.write(f"\x1b[?{21 if self.user_keys_locked else 20}n", flush=True)
+
+    def set_user_keys_locked(self, locked: bool) -> None:
+        """Operator Set-Up control; DECUDK cannot unlock downloaded keys."""
+        self.user_keys_locked = locked
 
     # --- modern keyboard negotiation (xterm modifyOtherKeys, Kitty protocol) --- #
 
@@ -242,6 +276,8 @@ class KeyboardDevice(Device):
     def reset(self, hard: bool = True) -> None:
         """RIS clears the modern-keyboard negotiation state, on both screens."""
         if hard:
+            self.user_defined_keys.clear()
+            self.user_keys_locked = False
             self.modify_other_keys = 0
             for state in self._kitty.values():
                 state.clear()
@@ -293,6 +329,8 @@ class KeyboardDevice(Device):
         self._legacy_key(char, modifier)
 
     def _legacy_key(self, char: str, modifier: int) -> None:
+        if char == "escape":
+            char = constants.ESC
         keymap = self.board.model.keymap
 
         # Sending raw DEL for Delete recreates the ambiguity Kitty flag 1
@@ -322,6 +360,12 @@ class KeyboardDevice(Device):
         if enhanced is not None:  # modifyOtherKeys / Kitty encode modified keys explicitly
             self.input(enhanced, local_text=char, margin_key=char.isprintable())
             return
+
+        if char == constants.ESC:
+            if self.board.modes.application_escape:
+                self.input("\x1bO[")
+                return
+            char = "\x1c" if self.board.modes.escape_sends_fs else constants.ESC
 
         # xterm modifier numbers are one plus a shift/alt/control bit mask.
         # Apply the legacy control and Alt transformations only after the
@@ -362,8 +406,8 @@ class KeyboardDevice(Device):
         self._legacy_fkey(num, modifier)
 
     def _legacy_fkey(self, num: int, modifier: int) -> None:
-        if num in self.user_defined_keys:
-            self.input(self.user_defined_keys[num])
+        if modifier == constants.KEY_MOD_SHIFT and num in self.user_defined_keys:
+            self.board.transmit_keyboard_bytes(self.user_defined_keys[num])
             return
         keymap = self.board.model.keymap
         sequence = keymap.function_keys.get(num)
@@ -402,6 +446,8 @@ class KeyboardDevice(Device):
 
     def input_key_event(self, event: KeyEvent) -> None:
         """Encode supplied key facts using the child's active keyboard policy."""
+        if event.event_type == "repeat" and not self.board.modes.auto_repeat:
+            return
         flags = self.kitty_flags
         # Extended modifiers have no legacy encoding. Kitty-capable models can
         # express them even before an application opts into enhancements.
@@ -427,7 +473,17 @@ class KeyboardDevice(Device):
         elif key in KEYPAD_LEGACY:
             self._legacy_numpad(KEYPAD_LEGACY[key], modifier)
         elif key.startswith("kp_"):
-            self._legacy_key(key[3:], modifier)
+            modes = self.board.modes
+            position = _KEYPAD_POSITIONS.get(key[3:])
+            if (
+                position is not None
+                and modes.application_escape
+                and not modes.numeric_keypad
+                and not modes.cursor_application_mode
+            ):
+                self._legacy_numpad(position, modifier)
+            else:
+                self._legacy_key(key[3:], modifier)
         elif event.text and not bits & 62:
             self.board.transmit_keyboard(event.text, local_text=event.text, margin_key=True)
         elif event.text and len(event.text) > 1 and not bits & KeyModifiers.CTRL:
