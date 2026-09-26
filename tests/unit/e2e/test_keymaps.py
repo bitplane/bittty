@@ -138,3 +138,15 @@ def test_sun_delete_ignores_modifiers_but_keypad_delete_does_not():
     wire.data.clear()
     board.input_key_event(KeyEvent("kp_delete", M.CTRL))
     assert wire.text == "\x1b[3;5z"
+
+
+def test_modified_delete_is_not_del_under_modify_other_keys():
+    """xterm 407 with 1037: Delete and Ctrl-Delete are DEL, until modifyOtherKeys makes Ctrl-Delete CSI 3;5~."""
+    board, wire = driver(setup="\x1b[?1037h")
+    board.input_key_event(KeyEvent("delete", M.CTRL))
+    assert wire.text == "\x7f"
+    wire.data.clear()
+    board.feed_host_data("\x1b[>4;1m")
+    board.input_key_event(KeyEvent("delete", M.CTRL))
+    board.input_key_event(KeyEvent("delete"))
+    assert wire.text == "\x1b[3;5~\x7f"

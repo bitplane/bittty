@@ -299,18 +299,20 @@ class KeyboardDevice(Device):
     def _send_key(self, sequence: str, mods: KeyModifiers, *, keypad: bool = False) -> None:
         """Send a keymap sequence, folding in the modifiers if the keymap encodes them."""
         keymap = self.keymap
-        if keymap.modifiers and (keymap.keypad_modifiers or not keypad):
+        modifiers = keymap.modifiers or (keymap.modifiers_with_other_keys and self.modify_other_keys)
+        if modifiers and (keymap.keypad_modifiers or not keypad):
             sequence = apply_modifier(sequence, xterm_modifier(mods), keypad=keypad)
         self.board.transmit_keyboard(sequence)
 
-    def _delete_is_del(self) -> bool:
+    def _delete_is_del(self, mods: KeyModifiers) -> bool:
         """Whether Delete sends DEL rather than the keymap's Delete sequence.
 
         Raw DEL recreates the ambiguity Kitty flag 1 removes, so negotiated
-        Kitty flags keep the keymap's CSI 3~.
+        Kitty flags keep the keymap's CSI 3~; so does a modified Delete under
+        modifyOtherKeys (xterm).
         """
         policy = self.keymap.delete_is_del
-        if policy is None or self.kitty_flags:
+        if policy is None or self.kitty_flags or (mods and self.modify_other_keys):
             return False
         return self.board.modes.delete_sends_del or (policy and not self.delete_policy_explicit)
 
@@ -336,7 +338,7 @@ class KeyboardDevice(Device):
         if char == "escape":
             char = constants.ESC
         if char == "delete":  # the editing keypad's Delete, not KP_Delete
-            if self._delete_is_del():
+            if self._delete_is_del(mods):
                 self.board.transmit_keyboard(constants.DEL)
                 return
             if self.keymap.delete_unmodified:

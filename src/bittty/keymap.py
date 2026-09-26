@@ -77,6 +77,7 @@ class KeyMap:
     # DECCKM replacements; the SS3 cursor keys by default.
     application: Mapping[str, str] = field(default_factory=lambda: _arrows(SS3))
     modifiers: bool = True  # whether shift/alt/ctrl are folded into the sequence
+    modifiers_with_other_keys: bool = False  # ...or only once modifyOtherKeys is set (xterm legacy/VT220)
     keypad_modifiers: bool = True  # whether keypad keys (PF1-PF4, DECKPAM) carry them too
     keypad: Mapping[str, str] = field(default_factory=lambda: KEYPAD_APPLICATION)  # DECKPAM
     numeric: Mapping[str, str] = field(default_factory=lambda: KEYPAD_NUMERIC)  # DECKPNM

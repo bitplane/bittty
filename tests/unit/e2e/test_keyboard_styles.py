@@ -91,12 +91,32 @@ def test_shift_function_key(mode, expected):
     assert wire.text == expected
 
 
-@pytest.mark.parametrize("mode,expected", [(1060, "\x1b[11~"), (1061, "\x1bOP")])
-def test_modify_other_keys_does_not_change_historical_modifier_policy(mode, expected):
+@pytest.mark.parametrize(
+    "mode,event,expected",
+    [
+        (1060, KeyEvent("f1", KeyModifiers.ALT | KeyModifiers.SHIFT), "\x1b[11;4~"),
+        (1061, KeyEvent("f1", KeyModifiers.ALT | KeyModifiers.SHIFT), "\x1b[1;4P"),
+        (1060, KeyEvent("up", KeyModifiers.SHIFT), "\x1b[1;2A"),
+        (1061, KeyEvent("home", KeyModifiers.CTRL), "\x1b[1;5~"),
+        (1060, KeyEvent("f1", KeyModifiers.CTRL), "\x1b[23~"),
+        (1060, KeyEvent("delete"), "\x7f"),
+        (1060, KeyEvent("delete", KeyModifiers.CTRL), "\x1b[3;5~"),
+    ],
+)
+def test_modify_other_keys_unlocks_legacy_modifiers(mode, event, expected):
+    """xterm 407: with modifyOtherKeys the legacy/VT220 keyboards fold modifiers in (after the Ctrl-Fn bank)."""
     board, wire = driver(mode)
-    board.feed_host_data("\x1b[>4;2m")
-    board.input_key_event(KeyEvent("f1", KeyModifiers.ALT | KeyModifiers.SHIFT))
+    board.feed_host_data("\x1b[>4;1m")
+    board.input_key_event(event)
     assert wire.text == expected
+
+
+@pytest.mark.parametrize("mode", [1060, 1061])
+def test_legacy_keypad_modifiers_with_modify_other_keys(mode):
+    board, wire = driver(mode)
+    board.feed_host_data("\x1b[>4;2m\x1b=")
+    board.input_key_event(KeyEvent("kp_enter", KeyModifiers.CTRL))
+    assert wire.text == "\x1bO5M"
 
 
 @pytest.mark.parametrize("mode", [1060, 1061])
