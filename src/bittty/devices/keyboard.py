@@ -25,7 +25,29 @@ _KITTY_SUPPORTED = 31
 # The spec: "Terminals should limit the size of the stack as appropriate, to
 # prevent Denial-of-Service attacks." Full stack evicts its oldest entry.
 _KITTY_STACK_MAX = 8
-_CONTROL_TEXT = dict(zip(" @2345678?[/\\]^_~", (0, 0, 0, 27, 28, 29, 30, 31, 127, 127, 27, 31, 28, 29, 30, 31, 30)))
+# Xlib's Control translation (XLookupString) beyond '@'-'~': the digit and punctuation aliases.
+_X_CONTROL_ALIASES = {
+    " ": "\0",
+    "2": "\0",
+    "3": "\x1b",
+    "4": "\x1c",
+    "5": "\x1d",
+    "6": "\x1e",
+    "7": "\x1f",
+    "8": "\x7f",
+    "/": "\x1f",
+}
+
+
+def _x_control(char: str) -> str:
+    """What Ctrl makes of a character in X: '@'-'~' become C0, a few aliases too, the rest are unchanged."""
+    code = ord(char)
+    return chr(code & 0x1F) if 0x40 <= code <= 0x7E else _X_CONTROL_ALIASES.get(char, char)
+
+
+def _is_control(char: str) -> bool:
+    code = ord(char)
+    return code < 0x20 or 0x7F <= code <= 0x9F
 
 
 @dataclass(slots=True)
@@ -73,8 +95,8 @@ class KeyboardDevice(Device):
         self.user_keys_locked = False
         self.style = KeyboardStyle.DEFAULT
         self.saved_style = KeyboardStyle.DEFAULT
-        self.delete_policy_explicit = False
-        self.saved_delete = (False, False)
+        self.delete_mode: bool | None = None  # mode 1037, once set; else the keymap's default
+        self.saved_delete_mode: bool | None = None
         self.modify_other_keys = 0  # xterm modifyOtherKeys level (0/1/2)
         self.paste_bracketed = False
         # Built directly: the blitter these key off does not exist yet.
@@ -249,18 +271,77 @@ class KeyboardDevice(Device):
             return f"{constants.ESC}[{code};{modifier}u"
         return f"{constants.ESC}[{code}u"
 
-    def _enhanced_key(self, char: str, mods: KeyModifiers) -> str | None:
-        """Encode a modified character key via xterm modifyOtherKeys, else None.
+    def _modify_other_keys(self, char: str, mods: KeyModifiers) -> str | None:
+        """xterm modifyOtherKeys for a character key: CSI 27 ; mod ; code ~, else None.
 
-        Uses CSI 27 ; mod ; code ~ with the base (unshifted) codepoint. Only
-        fires when a modifier is present and Kitty (which takes precedence and
-        runs earlier in input_key) is inactive.
+        Ported from xterm input.c (ModifyOtherKeys, allowedCharModifiers). Level 1
+        leaves keys whose modified form already means something alone (Ctrl-letter,
+        Shift-printable, Ctrl-2 as NUL, Escape, Backspace); level 2 reports those
+        too, except Shift on characters below '@'. The code is the shifted
+        character: what the key types without Ctrl. Kitty flags take precedence.
         """
-        if len(char) != 1 or not mods or self.kitty_flags:
+        level = self.modify_other_keys
+        if not level or not mods or self.kitty_flags:
             return None
-        if self.modify_other_keys >= 1:
-            return f"{constants.ESC}[27;{xterm_modifier(mods)};{self._kitty_code(char)}~"
-        return None
+        if char == constants.BS:
+            # xterm's backarrow toggle: a Backspace that sends DEL is reported as DEL, without Ctrl.
+            if self.board.modes.backarrow_key_sends_bs == bool(mods & M.CTRL):
+                char, mods = constants.DEL, mods & ~M.CTRL
+                encode = level >= 2 and bool(mods)
+            else:
+                encode = level >= 2 and bool(mods & ~M.CTRL)
+        elif level >= 2:
+            if char == "\t" and mods & M.SHIFT:  # backtab (ISO_Left_Tab)
+                encode = bool(mods & ~M.SHIFT)
+            elif char in "\t\r\x1b\x7f":
+                encode = True
+            else:
+                char = char.upper() if mods & M.SHIFT and len(char.upper()) == 1 else char
+                encode = 0x40 <= ord(char) <= 0x7F or (mods == M.SHIFT and char == " ") or bool(mods & ~M.SHIFT)
+        else:
+            if not (char == "\t" and mods & M.SHIFT):
+                char = char.upper() if mods & M.SHIFT and len(char.upper()) == 1 else char
+            mods = self._filter_alt_meta(mods, char)
+            if char in "\t\r" and not (char == "\t" and mods & M.SHIFT):
+                encode = bool(mods)
+            elif char in "\t\x1b":  # backtab and Escape are control aliases already
+                encode = bool(mods & ~(M.CTRL | M.SHIFT))
+            elif char == "\x7f":
+                encode = False
+            else:
+                control_input = 0x40 <= ord(char) <= 0x7F
+                alias = _is_control(_x_control(char) if mods & M.CTRL else char)
+                if control_input and not mods & ~M.CTRL:
+                    pass
+                elif alias:
+                    mods = mods if mods & ~(M.CTRL | M.SHIFT) else M.NONE
+                elif not mods & M.CTRL:
+                    mods &= ~M.SHIFT
+                if control_input:
+                    encode = mods not in (M.NONE, M.CTRL, M.SHIFT)
+                elif alias:
+                    encode = bool(mods & ~M.CTRL) and mods != M.SHIFT
+                else:
+                    encode = bool(mods)
+        if not encode:
+            return None
+        return f"{constants.ESC}[27;{xterm_modifier(mods)};{ord(char)}~"
+
+    def _filter_alt_meta(self, mods: KeyModifiers, char: str) -> KeyModifiers:
+        """Leave Alt/Meta to the legacy encodings at level 1 (xterm filterAltMeta).
+
+        Escape-prefix modes claim them, a bare Alt/Meta stays legacy, and
+        Ctrl-Alt on a control character keeps its emacs meaning.
+        """
+        modes = self.board.modes
+        control = char not in "\t\r\x1b\x7f" and (0x40 <= ord(char) <= 0x7F or _is_control(char))
+        for mask, escapes in ((M.META, modes.meta_sends_escape), (M.ALT, modes.alt_sends_escape)):
+            if mods & mask:
+                if escapes or not mods & ~mask:
+                    mods &= ~mask
+                if control and mods & M.CTRL:
+                    mods &= ~(mask | M.CTRL)
+        return mods
 
     def report_focus(self, focused: bool) -> None:
         """Focus reporting (DECSET 1004) — send CSI I on focus in, CSI O on focus out."""
@@ -272,8 +353,7 @@ class KeyboardDevice(Device):
         if hard:
             # Xterm keyboard selection survives RIS, unlike its saved slot.
             self.saved_style = KeyboardStyle.DEFAULT
-            self.delete_policy_explicit = False
-            self.saved_delete = (False, False)
+            self.saved_delete_mode = None  # the setting itself survives, like the keyboard selection
             self.user_defined_keys.clear()
             self.user_keys_locked = False
             self.modify_other_keys = 0
@@ -304,17 +384,20 @@ class KeyboardDevice(Device):
             sequence = apply_modifier(sequence, xterm_modifier(mods), keypad=keypad)
         self.board.transmit_keyboard(sequence)
 
+    @property
+    def delete_sends_del(self) -> bool:
+        """Mode 1037 as set, else the keymap's default; keymaps with their own Delete never send DEL."""
+        policy = self.keymap.delete_is_del
+        return policy is not None and (policy if self.delete_mode is None else self.delete_mode)
+
     def _delete_is_del(self, mods: KeyModifiers) -> bool:
-        """Whether Delete sends DEL rather than the keymap's Delete sequence.
+        """Whether this Delete press sends DEL rather than the keymap's Delete sequence.
 
         Raw DEL recreates the ambiguity Kitty flag 1 removes, so negotiated
         Kitty flags keep the keymap's CSI 3~; so does a modified Delete under
         modifyOtherKeys (xterm).
         """
-        policy = self.keymap.delete_is_del
-        if policy is None or self.kitty_flags or (mods and self.modify_other_keys):
-            return False
-        return self.board.modes.delete_sends_del or (policy and not self.delete_policy_explicit)
+        return self.delete_sends_del and not self.kitty_flags and not (mods and self.modify_other_keys)
 
     def _named_key(self, name: str, mods: KeyModifiers) -> None:
         """Encode a named key from the active keymap; names it does not define are ignored."""
@@ -341,10 +424,15 @@ class KeyboardDevice(Device):
             if self._delete_is_del(mods):
                 self.board.transmit_keyboard(constants.DEL)
                 return
-            if self.keymap.delete_unmodified:
+            if self.keymap.delete_unmodified and not self.modify_other_keys:
                 mods = M.NONE
         if len(char) > 1:
             self._named_key(char, mods)
+            return
+
+        other_key = self._modify_other_keys(char, mods)
+        if other_key is not None:
+            self.input(other_key, local_text=char, margin_key=char.isprintable())
             return
 
         if char == constants.BS:
@@ -360,11 +448,6 @@ class KeyboardDevice(Device):
             self.board.transmit_keyboard(backtab)
             return
 
-        enhanced = self._enhanced_key(char, mods)
-        if enhanced is not None:  # modifyOtherKeys / Kitty encode modified keys explicitly
-            self.input(enhanced, local_text=char, margin_key=char.isprintable())
-            return
-
         if char == constants.ESC:
             if self.board.modes.application_escape:
                 self.input("\x1bO[")
@@ -374,11 +457,7 @@ class KeyboardDevice(Device):
         # Apply the legacy control and Alt transformations only after the
         # negotiated modern encodings above have had first refusal.
         if mods & M.CTRL:
-            upper_char = char.upper()
-            if len(upper_char) == 1 and "A" <= upper_char <= "Z":
-                char = chr(ord(upper_char) - ord("A") + 1)
-            elif char in _CONTROL_TEXT:
-                char = chr(_CONTROL_TEXT[char])
+            char = "\x7f" if char == "?" else _x_control(char)  # xterm: Ctrl-? is DEL
 
         if len(char) == 1:
             local_text = char
@@ -479,7 +558,7 @@ class KeyboardDevice(Device):
                 self._legacy_numpad(position, mods)
             else:
                 self._named_key(key[3:], mods)
-        elif event.text and not bits & 62:
+        elif event.text and not bits & 62 and not (bits & M.SHIFT and self.modify_other_keys >= 2):
             self.board.transmit_keyboard(event.text, local_text=event.text, margin_key=True)
         elif event.text and len(event.text) > 1 and not bits & KeyModifiers.CTRL:
             prefix = constants.ESC if self._legacy_escape_prefix(mods) else ""
@@ -488,6 +567,8 @@ class KeyboardDevice(Device):
             char = {"escape": "\x1b", "enter": "\r", "tab": "\t", "backspace": "\x08"}.get(key, key)
             if event.text and len(event.text) == 1 and not bits & KeyModifiers.CTRL:
                 char = event.text
+            elif bits & M.SHIFT and event.shifted_key:
+                char = event.shifted_key
             self._legacy_key(char, mods)
 
     def input_text(self, text: str) -> None:

@@ -54,14 +54,16 @@ def test_alt_sends_escape_for_plain_and_control_characters():
     assert board.pty.data == ["\x1bx", "\x1b\x03"]
 
 
-def test_modern_keyboard_encoding_takes_precedence_over_alt_sends_escape():
+def test_alt_sends_escape_beats_modify_other_keys_level_one():
+    """xterm filterAltMeta: at level 1 an escape-prefixed or bare Alt stays legacy; level 2 reports it."""
     board = board_with_pty()
     board.modes.alt_sends_escape = True
     board.keyboard.modify_other_keys = 1
-
+    board.keyboard.input_key("x", constants.KEY_MOD_ALT)
+    board.keyboard.modify_other_keys = 2
     board.keyboard.input_key("x", constants.KEY_MOD_ALT)
 
-    assert board.pty.data == ["\x1b[27;3;120~"]
+    assert board.pty.data == ["\x1bx", "\x1b[27;3;120~"]
 
 
 def test_meta_can_set_the_eighth_bit_as_a_raw_byte():
@@ -85,15 +87,16 @@ def test_meta_sends_escape_takes_precedence_over_eight_bit_input():
     assert board.pty.data == ["\x1bx"]
 
 
-def test_modern_keyboard_encoding_takes_precedence_over_meta_policy():
+def test_meta_policy_beats_modify_other_keys_level_one():
     board = board_with_pty()
     board.modes.eight_bit_input = True
     board.modes.meta_sends_escape = True
     board.keyboard.modify_other_keys = 1
-
+    board.keyboard.input_key("x", constants.KEY_MOD_META)
+    board.keyboard.modify_other_keys = 2
     board.keyboard.input_key("x", constants.KEY_MOD_META)
 
-    assert board.pty.data == ["\x1b[27;9;120~"]
+    assert board.pty.data == ["\x1bx", "\x1b[27;9;120~"]
 
 
 def test_alt_on_cursor_keys_stays_a_modifier_parameter():

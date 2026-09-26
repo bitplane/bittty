@@ -139,16 +139,16 @@ def _keyboard_style(capability: str, number: int, style: KeyboardStyle) -> ModeS
     )
 
 
-def _explicit_delete(device: ModeDevice, value: bool) -> None:
-    device.board.keyboard.delete_policy_explicit = True
+def _set_delete_mode(device: ModeDevice, value: bool) -> None:
+    device.board.keyboard.delete_mode = value
 
 
 def _save_delete(device: ModeDevice) -> None:
-    device.board.keyboard.saved_delete = (device.delete_sends_del, device.board.keyboard.delete_policy_explicit)
+    device.board.keyboard.saved_delete_mode = device.board.keyboard.delete_mode
 
 
 def _restore_delete(device: ModeDevice) -> None:
-    device.delete_sends_del, device.board.keyboard.delete_policy_explicit = device.board.keyboard.saved_delete
+    device.board.keyboard.delete_mode = device.board.keyboard.saved_delete_mode
 
 
 def _dec_deccolm(device: ModeDevice, value: bool) -> None:
@@ -494,13 +494,14 @@ MODE_SPECS: tuple[ModeSpec, ...] = (
         queryable=True,
     ),
     ModeSpec(mp.XTERM_META_ESCAPE, 1036, True, "meta_sends_escape", queryable=True),
+    # A keyboard setting in xterm, not terminal state: RIS and DECSTR keep it.
     ModeSpec(
         mp.XTERM_DELETE,
         1037,
         True,
-        "delete_sends_del",
         queryable=True,
-        apply_fn=_explicit_delete,
+        apply_fn=_set_delete_mode,
+        status_fn=lambda d: 1 if d.board.keyboard.delete_sends_del else 2,
         save_fn=_save_delete,
         restore_fn=_restore_delete,
     ),

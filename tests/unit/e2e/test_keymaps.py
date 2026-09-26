@@ -152,10 +152,10 @@ def test_modified_delete_is_not_del_under_modify_other_keys():
     assert wire.text == "\x1b[3;5~\x7f"
 
 
-@pytest.mark.parametrize("setup", ["", "\x1b[?1051h", "\x1b[?1060h", "\x1b[?1061h", "\x1b[>4;1m", "\x1b[>4;2m"])
+@pytest.mark.parametrize("setup", ["", "\x1b[?1051h", "\x1b[?1060h", "\x1b[?1061h", "\x1b[>4;1m"])
 @pytest.mark.parametrize("mods", [M.SHIFT, M.SHIFT | M.CTRL])
 def test_shift_tab_is_backtab(setup, mods):
-    """xterm 407: Shift-Tab and Ctrl-Shift-Tab send CSI Z in every keyboard."""
+    """xterm 407: Shift-Tab and Ctrl-Shift-Tab send CSI Z in every keyboard (modifyOtherKeys 2: see its tests)."""
     board, wire = driver(setup=setup)
     board.input_key_event(KeyEvent("tab", mods))
     assert wire.text == "\x1b[Z"
@@ -176,3 +176,21 @@ def test_control_inverts_backarrow(setup, mods, expected):
     board, wire = driver(setup=setup)
     board.input_key_event(KeyEvent("backspace", mods))
     assert wire.text == expected
+
+
+def test_delete_mode_survives_ris_and_decstr():
+    """xterm 407: 1037 is a setting, not terminal state; DECRQM shows the legacy keyboard's DEL default."""
+    board, wire = driver(setup="\x1b[?1060h")
+    board.feed_host_data("\x1b[?1037$p")
+    assert wire.text == "\x1b[?1037;1$y"
+    board.feed_host_data("\x1b[?1037l\x1bc\x1b[!p")
+    wire.data.clear()
+    board.input_key_event(KeyEvent("delete"))
+    board.feed_host_data("\x1b[?1037$p")
+    assert wire.text == "\x1b[3~\x1b[?1037;2$y"
+
+
+def test_sun_delete_takes_modifiers_under_modify_other_keys():
+    board, wire = driver(setup="\x1b[?1051h\x1b[>4;1m")
+    board.input_key_event(KeyEvent("delete", M.SHIFT))
+    assert wire.text == "\x1b[3;2z"

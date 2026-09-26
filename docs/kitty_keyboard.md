@@ -30,6 +30,12 @@ and keeps keypad modifiers inside SS3 (`ESC O 5 M`); the numeric keypad ignores
 modifiers. With NumLock reported and mode 1035 set, keypad text wins over DECKPAM.
 Fixtures are captured from xterm 407 and tmux 3.6 (`tests/unit/e2e/test_keymaps.py`).
 
+modifyOtherKeys (`CSI > 4 ; n m`) follows xterm's rules, ported from its input.c:
+level 1 leaves keys whose modified form already means something alone (Ctrl-letter,
+Shift-printable, Ctrl-2 as NUL, Escape, Backspace, escape-prefixed or bare Alt/Meta);
+level 2 reports them too. The code is the shifted character (`CSI 27;6;65~` for
+Ctrl-Shift-A). Mode 1037 is a keyboard setting that RIS and DECSTR keep, as in xterm.
+
 DECARM (mode 8, bittty and DEC hardware profiles) filters explicit repeat events;
 legacy bytes cannot distinguish repeats. Repeat timing and historical per-key
 exceptions remain frontend/hardware-profile work.
