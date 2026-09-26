@@ -291,15 +291,6 @@ class KeyboardDevice(Device):
         """The active keymap: an xterm keyboard selection, else the model's own."""
         return STYLE_KEYMAPS.get(self.style, self.board.model.keymap)
 
-    def _special_modifier(self, mods: KeyModifiers) -> tuple[KeyModifiers, KeyModifiers]:
-        """Split modifiers into those encoded on a special key and those left to an ESC prefix."""
-        if self.board.modes.special_modifiers or self.kitty_flags:
-            # Under the Kitty protocol Alt/Meta live in the CSI modifier
-            # parameter; an ESC prefix would be a legacy encoding.
-            return mods, M.NONE
-        prefix = mods & (M.ALT | M.META)
-        return mods & ~prefix, prefix
-
     def _legacy_escape_prefix(self, mods: KeyModifiers) -> bool:
         """Whether legacy Alt/Meta policy prefixes this input with ESC."""
         modes = self.board.modes
@@ -309,10 +300,7 @@ class KeyboardDevice(Device):
         """Send a keymap sequence, folding in the modifiers if the keymap encodes them."""
         keymap = self.keymap
         if keymap.modifiers and (keymap.keypad_modifiers or not keypad):
-            encoded, prefix = self._special_modifier(mods)
-            sequence = apply_modifier(sequence, xterm_modifier(encoded), keypad=keypad)
-            if self._legacy_escape_prefix(prefix):
-                sequence = constants.ESC + sequence
+            sequence = apply_modifier(sequence, xterm_modifier(mods), keypad=keypad)
         self.board.transmit_keyboard(sequence)
 
     def _delete_is_del(self) -> bool:

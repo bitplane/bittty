@@ -96,7 +96,8 @@ def test_modern_keyboard_encoding_takes_precedence_over_meta_policy():
     assert board.pty.data == ["\x1b[27;9;120~"]
 
 
-def test_special_modifier_mode_controls_alt_on_cursor_keys():
+def test_alt_on_cursor_keys_stays_a_modifier_parameter():
+    """xterm 407: neither mode 1035 nor 1039 turns Alt-Up into an ESC prefix."""
     board = board_with_pty()
 
     board.keyboard.input_key("up", constants.KEY_MOD_ALT)
@@ -105,7 +106,7 @@ def test_special_modifier_mode_controls_alt_on_cursor_keys():
     board.modes.alt_sends_escape = True
     board.keyboard.input_key("up", constants.KEY_MOD_ALT)
 
-    assert board.pty.data == ["\x1b[1;3A", "\x1b[A", "\x1b\x1b[A"]
+    assert board.pty.data == ["\x1b[1;3A"] * 3
 
 
 def test_mouse_device_caches_position_and_gates_tracking():
