@@ -23,6 +23,13 @@ retains its original meaning (in particular, bit 8 means Meta, not Super).
 Hardware/layout adapters can map their identities into events without adding
 platform-specific codes to the board. Historical keyboard layouts remain unimplemented.
 
+Legacy encodings come from a `KeyMap`: the model's own, or an xterm keyboard
+selection (below). Named keys include `find`, `select`, `help`, `menu`, `begin`
+and `pf1`–`pf4`. The xterm map covers F1–F63, follows DECCKM for Home/End/Begin,
+and keeps keypad modifiers inside SS3 (`ESC O 5 M`); the numeric keypad ignores
+modifiers. With NumLock reported and mode 1035 set, keypad text wins over DECKPAM.
+Fixtures are captured from xterm 407 and tmux 3.6 (`tests/unit/e2e/test_keymaps.py`).
+
 DECARM (mode 8, bittty and DEC hardware profiles) filters explicit repeat events;
 legacy bytes cannot distinguish repeats. Repeat timing and historical per-key
 exceptions remain frontend/hardware-profile work.

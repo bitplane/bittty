@@ -75,7 +75,7 @@ def test_shift_tab_is_disambiguated_when_requested():
 @pytest.mark.parametrize(
     "flags,expected",
     [
-        (0, "\x00"),
+        (0, "2"),  # xterm: the numeric keypad ignores Ctrl
         (2, "\x1b[50;5:2u"),
         (3, "\x1b[57401;5:2u"),
         (31, "\x1b[57401;5:2u"),

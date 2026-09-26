@@ -1,8 +1,14 @@
-"""Keyboard encoding as model data.
+"""Keyboard encoding as data.
 
-Function keys are where real terminals diverge most: a VT100 has only PF1-PF4
-and no keyboard-modifier encoding, while xterm sends F1-F12 and folds shift/alt/
-ctrl into a ``;mod`` parameter. A `KeyMap` captures that difference as data.
+Real terminals diverge most in their non-text keys: a VT100 has only PF1-PF4 and no
+modifier encoding, while xterm sends F1-F63 and folds shift/alt/ctrl into a ``;mod``
+parameter. A `KeyMap` captures those differences as data. Model keymaps and xterm's
+selectable keyboards (see keyboard_styles) are both KeyMaps, and the keyboard device
+has a single encoder for them.
+
+Keys are named as in `KeyEvent`: ``up``, ``home``, ``f13``, plus ``pf1``-``pf4`` for
+the DEC keypad function keys. Keypad tables use the keypad's legends: ``0``-``9``,
+``.``, ``Enter`` and so on.
 """
 
 from __future__ import annotations
@@ -11,177 +17,178 @@ from dataclasses import dataclass, field
 from typing import Mapping
 
 ESC = "\x1b"
+CSI = ESC + "["
+SS3 = ESC + "O"
 
-# The application/numeric keypad is standard across the terminals modelled here.
-_NUMPAD_NUMERIC = {str(d): str(d) for d in range(10)} | {
+ARROWS = {"up": "A", "down": "B", "right": "C", "left": "D"}
+# The DEC keypad function keys PF1-PF4. Their modifiers stay inside the SS3 sequence.
+PF_KEYS = {f"pf{n}": SS3 + final for n, final in enumerate("PQRS", 1)}
+
+# The numeric and application keypad, standard across the terminals modelled here.
+KEYPAD_NUMERIC = {str(d): str(d) for d in range(10)} | {
     ".": ".",
     "+": "+",
     "-": "-",
     "*": "*",
     "/": "/",
+    "=": "=",
+    ",": ",",
     "Enter": "\r",
+    "Tab": "\t",
+    "Space": " ",
 }
-_NUMPAD_APPLICATION = {
-    "0": f"{ESC}Op",
-    "1": f"{ESC}Oq",
-    "2": f"{ESC}Or",
-    "3": f"{ESC}Os",
-    "4": f"{ESC}Ot",
-    "5": f"{ESC}Ou",
-    "6": f"{ESC}Ov",
-    "7": f"{ESC}Ow",
-    "8": f"{ESC}Ox",
-    "9": f"{ESC}Oy",
-    ".": f"{ESC}On",
-    "+": f"{ESC}Ok",
-    "-": f"{ESC}Om",
-    "*": f"{ESC}Oj",
-    "/": f"{ESC}Oo",
-    "Enter": f"{ESC}OM",
+KEYPAD_APPLICATION = {str(d): SS3 + final for d, final in enumerate("pqrstuvwxy")} | {
+    ".": SS3 + "n",
+    "+": SS3 + "k",
+    "-": SS3 + "m",
+    "*": SS3 + "j",
+    "/": SS3 + "o",
+    "=": SS3 + "X",
+    ",": SS3 + "l",
+    "Enter": SS3 + "M",
+    "Tab": SS3 + "I",
+    "Space": SS3 + " ",
 }
+# The editing keys printed on a PC keypad, by the keypad key they share.
+KEYPAD_POSITIONS = {
+    "insert": "0",
+    "end": "1",
+    "down": "2",
+    "pagedown": "3",
+    "left": "4",
+    "begin": "5",
+    "right": "6",
+    "home": "7",
+    "up": "8",
+    "pageup": "9",
+    "delete": ".",
+}
+
+
+def _arrows(prefix: str) -> dict[str, str]:
+    return {key: prefix + final for key, final in ARROWS.items()}
 
 
 @dataclass(frozen=True)
 class KeyMap:
     """How a terminal encodes its keys (and whether it encodes modifiers)."""
 
-    function_keys: Mapping[int, str]
-    cursor_keys: Mapping[str, str]  # "up"/"down"/"left"/"right" -> CSI/SS3 final byte
-    nav_keys: Mapping[str, str]  # "home"/"end"/... -> CSI body
+    keys: Mapping[str, str]  # key name -> sequence
+    # DECCKM replacements; the SS3 cursor keys by default.
+    application: Mapping[str, str] = field(default_factory=lambda: _arrows(SS3))
     modifiers: bool = True  # whether shift/alt/ctrl are folded into the sequence
-    numpad_numeric: Mapping[str, str] = field(default_factory=lambda: _NUMPAD_NUMERIC)
-    numpad_application: Mapping[str, str] = field(default_factory=lambda: _NUMPAD_APPLICATION)
+    keypad_modifiers: bool = True  # whether keypad keys (PF1-PF4, DECKPAM) carry them too
+    keypad: Mapping[str, str] = field(default_factory=lambda: KEYPAD_APPLICATION)  # DECKPAM
+    numeric: Mapping[str, str] = field(default_factory=lambda: KEYPAD_NUMERIC)  # DECKPNM
+    ctrl_function_offset: int = 0  # xterm ctrlFKeys: Ctrl-Fn sends F(n + offset), unmodified
+    user_keys: bool = False  # Shift-F6-F20 send DECUDK strings when defined
+    # Delete sends DEL: False honours mode 1037, True also defaults to DEL, None never.
+    delete_is_del: bool | None = False
+    # The VT220 keypad: ',' where a PC has '+', Ctrl-',' is '-', and the keypad's
+    # editing legends send keypad codes.
+    vt220_keypad: bool = False
 
 
-def apply_modifier(sequence: str, modifier: int) -> str:
-    """Fold an xterm-style modifier into a function-key sequence.
+def apply_modifier(sequence: str, modifier: int, *, keypad: bool = False) -> str:
+    """Fold an xterm modifier parameter into a key sequence.
 
-    ``ESC O X`` becomes ``ESC [ 1 ; mod X``; ``ESC [ n ~`` becomes ``ESC [ n ; mod ~``.
+    ``ESC O X`` becomes ``ESC [ 1 ; mod X``, ``ESC [ n ~`` becomes ``ESC [ n ; mod ~``
+    and a bare ``ESC X`` becomes ``ESC [ 1 ; mod X``. Keypad keys keep their SS3
+    form, ``ESC O mod X``, as in xterm.
     """
-    if sequence.startswith(f"{ESC}O") and len(sequence) == 3:
-        return f"{ESC}[1;{modifier}{sequence[2]}"
-    if sequence.startswith(f"{ESC}[") and sequence.endswith("~"):
-        return f"{ESC}[{sequence[2:-1]};{modifier}~"
-    return sequence
+    if modifier <= 1:
+        return sequence
+    prefix = sequence[:2] if sequence.startswith((CSI, SS3)) else ESC
+    params = sequence[len(prefix) : -1]
+    if not keypad:
+        prefix, params = CSI, params or "1"
+    return f"{prefix}{params + ';' if params else ''}{modifier}{sequence[-1]}"
 
 
-_ARROWS = {"up": "A", "down": "B", "right": "C", "left": "D"}
+# The VT220 function-key codes for F1-F20; xterm continues from F21 as n + 21.
+DEC_FUNCTION_CODES = (11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 23, 24, 25, 26, 28, 29, 31, 32, 33, 34)
+DEC_EDITING = {"find": "1~", "insert": "2~", "delete": "3~", "select": "4~", "pageup": "5~", "pagedown": "6~"}
 
-# The xterm F1-F12 repertoire, reused by screen/tmux (verified against terminfo).
-_XTERM_FUNCTION_KEYS = {
-    1: f"{ESC}OP",
-    2: f"{ESC}OQ",
-    3: f"{ESC}OR",
-    4: f"{ESC}OS",
-    5: f"{ESC}[15~",
-    6: f"{ESC}[17~",
-    7: f"{ESC}[18~",
-    8: f"{ESC}[19~",
-    9: f"{ESC}[20~",
-    10: f"{ESC}[21~",
-    11: f"{ESC}[23~",
-    12: f"{ESC}[24~",
-}
 
-# The xterm editing keypad (insert/delete/page), shared by screen/tmux/rxvt.
-_EDITING_KEYPAD = {"insert": "2~", "delete": "3~", "pageup": "5~", "pagedown": "6~"}
+def dec_function_keys(first: int = 1, last: int = 63) -> dict[str, str]:
+    """CSI n ~ function keys, numbered as on the VT220 and continued by xterm."""
+    return {f"f{n}": f"{CSI}{DEC_FUNCTION_CODES[n - 1] if n <= 20 else n + 21}~" for n in range(first, last + 1)}
 
-# xterm: F1-F4 as SS3 letters, F5-F12 as CSI-tilde, Home/End as H/F, modifiers encoded.
+
+# xterm's default keyboard: F1-F4 as SS3, the rest CSI-tilde; Home/End/Begin follow DECCKM.
+# (xterm input.c; checked against xterm 407)
 XTERM_KEYMAP = KeyMap(
-    function_keys=_XTERM_FUNCTION_KEYS,
-    cursor_keys=_ARROWS,
-    nav_keys={"home": "H", "end": "F", **_EDITING_KEYPAD},
+    keys={
+        **_arrows(CSI),
+        "home": CSI + "H",
+        "end": CSI + "F",
+        "begin": CSI + "E",
+        **{key: CSI + body for key, body in DEC_EDITING.items()},
+        "help": CSI + "28~",
+        "menu": CSI + "29~",
+        **PF_KEYS,
+        **{f"f{n}": SS3 + final for n, final in enumerate("PQRS", 1)},
+        **dec_function_keys(5),
+    },
+    application={**_arrows(SS3), "home": SS3 + "H", "end": SS3 + "F", "begin": SS3 + "E"},
+    user_keys=True,
 )
 
-# GNU screen / tmux: xterm's function keys, but VT220-style Home/End (1~/4~). (terminfo)
+# The xterm F1-F12 repertoire, reused by screen/tmux (verified against terminfo).
+_XTERM_FUNCTION_KEYS = {f"f{n}": SS3 + final for n, final in enumerate("PQRS", 1)} | dec_function_keys(5, 12)
+# The xterm editing keypad (insert/delete/page), shared by screen/tmux/rxvt.
+_EDITING_KEYPAD = {key: CSI + DEC_EDITING[key] for key in ("insert", "delete", "pageup", "pagedown")}
+
+# GNU screen / tmux: xterm's function keys, but VT220-style Home/End (1~/4~) (terminfo),
+# and keypad keys without modifier parameters (tmux 3.6: Shift-KP0 in DECKPAM is ESC O p).
 SCREEN_KEYMAP = KeyMap(
-    function_keys=_XTERM_FUNCTION_KEYS,
-    cursor_keys=_ARROWS,
-    nav_keys={"home": "1~", "end": "4~", **_EDITING_KEYPAD},
+    keys={**_XTERM_FUNCTION_KEYS, **_arrows(CSI), "home": CSI + "1~", "end": CSI + "4~", **_EDITING_KEYPAD},
+    keypad_modifiers=False,
 )
 
 # rxvt-unicode: F1-F4 as CSI 11~-14~ (not SS3), Home/End as 7~/8~, no xterm modifier
 # folding (rxvt uses its own shifted-key scheme). (terminfo: rxvt-unicode-256color)
 URXVT_KEYMAP = KeyMap(
-    function_keys={
-        1: f"{ESC}[11~",
-        2: f"{ESC}[12~",
-        3: f"{ESC}[13~",
-        4: f"{ESC}[14~",
-        5: f"{ESC}[15~",
-        6: f"{ESC}[17~",
-        7: f"{ESC}[18~",
-        8: f"{ESC}[19~",
-        9: f"{ESC}[20~",
-        10: f"{ESC}[21~",
-        11: f"{ESC}[23~",
-        12: f"{ESC}[24~",
-    },
-    cursor_keys=_ARROWS,
-    nav_keys={"home": "7~", "end": "8~", **_EDITING_KEYPAD},
+    keys={**dec_function_keys(1, 12), **_arrows(CSI), "home": CSI + "7~", "end": CSI + "8~", **_EDITING_KEYPAD},
     modifiers=False,
 )
 
 # VT100: four PF keys, arrow keys, no editing keypad and no modifier encoding.
 VT100_KEYMAP = KeyMap(
-    function_keys={
-        1: f"{ESC}OP",
-        2: f"{ESC}OQ",
-        3: f"{ESC}OR",
-        4: f"{ESC}OS",
-    },
-    cursor_keys=_ARROWS,
-    nav_keys={},
+    keys={**PF_KEYS, **{f"f{n}": SS3 + final for n, final in enumerate("PQRS", 1)}, **_arrows(CSI)},
     modifiers=False,
 )
 
-# VT220: PF1-PF4, F6-F20 (F1-F5 are local keys), the six-key editing keypad,
-# and no keyboard-modifier encoding.
+# VT220: PF1-PF4, F6-F20 (F1-F5 are local keys; F15 is Help and F16 is Do), the six-key
+# editing keypad (Find, Insert Here, Remove, Select, Prev, Next), and no modifier encoding.
 VT220_KEYMAP = KeyMap(
-    function_keys={
-        1: f"{ESC}OP",
-        2: f"{ESC}OQ",
-        3: f"{ESC}OR",
-        4: f"{ESC}OS",
-        6: f"{ESC}[17~",
-        7: f"{ESC}[18~",
-        8: f"{ESC}[19~",
-        9: f"{ESC}[20~",
-        10: f"{ESC}[21~",
-        11: f"{ESC}[23~",
-        12: f"{ESC}[24~",
-        13: f"{ESC}[25~",
-        14: f"{ESC}[26~",
-        15: f"{ESC}[28~",
-        16: f"{ESC}[29~",
-        17: f"{ESC}[31~",
-        18: f"{ESC}[32~",
-        19: f"{ESC}[33~",
-        20: f"{ESC}[34~",
+    keys={
+        **PF_KEYS,
+        **{f"f{n}": SS3 + final for n, final in enumerate("PQRS", 1)},
+        **dec_function_keys(6, 20),
+        **_arrows(CSI),
+        **{key: CSI + body for key, body in DEC_EDITING.items()},
+        "home": CSI + "1~",
+        "end": CSI + "4~",
+        "help": CSI + "28~",
+        "menu": CSI + "29~",
     },
-    cursor_keys=_ARROWS,
-    # The editing keypad: Find, Insert Here, Remove, Select, Prev, Next.
-    nav_keys={"home": "1~", "insert": "2~", "delete": "3~", "end": "4~", "pageup": "5~", "pagedown": "6~"},
     modifiers=False,
+    user_keys=True,
 )
 
 # Linux console: the distinctive F1-F5 as ESC [ [ A .. E, F6-F12 as CSI-tilde.
 LINUX_KEYMAP = KeyMap(
-    function_keys={
-        1: f"{ESC}[[A",
-        2: f"{ESC}[[B",
-        3: f"{ESC}[[C",
-        4: f"{ESC}[[D",
-        5: f"{ESC}[[E",
-        6: f"{ESC}[17~",
-        7: f"{ESC}[18~",
-        8: f"{ESC}[19~",
-        9: f"{ESC}[20~",
-        10: f"{ESC}[21~",
-        11: f"{ESC}[23~",
-        12: f"{ESC}[24~",
+    keys={
+        **{f"f{n}": CSI + "[" + final for n, final in enumerate("ABCDE", 1)},
+        **dec_function_keys(6, 12),
+        **_arrows(CSI),
+        "home": CSI + "1~",
+        "insert": CSI + "2~",
+        "delete": CSI + "3~",
+        "end": CSI + "4~",
+        "pageup": CSI + "5~",
+        "pagedown": CSI + "6~",
     },
-    cursor_keys=_ARROWS,
-    nav_keys={"home": "1~", "insert": "2~", "delete": "3~", "end": "4~", "pageup": "5~", "pagedown": "6~"},
     modifiers=False,
 )

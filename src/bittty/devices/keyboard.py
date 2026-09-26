@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING
 
 from .. import constants
 from ..keyboard_protocol import ALIASES, KEYPAD_LEGACY, KEYPAD_NAMES, encode_key
-from ..keyboard_styles import KEYPAD_POSITIONS, KeyboardStyle, function_sequence, modify_sequence, special_sequence
-from ..keymap import apply_modifier
+from ..keyboard_styles import STYLE_KEYMAPS, KeyboardStyle
+from ..keymap import KEYPAD_POSITIONS, PF_KEYS, KeyMap, apply_modifier
 from ..keys import KeyEvent, KeyModifiers, legacy_modifiers, valid_text
 from ..options import DEC_KEYBOARD_LEDS, DEC_USER_KEYS, KITTY_KEYBOARD
 from .modes import ModeEffect
@@ -279,14 +279,10 @@ class KeyboardDevice(Device):
                 state.clear()
             self.led_num = self.led_caps = self.led_scroll = False
 
-    def _csi_key(self, body: str, modifier: int) -> str:
-        """Build a CSI cursor/nav sequence, folding in a modifier if the terminal supports it."""
-        keymap = self.board.model.keymap
-        if modifier != constants.KEY_MOD_NONE and keymap.modifiers:
-            if body.endswith("~"):  # editing-keypad keys carry the modifier as ESC[n;mod~
-                return f"{constants.ESC}[{body[:-1]};{modifier}~"
-            return f"{constants.ESC}[1;{modifier}{body}"
-        return f"{constants.ESC}[{body}"
+    @property
+    def keymap(self) -> KeyMap:
+        """The active keymap: an xterm keyboard selection, else the model's own."""
+        return STYLE_KEYMAPS.get(self.style, self.board.model.keymap)
 
     @staticmethod
     def _modifier_bits(modifier: int) -> int:
@@ -308,11 +304,38 @@ class KeyboardDevice(Device):
         modes = self.board.modes
         return bool((bits & 2 and modes.alt_sends_escape) or (bits & 8 and modes.meta_sends_escape))
 
-    def _input_special(self, sequence: str, legacy_bits: int) -> None:
-        """Send a cursor/function sequence after legacy Alt/Meta handling."""
-        if self._legacy_escape_prefix(legacy_bits):
-            sequence = constants.ESC + sequence
-        self.input(sequence)
+    def _send_key(self, sequence: str, modifier: int, *, keypad: bool = False) -> None:
+        """Send a keymap sequence, folding in the modifier if the keymap encodes modifiers."""
+        keymap = self.keymap
+        if keymap.modifiers and (keymap.keypad_modifiers or not keypad):
+            modifier, legacy_bits = self._special_modifier(modifier)
+            sequence = apply_modifier(sequence, modifier, keypad=keypad)
+            if self._legacy_escape_prefix(legacy_bits):
+                sequence = constants.ESC + sequence
+        self.board.transmit_keyboard(sequence)
+
+    def _delete_is_del(self) -> bool:
+        """Whether Delete sends DEL rather than the keymap's Delete sequence.
+
+        Raw DEL recreates the ambiguity Kitty flag 1 removes, so negotiated
+        Kitty flags keep the keymap's CSI 3~.
+        """
+        policy = self.keymap.delete_is_del
+        if policy is None or self.kitty_flags:
+            return False
+        return self.board.modes.delete_sends_del or (policy and not self.delete_policy_explicit)
+
+    def _named_key(self, name: str, modifier: int) -> None:
+        """Encode a named key from the active keymap; names it does not define are ignored."""
+        if name == "delete" and self._delete_is_del():
+            self.board.transmit_keyboard(constants.DEL)
+            return
+        keymap = self.keymap
+        # DECCKM's SS3 forms are legacy encodings; Kitty ignores the mode.
+        application = keymap.application if self.board.modes.cursor_application_mode and not self.kitty_flags else {}
+        sequence = application.get(name) or keymap.keys.get(name)
+        if sequence is not None:
+            self._send_key(sequence, modifier, keypad=name in PF_KEYS)
 
     def input_key(self, char: str, modifier: int = constants.KEY_MOD_NONE) -> None:
         """Convert key + modifier to standard control codes, then send to input()."""
@@ -327,25 +350,8 @@ class KeyboardDevice(Device):
     def _legacy_key(self, char: str, modifier: int) -> None:
         if char == "escape":
             char = constants.ESC
-        keymap = self.board.model.keymap
-
-        if self.style is not KeyboardStyle.DEFAULT and len(char) > 1 and self._style_key(char, modifier):
-            return
-
-        # Sending raw DEL for Delete recreates the ambiguity Kitty flag 1
-        # removes; the named key falls through to nav_keys' CSI 3~ instead.
-        if char == "delete" and self.board.modes.delete_sends_del and not self.kitty_flags:
-            self.input(constants.DEL)
-            return
-
-        if char in keymap.cursor_keys:
-            special_modifier, legacy_bits = self._special_modifier(modifier)
-            self._input_special(self._csi_key(keymap.cursor_keys[char], special_modifier), legacy_bits)
-            return
-
-        if char in keymap.nav_keys:
-            special_modifier, legacy_bits = self._special_modifier(modifier)
-            self._input_special(self._csi_key(keymap.nav_keys[char], special_modifier), legacy_bits)
+        if len(char) > 1:
+            self._named_key(char, modifier)
             return
 
         if char == constants.BS:
@@ -395,7 +401,6 @@ class KeyboardDevice(Device):
                 )
             else:
                 self.input(char, local_text=local_text, margin_key=local_text.isprintable())
-        # A multi-character key name this terminal's keymap does not define is ignored.
 
     def input_fkey(self, num: int, modifier: int = constants.KEY_MOD_NONE) -> None:
         """Encode a function key using any user-defined string, else the keymap."""
@@ -405,92 +410,15 @@ class KeyboardDevice(Device):
         self._legacy_fkey(num, modifier)
 
     def _legacy_fkey(self, num: int, modifier: int) -> None:
-        if self.style is not KeyboardStyle.DEFAULT:
-            self._style_fkey(num, modifier)
-            return
-        if modifier == constants.KEY_MOD_SHIFT and num in self.user_defined_keys:
+        keymap = self.keymap
+        bits = modifier - 1
+        if bits & 4 and keymap.ctrl_function_offset:  # xterm ctrlFKeys: a second bank, unmodified
+            num += keymap.ctrl_function_offset
+            modifier = (bits & ~4) + 1
+        if keymap.user_keys and modifier == constants.KEY_MOD_SHIFT and num in self.user_defined_keys:
             self.board.transmit_keyboard_bytes(self.user_defined_keys[num])
             return
-        keymap = self.board.model.keymap
-        sequence = keymap.function_keys.get(num)
-        if sequence is None:
-            return  # this terminal has no such function key
-        special_modifier, legacy_bits = self._special_modifier(modifier)
-        if special_modifier != constants.KEY_MOD_NONE and keymap.modifiers:
-            sequence = apply_modifier(sequence, special_modifier)
-        self._input_special(sequence, legacy_bits)
-
-    def _style_send(self, sequence: str, modifier: int) -> None:
-        if self.style in (KeyboardStyle.LEGACY, KeyboardStyle.VT220):
-            modifier, legacy_bits = 1, 0
-        else:
-            modifier, legacy_bits = self._special_modifier(modifier)
-        sequence = modify_sequence(sequence, modifier)
-        if self._legacy_escape_prefix(legacy_bits):
-            sequence = constants.ESC + sequence
-        # Already encoded: DECCKM must not rewrite SCO cursor codes.
-        self.board.transmit_keyboard(sequence)
-
-    def _style_key(self, key: str, modifier: int) -> bool:
-        modes = self.board.modes
-        if key == "delete" and self.style in (KeyboardStyle.LEGACY, KeyboardStyle.VT220):
-            legacy_default = self.style is KeyboardStyle.LEGACY and not self.delete_policy_explicit
-            if modes.delete_sends_del or legacy_default:
-                self.board.transmit_keyboard(constants.DEL)
-                return True
-        if key.startswith("pf") and key[2:] in ("1", "2", "3", "4"):
-            self._style_keypad_send("\x1bO" + "PQRS"[int(key[2:]) - 1], modifier)
-            return True
-        sequence = special_sequence(self.style, key, modes.cursor_application_mode)
-        if sequence is None:
-            return False
-        self._style_send(sequence, modifier)
-        return True
-
-    def _style_fkey(self, number: int, modifier: int) -> None:
-        bits = modifier - 1
-        if self.style in (KeyboardStyle.LEGACY, KeyboardStyle.VT220) and bits & 4:
-            number += 12  # xterm's default ctrlFKeys bank
-            modifier = (bits & ~4) + 1
-        if (
-            self.style is KeyboardStyle.VT220
-            and modifier == constants.KEY_MOD_SHIFT
-            and number in self.user_defined_keys
-        ):
-            self.board.transmit_keyboard_bytes(self.user_defined_keys[number])
-            return
-        sequence = function_sequence(self.style, number)
-        if sequence is not None:
-            self._style_send(sequence, modifier)
-
-    def _style_numpad(self, key: str, modifier: int, *, numeric_override: bool = False) -> None:
-        bits = modifier - 1
-        if self.style is KeyboardStyle.VT220 and not bits & 1:
-            if key == "+":
-                key = ","
-            if key == "," and bits & 4:
-                key = "-"
-                modifier = (bits & ~4) + 1
-        if self.board.modes.numeric_keypad or numeric_override:
-            text = {"Enter": "\r", "Tab": "\t", "Space": " "}.get(key, key)
-            if len(text) == 1:
-                self.board.transmit_keyboard(text, local_text=text, margin_key=text.isprintable())
-            return
-        final = {"=": "X", ",": "l", "Tab": "I", "Space": " "}.get(key)
-        sequence = "\x1bO" + final if final else self.board.model.keymap.numpad_application.get(key)
-        if sequence is not None:
-            self._style_keypad_send(sequence, modifier)
-
-    def _style_keypad_send(self, sequence: str, modifier: int) -> None:
-        # Unlike cursor/function keys, keypad modifiers use original SS3 params.
-        if self.style in (KeyboardStyle.LEGACY, KeyboardStyle.VT220):
-            modifier, legacy_bits = 1, 0
-        else:
-            modifier, legacy_bits = self._special_modifier(modifier)
-        sequence = modify_sequence(sequence, modifier, 0)
-        if self._legacy_escape_prefix(legacy_bits):
-            sequence = constants.ESC + sequence
-        self.board.transmit_keyboard(sequence)
+        self._named_key(f"f{num}", modifier)
 
     def input_numpad_key(self, key: str) -> None:
         """Convert numpad key to the sequence for the current keypad mode."""
@@ -500,26 +428,22 @@ class KeyboardDevice(Device):
             return
         self._legacy_numpad(key)
 
-    def _legacy_numpad(self, key: str, modifier: int = constants.KEY_MOD_NONE) -> None:
-        if self.style is not KeyboardStyle.DEFAULT:
-            self._style_numpad(key, modifier)
+    def _legacy_numpad(self, key: str, modifier: int = constants.KEY_MOD_NONE, *, numeric: bool = False) -> None:
+        """Encode a keypad key: text in numeric mode (or when forced), else its DECKPAM sequence."""
+        keymap = self.keymap
+        bits = modifier - 1
+        if keymap.vt220_keypad and not bits & 1:
+            key = {"+": ","}.get(key, key)
+            if key == "," and bits & 4:
+                key, modifier = "-", (bits & ~4) + 1
+        if numeric or self.board.modes.numeric_keypad:
+            text = keymap.numeric.get(key)
+            if text is not None:
+                self.board.transmit_keyboard(text, local_text=text, margin_key=text.isprintable())
             return
-        keymap = self.board.model.keymap
-        table = keymap.numpad_numeric if self.board.modes.numeric_keypad else keymap.numpad_application
-        sequence = table.get(key, key)
-
-        if modifier != constants.KEY_MOD_NONE:
-            if self.board.modes.numeric_keypad:
-                self._legacy_key(sequence, modifier)
-            else:
-                special_modifier, legacy_bits = self._special_modifier(modifier)
-                if special_modifier != constants.KEY_MOD_NONE and keymap.modifiers:
-                    sequence = apply_modifier(sequence, special_modifier)
-                self._input_special(sequence, legacy_bits)
-            return
-
-        local_text = key if self.board.modes.numeric_keypad and len(key) == 1 else None
-        self.input(sequence, local_text=local_text, margin_key=bool(local_text and local_text.isprintable()))
+        sequence = keymap.keypad.get(key)
+        if sequence is not None:
+            self._send_key(sequence, modifier, keypad=True)
 
     def input_key_event(self, event: KeyEvent) -> None:
         """Encode supplied key facts using the child's active keyboard policy."""
@@ -548,21 +472,20 @@ class KeyboardDevice(Device):
         if key.startswith("f") and key[1:].isdigit():
             self._legacy_fkey(int(key[1:]), modifier)
         elif key in KEYPAD_LEGACY:
-            if (
-                self.style is not KeyboardStyle.DEFAULT
-                and bits & KeyModifiers.NUM_LOCK
-                and self.board.modes.special_modifiers
+            # xterm numLock (mode 1035, known and set): with NumLock on, the keypad
+            # sends its text even under DECKPAM. Other terminals keep DECKPAM.
+            numeric = bool(
+                bits & KeyModifiers.NUM_LOCK
+                and self.board.modes.get_private_mode_status(1035) == 1
                 and event.text
                 and len(event.text) == 1
-            ):
-                self._style_numpad(KEYPAD_LEGACY[key], modifier, numeric_override=True)
-            else:
-                self._legacy_numpad(KEYPAD_LEGACY[key], modifier)
+            )
+            self._legacy_numpad(KEYPAD_LEGACY[key], modifier, numeric=numeric)
         elif key.startswith("kp_"):
             modes = self.board.modes
             position = KEYPAD_POSITIONS.get(key[3:])
             if position is not None and (
-                self.style is KeyboardStyle.VT220
+                self.keymap.vt220_keypad
                 or (modes.application_escape and not modes.numeric_keypad and not modes.cursor_application_mode)
             ):
                 self._legacy_numpad(position, modifier)
