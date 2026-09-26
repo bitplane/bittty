@@ -39,6 +39,7 @@ clear/merge, download locking and DSR 25. RIS clears definitions and unlocks;
 DECSTR preserves them. `keyboard.set_user_keys_locked(False)` is the operator
 Set-Up unlock. Storage is bounded by `Model.udk_capacity` (256 bytes on VT220,
 4,096 otherwise; the latter is an implementation budget, not a hardware claim).
+Like xterm itself, the xterm profile sends them only from its VT220 keyboard (1061).
 
 The bittty profile supports mintty modes 7727/7728: application Escape (`ESC O [`)
 takes precedence over Escape-as-Ctrl-Backslash. Existing modifier policies apply

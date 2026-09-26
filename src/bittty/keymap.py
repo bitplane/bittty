@@ -13,7 +13,7 @@ the DEC keypad function keys. Keypad tables use the keypad's legends: ``0``-``9`
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Mapping
 
 ESC = "\x1b"
@@ -133,8 +133,10 @@ XTERM_KEYMAP = KeyMap(
         **dec_function_keys(5),
     },
     application={**_arrows(SS3), "home": SS3 + "H", "end": SS3 + "F", "begin": SS3 + "E"},
-    user_keys=True,
 )
+
+# bittty: xterm's keyboard, plus DECUDK strings on Shift-F6-F20 without selecting the VT220 keyboard.
+BITTTY_KEYMAP = replace(XTERM_KEYMAP, user_keys=True)
 
 # The xterm F1-F12 repertoire, reused by screen/tmux (verified against terminfo).
 _XTERM_FUNCTION_KEYS = {f"f{n}": SS3 + final for n, final in enumerate("PQRS", 1)} | dec_function_keys(5, 12)

@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .keymap import (
+    BITTTY_KEYMAP,
     LINUX_KEYMAP,
     SCREEN_KEYMAP,
     URXVT_KEYMAP,
@@ -118,6 +119,7 @@ BITTTY = Model(
     term_name="xterm",
     da2_response=XTERM.da2_response,
     mode_capabilities=BITTTY_MODE_CAPABILITIES,
+    keymap=BITTTY_KEYMAP,
     options=frozenset({VT510_PRINTER_PORT, LOCATOR_PORT}),
     control_capabilities=frozenset({KITTY_KEYBOARD, DEC_KEYBOARD_LEDS, DEC_USER_KEYS}),
 )

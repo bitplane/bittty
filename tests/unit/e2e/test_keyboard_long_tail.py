@@ -221,3 +221,13 @@ def test_stdio_escape_fragmentation_and_paste():
     assert wire.text == "\x1c\x1c"
     terminal.handle_input(b"\x1b[200~\x1b\x1b[201~")
     assert wire.text == "\x1c\x1c\x1b"
+
+
+def test_xterm_sends_user_keys_only_from_its_vt220_keyboard():
+    """xterm 407 stores DECUDK strings but its default keyboard sends Shift-F6 as CSI 17;2~."""
+    board, wire = driver(XTERM)
+    define(board, "17/4142")
+    board.input_fkey(6, 2)
+    board.feed_host_data("\x1b[?1061h")
+    board.input_fkey(6, 2)
+    assert wire.data == ["\x1b[17;2~", b"AB"]
