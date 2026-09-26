@@ -374,7 +374,11 @@ class KeyboardDevice(Device):
     def _legacy_escape_prefix(self, mods: KeyModifiers) -> bool:
         """Whether legacy Alt/Meta policy prefixes this input with ESC."""
         modes = self.board.modes
-        return bool((mods & M.ALT and modes.alt_sends_escape) or (mods & M.META and modes.meta_sends_escape))
+        return bool(
+            (mods & M.ALT and modes.alt_sends_escape)
+            or (mods & M.META and modes.meta_sends_escape)
+            or (mods & (M.ALT | M.META) and self.keymap.meta_prefix)
+        )
 
     def _send_key(self, sequence: str, mods: KeyModifiers, *, keypad: bool = False) -> None:
         """Send a keymap sequence, folding in the modifiers if the keymap encodes them."""
@@ -382,6 +386,8 @@ class KeyboardDevice(Device):
         modifiers = keymap.modifiers or (keymap.modifiers_with_other_keys and self.modify_other_keys)
         if modifiers and (keymap.keypad_modifiers or not keypad):
             sequence = apply_modifier(sequence, xterm_modifier(mods), keypad=keypad)
+        elif keypad and keymap.meta_prefix and mods & (M.ALT | M.META):
+            sequence = constants.ESC + sequence
         self.board.transmit_keyboard(sequence)
 
     @property
@@ -404,7 +410,8 @@ class KeyboardDevice(Device):
         keymap = self.keymap
         # DECCKM's SS3 forms are legacy encodings; Kitty ignores the mode.
         application = keymap.application if self.board.modes.cursor_application_mode and not self.kitty_flags else {}
-        sequence = application.get(name) or keymap.keys.get(name)
+        modified = keymap.modified if mods else {}
+        sequence = modified.get(name) or application.get(name) or keymap.keys.get(name)
         if sequence is not None:
             self._send_key(sequence, mods, keypad=name in PF_KEYS)
 
@@ -435,13 +442,12 @@ class KeyboardDevice(Device):
             self.input(other_key, local_text=char, margin_key=char.isprintable())
             return
 
+        local_text = char
         if char == constants.BS:
-            # Ctrl sends whichever of BS and DEL the backarrow key does not.
-            if self.board.modes.backarrow_key_sends_bs != bool(mods & M.CTRL):
-                self.input(constants.BS, local_text=constants.BS)
-            else:
-                self.input(constants.DEL, local_text=constants.BS)
-            return
+            # Ctrl sends whichever of BS and DEL the backarrow key does not; echo stays a backspace.
+            if self.board.modes.backarrow_key_sends_bs == bool(mods & M.CTRL):
+                char = constants.DEL
+            mods &= ~M.CTRL
 
         backtab = self.keymap.keys.get("backtab") if char == "\t" and mods & M.SHIFT else None
         if backtab is not None:  # xterm folds no modifiers into CSI Z
@@ -452,15 +458,14 @@ class KeyboardDevice(Device):
             if self.board.modes.application_escape:
                 self.input("\x1bO[")
                 return
-            char = "\x1c" if self.board.modes.escape_sends_fs else constants.ESC
+            char = local_text = "\x1c" if self.board.modes.escape_sends_fs else constants.ESC
 
         # Apply the legacy control and Alt transformations only after the
         # negotiated modern encodings above have had first refusal.
         if mods & M.CTRL:
-            char = "\x7f" if char == "?" else _x_control(char)  # xterm: Ctrl-? is DEL
+            char = local_text = "\x7f" if char == "?" else _x_control(char)  # xterm: Ctrl-? is DEL
 
         if len(char) == 1:
-            local_text = char
             # Escape-prefix policy wins over the older eighth-bit Meta form.
             if self._legacy_escape_prefix(mods):
                 char = constants.ESC + char
@@ -506,7 +511,8 @@ class KeyboardDevice(Device):
         if numeric or self.board.modes.numeric_keypad:
             text = keymap.numeric.get(key)
             if text is not None:
-                self.board.transmit_keyboard(text, local_text=text, margin_key=text.isprintable())
+                prefix = constants.ESC if keymap.meta_prefix and mods & (M.ALT | M.META) else ""
+                self.board.transmit_keyboard(prefix + text, local_text=text, margin_key=text.isprintable())
             return
         sequence = keymap.keypad.get(key)
         if sequence is not None:

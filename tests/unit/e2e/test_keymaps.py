@@ -4,7 +4,7 @@ import pytest
 
 from bittty import Board, KeyEvent, KeyModifiers
 from bittty.connections import MemoryConnection
-from bittty.model import LINUX, SCREEN, VT100, VT220, XTERM
+from bittty.model import LINUX, SCREEN, TMUX, VT100, VT220, XTERM
 
 M = KeyModifiers
 
@@ -194,3 +194,46 @@ def test_sun_delete_takes_modifiers_under_modify_other_keys():
     board, wire = driver(setup="\x1b[?1051h\x1b[>4;1m")
     board.input_key_event(KeyEvent("delete", M.SHIFT))
     assert wire.text == "\x1b[3;2z"
+
+
+@pytest.mark.parametrize(
+    "setup,event,expected",
+    [
+        ("", KeyEvent("home"), "\x1b[1~"),
+        ("", KeyEvent("home", M.CTRL), "\x1b[1;5H"),
+        ("\x1b[?1h", KeyEvent("end", M.SHIFT), "\x1b[1;2F"),
+        ("", KeyEvent("end", M.ALT | M.CTRL), "\x1b[1;7F"),
+        ("", KeyEvent("up", M.ALT), "\x1b[1;3A"),
+        ("", KeyEvent("a", M.ALT, text="a"), "\x1ba"),
+        ("", KeyEvent("a", M.ALT | M.CTRL), "\x1b\x01"),
+        ("", KeyEvent("enter", M.ALT), "\x1b\r"),
+        ("", KeyEvent("escape", M.ALT), "\x1b\x1b"),
+        ("", KeyEvent("backspace", M.ALT), "\x1b\x7f"),
+        ("", KeyEvent("tab", M.ALT), "\x1b\t"),
+        ("", KeyEvent("tab", M.SHIFT | M.ALT), "\x1b[Z"),
+        ("", KeyEvent("kp_enter"), "\n"),
+        ("", KeyEvent("kp_0", M.ALT, text="0"), "\x1b0"),
+        ("\x1b=", KeyEvent("kp_0", M.ALT, text="0"), "\x1b\x1bOp"),
+        ("\x1b=", KeyEvent("kp_enter", M.ALT), "\x1b\x1bOM"),
+    ],
+)
+def test_tmux_keyboard(setup, event, expected):
+    """tmux 3.6 via send-keys: xterm-style modified Home/End, Alt as an ESC prefix on text and keypad keys."""
+    board, wire = driver(TMUX, setup)
+    board.input_key_event(event)
+    assert wire.text == expected
+
+
+@pytest.mark.parametrize(
+    "setup,event,expected",
+    [
+        ("\x1b[?1039h", KeyEvent("backspace", M.ALT), "\x1b\x7f"),
+        ("\x1b[?1039h\x1b[?67h", KeyEvent("backspace", M.ALT), "\x1b\x08"),
+        ("\x1b[?1039h", KeyEvent("backspace", M.ALT | M.CTRL), "\x1b\x08"),
+    ],
+)
+def test_escape_prefix_applies_to_backspace(setup, event, expected):
+    """xterm input.c: after the backarrow toggle Backspace is an ordinary one-byte key, so Alt/Meta prefix it."""
+    board, wire = driver(setup=setup)
+    board.input_key_event(event)
+    assert wire.text == expected

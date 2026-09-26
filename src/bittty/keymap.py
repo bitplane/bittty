@@ -76,6 +76,7 @@ class KeyMap:
     keys: Mapping[str, str]  # key name -> sequence
     # DECCKM replacements; the SS3 cursor keys by default.
     application: Mapping[str, str] = field(default_factory=lambda: _arrows(SS3))
+    modified: Mapping[str, str] = field(default_factory=dict)  # replacements when modifiers are folded in
     modifiers: bool = True  # whether shift/alt/ctrl are folded into the sequence
     modifiers_with_other_keys: bool = False  # ...or only once modifyOtherKeys is set (xterm legacy/VT220)
     keypad_modifiers: bool = True  # whether keypad keys (PF1-PF4, DECKPAM) carry them too
@@ -89,6 +90,7 @@ class KeyMap:
     # The VT220 keypad: ',' where a PC has '+', Ctrl-',' is '-', and the keypad's
     # editing legends send keypad codes.
     vt220_keypad: bool = False
+    meta_prefix: bool = False  # Alt/Meta always ESC-prefix text and keypad keys (tmux)
 
 
 def apply_modifier(sequence: str, modifier: int, *, keypad: bool = False) -> str:
@@ -156,6 +158,16 @@ SCREEN_KEYMAP = KeyMap(
         "backtab": CSI + "Z",
     },
     keypad_modifiers=False,
+)
+
+# tmux 3.6 (checked with send-keys): screen's keys, but modified Home/End take the xterm
+# CSI 1;m H/F forms, Alt/Meta is always an ESC prefix on text and keypad keys, and the
+# numeric keypad's Enter is LF.
+TMUX_KEYMAP = replace(
+    SCREEN_KEYMAP,
+    modified={"home": CSI + "H", "end": CSI + "F"},
+    meta_prefix=True,
+    numeric={**KEYPAD_NUMERIC, "Enter": "\n"},
 )
 
 # rxvt-unicode: F1-F4 as CSI 11~-14~ (not SS3), Home/End as 7~/8~, no xterm modifier

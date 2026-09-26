@@ -14,6 +14,7 @@ from .keymap import (
     BITTTY_KEYMAP,
     LINUX_KEYMAP,
     SCREEN_KEYMAP,
+    TMUX_KEYMAP,
     URXVT_KEYMAP,
     VT100_KEYMAP,
     VT220_KEYMAP,
@@ -203,7 +204,7 @@ TMUX = Model(
     da3_response=None,
     mode_capabilities=TMUX_MODE_CAPABILITIES,
     color_depth="256",
-    keymap=SCREEN_KEYMAP,
+    keymap=TMUX_KEYMAP,
 )
 
 # rxvt-unicode — keymap and colours from terminfo (rxvt-unicode-256color). DA1 is VT100+AVO;
