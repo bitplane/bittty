@@ -7,7 +7,7 @@ selectable keyboards (see keyboard_styles) are both KeyMaps, and the keyboard de
 has a single encoder for them.
 
 Keys are named as in `KeyEvent`: ``up``, ``home``, ``f13``, plus ``pf1``-``pf4`` for
-the DEC keypad function keys. Keypad tables use the keypad's legends: ``0``-``9``,
+the DEC keypad function keys and ``backtab`` for Shift-Tab (terminfo kcbt). Keypad tables use the keypad's legends: ``0``-``9``,
 ``.``, ``Enter`` and so on.
 """
 
@@ -128,6 +128,7 @@ XTERM_KEYMAP = KeyMap(
         **{key: CSI + body for key, body in DEC_EDITING.items()},
         "help": CSI + "28~",
         "menu": CSI + "29~",
+        "backtab": CSI + "Z",
         **PF_KEYS,
         **{f"f{n}": SS3 + final for n, final in enumerate("PQRS", 1)},
         **dec_function_keys(5),
@@ -146,14 +147,28 @@ _EDITING_KEYPAD = {key: CSI + DEC_EDITING[key] for key in ("insert", "delete", "
 # GNU screen / tmux: xterm's function keys, but VT220-style Home/End (1~/4~) (terminfo),
 # and keypad keys without modifier parameters (tmux 3.6: Shift-KP0 in DECKPAM is ESC O p).
 SCREEN_KEYMAP = KeyMap(
-    keys={**_XTERM_FUNCTION_KEYS, **_arrows(CSI), "home": CSI + "1~", "end": CSI + "4~", **_EDITING_KEYPAD},
+    keys={
+        **_XTERM_FUNCTION_KEYS,
+        **_arrows(CSI),
+        "home": CSI + "1~",
+        "end": CSI + "4~",
+        **_EDITING_KEYPAD,
+        "backtab": CSI + "Z",
+    },
     keypad_modifiers=False,
 )
 
 # rxvt-unicode: F1-F4 as CSI 11~-14~ (not SS3), Home/End as 7~/8~, no xterm modifier
 # folding (rxvt uses its own shifted-key scheme). (terminfo: rxvt-unicode-256color)
 URXVT_KEYMAP = KeyMap(
-    keys={**dec_function_keys(1, 12), **_arrows(CSI), "home": CSI + "7~", "end": CSI + "8~", **_EDITING_KEYPAD},
+    keys={
+        **dec_function_keys(1, 12),
+        **_arrows(CSI),
+        "home": CSI + "7~",
+        "end": CSI + "8~",
+        **_EDITING_KEYPAD,
+        "backtab": CSI + "Z",
+    },
     modifiers=False,
 )
 
@@ -193,6 +208,7 @@ LINUX_KEYMAP = KeyMap(
         "end": CSI + "4~",
         "pageup": CSI + "5~",
         "pagedown": CSI + "6~",
+        "backtab": ESC + "\t",
     },
     modifiers=False,
 )

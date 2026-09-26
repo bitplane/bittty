@@ -150,3 +150,29 @@ def test_modified_delete_is_not_del_under_modify_other_keys():
     board.input_key_event(KeyEvent("delete", M.CTRL))
     board.input_key_event(KeyEvent("delete"))
     assert wire.text == "\x1b[3;5~\x7f"
+
+
+@pytest.mark.parametrize("setup", ["", "\x1b[?1051h", "\x1b[?1060h", "\x1b[?1061h", "\x1b[>4;1m", "\x1b[>4;2m"])
+@pytest.mark.parametrize("mods", [M.SHIFT, M.SHIFT | M.CTRL])
+def test_shift_tab_is_backtab(setup, mods):
+    """xterm 407: Shift-Tab and Ctrl-Shift-Tab send CSI Z in every keyboard."""
+    board, wire = driver(setup=setup)
+    board.input_key_event(KeyEvent("tab", mods))
+    assert wire.text == "\x1b[Z"
+
+
+def test_vt220_has_no_backtab():
+    board, wire = driver(VT220)
+    board.input_key_event(KeyEvent("tab", M.SHIFT))
+    assert wire.text == "\t"
+
+
+@pytest.mark.parametrize(
+    "setup,mods,expected",
+    [("", M.NONE, "\x7f"), ("", M.CTRL, "\x08"), ("\x1b[?67h", M.NONE, "\x08"), ("\x1b[?67h", M.CTRL, "\x7f")],
+)
+def test_control_inverts_backarrow(setup, mods, expected):
+    """xterm 407: Ctrl-Backspace sends whichever of BS/DEL Backspace does not."""
+    board, wire = driver(setup=setup)
+    board.input_key_event(KeyEvent("backspace", mods))
+    assert wire.text == expected

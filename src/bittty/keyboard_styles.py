@@ -22,7 +22,11 @@ _SUN_CODES = (*range(224, 234), *range(192, 202), *range(208, 223), 234, 235)
 _SCO_FINALS = "MNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@[\\]^_`{"
 _SS3_ARROWS = {key: SS3 + final for key, final in ARROWS.items()}
 _CSI_ARROWS = {key: CSI + final for key, final in ARROWS.items()}
-_DEC_KEYS = {key: CSI + body for key, body in DEC_EDITING.items()} | {"help": CSI + "28~", "menu": CSI + "29~"}
+_DEC_KEYS = {key: CSI + body for key, body in DEC_EDITING.items()} | {
+    "help": CSI + "28~",
+    "menu": CSI + "29~",
+    "backtab": CSI + "Z",
+}
 # Keys that follow DECCKM wherever a keyboard leaves them in their DEC form.
 _CURSOR = {"home": "H", "end": "F", "begin": "E"}
 _DEC_CURSOR = _CSI_ARROWS | {key: CSI + final for key, final in _CURSOR.items()}
@@ -34,6 +38,7 @@ STYLE_KEYMAPS = {
             **dec_function_keys(),
             **{f"f{n}": f"{CSI}{code}z" for n, code in enumerate(_SUN_CODES, 1)},
             **_SS3_ARROWS,
+            "backtab": CSI + "Z",
             **{
                 key: f"{CSI}{code}z"
                 for key, code in {

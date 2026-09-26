@@ -348,10 +348,16 @@ class KeyboardDevice(Device):
             return
 
         if char == constants.BS:
-            if self.board.modes.backarrow_key_sends_bs:
+            # Ctrl sends whichever of BS and DEL the backarrow key does not.
+            if self.board.modes.backarrow_key_sends_bs != bool(mods & M.CTRL):
                 self.input(constants.BS, local_text=constants.BS)
             else:
                 self.input(constants.DEL, local_text=constants.BS)
+            return
+
+        backtab = self.keymap.keys.get("backtab") if char == "\t" and mods & M.SHIFT else None
+        if backtab is not None:  # xterm folds no modifiers into CSI Z
+            self.board.transmit_keyboard(backtab)
             return
 
         enhanced = self._enhanced_key(char, mods)
