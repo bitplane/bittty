@@ -128,3 +128,13 @@ def test_delete_as_del_is_the_editing_keypad_delete_only(setup):
     wire.data.clear()
     board.input_key_event(KeyEvent("kp_delete"))
     assert wire.text == "\x1b[3~"
+
+
+def test_sun_delete_ignores_modifiers_but_keypad_delete_does_not():
+    """xterm 407, Sun function keys: Ctrl-Delete is CSI 3z, Ctrl-KP_Delete is CSI 3;5z."""
+    board, wire = driver(setup="\x1b[?1051h\x1b[?1037h")
+    board.input_key_event(KeyEvent("delete", M.CTRL))
+    assert wire.text == "\x1b[3z"
+    wire.data.clear()
+    board.input_key_event(KeyEvent("kp_delete", M.CTRL))
+    assert wire.text == "\x1b[3;5z"

@@ -84,6 +84,7 @@ class KeyMap:
     user_keys: bool = False  # Shift-F6-F20 send DECUDK strings when defined
     # Delete sends DEL: False honours mode 1037, True also defaults to DEL, None never.
     delete_is_del: bool | None = False
+    delete_unmodified: bool = False  # the editing-keypad Delete ignores modifiers (xterm Sun keys)
     # The VT220 keypad: ',' where a PC has '+', Ctrl-',' is '-', and the keypad's
     # editing legends send keypad codes.
     vt220_keypad: bool = False

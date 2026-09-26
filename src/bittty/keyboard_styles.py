@@ -54,6 +54,7 @@ STYLE_KEYMAPS = {
         },
         application={},
         delete_is_del=None,
+        delete_unmodified=True,
     ),
     KeyboardStyle.HP: KeyMap(
         keys={

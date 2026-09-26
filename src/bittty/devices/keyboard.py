@@ -335,9 +335,12 @@ class KeyboardDevice(Device):
     def _legacy_key(self, char: str, mods: KeyModifiers) -> None:
         if char == "escape":
             char = constants.ESC
-        if char == "delete" and self._delete_is_del():  # the editing keypad's Delete, not KP_Delete
-            self.board.transmit_keyboard(constants.DEL)
-            return
+        if char == "delete":  # the editing keypad's Delete, not KP_Delete
+            if self._delete_is_del():
+                self.board.transmit_keyboard(constants.DEL)
+                return
+            if self.keymap.delete_unmodified:
+                mods = M.NONE
         if len(char) > 1:
             self._named_key(char, mods)
             return
