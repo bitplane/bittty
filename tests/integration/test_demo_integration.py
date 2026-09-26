@@ -25,3 +25,11 @@ def test_demo_clean_exit(assert_demo_output):
     # Just verify exit works - fixture auto-adds exit if missing
     output = assert_demo_output("", [])  # Empty commands, no expected output
     assert isinstance(output, str), "Should return string output"
+
+
+@pytest.mark.integration
+@pytest.mark.skipif(sys.platform == "win32", reason="Demo uses Unix terminal features")
+def test_demo_logs_to_test_directory(assert_demo_output, tmp_path):
+    """Demo runs log under tmp_path, off the repo's disk and out of the developer's log."""
+    assert_demo_output("", [])
+    assert "Demo logging started" in (tmp_path / "demo.log").read_text()

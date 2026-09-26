@@ -9,13 +9,17 @@ reserved_rows / draw_chrome() seam on StdioTerminal is for.
 
 import asyncio
 import logging
+import os
 import signal
 import sys
 from pathlib import Path
 
 from bittty.terminals.stdio import StdioTerminal
 
-LOG_PATH = Path(__file__).resolve().parents[1] / "logs" / "demo" / "terminal.log"
+# BITTTY_DEMO_LOG moves the log elsewhere; the tests point it at a tmpfs file.
+LOG_PATH = Path(
+    os.environ.get("BITTTY_DEMO_LOG", Path(__file__).resolve().parents[1] / "logs" / "demo" / "terminal.log")
+)
 logger = logging.getLogger(__name__)
 
 
@@ -31,7 +35,7 @@ class DemoTerminal(StdioTerminal):
 
 
 def setup_logging() -> None:
-    """Write demo and bittty logs to logs/demo/terminal.log."""
+    """Write demo and bittty logs to LOG_PATH (logs/demo/terminal.log by default)."""
     LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
     logging.basicConfig(
         filename=LOG_PATH,

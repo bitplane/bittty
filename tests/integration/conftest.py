@@ -28,16 +28,18 @@ class DemoTimeoutError(Exception):
         self.args = (enhanced_message,)
 
 
-def _run_demo(input_commands, timeout=10.0):
+def _run_demo(input_commands, log_path, timeout=10.0):
     """Internal function to run demo and return output.
 
     The deadline is a hang detector, not a performance gate: a healthy run
     takes ~0.3s, so it only fires when the demo genuinely fails to exit.
     SHELL is pinned to /bin/sh so the test exercises bittty rather than the
-    developer's login shell and rc files — hermetic, and faster.
+    developer's login shell and rc files — hermetic, and faster. The log goes
+    to log_path: truncating the repo's log can stall for seconds in the ext4
+    journal when the disk is busy, and it would clobber the developer's log.
     """
     demo_path = os.path.join(os.path.dirname(__file__), "..", "..", "demo", "terminal.py")
-    env = {**os.environ, "SHELL": "/bin/sh", "ENV": ""}
+    env = {**os.environ, "SHELL": "/bin/sh", "ENV": "", "BITTTY_DEMO_LOG": str(log_path)}
 
     with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as stdout:
         with tempfile.TemporaryFile(mode="w+", encoding="utf-8") as stderr:
@@ -81,7 +83,7 @@ def _run_demo(input_commands, timeout=10.0):
 
 
 @pytest.fixture
-def assert_demo_output():
+def assert_demo_output(tmp_path):
     """Assert that demo output contains expected text, with nice screen dump on failure."""
 
     def _assert(commands, expected, timeout=10.0):
@@ -96,7 +98,7 @@ def assert_demo_output():
         if not commands.strip().endswith("exit"):
             commands = commands.rstrip() + "\r\nexit\r\n"
 
-        output = _run_demo(commands, timeout)
+        output = _run_demo(commands, tmp_path / "demo.log", timeout)
 
         # Handle both string and list expectations
         if isinstance(expected, str):
