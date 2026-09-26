@@ -108,3 +108,12 @@ def test_tmux_application_keypad_carries_no_modifiers(event, expected):
     board, wire = driver(SCREEN, "\x1b=")
     board.input_key_event(event)
     assert wire.text == expected
+
+
+@pytest.mark.parametrize("modifier", [0, 17, -1])
+def test_legacy_modifier_outside_one_plus_mask_is_rejected(modifier):
+    board, _ = driver()
+    with pytest.raises(ValueError):
+        board.input_key("up", modifier)
+    with pytest.raises(ValueError):
+        board.input_fkey(1, modifier)

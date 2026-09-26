@@ -53,7 +53,18 @@ def valid_text(text: str) -> bool:
     return all(ord(c) >= 32 and not 127 <= ord(c) <= 159 and not 0xD800 <= ord(c) <= 0xDFFF for c in text)
 
 
+# The modifiers legacy encodings can express; Super/Hyper need the Kitty protocol.
+LEGACY_MODIFIERS = KeyModifiers.SHIFT | KeyModifiers.ALT | KeyModifiers.CTRL | KeyModifiers.META
+
+
 def legacy_modifiers(modifier: int) -> KeyModifiers:
     """Adapt the old one-plus-mask API, whose bit 8 meant Meta, not Super."""
-    bits = max(0, modifier - 1)
+    if not 1 <= modifier <= 16:
+        raise ValueError("modifier must be xterm's one-plus-mask parameter, 1-16")
+    bits = modifier - 1
     return KeyModifiers((bits & 7) | (32 if bits & 8 else 0))
+
+
+def xterm_modifier(modifiers: KeyModifiers) -> int:
+    """The xterm modifier parameter: one plus Shift 1, Alt 2, Ctrl 4, Meta 8."""
+    return 1 + (modifiers & 7) + (8 if modifiers & KeyModifiers.META else 0)
