@@ -4,7 +4,6 @@ import codecs
 import re
 
 from ..keyboard_protocol import FUNCTIONAL, UNICODE_KEYS
-from ..keyboard_styles import KeyboardStyle
 from ..keys import KeyEvent, KeyModifiers
 
 _CSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
@@ -169,7 +168,7 @@ class KeyboardInput:
         elif (
             terminal.host_keyboard_flags is not None
             or terminal.board.keyboard.kitty_flags
-            or terminal.board.keyboard.style is not KeyboardStyle.DEFAULT
+            or terminal.board.keyboard.keyboard_selected
         ):
             event = decode_key(raw)
             if isinstance(event, KeyEvent):

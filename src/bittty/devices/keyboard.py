@@ -282,6 +282,11 @@ class KeyboardDevice(Device):
             self.led_num = self.led_caps = self.led_scroll = False
 
     @property
+    def keyboard_selected(self) -> bool:
+        """Whether an xterm keyboard (Sun/HP/SCO/legacy/VT220) replaces the model's keymap."""
+        return self.style is not KeyboardStyle.DEFAULT
+
+    @property
     def keymap(self) -> KeyMap:
         """The active keymap: an xterm keyboard selection, else the model's own."""
         return STYLE_KEYMAPS.get(self.style, self.board.model.keymap)
@@ -393,11 +398,7 @@ class KeyboardDevice(Device):
 
     def input_fkey(self, num: int, modifier: int = constants.KEY_MOD_NONE) -> None:
         """Encode a function key using any user-defined string, else the keymap."""
-        mods = legacy_modifiers(modifier)
-        if self.kitty_flags:
-            self.input_key_event(KeyEvent(f"f{num}", mods))
-            return
-        self._legacy_fkey(num, mods)
+        self.input_key_event(KeyEvent(f"f{num}", legacy_modifiers(modifier)))
 
     def _legacy_fkey(self, num: int, mods: KeyModifiers) -> None:
         keymap = self.keymap
