@@ -101,13 +101,17 @@ def test_modify_other_keys_does_not_change_historical_modifier_policy(mode, expe
 
 @pytest.mark.parametrize("mode", [1060, 1061])
 def test_control_function_bank_and_shift_udk(mode):
+    """xterm 407: ctrlFKeys is 10, so Ctrl-F1 is F11 and Ctrl-F10 is F20."""
     board, wire = driver(mode)
-    board.feed_host_data("\x1bP0;1|25/4142\x1b\\")
+    board.feed_host_data("\x1bP0;1|23/4142\x1b\\")
     board.input_key_event(KeyEvent("f1", KeyModifiers.CTRL))
-    assert wire.text == "\x1b[25~"
+    assert wire.text == "\x1b[23~"
+    wire.data.clear()
+    board.input_key_event(KeyEvent("f10", KeyModifiers.CTRL))
+    assert wire.text == "\x1b[34~"
     wire.data.clear()
     board.input_key_event(KeyEvent("f1", KeyModifiers.CTRL | KeyModifiers.SHIFT))
-    assert wire.text == ("AB" if mode == 1061 else "\x1b[25~")
+    assert wire.text == ("AB" if mode == 1061 else "\x1b[23~")
 
 
 @pytest.mark.parametrize("mode", [1051, 1052, 1053])

@@ -101,7 +101,7 @@ STYLE_KEYMAPS = {
         keys={**dec_function_keys(), **_DEC_KEYS, **_DEC_CURSOR, **PF_KEYS},
         application=_DEC_APPLICATION,
         modifiers=False,
-        ctrl_function_offset=12,
+        ctrl_function_offset=10,
         delete_is_del=True,
     ),
     KeyboardStyle.VT220: KeyMap(
@@ -117,7 +117,7 @@ STYLE_KEYMAPS = {
         },
         application=_SS3_ARROWS | {"begin": SS3 + "E"},
         modifiers=False,
-        ctrl_function_offset=12,
+        ctrl_function_offset=10,
         user_keys=True,
         vt220_keypad=True,
     ),
