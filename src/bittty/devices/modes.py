@@ -857,63 +857,6 @@ class ModeDevice(Device):
         self.cursor_blinking = enabled
         self.reconcile(ModeEffect.CURSOR_BLINK)
 
-    # Compatibility properties for callers that used the former mouse booleans.
-
-    @property
-    def mouse_tracking(self) -> bool:
-        return self.mouse_protocol in {
-            MouseProtocol.X10,
-            MouseProtocol.NORMAL,
-            MouseProtocol.BUTTON,
-            MouseProtocol.ANY,
-        }
-
-    @mouse_tracking.setter
-    def mouse_tracking(self, enabled: bool) -> None:
-        self.select_mouse_protocol(MouseProtocol.NORMAL if enabled else MouseProtocol.OFF)
-
-    @property
-    def mouse_button_tracking(self) -> bool:
-        return self.mouse_protocol is MouseProtocol.BUTTON
-
-    @mouse_button_tracking.setter
-    def mouse_button_tracking(self, enabled: bool) -> None:
-        self._set_group_member("mouse_protocol", MouseProtocol.BUTTON, enabled)
-        self.reconcile(ModeEffect.MOUSE_CAPTURE)
-
-    @property
-    def mouse_any_tracking(self) -> bool:
-        return self.mouse_protocol is MouseProtocol.ANY
-
-    @mouse_any_tracking.setter
-    def mouse_any_tracking(self, enabled: bool) -> None:
-        self._set_group_member("mouse_protocol", MouseProtocol.ANY, enabled)
-        self.reconcile(ModeEffect.MOUSE_CAPTURE)
-
-    @property
-    def mouse_utf8_mode(self) -> bool:
-        return self.mouse_encoding is MouseEncoding.UTF8
-
-    @mouse_utf8_mode.setter
-    def mouse_utf8_mode(self, enabled: bool) -> None:
-        self._set_group_member("mouse_encoding", MouseEncoding.UTF8, enabled)
-
-    @property
-    def mouse_sgr_mode(self) -> bool:
-        return self.mouse_encoding is MouseEncoding.SGR
-
-    @mouse_sgr_mode.setter
-    def mouse_sgr_mode(self, enabled: bool) -> None:
-        self._set_group_member("mouse_encoding", MouseEncoding.SGR, enabled)
-
-    @property
-    def urxvt_mouse(self) -> bool:
-        return self.mouse_encoding is MouseEncoding.URXVT
-
-    @urxvt_mouse.setter
-    def urxvt_mouse(self, enabled: bool) -> None:
-        self._set_group_member("mouse_encoding", MouseEncoding.URXVT, enabled)
-
     def set_grapheme_capability(self, capability: str) -> None:
         """Apply the destination's mode-2027 policy without changing the model repertoire."""
         key = (True, 2027)

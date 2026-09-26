@@ -1,6 +1,7 @@
 """Phase 2: devices emit present events alongside (never instead of) their register writes."""
 
 from bittty import Board, TerminalCaps
+from bittty.devices.modes import MouseProtocol
 from bittty.parser import Parser
 from bittty.present import (
     AmbiguousWidthChanged,
@@ -148,4 +149,4 @@ def test_events_are_dropped_with_no_frontend():
     parser = Parser(board)
     parser.feed("\x1b]2;t\x07\x1b[?1000h\x07")
     assert board.title.title == "t"
-    assert board.modes.mouse_tracking is True
+    assert board.modes.mouse_protocol is MouseProtocol.NORMAL

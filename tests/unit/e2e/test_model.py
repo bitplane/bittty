@@ -1,6 +1,7 @@
 """Model-driven behaviour: the same board answers as different terminals."""
 
 from bittty import Board, MemoryConnection, constants
+from bittty.devices.modes import MouseProtocol
 from bittty.model import LINUX, VT100, VT220, VT510, XTERM
 from bittty.parser import Parser
 from bittty.style import Color
@@ -123,7 +124,7 @@ def test_vt220_is_distinct_across_every_axis():
 
     # Modes: the VT220 predates mouse tracking, so DECSET 1000 is a no-op.
     parser.feed("\x1b[?1000h")
-    assert vt220.modes.mouse_tracking is False
+    assert vt220.modes.mouse_protocol is MouseProtocol.OFF
 
     # Charsets: it knows DEC Supplemental ("<", a VT220 addition) but not DEC
     # Technical (">", a later set).

@@ -3,6 +3,7 @@
 import pytest
 
 from bittty import Board, MemoryConnection, TerminalCaps
+from bittty.devices.modes import MouseEncoding
 from bittty.model import VT220
 from bittty.parser import Parser
 
@@ -74,15 +75,25 @@ def test_reverse_screen_and_cursor_blink_modes_report_real_state():
     assert transport.data[-2:] == ["\x1b[?5;2$y", "\x1b[?12;2$y"]
 
 
+@pytest.mark.parametrize(("mode", "encoding"), [(1005, MouseEncoding.UTF8), (1015, MouseEncoding.URXVT)])
+def test_mouse_encoding_modes_report_and_change_real_state(mode, encoding):
+    board, parser, transport = _term()
+
+    parser.feed(f"\x1b[?{mode}$p\x1b[?{mode}h\x1b[?{mode}$p")
+    assert board.modes.mouse_encoding is encoding
+    assert transport.data[-2:] == [f"\x1b[?{mode};2$y", f"\x1b[?{mode};1$y"]
+
+    parser.feed(f"\x1b[?{mode}l")
+    assert board.modes.mouse_encoding is MouseEncoding.LEGACY
+
+
 @pytest.mark.parametrize(
     ("mode", "attr"),
     [
         (42, "national_charset_mode"),
         (45, "reverse_wraparound"),
         (95, "no_clear_column_mode"),
-        (1005, "mouse_utf8_mode"),
         (1007, "alternate_scroll_mode"),
-        (1015, "urxvt_mouse"),
         (1034, "eight_bit_input"),
         (1036, "meta_sends_escape"),
         (1039, "alt_sends_escape"),

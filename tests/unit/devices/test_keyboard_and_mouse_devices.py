@@ -120,8 +120,8 @@ def test_mouse_device_caches_position_and_gates_tracking():
     assert (mouse.x, mouse.y) == (10, 5)
     assert board.pty.data == []
 
-    board.modes.mouse_tracking = True
-    board.modes.mouse_sgr_mode = True
+    board.parser.feed("\x1b[?1000h")
+    board.parser.feed("\x1b[?1006h")
     mouse.input_mouse(10, 5, 0, "press", {"shift"})
 
     assert board.pty.data == ["\x1b[<4;10;5M"]
@@ -129,13 +129,13 @@ def test_mouse_device_caches_position_and_gates_tracking():
 
 def test_mouse_device_move_requires_any_tracking():
     board = board_with_pty()
-    board.modes.mouse_tracking = True
-    board.modes.mouse_sgr_mode = True
+    board.parser.feed("\x1b[?1000h")
+    board.parser.feed("\x1b[?1006h")
 
     board.mouse.input_mouse(1, 2, 0, "move", set())
     assert board.pty.data == []
 
-    board.modes.mouse_any_tracking = True
+    board.parser.feed("\x1b[?1003h")
     board.mouse.input_mouse(1, 2, 0, "move", set())
     assert board.pty.data == ["\x1b[<35;1;2M"]
 
@@ -158,7 +158,7 @@ def test_input_mouse_basic():
     board = Board(width=80, height=24)
 
     # Enable mouse tracking
-    board.modes.mouse_tracking = True
+    board.parser.feed("\x1b[?1000h")
 
     # Test mouse press
     board.input_mouse(10, 5, 1, "press", set())
@@ -173,8 +173,8 @@ def test_input_mouse_sgr_mode():
     board = Board(width=80, height=24)
 
     # Enable SGR mouse mode
-    board.modes.mouse_sgr_mode = True
-    board.modes.mouse_tracking = True
+    board.parser.feed("\x1b[?1006h")
+    board.parser.feed("\x1b[?1000h")
 
     # Test mouse press with modifiers
     modifiers = {"shift", "ctrl"}
@@ -288,7 +288,7 @@ def test_mouse_device_legacy_encoding_without_sgr():
     real connection takes.
     """
     board = board_with_pty()
-    board.modes.mouse_tracking = True
+    board.parser.feed("\x1b[?1000h")
 
     board.mouse.input_mouse(10, 5, 0, "press", set())
     assert board.pty.data == [b"\x1b[M" + bytes((32 + 0, 32 + 10, 32 + 5))]
@@ -303,7 +303,7 @@ def test_legacy_mouse_uses_raw_bytes_on_a_real_pty_connection():
     output = io.BytesIO()
     board = Board(width=300, height=20)
     board.pty = PTY(to_process=output)
-    board.modes.mouse_tracking = True
+    board.parser.feed("\x1b[?1000h")
 
     board.mouse.input_mouse(200, 5, 0, "press", set())
 
@@ -312,8 +312,8 @@ def test_legacy_mouse_uses_raw_bytes_on_a_real_pty_connection():
 
 def test_utf8_mouse_encoding_extends_coordinates():
     board = board_with_pty()
-    board.modes.mouse_tracking = True
-    board.modes.mouse_utf8_mode = True
+    board.parser.feed("\x1b[?1000h")
+    board.parser.feed("\x1b[?1005h")
 
     board.mouse.input_mouse(200, 300, 0, "press", set())
 
@@ -324,8 +324,8 @@ def test_utf8_mouse_encoding_extends_coordinates():
 
 def test_urxvt_mouse_uses_decimal_parameters_and_x10_button_offset():
     board = board_with_pty()
-    board.modes.mouse_tracking = True
-    board.modes.urxvt_mouse = True
+    board.parser.feed("\x1b[?1000h")
+    board.parser.feed("\x1b[?1015h")
 
     board.mouse.input_mouse(300, 400, 0, "press", set())
     board.mouse.input_mouse(300, 400, 0, "release", set())
@@ -335,10 +335,10 @@ def test_urxvt_mouse_uses_decimal_parameters_and_x10_button_offset():
 
 def test_sgr_mouse_takes_precedence_over_other_coordinate_encodings():
     board = board_with_pty()
-    board.modes.mouse_tracking = True
-    board.modes.mouse_utf8_mode = True
-    board.modes.urxvt_mouse = True
-    board.modes.mouse_sgr_mode = True
+    board.parser.feed("\x1b[?1000h")
+    board.parser.feed("\x1b[?1005h")
+    board.parser.feed("\x1b[?1015h")
+    board.parser.feed("\x1b[?1006h")
 
     board.mouse.input_mouse(300, 400, 0, "press", set())
 
@@ -361,8 +361,8 @@ def test_mouse_tracking_takes_precedence_over_alternate_scroll():
     board = board_with_pty()
     board.blitter.switch_screen(True)
     board.modes.alternate_scroll_mode = True
-    board.modes.mouse_tracking = True
-    board.modes.mouse_sgr_mode = True
+    board.parser.feed("\x1b[?1000h")
+    board.parser.feed("\x1b[?1006h")
 
     board.mouse.input_mouse(5, 5, constants.MOUSE_BUTTON_WHEEL_UP, "press", set())
 
