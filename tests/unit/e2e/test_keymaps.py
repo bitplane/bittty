@@ -117,3 +117,14 @@ def test_legacy_modifier_outside_one_plus_mask_is_rejected(modifier):
         board.input_key("up", modifier)
     with pytest.raises(ValueError):
         board.input_fkey(1, modifier)
+
+
+@pytest.mark.parametrize("setup", ["\x1b[?1037h", "\x1b[?1060h"])
+def test_delete_as_del_is_the_editing_keypad_delete_only(setup):
+    """xterm 407: 1037 (and the legacy keyboard) make Delete DEL; KP_Delete stays CSI 3~."""
+    board, wire = driver(setup=setup)
+    board.input_key_event(KeyEvent("delete"))
+    assert wire.text == "\x7f"
+    wire.data.clear()
+    board.input_key_event(KeyEvent("kp_delete"))
+    assert wire.text == "\x1b[3~"

@@ -316,9 +316,6 @@ class KeyboardDevice(Device):
 
     def _named_key(self, name: str, mods: KeyModifiers) -> None:
         """Encode a named key from the active keymap; names it does not define are ignored."""
-        if name == "delete" and self._delete_is_del():
-            self.board.transmit_keyboard(constants.DEL)
-            return
         keymap = self.keymap
         # DECCKM's SS3 forms are legacy encodings; Kitty ignores the mode.
         application = keymap.application if self.board.modes.cursor_application_mode and not self.kitty_flags else {}
@@ -338,6 +335,9 @@ class KeyboardDevice(Device):
     def _legacy_key(self, char: str, mods: KeyModifiers) -> None:
         if char == "escape":
             char = constants.ESC
+        if char == "delete" and self._delete_is_del():  # the editing keypad's Delete, not KP_Delete
+            self.board.transmit_keyboard(constants.DEL)
+            return
         if len(char) > 1:
             self._named_key(char, mods)
             return
@@ -467,7 +467,7 @@ class KeyboardDevice(Device):
             ):
                 self._legacy_numpad(position, mods)
             else:
-                self._legacy_key(key[3:], mods)
+                self._named_key(key[3:], mods)
         elif event.text and not bits & 62:
             self.board.transmit_keyboard(event.text, local_text=event.text, margin_key=True)
         elif event.text and len(event.text) > 1 and not bits & KeyModifiers.CTRL:
