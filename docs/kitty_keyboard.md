@@ -36,6 +36,12 @@ Shift-printable, Ctrl-2 as NUL, Escape, Backspace, escape-prefixed or bare Alt/M
 level 2 reports them too. The code is the shifted character (`CSI 27;6;65~` for
 Ctrl-Shift-A). Mode 1037 is a keyboard setting that RIS and DECSTR keep, as in xterm.
 
+Alt and Meta on text keys prefix ESC when 1039 (Alt) or 1036 (Meta) is set; otherwise,
+while eight-bit input (1034) is set, they set the eighth bit and send that character
+(UTF-8 on the wire, as xterm does in a UTF-8 locale), and with neither they are dropped.
+Alt follows xterm's `altIsNotMeta` behaviour. The xterm profile powers on with 1034, as
+xterm does, so Alt-a sends `á`; the bittty profile powers on with 1036 and 1039 (ESC).
+
 DECARM (mode 8, bittty and DEC hardware profiles) filters explicit repeat events;
 legacy bytes cannot distinguish repeats. Repeat timing and historical per-key
 exceptions remain frontend/hardware-profile work.

@@ -103,7 +103,7 @@ def test_mouse_encoding_modes_report_and_change_real_state(mode, encoding):
 def test_restored_private_modes_report_and_change_real_state(mode, attr):
     board, parser, transport = _term()
 
-    parser.feed(f"\x1b[?{mode}$p\x1b[?{mode}h\x1b[?{mode}$p")
+    parser.feed(f"\x1b[?{mode}l\x1b[?{mode}$p\x1b[?{mode}h\x1b[?{mode}$p")
     assert getattr(board.modes, attr) is True
     assert transport.data[-2:] == [f"\x1b[?{mode};2$y", f"\x1b[?{mode};1$y"]
 

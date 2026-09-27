@@ -1,6 +1,7 @@
 import io
 
 from bittty import Board, MemoryConnection, constants
+from bittty.model import XTERM
 from bittty.pty import PTY
 
 
@@ -66,15 +67,15 @@ def test_alt_sends_escape_beats_modify_other_keys_level_one():
     assert board.pty.data == ["\x1bx", "\x1b[27;3;120~"]
 
 
-def test_meta_can_set_the_eighth_bit_as_a_raw_byte():
+def test_meta_sets_the_eighth_bit_as_a_utf8_character():
+    """xterm 407 in a UTF-8 locale: Meta-x is U+00F8, not a lone 0xF8 byte."""
     output = io.BytesIO()
-    board = Board()
+    board = Board(model=XTERM)
     board.pty = PTY(to_process=output)
-    board.modes.eight_bit_input = True
 
     board.keyboard.input_key("x", constants.KEY_MOD_META)
 
-    assert output.getvalue() == b"\xf8"
+    assert output.getvalue() == b"\xc3\xb8"
 
 
 def test_meta_sends_escape_takes_precedence_over_eight_bit_input():

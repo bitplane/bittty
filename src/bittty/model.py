@@ -80,6 +80,8 @@ class Model:
     # DEC hardware uses 0 for a valid DECRQSS request; modern emulators use 1.
     decrqss_valid_is_one: bool = True
     udk_capacity: int = 4096  # byte budget for downloaded function-key strings
+    # Private modes this terminal sets at power-on (and RIS), beyond each mode's own default.
+    power_on_modes: frozenset[int] = frozenset()
 
     @property
     def capabilities(self) -> frozenset[str]:
@@ -112,6 +114,7 @@ XTERM = Model(
     mode_capabilities=XTERM_MODE_CAPABILITIES,
     options=frozenset({XTERM_PRINTER_PIPE, LOCATOR_PORT}),
     control_capabilities=frozenset({DEC_KEYBOARD_LEDS, DEC_USER_KEYS}),
+    power_on_modes=frozenset({1034}),  # eightBitInput
 )
 
 BITTTY = Model(
@@ -123,6 +126,7 @@ BITTTY = Model(
     keymap=BITTTY_KEYMAP,
     options=frozenset({VT510_PRINTER_PORT, LOCATOR_PORT}),
     control_capabilities=frozenset({KITTY_KEYBOARD, DEC_KEYBOARD_LEDS, DEC_USER_KEYS}),
+    power_on_modes=frozenset({1036, 1039}),  # Alt and Meta send ESC
 )
 
 VT100 = Model(

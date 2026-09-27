@@ -470,12 +470,9 @@ class KeyboardDevice(Device):
             if self._legacy_escape_prefix(mods):
                 char = constants.ESC + char
                 self.input(char, local_text=local_text, margin_key=local_text.isprintable())
-            elif mods & M.META and self.board.modes.eight_bit_input and ord(char) < 128:
-                self.board.transmit_keyboard_bytes(
-                    bytes((ord(char) | 0x80,)),
-                    local_text=local_text,
-                    margin_key=local_text.isprintable(),
-                )
+            elif mods & (M.ALT | M.META) and self.board.modes.eight_bit_input and ord(char) < 128:
+                # xterm in a UTF-8 locale sends the shifted code as a character.
+                self.input(chr(ord(char) | 0x80), local_text=local_text, margin_key=local_text.isprintable())
             else:
                 self.input(char, local_text=local_text, margin_key=local_text.isprintable())
 

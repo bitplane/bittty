@@ -4,7 +4,7 @@ import pytest
 
 from bittty import Board, KeyEvent, KeyModifiers
 from bittty.connections import MemoryConnection
-from bittty.model import LINUX, SCREEN, TMUX, VT100, VT220, XTERM
+from bittty.model import BITTTY, LINUX, SCREEN, TMUX, VT100, VT220, XTERM
 
 M = KeyModifiers
 
@@ -237,3 +237,46 @@ def test_escape_prefix_applies_to_backspace(setup, event, expected):
     board, wire = driver(setup=setup)
     board.input_key_event(event)
     assert wire.text == expected
+
+
+@pytest.mark.parametrize(
+    "setup,mods,expected",
+    [
+        ("", M.META, "\xe1"),
+        ("", M.ALT, "\xe1"),
+        ("", M.META | M.CTRL, "\x81"),
+        ("\x1b[?1036h", M.META, "\x1ba"),
+        ("\x1b[?1036h", M.ALT, "\xe1"),
+        ("\x1b[?1039h", M.ALT, "\x1ba"),
+        ("\x1b[?1039h", M.META, "\xe1"),
+        ("\x1b[?1034l", M.META, "a"),
+        ("\x1b[?1034l", M.ALT, "a"),
+        ("\x1b[?1034l\x1b[?1039h", M.ALT, "\x1ba"),
+    ],
+)
+def test_xterm_alt_and_meta_on_text_keys(setup, mods, expected):
+    """xterm 407 in a UTF-8 locale (altIsNotMeta for Alt): ESC prefix if its mode is set, else the eighth
+    bit while 1034 is set (its default), sent as a character; with neither, the modifier is dropped."""
+    board, wire = driver(setup=setup)
+    board.input_key_event(KeyEvent("a", mods, text="a"))
+    assert wire.text == expected
+
+
+def test_xterm_eighth_bit_backspace():
+    board, wire = driver()
+    board.input_key_event(KeyEvent("backspace", M.META))
+    assert wire.text == "\xff"
+
+
+def test_xterm_powers_on_with_eight_bit_input():
+    board, wire = driver(setup="\x1b[?1034$p")
+    assert wire.text == "\x1b[?1034;1$y"
+
+
+@pytest.mark.parametrize("mods", [M.ALT, M.META])
+def test_bittty_alt_and_meta_send_escape(mods):
+    board, wire = driver(BITTTY)
+    board.input_key_event(KeyEvent("a", mods, text="a"))
+    board.feed_host_data("\x1bc")
+    board.input_key_event(KeyEvent("a", mods, text="a"))
+    assert wire.text == "\x1ba\x1ba"

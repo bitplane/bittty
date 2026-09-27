@@ -665,10 +665,12 @@ class ModeDevice(Device):
         self.mouse_protocol = MouseProtocol.OFF
         self.mouse_encoding = MouseEncoding.LEGACY
         initialized: set[str] = set()
+        power_on = self.board.model.power_on_modes
         for spec in MODE_SPECS:
             if spec.attr is None or spec.attr in initialized:
                 continue
             default = spec.default(self) if callable(spec.default) else spec.default
+            default = default or (spec.private and spec.number in power_on)
             setattr(self, spec.attr, default)
             initialized.add(spec.attr)
 
