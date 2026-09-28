@@ -21,7 +21,7 @@ class CharsetDevice(Device):
         self.g2_charset = "B"
         self.g3_charset = "B"
         self.current_charset = 0  # G-set invoked into GL (0x20-0x7F); SI/SO/LS2/LS3 move it
-        self.gr = 1  # G-set invoked into GR (0xA0-0xFF); LS1R/LS2R/LS3R move it
+        self.gr = 2  # G-set invoked into GR (0xA0-0xFF), G2 at power-on; LS1R/LS2R/LS3R move it
         self.single_shift: int | None = None
         self.cache = {}
         self.charset_array = ["B", "B", "B", "B"]
@@ -141,5 +141,5 @@ class CharsetDevice(Device):
         self.set_g2_charset("B")
         self.set_g3_charset("B")
         self.current_charset = 0
-        self.gr = 1
+        self.gr = 2
         self.single_shift = None

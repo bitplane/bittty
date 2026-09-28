@@ -170,8 +170,19 @@ def test_locking_shift_2_right_translates_gr_half():
     assert board.blitter.current_page.get_line_text(0).rstrip() == "┌"
 
 
+def test_designating_g1_leaves_latin1_text_alone():
+    """GR powers on as G2 (xterm 407 DECCIR), so ncurses' ESC ) 0 doesn't turn ì into line drawing."""
+    board = Board(width=20, height=5)
+    parser = Parser(board)
+
+    parser.feed("\x1b)0ìl\x0el")
+
+    assert board.charset.gr == 2
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "ìl┌"
+
+
 def test_reset_clears_locking_shifts():
-    """RIS restores GL to G0 and GR to G1 (both ASCII)."""
+    """RIS restores GL to G0 and GR to G2 (both ASCII)."""
     board = Board(width=20, height=5)
     parser = Parser(board)
 
@@ -182,7 +193,7 @@ def test_reset_clears_locking_shifts():
 
     parser.feed("\x1bc")  # RIS
     assert board.charset.current_charset == 0
-    assert board.charset.gr == 1
+    assert board.charset.gr == 2
     parser.feed("\xec")  # GR now ASCII -> passthrough, no translation
     assert board.blitter.current_page.get_line_text(0).rstrip() == "\xec"
 
