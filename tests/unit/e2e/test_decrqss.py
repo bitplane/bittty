@@ -1,5 +1,7 @@
 """DECRQSS (DCS $q ... ST): reporting the current setting back to the host."""
 
+import pytest
+
 from bittty import Board, MemoryConnection
 from bittty.model import VT510
 from bittty.parser import Parser
@@ -85,3 +87,28 @@ def test_non_configurable_model_does_not_expose_attached_configuration():
     parser.sink.printer.attach(MemoryPrinter())
     parser.feed("\x1bP$q$s\x1b\\")
     assert transport.data == ["\x1bP0$r$s\x1b\\"]
+
+
+@pytest.mark.parametrize(
+    ("setup", "setting", "reply"),
+    [
+        ("\x1b[?69h\x1b[5;40s", "s", "5;40s"),  # DECSLRM
+        ("", "s", "1;80s"),  # reported even with margin mode off
+        ("", "t", "24t"),  # DECSLPP
+        ("", "*|", "24*|"),  # DECSNLS
+        ("", "$|", "80$|"),  # DECSCPP
+        ('\x1b[1"q', '"q', '1"q'),  # DECSCA
+        ('\x1b[1"q\x1b[2"q', '"q', '0"q'),
+        ("", "*x", "0*x"),  # DECSACE powers on as stream
+        ("\x1b[2*x", "*x", "2*x"),
+        ('\x1b[63;1"p', '"p', '63;1"p'),  # DECSCL: 7-bit controls
+        ('\x1b[62"p', '"p', '62;0"p'),  # a bare level selects 8-bit controls
+        ('\x1b[63;2"p', '"p', '63;0"p'),
+    ],
+)
+def test_decrqss_reports_settings_as_xterm_does(setup, setting, reply):
+    """Replies captured from xterm 407 (80x24)."""
+    parser, transport = _driver()
+    parser.feed(setup)
+    parser.feed(f"\x1bP$q{setting}\x1b\\")
+    assert transport.data == [f"\x1bP1$r{reply}\x1b\\"]

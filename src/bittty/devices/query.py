@@ -53,6 +53,20 @@ class QueryDevice(Device):
             "XTGETTCAP": self.request_termcap,
             "XTVERSION": self.report_version,
         }
+        # DECRQSS: each setting's current parameters, answered with the request as final.
+        blitter = board.blitter
+        self._status_reporters = {
+            "m": self._sgr_status,
+            "r": lambda: f"{blitter.scroll_top + 1};{blitter.scroll_bottom + 1}",
+            "s": lambda: f"{blitter.left_margin + 1};{blitter.right_margin + 1}",
+            "t": lambda: str(self.board.height),  # DECSLPP
+            "*|": lambda: str(self.board.height),  # DECSNLS
+            "$|": lambda: str(self.board.width),  # DECSCPP
+            " q": self._cursor_style_status,
+            '"q': lambda: "1" if self.board.style.current.protected else "0",  # DECSCA
+            '"p': lambda: f"{self.board.conformance_level};{0 if self.board.c1_eightbit else 1}",
+            "*x": lambda: "2" if blitter.attr_change_extent == "rectangle" else "0",
+        }
 
     def handle_cwd(self, operation: Operation) -> None:
         """OSC 7 — record the reported working directory."""
@@ -135,17 +149,16 @@ class QueryDevice(Device):
         self.board.host.write(f"\x1bP{invalid}$r{suffix}\x1b\\", flush=True)
 
     def _status_string(self, request: str) -> str | None:
-        if request == "m":  # SGR
-            ansi = style_to_ansi(self.board.style.current)
-            params = ansi[2:-1] if ansi else "0"
-            return f"{params}m"
-        if request == "r":  # DECSTBM - top/bottom margins
-            return f"{self.board.blitter.scroll_top + 1};{self.board.blitter.scroll_bottom + 1}r"
-        if request == " q":  # DECSCUSR - cursor style
-            base = {"block": 1, "underline": 3, "bar": 5}.get(self.board.cursor.shape, 1)
-            style = base if self.board.modes.cursor_blinking else base + 1
-            return f"{style} q"
-        return None
+        reporter = self._status_reporters.get(request)
+        return reporter() + request if reporter else None
+
+    def _sgr_status(self) -> str:
+        ansi = style_to_ansi(self.board.style.current)
+        return ansi[2:-1] if ansi else "0"
+
+    def _cursor_style_status(self) -> str:
+        base = {"block": 1, "underline": 3, "bar": 5}.get(self.board.cursor.shape, 1)
+        return str(base if self.board.modes.cursor_blinking else base + 1)
 
     def handle_clipboard(self, operation: Operation) -> None:
         """OSC 52 — set the clipboard, or answer a query with its current contents."""
@@ -237,10 +250,14 @@ class QueryDevice(Device):
         )
 
     def set_conformance_level(self, operation: Operation) -> None:
-        """DECSCL — record the requested conformance level (behaviourally a no-op)."""
+        """DECSCL — record the conformance level and C1 transmission (behaviourally a no-op).
+
+        As in xterm, a VT200-or-later level selects 8-bit controls unless the second parameter is 1.
+        """
         params = operation.args[0]
         if params and params[0] is not None:
             self.board.conformance_level = params[0]
+            self.board.c1_eightbit = params[0] > 61 and (*params, None)[1] != 1
 
     def handle_setterm(self, operation: Operation) -> None:
         """linux `setterm` CSI...] — update the board's hardware registers."""
