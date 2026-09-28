@@ -132,7 +132,15 @@ class MouseDevice(Device):
 
     # --- input --- #
 
-    def input_mouse(self, x: int, y: int, button: int, event_type: str, modifiers: set[str]) -> None:
+    def input_mouse(
+        self,
+        x: int,
+        y: int,
+        button: int,
+        event_type: str,
+        modifiers: set[str],
+        pixel: tuple[int, int] | None = None,
+    ) -> None:
         """
         Handle mouse input, cache position, and send appropriate sequence to the host.
 
@@ -142,6 +150,8 @@ class MouseDevice(Device):
             button: The button that was pressed/released.
             event_type: "press", "release", or "move".
             modifiers: A set of active modifiers ("shift", "meta", "ctrl").
+            pixel: the pointer's 0-based pixel position in the text area, if the chrome knows it
+                (SGR-Pixels mode reports it; without it, the cell's top-left pixel is reported).
         """
         self.x = x
         self.y = y
@@ -194,8 +204,12 @@ class MouseDevice(Device):
         else:
             bits = button | mods
 
-        if modes.mouse_encoding is MouseEncoding.SGR:
+        if modes.mouse_encoding in (MouseEncoding.SGR, MouseEncoding.SGR_PIXELS):
             final_char = "m" if event_type == "release" else "M"
+            if modes.mouse_encoding is MouseEncoding.SGR_PIXELS:
+                cell_width, cell_height = self.board.caps.cell_px or (1, 1)
+                px, py = pixel or ((x - 1) * cell_width, (y - 1) * cell_height)
+                x, y = px + 1, py + 1
             self.board.host.write(f"{constants.ESC}[<{bits};{x};{y}{final_char}")
             return
 

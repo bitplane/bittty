@@ -63,6 +63,7 @@ XTERM_MOUSE_BUTTON = "xterm.mouse-button"
 XTERM_MOUSE_ANY = "xterm.mouse-any"
 XTERM_MOUSE_UTF8 = "xterm.mouse-utf8"
 XTERM_MOUSE_SGR = "xterm.mouse-sgr"
+XTERM_MOUSE_SGR_PIXELS = "xterm.mouse-sgr-pixels"
 XTERM_ALTERNATE_SCROLL = "xterm.alternate-scroll"
 URXVT_MOUSE = "urxvt.mouse"
 XTERM_EIGHT_BIT_INPUT = "xterm.eight-bit-input"
@@ -197,6 +198,7 @@ XTERM_MODE_CAPABILITIES = (
             XTERM_MOUSE_ANY,
             XTERM_MOUSE_UTF8,
             XTERM_MOUSE_SGR,
+            XTERM_MOUSE_SGR_PIXELS,
             XTERM_ALTERNATE_SCROLL,
             URXVT_MOUSE,
             XTERM_EIGHT_BIT_INPUT,

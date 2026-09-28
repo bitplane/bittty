@@ -537,7 +537,15 @@ class Board:
         """
         self.keyboard.input_paste(text, phase)
 
-    def input_mouse(self, x: int, y: int, button: int, event_type: str, modifiers: set[str]) -> None:
+    def input_mouse(
+        self,
+        x: int,
+        y: int,
+        button: int,
+        event_type: str,
+        modifiers: set[str],
+        pixel: tuple[int, int] | None = None,
+    ) -> None:
         """
         Handle mouse input, cache position, and send appropriate sequence to the host.
 
@@ -547,8 +555,9 @@ class Board:
             button: The button that was pressed/released.
             event_type: "press", "release", or "move".
             modifiers: A set of active modifiers ("shift", "meta", "ctrl").
+            pixel: the pointer's 0-based pixel position in the text area, if the chrome knows it.
         """
-        self.mouse.input_mouse(x, y, button, event_type, modifiers)
+        self.mouse.input_mouse(x, y, button, event_type, modifiers, pixel)
 
     def focus_in(self) -> None:
         """The box gained focus: record it and report to the child if DECSET 1004 is on."""

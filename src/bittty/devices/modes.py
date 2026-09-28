@@ -62,6 +62,7 @@ class MouseEncoding(Enum):
     LEGACY = "legacy"
     UTF8 = "utf8"
     SGR = "sgr"
+    SGR_PIXELS = "sgr-pixels"
     URXVT = "urxvt"
 
 
@@ -523,6 +524,14 @@ MODE_SPECS: tuple[ModeSpec, ...] = (
         queryable=True,
         group="mouse_encoding",
         group_value=MouseEncoding.SGR,
+    ),
+    ModeSpec(
+        mp.XTERM_MOUSE_SGR_PIXELS,
+        1016,
+        True,
+        queryable=True,
+        group="mouse_encoding",
+        group_value=MouseEncoding.SGR_PIXELS,
     ),
     ModeSpec(
         mp.XTERM_ALTERNATE_SCROLL,

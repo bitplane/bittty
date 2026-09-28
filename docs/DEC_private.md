@@ -116,7 +116,7 @@ Related ANSI modes: KAM (`CSI 2 h/l`) and SRM (`CSI 12 h/l`) implement keyboard 
 | 1011 | rxvt | Scroll to bottom on key press (a chrome resource: kept, reported and passed to the chrome) | ✅ |
 | 1014 | xterm | Enable fastScroll resource (a chrome resource: kept, reported and passed to the chrome) | ✅ |
 | 1015 | urxvt | Enable urxvt Mouse Mode | ✅ |
-| 1016 | xterm | Enable SGR Mouse PixelMode | X |
+| 1016 | xterm | Enable SGR Mouse PixelMode | ✅ |
 | 1021 | rxvt | Bold/italic implies high intensity | X |
 | 1034 | xterm | Interpret "meta" key | ✅ |
 | 1035 | xterm | Enable special modifiers for Alt and NumLock keys | ✅ |
