@@ -169,8 +169,8 @@ def test_mode_query_save_restore_screen_and_reset(mode, default):
 def test_xterm_does_not_advertise_new_modes():
     board, wire = driver(XTERM)
     board.feed_host_data("\x1b[?8l\x1b[?7727;7728h")
-    for mode in (8, 7727, 7728):
-        assert board.modes.get_private_mode_status(mode) == 0
+    for mode, status in ((8, 4), (7727, 0), (7728, 0)):  # xterm 407 knows DECARM but fixes it reset
+        assert board.modes.get_private_mode_status(mode) == status
     board.input_key_event(KeyEvent("escape"))
     assert wire.text == "\x1b"
 

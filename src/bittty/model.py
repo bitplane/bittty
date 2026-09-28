@@ -64,6 +64,16 @@ from .options import (
 from .palette import VGA_PALETTE, XTERM_PALETTE, PaletteDefaults
 
 
+def _fixed(status: int, *modes: str) -> frozenset[tuple[bool, int, int]]:
+    """Modes reported permanently set (3) or reset (4); "?n" names a private mode."""
+    return frozenset((mode.startswith("?"), int(mode.lstrip("?")), status) for mode in modes)
+
+
+# The ECMA-48 modes DEC terminals (and xterm) never implemented: GATM, SRTM, VEM, HEM, PUM,
+# FEAM, FETM, MATM, TTM, SATM, TSM and EBM, permanently reset (VT420 user guide table 9-2).
+UNIMPLEMENTED_ANSI_MODES = _fixed(4, "1", "5", "7", "10", "11", "13", "14", "15", "16", "17", "18", "19")
+
+
 @dataclass(frozen=True)
 class Model:
     """A terminal type expressed as data."""
@@ -107,6 +117,9 @@ class Model:
     # The keyboard DSR's Ptyp for a VT and an enhanced PC layout; () is the VT220's report of
     # the language alone, and None no report at all.
     keyboard_types: tuple[int, ...] | None = None
+    # Modes the host cannot change, as (private, number, status): DECRQM reports them
+    # permanently set (3) or reset (4).
+    fixed_modes: frozenset[tuple[bool, int, int]] = frozenset()
     # Page memory as (lines per page, pages) pairs; a page size not listed has one page (DECSLPP).
     page_memory: tuple[tuple[int, int], ...] = ()
 
@@ -149,6 +162,10 @@ XTERM = Model(
         {DEC_KEYBOARD_LEDS, DEC_USER_KEYS, XTERM_MODIFY_KEYS, XTERM_EXTRAS, DEC_DISPLAYED_EXTENT, DEC_EXTENDED_CPR}
     ),
     power_on_modes=frozenset({1034}),  # eightBitInput
+    # Captured from xterm 407: DEC modes it knows but cannot change, and its one permanent set.
+    fixed_modes=UNIMPLEMENTED_ANSI_MODES
+    | _fixed(4, "?8", "?10", "?11", "?16", "?46", "?53", "?59", "?60", "?61", "?64", "?68", "?73", "?81")
+    | _fixed(3, "?14"),
     # The sets of xterm's default VT4xx level (charproc.c scs_table): not the VT100's
     # alternate ROMs nor JIS Roman, nor the VT5xx sets.
     charsets=frozenset(
@@ -254,6 +271,7 @@ VT320 = Model(
     decrqss_valid_is_one=False,
     upss="%5",
     keyboard_types=(),  # the language alone, as the VT220 reports it
+    fixed_modes=_fixed(4, "10"),  # HEM
 )
 
 VT420 = Model(
@@ -279,6 +297,7 @@ VT420 = Model(
     keyboard_types=(1, 1),  # LK401
     macro_space=6144,  # the VT510's figure: the VT420 guide does not give one
     page_memory=((24, 6), (25, 5), (36, 4), (48, 3), (72, 2)),  # a single session
+    fixed_modes=UNIMPLEMENTED_ANSI_MODES | _fixed(4, "?60"),  # DECHCCM
 )
 
 VT510 = Model(
@@ -308,6 +327,7 @@ VT510 = Model(
     decrqss_valid_is_one=False,
     status_line_type=1,  # the indicator, the Set-Up default
     page_memory=((24, 3), (25, 2), (36, 2)),  # DECSLPP; any other page size is a single page
+    fixed_modes=UNIMPLEMENTED_ANSI_MODES | _fixed(4, "?60"),  # as the VT420
     macro_space=6144,  # "6 Kbytes of memory available for the storage of macros"
     upss="%5",
     keyboard_types=(4, 5),  # LK450, PCXAL

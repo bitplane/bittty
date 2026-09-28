@@ -127,11 +127,10 @@ VT510_MODE_CAPABILITIES = VT420_MODE_CAPABILITIES | frozenset(
     }
 )
 
+# xterm as Debian builds it (xterm 407): no HP or SCO function keys, and no DECNCSM.
 XTERM_MODE_CAPABILITIES = frozenset(
     {
         XTERM_SUN_KEYS,
-        XTERM_HP_KEYS,
-        XTERM_SCO_KEYS,
         XTERM_LEGACY_KEYS,
         XTERM_VT220_KEYS,
         ANSI_KEYBOARD_ACTION,
@@ -154,7 +153,6 @@ XTERM_MODE_CAPABILITIES = frozenset(
         DEC_NUMERIC_KEYPAD,
         DEC_BACKARROW,
         DEC_LEFT_RIGHT_MARGINS,
-        DEC_NO_CLEAR_COLUMN,
         XTERM_MOUSE_NORMAL,
         XTERM_FOCUS,
         XTERM_MOUSE_BUTTON,
@@ -330,6 +328,9 @@ KITTY_MODE_CAPABILITIES = frozenset(
 # The native model keeps bittty extensions separate from the xterm profile.
 BITTTY_MODE_CAPABILITIES = XTERM_MODE_CAPABILITIES | frozenset(
     {
+        XTERM_HP_KEYS,
+        XTERM_SCO_KEYS,
+        DEC_NO_CLEAR_COLUMN,
         DEC_AUTO_REPEAT,
         MINTTY_APPLICATION_ESCAPE,
         MINTTY_ESCAPE_FS,

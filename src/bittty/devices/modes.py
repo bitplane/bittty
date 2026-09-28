@@ -670,7 +670,7 @@ class ModeDevice(Device):
     def __init__(self, board: Board) -> None:
         self.board = board
         self._modes = resolve_mode_specs(board.model.capabilities, board.model.unsupported_modes)
-        self._runtime_mode_status: dict[tuple[bool, int], int] = {}
+        self._runtime_mode_status = {(private, number): status for private, number, status in board.model.fixed_modes}
         # None marks an action-mode whose save/restore hooks own the snapshot.
         self._saved_private_modes: dict[int, bool | None] = {}
         self._batch_depth = 0
@@ -997,5 +997,8 @@ class ModeDevice(Device):
         return entry.status(self) if entry is not None else 0
 
     def get_ansi_mode_status(self, mode: int) -> int:
-        entry = self._modes.get((False, mode))
+        key = (False, mode)
+        if key in self._runtime_mode_status:
+            return self._runtime_mode_status[key]
+        entry = self._modes.get(key)
         return entry.status(self) if entry is not None else 0

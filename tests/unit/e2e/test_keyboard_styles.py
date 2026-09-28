@@ -228,11 +228,13 @@ def test_kitty_precedence_and_release_suppression(mode):
     assert wire.text != "\x1b[1;2P"
 
 
-@pytest.mark.parametrize("model,supported", [(BITTTY, True), (XTERM, True), (VT220, False), (KITTY, False)])
+@pytest.mark.parametrize(
+    "model,supported",
+    [(BITTTY, set(MODES)), (XTERM, {1051, 1060, 1061}), (VT220, set()), (KITTY, set())],  # xterm 407: no HP or SCO
+)
 def test_model_repertoire(model, supported):
     board, _ = driver(1051, model)
-    for mode in MODES:
-        assert board.modes.recognizes(True, mode) == supported
+    assert {mode for mode in MODES if board.modes.recognizes(True, mode)} == supported
     assert board.keyboard.style is (KeyboardStyle.SUN if supported else KeyboardStyle.DEFAULT)
 
 
