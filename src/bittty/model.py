@@ -324,7 +324,9 @@ VT510 = Model(
     da2_response="\033[>61;10;0c",
     da3_response=None,
     mode_capabilities=VT510_MODE_CAPABILITIES,
-    charsets=VT220.charsets | {"%5", ">", "f", "9", "`", "96A", "96B", "96F", "96H", "96L", "96M"},
+    charsets=VT220.charsets
+    | {"%5", ">", "f", "9", "`", "96A", "96B", "96F", "96H", "96L", "96M"}
+    | {"&4", '"?', '"4', "%0", '">', "%=", "&5", "%3", "%2"},  # the VT5xx sets
     color_depth="monochrome",
     keymap=VT220_KEYMAP,
     options=frozenset({VT510_PRINTER_PORT, VT510_COMM_PORTS}),

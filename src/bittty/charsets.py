@@ -71,6 +71,144 @@ ISO_SETS = {
     "96M": _iso_upper_half("iso8859_9"),  # ISO Latin-5 Supplemental
 }
 
+# The VT5xx sets, from xterm's charsets.h (checked against xterm 407 at VT525 level);
+# a reserved position shows as a reversed "?".
+_GL94 = [chr(code) for code in range(0x21, 0x7F)]
+
+# DEC Cyrillic (ESC ( & 4)
+DEC_CYRILLIC = dict(
+    zip(_GL94, "␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦юабцдефгхийклмнопярстужвьызшэщчъЮАБЦДЕФГХИЙКЛМНОПЯРСТУЖВЬЫЗШЭЩЧ")
+)
+
+# DEC Greek Supplemental (ESC ( " ?)
+DEC_GREEK_SUPPLEMENTAL = dict(
+    zip(_GL94, "¡¢£␦¥␦§¤©ª«␦␦␦␦°±²³␦µ¶·␦¹º»¼½␦¿ϊΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟ␦ΠΡΣΤΥΦΧΨΩάέήί␦όϋαβγδεζηθικλμνξο␦πρστυφχψωςύώ΄␦")
+)
+
+# DEC Hebrew Supplemental (ESC ( " 4)
+DEC_HEBREW_SUPPLEMENTAL = dict(
+    zip(_GL94, "¡¢£␦¥␦§¨©×«␦␦␦␦°±²³␦µ¶·␦¹÷»¼½␦¿␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦␦אבגדהוזחטיךכלםמןנסעףפץצקרשת␦␦␦␦")
+)
+
+# DEC Turkish Supplemental (ESC ( % 0)
+DEC_TURKISH_SUPPLEMENTAL = dict(
+    zip(_GL94, "¡¢£␦¥␦§¨©ª«␦␦İ␦°±²³␦µ¶·␦¹º»¼½ı¿ÀÁÂÃÄÅÆÇÈÉÊËÌÍÎÏĞÑÒÓÔÕÖŒØÙÚÛÜŸŞßàáâãäåæçèéêëìíîïğñòóôõöœøùúûüÿş")
+)
+
+# Greek National Replacement Character Set (ESC ( " >)
+GREEK_NATIONAL = {
+    "a": "Α",
+    "b": "Β",
+    "c": "Γ",
+    "d": "Δ",
+    "e": "Ε",
+    "f": "Ζ",
+    "g": "Η",
+    "h": "Θ",
+    "i": "Ι",
+    "j": "Κ",
+    "k": "Λ",
+    "l": "Μ",
+    "m": "Ν",
+    "n": "Χ",
+    "o": "Ο",
+    "p": "Π",
+    "q": "Ρ",
+    "r": "Σ",
+    "s": "Τ",
+    "t": "Υ",
+    "u": "Φ",
+    "v": "Ξ",
+    "w": "Ψ",
+    "x": "Ω",
+    "y": "␦",
+    "z": "␦",
+}
+
+# Hebrew National Replacement Character Set (ESC ( % =)
+HEBREW_NATIONAL = {
+    "`": "א",
+    "a": "ב",
+    "b": "ג",
+    "c": "ד",
+    "d": "ה",
+    "e": "ו",
+    "f": "ז",
+    "g": "ח",
+    "h": "ט",
+    "i": "י",
+    "j": "ך",
+    "k": "כ",
+    "l": "ל",
+    "m": "ם",
+    "n": "מ",
+    "o": "ן",
+    "p": "נ",
+    "q": "ס",
+    "r": "ע",
+    "s": "ף",
+    "t": "פ",
+    "u": "ץ",
+    "v": "צ",
+    "w": "ק",
+    "x": "ר",
+    "y": "ש",
+    "z": "ת",
+}
+
+# Russian National Replacement Character Set (ESC ( & 5)
+RUSSIAN_NATIONAL = {
+    "`": "Ю",
+    "a": "А",
+    "b": "Б",
+    "c": "Ц",
+    "d": "Д",
+    "e": "Е",
+    "f": "Ф",
+    "g": "Г",
+    "h": "Х",
+    "i": "И",
+    "j": "Й",
+    "k": "К",
+    "l": "Л",
+    "m": "М",
+    "n": "Н",
+    "o": "О",
+    "p": "П",
+    "q": "Я",
+    "r": "Р",
+    "s": "С",
+    "t": "Т",
+    "u": "У",
+    "v": "Ж",
+    "w": "В",
+    "x": "Ь",
+    "y": "Ы",
+    "z": "З",
+    "{": "Ш",
+    "|": "Э",
+    "}": "Щ",
+    "~": "Ч",
+}
+
+# SCS (Serbo-Croatian) National Replacement Character Set (ESC ( % 3)
+SCS_NATIONAL = {"@": "Ž", "[": "Š", "\\": "Đ", "]": "Ć", "^": "Č", "`": "ž", "{": "š", "|": "đ", "}": "ć", "~": "č"}
+
+# Turkish National Replacement Character Set (ESC ( % 2)
+TURKISH_NATIONAL = {
+    "&": "ğ",
+    "@": "İ",
+    "[": "Ş",
+    "\\": "Ö",
+    "]": "Ç",
+    "^": "Ü",
+    "`": "Ğ",
+    "{": "ş",
+    "|": "ö",
+    "}": "ç",
+    "~": "ü",
+}
+
 # UK National Replacement Character Set (ESC ( A)
 # Only differs from ASCII in one position
 UK_NATIONAL = {
@@ -364,6 +502,15 @@ CHARSETS = {
     "Z": SPANISH_NATIONAL,  # Spanish
     "%6": PORTUGUESE_NATIONAL,  # Portuguese (multi-char designator)
     "vt52": VT52_GRAPHICS,  # no designator: VT52 mode selects it with ESC F
+    "&4": DEC_CYRILLIC,
+    '"?': DEC_GREEK_SUPPLEMENTAL,
+    '"4': DEC_HEBREW_SUPPLEMENTAL,
+    "%0": DEC_TURKISH_SUPPLEMENTAL,
+    '">': GREEK_NATIONAL,
+    "%=": HEBREW_NATIONAL,
+    "&5": RUSSIAN_NATIONAL,
+    "%3": SCS_NATIONAL,
+    "%2": TURKISH_NATIONAL,
     **ISO_SETS,
 }
 
@@ -372,17 +519,20 @@ CHARSETS = {
 # DECNRCM switch and retain their model-specific SCS behaviour.
 NATIONAL_CHARSET_DESIGNATORS = frozenset(
     {"A", "4", "5", "6", "`", "7", "=", "9", "C", "E", "f", "H", "J", "K", "Q", "R", "Y", "Z", "%6"}
+    | {'">', "%=", "&5", "%3", "%2"}
 )
 
 
 # Sets DECAUPSS can make the user-preferred supplemental set, by (DECAUPSS Pn, designator):
 # Pn 0 names a 94-character set and 1 a 96-character set.
-SUPPLEMENTAL_SETS = {(0, "%5"): "%5"} | {(1, name.removeprefix("96")): name for name in ISO_SETS}
+SUPPLEMENTAL_SETS = {(0, name): name for name in ("%5", '"?', '"4', "%0", "&4")} | {
+    (1, name.removeprefix("96")): name for name in ISO_SETS
+}
 
 
 # Keyboard languages (DECKBD and the keyboard DSR), and the national replacement set each
-# selects for national mode: the VT510 manual's table 8-9 lists, less the sets bittty lacks
-# (Greek, Hebrew, Russian, SCS, Turkish). Dutch has none on the VT510, though the VT220's had.
+# selects for national mode: the VT510 manual's table 8-9 lists. Dutch has none on the VT510,
+# though the VT220's had.
 KEYBOARD_LANGUAGES = frozenset({*range(17), 19, 22, *range(28, 32), 33, 34, 35, 36, 38, 39, 40})
 KEYBOARD_NATIONAL_SETS = {
     2: "A",  # British
@@ -399,6 +549,12 @@ KEYBOARD_NATIONAL_SETS = {
     14: "R",  # French/Belgian
     15: "Z",  # Spanish
     16: "%6",  # Portuguese
+    19: "%=",  # Hebrew
+    22: '">',  # Greek
+    29: "%2",  # Turkish Q
+    30: "%2",  # Turkish F
+    38: "%3",  # SCS
+    39: "&5",  # Russian
     28: "Q",  # Canadian (English)
     40: "Z",  # Latin American
 }
