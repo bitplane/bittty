@@ -129,6 +129,8 @@ class Model:
     # Modes the host cannot change, as (private, number, status): DECRQM reports them
     # permanently set (3) or reset (4).
     fixed_modes: frozenset[tuple[bool, int, int]] = frozenset()
+    # Minutes without activity before the screen blanks at power-on; 0 never (the VT510's CRT saver).
+    blank_timeout: int = 0
     # Page memory as (lines per page, pages) pairs; a page size not listed has one page (DECSLPP).
     page_memory: tuple[tuple[int, int], ...] = ()
 
@@ -348,6 +350,7 @@ VT510 = Model(
     macro_space=6144,  # "6 Kbytes of memory available for the storage of macros"
     upss="%5",
     keyboard_types=(4, 5),  # LK450, PCXAL
+    blank_timeout=30,  # DECCRTSM: the CRT saver is enabled by default
     udk_capacity=804,  # the programmable keys' memory, which DECUDK shares
 )
 

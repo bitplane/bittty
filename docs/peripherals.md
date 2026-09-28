@@ -119,7 +119,7 @@ Grouping it that way turns a long list of orphan modes into a roadmap:
 | Cluster | Modes | Count |
 | :--- | :--- | ---: |
 | Keyboard (LK201/401/450, national variants) | 12, 16, 23, 35, 49, 57, 68, 81, 104 | 9 |
-| CRT / display hardware | 4, 9, 51, 55, 97, 106, 114–117 | 10 |
+| CRT / display hardware (VT525 colour, undocumented here) | 51, 55, 114–117 | 6 |
 | Comms / transport | 11, 14, 53 | 3 |
 | Graphics option | 38, 80, 1070, 8452 | 4 |
 | Graphics × printer (needs both) | 43, 44, 45, 46, 47 | 5 |

@@ -47,7 +47,7 @@ def test_hardware_profiles_expose_only_documented_implemented_modes():
         (True, 7),
         (True, 8),
     }
-    assert set(vt100.modes._modes) == expected_vt100
+    assert set(vt100.modes._modes) == expected_vt100 | {(True, 9)}  # interlace: the VT100's alone
     assert set(vt220.modes._modes) == expected_vt100 | {
         (False, 2),
         (False, 4),

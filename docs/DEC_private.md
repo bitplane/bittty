@@ -15,7 +15,7 @@ Related ANSI modes: KAM (`CSI 2 h/l`) and SRM (`CSI 12 h/l`) implement keyboard 
 | 6 | DEC | DECOM - Origin Mode | ✅ |
 | 7 | DEC | DECAWM - Auto Wrap Mode | ✅ |
 | 8 | DEC | DECARM - Auto Repeat Mode (explicit repeat events; hardware timing deferred) | ✅ |
-| 9 | DEC | DECINLM - Interlace Mode | X |
+| 9 | DEC | DECINLM - Interlace Mode (VT100; a CRT setting the chrome reads) | ✅ |
 | 9 | xterm | Mouse Tracking | ✅ |
 | 10 | DEC | DECEDM - Editing Mode | X |
 | 10 | rxvt | Show toolbar | X |
@@ -85,7 +85,7 @@ Related ANSI modes: KAM (`CSI 2 h/l`) and SRM (`CSI 12 h/l`) implement keyboard 
 | 90 | DEC | DECTHAISCM - Thai Space Compensating Mode | X |
 | 95 | DEC | DECNCSM - No Clearing Screen on Column Change Mode | ✅ |
 | 96 | DEC | DECRLCM - Right to Left Copy Mode | X |
-| 97 | DEC | DECCRTSM - CRT Save Mode | X |
+| 97 | DEC | DECCRTSM - CRT Save Mode (drives board.blank_timeout) | ✅ |
 | 98 | DEC | DECARSM - Auto Resize Mode | X |
 | 99 | DEC | DECMCM - Modem Control Mode (held with the host line's settings and offered to its connection) | ✅ |
 | 100 | DEC | DECAAM - Auto Answerback Mode | ✅ |
@@ -93,7 +93,7 @@ Related ANSI modes: KAM (`CSI 2 h/l`) and SRM (`CSI 12 h/l`) implement keyboard 
 | 102 | DEC | DECNULM - Ignore Null Mode | ✅ |
 | 103 | DEC | DECHDPXM - Half Duplex Mode (held with the host line's settings and offered to its connection) | ✅ |
 | 104 | DEC | DECESKM - Secondary Keyboard Language Mode | X |
-| 106 | DEC | DECOSCNM - Overscan Mode | X |
+| 106 | DEC | DECOSCNM - Overscan Mode (a CRT setting the chrome reads) | ✅ |
 | 108 | DEC | DECNUMLK - NumLock Mode | ✅ |
 | 109 | DEC | DECCAPSLK - Caps Lock Mode | ✅ |
 | 110 | DEC | DECKLHIM - Keyboard LEDs Host Indicator Mode | ✅ |

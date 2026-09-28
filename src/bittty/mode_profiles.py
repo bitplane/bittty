@@ -18,6 +18,9 @@ DEC_CURSOR_APPLICATION = "dec.cursor-application"
 DEC_ANSI = "dec.ansi"  # reset: VT52 mode
 DEC_COLUMN_MODE = "dec.column-mode"
 DEC_SMOOTH_SCROLL = "dec.smooth-scroll"
+DEC_INTERLACE = "dec.interlace"
+DEC_CRT_SAVER = "dec.crt-saver"
+DEC_OVERSCAN = "dec.overscan"
 XTERM_COLUMN_MODE = "xterm.column-mode"
 TMUX_COLUMN_MODE = "tmux.column-mode"
 KITTY_COLUMN_MODE = "kitty.column-mode"
@@ -118,7 +121,8 @@ HOST_LINE_MODE_CAPABILITIES = frozenset({DEC_TRANSMIT_RATE_LIMIT, DEC_MODEM_CONT
 
 # Hardware profiles are the intersection of the model's documented repertoire
 # and the mode semantics bittty currently implements.
-VT100_MODE_CAPABILITIES = frozenset(
+# What the VT100 and its successors share.
+_DEC_BASE_MODE_CAPABILITIES = frozenset(
     {
         ANSI_NEWLINE,
         DEC_ANSI,
@@ -131,7 +135,8 @@ VT100_MODE_CAPABILITIES = frozenset(
         DEC_AUTO_REPEAT,
     }
 )
-VT102_MODE_CAPABILITIES = VT100_MODE_CAPABILITIES | {ANSI_INSERT}
+VT100_MODE_CAPABILITIES = _DEC_BASE_MODE_CAPABILITIES | {DEC_INTERLACE}  # its successors never list interlace
+VT102_MODE_CAPABILITIES = _DEC_BASE_MODE_CAPABILITIES | {ANSI_INSERT}
 VT220_MODE_CAPABILITIES = VT102_MODE_CAPABILITIES | frozenset(
     {
         ANSI_KEYBOARD_ACTION,
@@ -147,6 +152,8 @@ VT510_MODE_CAPABILITIES = VT420_MODE_CAPABILITIES | frozenset(
         DEC_AUTO_ANSWERBACK,
         DEC_CONCEAL_ANSWERBACK,
         DEC_NO_CLEAR_COLUMN,
+        DEC_CRT_SAVER,
+        DEC_OVERSCAN,
         DEC_IGNORE_NULL,
         DEC_NUMLOCK,
         DEC_CAPSLOCK,

@@ -261,6 +261,15 @@ def _host_line_mode(field: str) -> dict:
     return {"apply_fn": apply, "status_fn": status}
 
 
+def _crt_saver(device: ModeDevice, value: bool) -> None:
+    """DECCRTSM drives the blank-timeout register: the VT510 blanks after 30 minutes."""
+    device.board.blank_timeout = 30 if value else 0
+
+
+def _crt_saver_status(device: ModeDevice) -> int:
+    return 1 if device.board.blank_timeout else 2
+
+
 def _ambiguous_width(device: ModeDevice, value: bool) -> None:
     device.board.set_ambiguous_width(2 if value else 1)
 
@@ -356,6 +365,10 @@ MODE_SPECS: tuple[ModeSpec, ...] = (
         mp.DEC_SMOOTH_SCROLL, 4, True, "smooth_scroll", queryable=True, effects=frozenset({ModeEffect.SMOOTH_SCROLL})
     ),
     ModeSpec(mp.DEC_ORIGIN, 6, True, "origin_mode", queryable=True),
+    # CRT settings the chrome carries out; it reads them here and from board.blank_timeout.
+    ModeSpec(mp.DEC_INTERLACE, 9, True, "interlace", queryable=True),
+    ModeSpec(mp.DEC_CRT_SAVER, 97, True, apply_fn=_crt_saver, status_fn=_crt_saver_status),
+    ModeSpec(mp.DEC_OVERSCAN, 106, True, "overscan", queryable=True),
     ModeSpec(mp.DEC_AUTOWRAP, 7, True, "auto_wrap", default=True, queryable=True),
     ModeSpec(mp.DEC_AUTO_REPEAT, 8, True, "auto_repeat", default=True, queryable=True),
     ModeSpec(mp.MINTTY_APPLICATION_ESCAPE, 7727, True, "application_escape", queryable=True),

@@ -111,7 +111,7 @@ class Board:
         self.window_position: tuple[int, int] = (0, 0)
         # linux console setterm hardware registers; a display/audio backend actuates these.
         self.screen_blanked: bool = False
-        self.blank_timeout: int = 0  # minutes; 0 = never
+        self.blank_timeout: int = self.model.blank_timeout  # minutes; 0 = never
         self.bell_hz: int = 750
         self.bell_ms: int = 125
         self.vesa_powerdown: int = 0
