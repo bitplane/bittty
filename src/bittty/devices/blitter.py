@@ -353,6 +353,12 @@ class Blitter(Device):
         r = max(left0, min(r, self.board.width - 1))
         return t, left0, b, r
 
+    def rectangle_styles(self, params) -> set[Style]:
+        """The styles in a Pt;Pl;Pb;Pr rectangle of the current page (XTREPORTSGR)."""
+        top, left, bottom, right = self._rectangle(*self._four(params))
+        page = self.current_page
+        return {page.get_cell(x, y)[0] for y in range(top, bottom + 1) for x in range(left, right + 1)}
+
     @staticmethod
     def _four(params, start=0):
         p = list(params) + [None] * (start + 4)

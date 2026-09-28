@@ -407,6 +407,7 @@ class Board:
         self.printer.reset(hard=hard)
         self.keyboard.reset(hard=hard)
         self.macros.reset(hard=hard)
+        self.title.reset(hard=hard)
         self.charset.reset()
         if hard:
             self.palette.reset()

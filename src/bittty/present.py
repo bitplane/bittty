@@ -159,6 +159,13 @@ class GraphemeClusteringChanged:
 
 
 @dataclass(frozen=True)
+class PointerModeChanged:
+    """XTSMPOINTER: when to hide the pointer while typing (0 never, 1 unless tracking, 2 and 3 always)."""
+
+    mode: int
+
+
+@dataclass(frozen=True)
 class StatusLineChanged:
     """DECSSDT chose the status line: "none", "indicator" or "host-writable"."""
 
@@ -187,4 +194,5 @@ PresentEvent = (
     | AmbiguousWidthChanged
     | GraphemeClusteringChanged
     | StatusLineChanged
+    | PointerModeChanged
 )

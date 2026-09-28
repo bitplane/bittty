@@ -154,6 +154,10 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
         if not intermediates and code == 0:
             return Operation("DA1", (code,), raw_csi_data)
 
+    if ">" in intermediates and final_char in "tTp":  # xterm title modes and pointer mode
+        name = {"t": "XTSMTITLE", "T": "XTRMTITLE", "p": "XTSMPOINTER"}[final_char]
+        return Operation(name, (tuple(params),), raw_csi_data)
+
     if final_char == "p" and "$" in intermediates:  # DECRQM - Request Mode Status
         mode = param(params, 0, 0)
         private = "?" in intermediates
@@ -214,6 +218,7 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
             "}": "XTPOPSGR",  # pop SGR attributes
             "P": "XTPUSHCOLORS",  # push the colour palette
             "Q": "XTPOPCOLORS",  # pop the colour palette
+            "|": "XTREPORTSGR",  # report the rendition common to a rectangle
         }.get(final_char)
         if stack_op is not None:
             return Operation(stack_op, (tuple(params),), raw_csi_data)

@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 from .. import constants
 from ..operations import Operation
-from ..options import DEC_STATUS_LINE
+from ..options import DEC_STATUS_LINE, XTERM_EXTRAS
 from ..present import (
     ClipboardChanged,
     ConsoleRequest,
@@ -20,7 +20,7 @@ from ..present import (
     PromptMark,
     WindowStateChanged,
 )
-from ..style import style_to_ansi
+from ..style import common_style, style_to_ansi
 from .base import Device
 
 if TYPE_CHECKING:
@@ -90,6 +90,9 @@ class QueryDevice(Device):
             '"p': lambda: f"{self.board.conformance_level};{0 if self.board.c1_eightbit else 1}",
             "*x": lambda: "2" if blitter.attr_change_extent == "rectangle" else "0",
         }
+        if XTERM_EXTRAS in board.model.provides:
+            self.handlers["XTREPORTSGR"] = self.report_rendition
+            self._status_reporters[">t"] = lambda: ";".join(str(int(mode)) for mode in board.title.modes)
         if DEC_STATUS_LINE in board.model.provides:
             self._status_reporters["$~"] = lambda: str(blitter.status_type)  # DECSSDT
             self._status_reporters["$}"] = lambda: str(int(blitter.status_active))  # DECSASD
@@ -175,12 +178,25 @@ class QueryDevice(Device):
         self.board.host.write(f"\x1bP{invalid}$r{suffix}\x1b\\", flush=True)
 
     def _status_string(self, request: str) -> str | None:
+        """A setting's parameters between the request's private marker and its final characters."""
         reporter = self._status_reporters.get(request)
-        return reporter() + request if reporter else None
+        if reporter is None:
+            return None
+        marker = request[0] if request[0] in "<=>?" else ""
+        return marker + reporter() + request[len(marker) :]
 
     def _sgr_status(self) -> str:
-        """The rendition as xterm reports it: reset first, colours from 16 up in their colon forms."""
-        ansi = style_to_ansi(self.board.style.current)
+        return self._rendition(self.board.style.current)
+
+    def report_rendition(self, operation: Operation) -> None:
+        """XTREPORTSGR — the rendition every cell of a rectangle shares, as an SGR."""
+        styles = self.board.blitter.rectangle_styles(operation.args[0])
+        self.board.host.write(f"\x1b[{self._rendition(common_style(styles))}m", flush=True)
+
+    @staticmethod
+    def _rendition(style) -> str:
+        """A rendition as xterm reports it: reset first, colours from 16 up in their colon forms."""
+        ansi = style_to_ansi(style)
         params = _INDEXED_COLOR.sub(r"\1:5:\2", _DIRECT_COLOR.sub(r"\1:2::\2:\3:\4", ansi[2:-1]))
         return f"0;{params}" if params else "0"
 
@@ -289,9 +305,9 @@ class QueryDevice(Device):
         elif op in (18, 19):  # report text-area / screen size in characters
             board.host.write(f"\x1b[{8 if op == 18 else 9};{board.height};{board.width}t", flush=True)
         elif op == 20:  # report icon label
-            board.host.write(f"\x1b]L{board.title.icon_title}\x1b\\", flush=True)
+            board.host.write(f"\x1b]L{board.title.reported(board.title.icon_title)}\x1b\\", flush=True)
         elif op == 21:  # report window title
-            board.host.write(f"\x1b]l{board.title.title}\x1b\\", flush=True)
+            board.host.write(f"\x1b]l{board.title.reported(board.title.title)}\x1b\\", flush=True)
         elif op == 22:  # save title to the stack
             board.title.push()
         elif op == 23:  # restore title from the stack

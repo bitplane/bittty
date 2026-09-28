@@ -42,6 +42,7 @@ KITTY_KEYBOARD = "kitty.keyboard"
 DEC_KEYBOARD_LEDS = "dec.keyboard-leds"
 DEC_USER_KEYS = "dec.user-keys"
 DEC_STATUS_LINE = "dec.status-line"
+XTERM_EXTRAS = "xterm.extras"  # title modes, pointer mode and XTREPORTSGR
 XTERM_MODIFY_KEYS = "xterm.modify-keys"  # key modifier resources beyond modifyOtherKeys, and their query
 
 

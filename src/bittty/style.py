@@ -258,6 +258,15 @@ def _style_diff(a: "Style", b: "Style") -> str:
     return f"\x1b[0m{target_ansi}" if target_ansi else "\x1b[0m"
 
 
+def common_style(styles) -> Style:
+    """The rendition every one of these styles shares: each field kept only where all agree."""
+    first, *rest = styles
+    fields = {name: getattr(first, name) for name in _FIELD_NAMES}
+    for style in rest:
+        fields = {name: value if getattr(style, name) == value else None for name, value in fields.items()}
+    return Style(**fields)
+
+
 # --- ANSI Sequence Parser --- #
 
 

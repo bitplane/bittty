@@ -5,7 +5,8 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from .. import constants
-from ..options import DEC_LOCATOR
+from ..options import DEC_LOCATOR, XTERM_EXTRAS
+from ..present import PointerModeChanged
 from .modes import MouseEncoding, MouseProtocol
 
 if TYPE_CHECKING:
@@ -34,6 +35,8 @@ class MouseDevice(Device):
         self._button_mask = 0
         self._pressed: set[int] = set()  # buttons currently held (drives 1002 drag motion)
         self.handlers = {}
+        if XTERM_EXTRAS in board.model.provides:
+            self.handlers["XTSMPOINTER"] = self.set_pointer_mode
         if DEC_LOCATOR in board.model.provides:
             # A terminal without a locator port does not recognise these at all,
             # which is a different thing from having one with nothing attached:
@@ -48,6 +51,13 @@ class MouseDevice(Device):
             )
 
     # --- DEC locator control functions --- #
+
+    def set_pointer_mode(self, operation: Operation) -> None:
+        """XTSMPOINTER — when the chrome hides the pointer while typing; no parameter is xterm's 1."""
+        params = operation.args[0]
+        mode = params[0] if params and params[0] is not None else 1
+        if 0 <= mode <= 3:
+            self.board.present(PointerModeChanged(mode))
 
     def enable_locator(self, operation: Operation) -> None:
         """DECELR — enable/disable locator reporting; ps2==1 selects pixel coordinates."""
