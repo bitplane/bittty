@@ -187,4 +187,6 @@ def test_new_modes_are_gated_by_audited_model_profiles():
     assert vt510.recognizes(True, 100) and vt510.recognizes(True, 101)
     assert xterm.recognizes(True, 44) and not xterm.recognizes(True, 100)
     assert native.recognizes(True, 2048)
-    assert all(not modes.recognizes(True, 103) for modes in (vt100, vt220, vt510, xterm, native))
+    # Half duplex (103) comes with the VT510's serial host ports.
+    assert all(modes.recognizes(True, 103) for modes in (vt510, native))
+    assert not any(modes.recognizes(True, 103) for modes in (vt100, vt220, xterm))

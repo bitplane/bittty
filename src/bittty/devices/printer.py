@@ -12,13 +12,10 @@ from ..operations import Operation
 from ..printer_config import (
     PrintedDataType,
     PrinterConfiguration,
-    PrinterFlowControl,
-    PrinterFlowThreshold,
-    PrinterParity,
-    PrinterPortSelection,
     PrinterType,
     ProPrinterCodePage,
 )
+from ..serial_line import FlowControl
 from .base import Device
 
 if TYPE_CHECKING:
@@ -30,21 +27,6 @@ _EXIT_BYTES = (b"\x1b[4i", b"\x9b4i")
 _ENTRY_TEXT = ("\x1b[5i", "\x9b5i")
 _EXIT_TEXT = ("\x1b[4i", "\x9b4i")
 _FLOW_CONTROL_DELETE = b"\x00\x11\x13"
-_BAUD_BY_SELECTOR = {
-    0: 4800,
-    1: 300,
-    2: 600,
-    3: 1200,
-    4: 2400,
-    5: 4800,
-    6: 9600,
-    7: 19200,
-    8: 38400,
-    9: 57600,
-    10: 76800,
-    11: 115200,
-}
-_SELECTOR_BY_BAUD = {baud: selector for selector, baud in _BAUD_BY_SELECTOR.items() if selector != 0}
 
 
 def _first_pattern(data, patterns):
@@ -113,10 +95,6 @@ class PrinterDevice(Device):
             "DECSPRTT": self.set_printer_type,
             "DECSDPT": self.set_printed_data_type,
             "DECSPPCS": self.set_code_page,
-            "DECSCP": self.set_port,
-            "DECSCS": self.set_speed,
-            "DECSFC": self.set_flow_control,
-            "DECSPP": self.set_port_parameters,
         }
 
     @property
@@ -223,7 +201,7 @@ class PrinterDevice(Device):
         value = params[index] if len(params) > index else None
         return default if value is None else value
 
-    def _replace_configuration(self, **changes) -> None:
+    def configure(self, **changes) -> None:
         if not self.capabilities.configuration:
             return
         configuration = replace(self.configuration, **changes)
@@ -237,7 +215,7 @@ class PrinterDevice(Device):
             self.port.configure(self.configuration)
 
     def set_ignore_null(self, enabled: bool) -> None:
-        self._replace_configuration(ignore_null=enabled)
+        self.configure(ignore_null=enabled)
 
     def set_printer_type(self, operation: Operation) -> None:
         params = operation.args[0]
@@ -246,7 +224,7 @@ class PrinterDevice(Device):
             value = PrinterType(selector)
         except ValueError:
             return
-        self._replace_configuration(printer_type=value)
+        self.configure(printer_type=value)
 
     def set_printed_data_type(self, operation: Operation) -> None:
         params = operation.args[0]
@@ -255,7 +233,7 @@ class PrinterDevice(Device):
             value = PrintedDataType(selector)
         except ValueError:
             return
-        self._replace_configuration(printed_data_type=value)
+        self.configure(printed_data_type=value)
 
     def set_code_page(self, operation: Operation) -> None:
         params = operation.args[0]
@@ -263,65 +241,7 @@ class PrinterDevice(Device):
             value = ProPrinterCodePage(self._at(params, 0, 437))
         except ValueError:
             return
-        self._replace_configuration(code_page=value)
-
-    def set_port(self, operation: Operation) -> None:
-        params = operation.args[0]
-        if self._at(params, 1, 1) != 1:
-            return
-        try:
-            value = PrinterPortSelection(self._at(params, 0, 1))
-        except ValueError:
-            return
-        self._replace_configuration(port=value)
-
-    def set_speed(self, operation: Operation) -> None:
-        params = operation.args[0]
-        if self._at(params, 0, 0) != 3:
-            return
-        baud_rate = _BAUD_BY_SELECTOR.get(self._at(params, 1, 0))
-        if baud_rate is not None:
-            self._replace_configuration(baud_rate=baud_rate)
-
-    def set_flow_control(self, operation: Operation) -> None:
-        params = operation.args[0]
-        if self._at(params, 0, 0) != 2:
-            return
-        direction = self._at(params, 1, 1)
-        try:
-            flow = PrinterFlowControl(self._at(params, 2, 1))
-            threshold = PrinterFlowThreshold(self._at(params, 3, 1))
-        except ValueError:
-            return
-        if direction not in (1, 2, 3):
-            return
-        changes = {}
-        if direction in (1, 3):
-            changes["transmit_flow_control"] = flow
-        if direction in (2, 3):
-            changes["receive_flow_control"] = flow
-        # VT510 printer ports always use the low threshold.
-        if threshold is PrinterFlowThreshold.LOW:
-            changes["flow_threshold"] = threshold
-        self._replace_configuration(**changes)
-
-    def set_port_parameters(self, operation: Operation) -> None:
-        params = operation.args[0]
-        if self._at(params, 0, 0) != 2:
-            return
-        bits_selector = self._at(params, 1, 1)
-        stop_selector = self._at(params, 3, 1)
-        if bits_selector not in (1, 2) or stop_selector not in (1, 2):
-            return
-        try:
-            parity = PrinterParity(self._at(params, 2, 1))
-        except ValueError:
-            return
-        self._replace_configuration(
-            data_bits=8 if bits_selector == 1 else 7,
-            parity=parity,
-            stop_bits=stop_selector,
-        )
+        self.configure(code_page=value)
 
     def status_strings(self, request: str) -> tuple[str, ...] | None:
         """Return restorable VT510 printer-setting strings for DECRQSS."""
@@ -334,18 +254,6 @@ class PrinterDevice(Device):
             return (f"{int(config.printed_data_type)})p",)
         if request == "*p":
             return (f"{int(config.code_page)}*p",)
-        if request == "*r":
-            return (f"3;{_SELECTOR_BY_BAUD[config.baud_rate]}*r",)
-        if request == "*u":
-            return (f"{int(config.port)};1*u",)
-        if request == "*s":
-            return (
-                f"2;1;{int(config.transmit_flow_control)};1*s",
-                f"2;2;{int(config.receive_flow_control)};1*s",
-            )
-        if request == "+w":
-            bits = 1 if config.data_bits == 8 else 2
-            return (f"2;{bits};{int(config.parity)};{config.stop_bits}+w",)
         return None
 
     def _screen_text(self, *, respect_extent: bool = False) -> str:
@@ -485,7 +393,7 @@ class PrinterDevice(Device):
         delete = bytearray()
         if self.configuration.ignore_null:
             delete.append(0)
-        software = {PrinterFlowControl.XON_XOFF, PrinterFlowControl.BOTH}
+        software = {FlowControl.XON_XOFF, FlowControl.BOTH}
         if self.configuration.transmit_flow_control in software or self.configuration.receive_flow_control in software:
             delete.extend((0x11, 0x13))
         return data.translate(None, bytes(delete)) if delete else data
@@ -496,7 +404,7 @@ class PrinterDevice(Device):
         table: dict[int, None] = {}
         if self.configuration.ignore_null:
             table[0] = None
-        software = {PrinterFlowControl.XON_XOFF, PrinterFlowControl.BOTH}
+        software = {FlowControl.XON_XOFF, FlowControl.BOTH}
         if self.configuration.transmit_flow_control in software or self.configuration.receive_flow_control in software:
             table[0x11] = None
             table[0x13] = None
@@ -509,4 +417,4 @@ class PrinterDevice(Device):
         self.printer_to_host = False
         self.print_form_feed = False
         self.print_extent = False
-        self._replace_configuration(ignore_null=False)
+        self.configure(ignore_null=False)

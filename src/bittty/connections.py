@@ -22,6 +22,7 @@ if TYPE_CHECKING:
     from .keys import KeyEvent
     from .present import PresentEvent
     from .printer_config import PrinterConfiguration
+    from .serial_line import SerialLine
 
 logger = logging.getLogger(__name__)
 
@@ -79,10 +80,23 @@ class HostPort:
         self.on_idle: Callable[[], bool] | None = None
         self.on_closed: Callable[[], None] | None = None
         self._reader_task: asyncio.Task | None = None
+        self.line: SerialLine | None = None  # the host line's settings, on a terminal that has them
 
     def attach(self, connection: Connection) -> None:
         """Attach a connection to this host port (transmit side only)."""
         self.connection = connection
+        self._offer_line()
+
+    def configure(self, line: SerialLine) -> None:
+        """Hold the host line's settings and offer them to the connection."""
+        self.line = line
+        self._offer_line()
+
+    def _offer_line(self) -> None:
+        """A connection that can apply line settings (a serial port can; a PTY has no modem) gets them."""
+        configure = getattr(self.connection, "configure_line", None)
+        if self.line is not None and callable(configure):
+            configure(self.line)
 
     def detach(self) -> None:
         """Detach the current connection."""
@@ -308,6 +322,7 @@ class MemoryConnection:
         self.flush_count = 0
         self.closed = False
         self.resizes: list[tuple[int, int]] = []
+        self.lines: list[SerialLine] = []  # each host line configuration offered, in order
         self._inbound = list(receive)
 
     @property
@@ -337,6 +352,10 @@ class MemoryConnection:
     def resize(self, rows: int, cols: int) -> None:
         """Record a window-size change, as a PTY would apply one."""
         self.resizes.append((rows, cols))
+
+    def configure_line(self, line: SerialLine) -> None:
+        """Record the host line's settings, as a serial port would apply them."""
+        self.lines.append(line)
 
     def flush(self) -> None:
         self.flush_count += 1

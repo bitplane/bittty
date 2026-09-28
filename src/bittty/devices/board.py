@@ -33,6 +33,7 @@ from .mouse import MouseDevice
 from .palette import PaletteDevice
 from .printer import PrinterDevice
 from .macros import MacroDevice
+from .comm import CommDevice
 from .query import QueryDevice
 from .style import StyleDevice
 from .title import TitleDevice
@@ -134,6 +135,7 @@ class Board:
         self.mouse = MouseDevice(self)
         self.palette = PaletteDevice(self)
         self.printer = PrinterDevice(self)
+        self.comm = CommDevice(self)
         self.blitter = Blitter(self)
         self.style = StyleDevice(self)
         self.title = TitleDevice(self)
@@ -152,6 +154,7 @@ class Board:
             "mouse": self.mouse,
             "palette": self.palette,
             "printer": self.printer,
+            "comm": self.comm,
             "query": self.query,
             "macros": self.macros,
             "blitter": self.blitter,
@@ -174,6 +177,7 @@ class Board:
             self.mouse,
             self.palette,
             self.printer,
+            self.comm,
             self.blitter,
             self.style,
             self.query,

@@ -1,8 +1,9 @@
 """Printer port configuration: what the terminal has been told is attached.
 
 Tier 2 of the peripheral model (see docs/peripherals.md). The terminal holds this
-whether or not anything is on the cable — DECSPRTT, DECSDPT, DECSPPCS, DECSCP,
-DECSCS, DECSFC and DECSPP set it, DECRQSS reports it back. It is offered to a
+whether or not anything is on the cable — DECSPRTT, DECSDPT and DECSPPCS set it, as do
+DECSCP, DECSCS, DECSFC and DECSPP when they name the printer (devices/comm.py), and
+DECRQSS reports it back. It is offered to a
 connected adapter through the printer port; what the adapter does with it is the
 peripheral's business.
 """
@@ -11,6 +12,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import IntEnum
+
+from .serial_line import FlowControl, FlowThreshold, Parity
 
 
 class PrinterPortSelection(IntEnum):
@@ -55,32 +58,6 @@ class ProPrinterCodePage(IntEnum):
     CYRILLIC = 866
 
 
-class PrinterParity(IntEnum):
-    """Serial parity selectors used by DECSPP."""
-
-    NONE = 1
-    EVEN = 2
-    ODD = 3
-    MARK = 6
-    SPACE = 7
-
-
-class PrinterFlowControl(IntEnum):
-    """Serial flow-control selectors used by DECSFC."""
-
-    XON_XOFF = 1
-    DTR = 2
-    BOTH = 3
-    NONE = 4
-
-
-class PrinterFlowThreshold(IntEnum):
-    """Receive-flow threshold. Printers support the low threshold."""
-
-    LOW = 1
-    HIGH = 2
-
-
 @dataclass(frozen=True)
 class PrinterConfiguration:
     """Complete physical printer configuration exposed to an adapter."""
@@ -91,9 +68,9 @@ class PrinterConfiguration:
     code_page: ProPrinterCodePage = ProPrinterCodePage.PC_INTERNATIONAL
     baud_rate: int = 4800
     data_bits: int = 8
-    parity: PrinterParity = PrinterParity.NONE
+    parity: Parity = Parity.NONE
     stop_bits: int = 1
-    transmit_flow_control: PrinterFlowControl = PrinterFlowControl.XON_XOFF
-    receive_flow_control: PrinterFlowControl = PrinterFlowControl.XON_XOFF
-    flow_threshold: PrinterFlowThreshold = PrinterFlowThreshold.LOW
+    transmit_flow_control: FlowControl = FlowControl.XON_XOFF
+    receive_flow_control: FlowControl = FlowControl.XON_XOFF
+    flow_threshold: FlowThreshold = FlowThreshold.LOW
     ignore_null: bool = False

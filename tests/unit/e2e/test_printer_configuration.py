@@ -9,10 +9,9 @@ from bittty import (
 )
 from bittty.model import VT100, VT220, VT510, XTERM
 from bittty.parser import Parser
+from bittty.serial_line import FlowControl, Parity
 from bittty.printer_config import (
     PrintedDataType,
-    PrinterFlowControl,
-    PrinterParity,
     PrinterPortSelection,
     PrinterType,
     ProPrinterCodePage,
@@ -56,10 +55,10 @@ def test_all_vt510_setters_update_one_typed_snapshot_each():
         code_page=ProPrinterCodePage.MULTILINGUAL,
         baud_rate=19200,
         data_bits=7,
-        parity=PrinterParity.MARK,
+        parity=Parity.MARK,
         stop_bits=2,
-        transmit_flow_control=PrinterFlowControl.NONE,
-        receive_flow_control=PrinterFlowControl.NONE,
+        transmit_flow_control=FlowControl.NONE,
+        receive_flow_control=FlowControl.NONE,
     )
 
 
@@ -69,7 +68,7 @@ def test_invalid_and_non_printer_selectors_are_ignored():
     board.printer.attach(printer)
     parser = Parser(board)
 
-    parser.feed("\x1b[99$s\x1b[999*p\x1b[2;2*u\x1b[1;6*r\x1b[1;3;4;1*s\x1b[1;2;3;2+w")
+    parser.feed("\x1b[99$s\x1b[999*p\x1b[4;1*u\x1b[1;6*r\x1b[1;3;4;1*s\x1b[1;2;3;2+w")
 
     assert board.printer.configuration == PrinterConfiguration()
     assert printer.configuration_history == [PrinterConfiguration()]

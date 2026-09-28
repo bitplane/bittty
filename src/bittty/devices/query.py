@@ -186,7 +186,12 @@ class QueryDevice(Device):
         """DECRQSS — answer a request for the current value of a setting."""
         request = operation.args[0]
         setting = self._status_string(request)
-        settings = (setting,) if setting is not None else self.board.printer.status_strings(request)
+        board = self.board
+        settings = (
+            (setting,)
+            if setting is not None
+            else board.comm.status_strings(request) or board.printer.status_strings(request)
+        )
         valid = "1" if self.board.model.decrqss_valid_is_one else "0"
         invalid = "0" if self.board.model.decrqss_valid_is_one else "1"
         if settings is not None:

@@ -201,6 +201,9 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
     if printer_configuration is not None:
         return Operation(printer_configuration, (tuple(params),), raw_csi_data)
 
+    if final_char == "u" and '"' in intermediates:  # DECSTRL - Set Transmit Rate Limit
+        return Operation("DECSTRL", (tuple(params),), raw_csi_data)
+
     if final_char == "q" and '"' in intermediates:  # DECSCA - Select Character Protection
         mode = param(params, 0, 0)
         return Operation("DECSCA", (mode,), raw_csi_data)

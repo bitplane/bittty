@@ -245,6 +245,18 @@ def _page_coupling(device: ModeDevice, value: bool) -> None:
         device.board.blitter.couple_display()
 
 
+def _host_line_mode(field: str) -> dict:
+    """A communication mode kept in the host line's settings: its setter and its DECRQM status."""
+
+    def apply(device: ModeDevice, value: bool) -> None:
+        device.board.comm.update(**{field: value})
+
+    def status(device: ModeDevice) -> int:
+        return 1 if getattr(device.board.comm.line, field) else 2
+
+    return {"apply_fn": apply, "status_fn": status}
+
+
 def _ambiguous_width(device: ModeDevice, value: bool) -> None:
     device.board.set_ambiguous_width(2 if value else 1)
 
@@ -399,8 +411,10 @@ MODE_SPECS: tuple[ModeSpec, ...] = (
         queryable=True,
         apply_fn=_page_coupling,
     ),
+    ModeSpec(mp.DEC_TRANSMIT_RATE_LIMIT, 73, True, **_host_line_mode("rate_limited")),
     ModeSpec(mp.DEC_NO_CLEAR_COLUMN, 95, True, "no_clear_column_mode", queryable=True),
     ModeSpec(mp.DEC_AUTO_ANSWERBACK, 100, True, "auto_answerback", queryable=True),
+    ModeSpec(mp.DEC_MODEM_CONTROL, 99, True, **_host_line_mode("modem_control")),
     ModeSpec(
         mp.DEC_CONCEAL_ANSWERBACK,
         101,
@@ -417,6 +431,7 @@ MODE_SPECS: tuple[ModeSpec, ...] = (
         apply_fn=_ignore_null,
         status_fn=_ignore_null_status,
     ),
+    ModeSpec(mp.DEC_HALF_DUPLEX, 103, True, **_host_line_mode("half_duplex")),
     # Keyboard indicators: 108/109 are keyboard state the host may drive; 110
     # selects whether the LEDs show that state or DECLL-loaded host indications.
     ModeSpec(

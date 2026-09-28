@@ -18,7 +18,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 from .connections import PrinterStatus
-from .mode_profiles import PRINTER_PORT_MODE_CAPABILITIES
+from .mode_profiles import HOST_LINE_MODE_CAPABILITIES, PRINTER_PORT_MODE_CAPABILITIES
 
 
 @dataclass(frozen=True)
@@ -52,6 +52,7 @@ DEC_TERMINAL_STATE = "dec.terminal-state"  # DECRQTSR and DECRSTS
 DEC_KEYBOARD_DIALECT = "dec.keyboard-dialect"  # DECKBD: the host selects the keyboard language
 DEC_KEY_MEMORY = "dec.key-memory"  # DECPKA and DECRQPKFM: programmed key memory
 DEC_EXTENDED_CPR = "dec.extended-cpr"  # DECXCPR: the cursor report with its page (VT420)
+DEC_HOST_LINE = "dec.host-line"  # the host line's settings: DECSCS, DECSFC, DECSPP, DECSCP and DECSTRL
 DEC_UPSS = "dec.upss"  # DECAUPSS: the host assigns the user-preferred supplemental set
 XTERM_EXTRAS = "xterm.extras"  # title modes, pointer mode and XTREPORTSGR
 XTERM_MODIFY_KEYS = "xterm.modify-keys"  # key modifier resources beyond modifyOtherKeys, and their query
@@ -100,3 +101,14 @@ XTERM_PRINTER_PIPE = Option(
 # and friends; whether a device is on the end of it only changes the report.
 
 LOCATOR_PORT = Option("locator-port", provides=frozenset({DEC_LOCATOR}))
+
+
+# --- host comm ports -------------------------------------------------------- #
+# The VT510's host session runs on comm1 (RS232) or comm2 (MMJ). The terminal holds
+# the line's settings and communication modes and offers them to the connection.
+
+VT510_COMM_PORTS = Option(
+    "vt510-comm-ports",
+    mode_capabilities=HOST_LINE_MODE_CAPABILITIES,
+    provides=frozenset({DEC_HOST_LINE}),
+)

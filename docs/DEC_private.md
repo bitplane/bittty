@@ -76,7 +76,7 @@ Related ANSI modes: KAM (`CSI 2 h/l`) and SRM (`CSI 12 h/l`) implement keyboard 
 | 69 | DEC | DECVSSM - Vertical Split Screen Mode | X |
 | 69 | DEC | DECLRMM - Left Right Margin Mode | ✅ |
 | 70 | DEC | DECFPM - Force Plot Mode | X |
-| 73 | DEC | DECXRLM - Transmission Rate Limiting | X |
+| 73 | DEC | DECXRLM - Transmission Rate Limiting (held with the host line's settings and offered to its connection) | ✅ |
 | 80 | DEC | DECSDM - Sixel Display Mode | X |
 | 81 | DEC | DECKPM - Key Position Mode | X |
 | 83 | WY-370 | 52 line | X |
@@ -87,11 +87,11 @@ Related ANSI modes: KAM (`CSI 2 h/l`) and SRM (`CSI 12 h/l`) implement keyboard 
 | 96 | DEC | DECRLCM - Right to Left Copy Mode | X |
 | 97 | DEC | DECCRTSM - CRT Save Mode | X |
 | 98 | DEC | DECARSM - Auto Resize Mode | X |
-| 99 | DEC | DECMCM - Modem Control Mode | X |
+| 99 | DEC | DECMCM - Modem Control Mode (held with the host line's settings and offered to its connection) | ✅ |
 | 100 | DEC | DECAAM - Auto Answerback Mode | ✅ |
 | 101 | DEC | DECCANSM - Conceal Answerback Message Mode | ✅ |
 | 102 | DEC | DECNULM - Ignore Null Mode | ✅ |
-| 103 | DEC | DECHDPXM - Half Duplex Mode (requires a transport-level half-duplex interface) | X |
+| 103 | DEC | DECHDPXM - Half Duplex Mode (held with the host line's settings and offered to its connection) | ✅ |
 | 104 | DEC | DECESKM - Secondary Keyboard Language Mode | X |
 | 106 | DEC | DECOSCNM - Overscan Mode | X |
 | 108 | DEC | DECNUMLK - NumLock Mode | ✅ |

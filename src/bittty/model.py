@@ -53,6 +53,7 @@ from .options import (
     KITTY_KEYBOARD,
     LOCATOR_PORT,
     NO_PRINTER,
+    VT510_COMM_PORTS,
     VT510_PRINTER_PORT,
     XTERM_EXTRAS,
     XTERM_MODIFY_KEYS,
@@ -166,7 +167,7 @@ BITTTY = Model(
     da2_response=XTERM.da2_response,
     mode_capabilities=BITTTY_MODE_CAPABILITIES,
     keymap=BITTTY_KEYMAP,
-    options=frozenset({VT510_PRINTER_PORT, LOCATOR_PORT}),
+    options=frozenset({VT510_PRINTER_PORT, VT510_COMM_PORTS, LOCATOR_PORT}),
     control_capabilities=EDITING
     | frozenset(
         {
@@ -289,7 +290,7 @@ VT510 = Model(
     charsets=VT220.charsets | {"%5", ">", "f", "9", "`", "96A", "96B", "96F", "96H", "96L", "96M"},
     color_depth="monochrome",
     keymap=VT220_KEYMAP,
-    options=frozenset({VT510_PRINTER_PORT}),
+    options=frozenset({VT510_PRINTER_PORT, VT510_COMM_PORTS}),
     control_capabilities=EDITING
     | frozenset(
         {

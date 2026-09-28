@@ -120,7 +120,7 @@ Grouping it that way turns a long list of orphan modes into a roadmap:
 | :--- | :--- | ---: |
 | Keyboard (LK201/401/450, national variants) | 12, 16, 23, 35, 49, 57, 68, 81, 104 | 9 |
 | CRT / display hardware | 4, 9, 51, 55, 97, 106, 114–117 | 10 |
-| Comms / transport | 11, 14, 53, 73, 99, 103 | 6 |
+| Comms / transport | 11, 14, 53 | 3 |
 | Graphics option | 38, 80, 1070, 8452 | 4 |
 | Graphics × printer (needs both) | 43, 44, 45, 46, 47 | 5 |
 | Hardcopy / plotter | 20, 24, 70 | 3 |
@@ -146,8 +146,13 @@ That distinction buys a faithful three-way that a single flag could not express:
 | port fitted, no device or not enabled | `CSI 0 & w` — locator unavailable |
 | port fitted, locator enabled | `CSI Pe ; Pb ; Pr ; Pc ; Pp & w` |
 
-Mode 103 DECHDPXM is already annotated in `DEC_private.md` as requiring a transport-level
-half-duplex interface. That annotation is this document in miniature.
+The **host line** is the printer's tiers applied to the other cable. `VT510_COMM_PORTS` is
+the option: it contributes DECXRLM, DECMCM and DECHDPXM (modes 73, 99 and 103) and provides
+the host line's settings, which DECSCS, DECSFC, DECSPP, DECSCP and DECSTRL set when they
+name the comm port rather than the printer (`devices/comm.py` routes each to its port). The
+terminal holds the line as a `SerialLine` whatever is on the cable, and the host port offers
+it to a connection that has `configure_line()`: a serial port could apply it, and a PTY,
+which has no modem, has nothing to apply.
 
 ## Printers, for the record
 

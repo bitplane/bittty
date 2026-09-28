@@ -47,6 +47,9 @@ DEC_BACKARROW = "dec.backarrow"
 DEC_LEFT_RIGHT_MARGINS = "dec.left-right-margins"
 DEC_NO_CLEAR_COLUMN = "dec.no-clear-column"
 DEC_PAGE_COUPLING = "dec.page-coupling"
+DEC_TRANSMIT_RATE_LIMIT = "dec.transmit-rate-limit"
+DEC_MODEM_CONTROL = "dec.modem-control"
+DEC_HALF_DUPLEX = "dec.half-duplex"
 DEC_IGNORE_NULL = "dec.ignore-null"
 XTERM_MOUSE_NORMAL = "xterm.mouse-normal"
 XTERM_FOCUS = "xterm.focus"
@@ -84,6 +87,8 @@ ANSI_MODE_CAPABILITIES = frozenset({ANSI_INSERT, ANSI_NEWLINE})
 # (see options.py and docs/peripherals.md); a terminal without the port does
 # not recognise them at all.
 PRINTER_PORT_MODE_CAPABILITIES = frozenset({DEC_PRINT_FORM_FEED, DEC_PRINT_EXTENT})
+# Contributed by the serial host ports: the communication modes of the host line.
+HOST_LINE_MODE_CAPABILITIES = frozenset({DEC_TRANSMIT_RATE_LIMIT, DEC_MODEM_CONTROL, DEC_HALF_DUPLEX})
 
 # Hardware profiles are the intersection of the model's documented repertoire
 # and the mode semantics bittty currently implements.
@@ -344,6 +349,7 @@ BITTTY_MODE_CAPABILITIES = XTERM_MODE_CAPABILITIES | frozenset(
 # Registry catalogue, including mutually exclusive same-number semantics.
 ALL_MODE_CAPABILITIES = (
     PRINTER_PORT_MODE_CAPABILITIES
+    | HOST_LINE_MODE_CAPABILITIES
     | BITTTY_MODE_CAPABILITIES
     | VT100_MODE_CAPABILITIES
     | VT220_MODE_CAPABILITIES

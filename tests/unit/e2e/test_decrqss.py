@@ -58,7 +58,10 @@ def test_vt510_printer_settings_use_dec_framing_and_restorable_payloads():
         "\x1bP0$r3)p\x1b\\",
         "\x1bP0$r850*p\x1b\\",
         "\x1bP0$r2;1*u\x1b\\",
+        "\x1bP0$r1;6*r\x1b\\",  # the host line's settings come first
+        "\x1bP0$r2;6*r\x1b\\",
         "\x1bP0$r3;7*r\x1b\\",
+        "\x1bP0$r1;1;1;1+w\x1b\\",
         "\x1bP0$r2;1;1;1+w\x1b\\",
     ]
 
@@ -68,6 +71,8 @@ def test_flow_control_decrqss_emits_transmit_then_receive():
     parser.feed("\x1b[2;1;4;1*s\x1b[2;2;2;1*s")
     parser.feed("\x1bP$q*s\x1b\\")
     assert transport.data == [
+        "\x1bP0$r1;1;4;1*s\x1b\\",  # the host line's settings come first
+        "\x1bP0$r1;2;1;1*s\x1b\\",
         "\x1bP0$r2;1;4;1*s\x1b\\",
         "\x1bP0$r2;2;2;1*s\x1b\\",
     ]
