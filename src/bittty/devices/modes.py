@@ -644,6 +644,11 @@ def resolve_mode_specs(
     return resolved
 
 
+# Modes whose setting is an action — entering VT52, clearing the screen, switching screens,
+# saving the cursor — rather than a state that setting re-establishes.
+_ACTION_MODES = frozenset({(True, 2), (True, 3), (True, 47), (True, 1047), (True, 1048), (True, 1049)})
+
+
 class ModeDevice(Device):
     """Owns terminal mode state and applies mode operations via the mode table."""
 
@@ -959,6 +964,15 @@ class ModeDevice(Device):
         self._apply_many(private, (mode,), False)
 
     # --- DECRQM status --- #
+
+    def restorable_states(self) -> list[tuple[bool, int, bool]]:
+        """(private, number, set) for each mode whose state setting or resetting it restores."""
+        states = []
+        for private, number in self._modes:
+            status = self.get_private_mode_status(number) if private else self.get_ansi_mode_status(number)
+            if status in (1, 2) and (private, number) not in _ACTION_MODES:
+                states.append((private, number, status == 1))
+        return states
 
     def get_private_mode_status(self, mode: int) -> int:
         key = (True, mode)

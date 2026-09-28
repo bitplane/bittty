@@ -43,7 +43,7 @@ class CharsetDevice(Device):
             "SCS_G3": lambda op: self.designate(3, op.args[0]),
         }
         if board.model.upss is not None:
-            self.handlers["DECRQUPSS"] = self.report_preferred
+            self.handlers["DECRQUPSS"] = lambda op: board.host.write(self.preferred_assignment(), flush=True)
         if DEC_UPSS in board.model.provides:
             self.handlers["DECAUPSS"] = self.assign_preferred
 
@@ -58,10 +58,10 @@ class CharsetDevice(Device):
             self.preferred = SUPPLEMENTAL_SETS[operation.args]
             self.cache.pop("<", None)
 
-    def report_preferred(self, operation: Operation) -> None:
-        """DECRQUPSS — the user-preferred supplemental set, as DECAUPSS would assign it."""
+    def preferred_assignment(self) -> str:
+        """The DECAUPSS that assigns the current user-preferred set (DECRQUPSS replies with it)."""
         size = int(self.preferred.startswith("96"))
-        self.board.host.write(f"\x1bP{size}!u{self.preferred.removeprefix('96')}\x1b\\", flush=True)
+        return f"\x1bP{size}!u{self.preferred.removeprefix('96')}\x1b\\"
 
     def designate(self, index: int, designator: str) -> None:
         """Apply an SCS G-set designation, ignoring charsets the terminal lacks."""

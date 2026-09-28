@@ -39,6 +39,7 @@ from .options import (
     DEC_KEYBOARD_LEDS,
     DEC_PRINTER_PORT,
     DEC_STATUS_LINE,
+    DEC_TERMINAL_STATE,
     DEC_UPSS,
     DEC_USER_KEYS,
     KITTY_KEYBOARD,
@@ -163,6 +164,7 @@ BITTTY = Model(
             XTERM_EXTRAS,
             DEC_DISPLAYED_EXTENT,
             DEC_UPSS,
+            DEC_TERMINAL_STATE,
         }
     ),
     power_on_modes=frozenset({1036, 1039}),  # Alt and Meta send ESC
@@ -211,7 +213,9 @@ VT510 = Model(
     color_depth="monochrome",
     keymap=VT220_KEYMAP,
     options=frozenset({VT510_PRINTER_PORT}),
-    control_capabilities=frozenset({DEC_KEYBOARD_LEDS, DEC_USER_KEYS, DEC_STATUS_LINE, DEC_DISPLAYED_EXTENT, DEC_UPSS}),
+    control_capabilities=frozenset(
+        {DEC_KEYBOARD_LEDS, DEC_USER_KEYS, DEC_STATUS_LINE, DEC_DISPLAYED_EXTENT, DEC_UPSS, DEC_TERMINAL_STATE}
+    ),
     decrqss_valid_is_one=False,
     status_line_type=1,  # the indicator, the Set-Up default
     page_memory=((24, 3), (25, 2), (36, 2)),  # DECSLPP; any other page size is a single page

@@ -29,6 +29,8 @@ def parse_dcs_operation(string_buffer: str, raw: str = "") -> Operation:
         sets = tuple(re.findall(r"[ -/]*[0-~]", designators))
         operands = (int(row), int(column), int(page), *flags, int(gl), int(gr), ord(scss) - 0x40, sets)
         return Operation("DECRSPS_CIR", operands, raw)
+    if string_buffer.startswith("1$p"):  # DECRSTS - restore a DECTSR terminal state report
+        return Operation("DECRSTS", (string_buffer[3:],), raw)
     if string_buffer.startswith("2$t"):  # DECRSPS - restore a DECTABSR tab stop report
         stops = re.match(r"[0-9]+(?:/[0-9]+)*", string_buffer[3:])
         return Operation("DECRSPS_TABS", (tuple(map(int, stops[0].split("/"))) if stops else (),), raw)

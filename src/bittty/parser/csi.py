@@ -163,6 +163,9 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
         private = "?" in intermediates
         return Operation("DECRQM", (mode, private), raw_csi_data)
 
+    if final_char == "u" and "$" in intermediates:  # DECRQTSR - Request Terminal State Report
+        return Operation("DECRQTSR", (param(params, 0, 0),), raw_csi_data)
+
     if final_char == "w" and "$" in intermediates:  # DECRQPSR - Request Presentation State Report
         return Operation("DECRQPSR", (param(params, 0, 0),), raw_csi_data)
 

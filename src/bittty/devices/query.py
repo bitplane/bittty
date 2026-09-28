@@ -9,7 +9,8 @@ from typing import TYPE_CHECKING
 
 from .. import constants
 from ..operations import Operation
-from ..options import DEC_DISPLAYED_EXTENT, DEC_STATUS_LINE, XTERM_EXTRAS
+from ..options import DEC_DISPLAYED_EXTENT, DEC_STATUS_LINE, DEC_TERMINAL_STATE, DEC_UPSS, XTERM_EXTRAS
+from ..parser import Parser
 from ..present import (
     ClipboardChanged,
     ConsoleRequest,
@@ -95,6 +96,9 @@ class QueryDevice(Device):
             self._status_reporters[">t"] = lambda: ";".join(str(int(mode)) for mode in board.title.modes)
         if DEC_DISPLAYED_EXTENT in board.model.provides:
             self.handlers["DECRQDE"] = self.report_displayed_extent
+        if DEC_TERMINAL_STATE in board.model.provides:
+            self.handlers["DECRQTSR"] = self.report_terminal_state
+            self.handlers["DECRSTS"] = self.restore_terminal_state
         if DEC_STATUS_LINE in board.model.provides:
             self._status_reporters["$~"] = lambda: str(blitter.status_type)  # DECSSDT
             self._status_reporters["$}"] = lambda: str(int(blitter.status_active))  # DECSASD
@@ -211,6 +215,38 @@ class QueryDevice(Device):
         board = self.board
         page = 1 if board.blitter.in_alt_screen else board.blitter.shown_page + 1
         board.host.write(f'\x1b[{board.height};{board.width};1;1;{page}"w', flush=True)
+
+    def report_terminal_state(self, operation: Operation) -> None:
+        """DECRQTSR 1 — DECTSR: the hex of the control functions that re-establish this state."""
+        if operation.args[0] == 1:
+            data = self._terminal_state().encode().hex().upper()
+            self.board.host.write(f"\x1bP1$s{data}\x1b\\", flush=True)
+
+    def _terminal_state(self) -> str:
+        """Modes, margins, renditions and settings, then the cursor and tab stops (restored last:
+        setting origin mode or a margin homes the cursor)."""
+        board, blitter = self.board, self.board.blitter
+        modes = board.modes.restorable_states()
+        parts = [f"\x1b[{'?' * private}{number}{'hl'[not on]}" for private, number, on in modes]
+        parts.append(f"\x1b[{blitter.scroll_top + 1};{blitter.scroll_bottom + 1}r")
+        if board.modes.left_right_margin_mode:
+            parts.append(f"\x1b[{blitter.left_margin + 1};{blitter.right_margin + 1}s")
+        parts.append(f"\x1b[{2 if blitter.attr_change_extent == 'rectangle' else 0}*x")
+        parts.append(f"\x1b[{self._cursor_style_status()} q\x1b[{self._sgr_status()}m")
+        if DEC_STATUS_LINE in board.model.provides:
+            parts.append(f"\x1b[{blitter.status_type}$~")
+        if DEC_UPSS in board.model.provides:
+            parts.append(board.charset.preferred_assignment())
+        parts.append(f"\x1bP1$t{self._cursor_information()}\x1b\\\x1bP2$t{self._tab_stops()}\x1b\\")
+        return "".join(parts)
+
+    def restore_terminal_state(self, operation: Operation) -> None:
+        """DECRSTS 1 — replay a DECTSR; one that is not hex is ignored whole."""
+        try:
+            data = bytes.fromhex(operation.args[0]).decode()
+        except ValueError:
+            return
+        Parser(self.board).feed(data)
 
     def report_presentation_state(self, operation: Operation) -> None:
         """DECRQPSR — cursor information (1, DECCIR) or tab stops (2, DECTABSR); anything else is ignored."""

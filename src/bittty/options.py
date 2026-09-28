@@ -43,6 +43,7 @@ DEC_KEYBOARD_LEDS = "dec.keyboard-leds"
 DEC_USER_KEYS = "dec.user-keys"
 DEC_STATUS_LINE = "dec.status-line"
 DEC_DISPLAYED_EXTENT = "dec.displayed-extent"  # DECRQDE
+DEC_TERMINAL_STATE = "dec.terminal-state"  # DECRQTSR and DECRSTS
 DEC_UPSS = "dec.upss"  # DECAUPSS: the host assigns the user-preferred supplemental set
 XTERM_EXTRAS = "xterm.extras"  # title modes, pointer mode and XTREPORTSGR
 XTERM_MODIFY_KEYS = "xterm.modify-keys"  # key modifier resources beyond modifyOtherKeys, and their query
