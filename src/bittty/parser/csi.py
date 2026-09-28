@@ -136,6 +136,10 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
             return Operation("DSR_PRINTER", (code,), raw_csi_data)
         if intermediates == ["?"] and code == 25:
             return Operation("DSR_USER_KEYS", (), raw_csi_data)
+        if intermediates == ["?"] and code == 62:  # DECMSR request
+            return Operation("DSR_MACRO_SPACE", (), raw_csi_data)
+        if intermediates == ["?"] and code == 63:  # DECCKSR request
+            return Operation("DSR_MEMORY_CHECKSUM", (param(params, 1, 0),), raw_csi_data)
         if code == 5:
             return Operation("DSR", (code,), raw_csi_data)
         if code == 6:
@@ -194,6 +198,9 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
 
     if final_char == "y" and "*" in intermediates:  # DECRQCRA - Request Checksum of Rectangular Area
         return Operation("DECRQCRA", (tuple(params),), raw_csi_data)
+
+    if final_char == "z" and "*" in intermediates:  # DECINVM - Invoke Macro
+        return Operation("DECINVM", (param(params, 0, 0),), raw_csi_data)
 
     if final_char == "x" and "*" in intermediates:  # DECSACE - Select Attribute Change Extent
         return Operation("DECSACE", (param(params, 0, 0),), raw_csi_data)

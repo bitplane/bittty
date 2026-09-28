@@ -32,6 +32,7 @@ from .modes import ModeDevice
 from .mouse import MouseDevice
 from .palette import PaletteDevice
 from .printer import PrinterDevice
+from .macros import MacroDevice
 from .query import QueryDevice
 from .style import StyleDevice
 from .title import TitleDevice
@@ -139,6 +140,7 @@ class Board:
 
         self.control = ControlDevice(self)
         self.query = QueryDevice(self)
+        self.macros = MacroDevice(self)
 
         self.devices = {
             "charset": self.charset,
@@ -151,6 +153,7 @@ class Board:
             "palette": self.palette,
             "printer": self.printer,
             "query": self.query,
+            "macros": self.macros,
             "blitter": self.blitter,
             "style": self.style,
             "title": self.title,
@@ -175,6 +178,7 @@ class Board:
             self.style,
             self.query,
             self.title,
+            self.macros,
         ):
             for name, handler in device.handlers.items():
                 if name in registry:
@@ -402,6 +406,7 @@ class Board:
         self.blitter.reset(hard=hard)
         self.printer.reset(hard=hard)
         self.keyboard.reset(hard=hard)
+        self.macros.reset(hard=hard)
         self.charset.reset()
         if hard:
             self.palette.reset()

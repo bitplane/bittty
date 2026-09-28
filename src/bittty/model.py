@@ -87,6 +87,8 @@ class Model:
     power_on_modes: frozenset[int] = frozenset()
     # DECSSDT at power-on and RIS (0 none, 1 indicator); the status line needs DEC_STATUS_LINE.
     status_line_type: int = 0
+    # Bytes of macro memory (DECDMAC); None: no macro reports at all. xterm answers with none.
+    macro_space: int | None = None
 
     @property
     def capabilities(self) -> frozenset[str]:
@@ -120,6 +122,7 @@ XTERM = Model(
     options=frozenset({XTERM_PRINTER_PIPE, LOCATOR_PORT}),
     control_capabilities=frozenset({DEC_KEYBOARD_LEDS, DEC_USER_KEYS, XTERM_MODIFY_KEYS}),
     power_on_modes=frozenset({1034}),  # eightBitInput
+    macro_space=0,  # xterm 407 reports no macro space
 )
 
 BITTTY = Model(
@@ -134,6 +137,7 @@ BITTTY = Model(
         {KITTY_KEYBOARD, DEC_KEYBOARD_LEDS, DEC_USER_KEYS, XTERM_MODIFY_KEYS, DEC_STATUS_LINE}
     ),
     power_on_modes=frozenset({1036, 1039}),  # Alt and Meta send ESC
+    macro_space=6144,
 )
 
 VT100 = Model(
@@ -180,6 +184,7 @@ VT510 = Model(
     control_capabilities=frozenset({DEC_KEYBOARD_LEDS, DEC_USER_KEYS, DEC_STATUS_LINE}),
     decrqss_valid_is_one=False,
     status_line_type=1,  # the indicator, the Set-Up default
+    macro_space=6144,  # "6 Kbytes of memory available for the storage of macros"
 )
 
 LINUX = Model(

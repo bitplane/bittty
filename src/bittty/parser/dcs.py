@@ -6,6 +6,8 @@ import re
 
 from ..operations import Operation
 
+# DECDMAC: Pid;Pdt;Pen ! z D...D
+_DECDMAC = re.compile(r"([0-9]*)(?:;([0-9]*))?(?:;([0-9]*))?!z(.*)", re.DOTALL)
 # DECCIR: row;column;page;Srend;Satt;Sflag;Pgl;Pgr;Scss;Sdesig
 _DECCIR = re.compile(r"([0-9]+);([0-9]+);([0-9]+);([@-O]);([@-O]);([@-O]);([0-3]);([0-3]);([@-O]);((?:[ -/]*[0-~])*)")
 
@@ -29,6 +31,10 @@ def parse_dcs_operation(string_buffer: str, raw: str = "") -> Operation:
     if string_buffer.startswith("2$t"):  # DECRSPS - restore a DECTABSR tab stop report
         stops = re.match(r"[0-9]+(?:/[0-9]+)*", string_buffer[3:])
         return Operation("DECRSPS_TABS", (tuple(map(int, stops[0].split("/"))) if stops else (),), raw)
+    match = _DECDMAC.fullmatch(string_buffer)
+    if match is not None:  # DECDMAC - Define Macro
+        pid, pdt, pen, body = match.groups()
+        return Operation("DECDMAC", (int(pid or 0), int(pdt or 0), int(pen or 0), body), raw)
     match = re.fullmatch(r"([0-9]*)(?:;([0-9]*))?\|(.*)", string_buffer, re.DOTALL)
     if match is not None:
         clear, lock, body = match.groups()
