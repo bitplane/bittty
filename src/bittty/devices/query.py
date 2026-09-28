@@ -24,6 +24,11 @@ if TYPE_CHECKING:
     from .board import Board
 
 
+def _bit_field(*flags) -> str:
+    """A DEC report's flag character: 0x40 plus bit n for each set flag n."""
+    return chr(0x40 | sum(1 << bit for bit, on in enumerate(flags) if on))
+
+
 class QueryDevice(Device):
     """Applies terminal query operations to the current board implementation."""
 
@@ -38,6 +43,7 @@ class QueryDevice(Device):
             "DA3": self.report_tertiary_device_attributes,
             "DECRQM": self.report_mode_status,
             "DECRQSS": self.report_status_string,
+            "DECRQPSR": self.report_presentation_state,
             "OSC_CLIPBOARD": self.handle_clipboard,
             "XTWINOPS": self.handle_window_op,
             "DECSCL": self.set_conformance_level,
@@ -159,6 +165,31 @@ class QueryDevice(Device):
     def _cursor_style_status(self) -> str:
         base = {"block": 1, "underline": 3, "bar": 5}.get(self.board.cursor.shape, 1)
         return str(base if self.board.modes.cursor_blinking else base + 1)
+
+    def report_presentation_state(self, operation: Operation) -> None:
+        """DECRQPSR — cursor information (1, DECCIR) or tab stops (2, DECTABSR); anything else is ignored."""
+        ps = operation.args[0]
+        reporter = {1: self._cursor_information, 2: self._tab_stops}.get(ps)
+        if reporter:
+            self.board.host.write(f"\x1bP{ps}$u{reporter()}\x1b\\", flush=True)
+
+    def _cursor_information(self) -> str:
+        """DECCIR: position, page, rendition, protection, flags, invoked and designated G-sets."""
+        board, cursor, charset = self.board, self.board.cursor, self.board.charset
+        style = board.style.current
+        srend = _bit_field(style.bold, style.underline, style.blink, style.reverse)
+        satt = _bit_field(style.protected)
+        sflag = _bit_field(
+            board.modes.origin_mode, charset.single_shift == 2, charset.single_shift == 3, cursor.wrap_pending
+        )
+        scss = "@"  # every designated set is a 94-character set: the 96-set SCS forms aren't parsed
+        position = f"{cursor.y + 1};{cursor.display_x + 1};1"
+        shifts = f"{charset.current_charset};{charset.gr}"
+        return f"{position};{srend};{satt};{sflag};{shifts};{scss};{''.join(charset.charset_array)}"
+
+    def _tab_stops(self) -> str:
+        """DECTABSR: the tab stop columns, one-based and separated by '/'."""
+        return "/".join(str(stop + 1) for stop in sorted(self.board.cursor.tab_stops))
 
     def handle_clipboard(self, operation: Operation) -> None:
         """OSC 52 — set the clipboard, or answer a query with its current contents."""

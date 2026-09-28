@@ -161,6 +161,11 @@ class CursorDevice(Device):
         return self._wrap_pending and self.x == self._wrap_right and self.y == self._wrap_y
 
     @property
+    def wrap_pending(self) -> bool:
+        """Whether the next printable character wraps first (the last column was just filled)."""
+        return self._pending_wrap_is_valid()
+
+    @property
     def display_x(self) -> int:
         """Physical cursor column, hiding the internal delayed-wrap sentinel."""
         if self._pending_wrap_is_valid():
