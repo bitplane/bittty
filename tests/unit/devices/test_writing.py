@@ -9,9 +9,9 @@ def test_write_cell_no_auto_wrap():
     board.cursor.x = 4
     board.cursor.y = 0
     board.blitter.write_text("a")
-    assert board.cursor.x == 4
+    assert board.cursor.display_x == 4
     board.blitter.write_text("b")
-    assert board.cursor.x == 4
+    assert board.cursor.display_x == 4
     assert board.blitter.current_page.get_line_text(0) == "    b"
 
 
@@ -21,7 +21,7 @@ def test_write_cell_clip_at_width():
     board.cursor.x = 5  # Set cursor beyond width
     board.cursor.y = 0
     board.blitter.write_text("X")
-    assert board.cursor.x == 4  # Should be clamped to width - 1
+    assert board.cursor.display_x == 4  # Should be clamped to width - 1
     assert board.blitter.current_page.get_line_text(0) == "    X"
 
 
@@ -226,4 +226,4 @@ def test_long_print_run_without_autowrap_clips_to_last_column():
     page = board.blitter.current_page
     assert page.get_line_text(0) == "abcdh"
     assert page.get_line_text(1).strip() == ""
-    assert board.cursor.x == 4
+    assert board.cursor.display_x == 4

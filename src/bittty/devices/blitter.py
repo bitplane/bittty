@@ -586,8 +586,7 @@ class Blitter(Device):
 
         Confined to the left/right margin box; a cursor outside it is a no-op.
         """
-        self.board.cursor.cancel_pending_wrap()
-        x0 = self.board.cursor.x
+        x0 = self.board.cursor.display_x  # a pending wrap stays pending, as in xterm
         if not (self.left_margin <= x0 <= self.right_margin):
             return
         # DECIC inserts blanks at x0 (content pushed right = negative shift); DECDC deletes (left).

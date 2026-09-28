@@ -145,7 +145,7 @@ def test_wide_character_without_autowrap_backs_up_to_fit():
     board.parser.feed("❌")
 
     assert row_chars(board, 0)[3:] == ["❌", ""]
-    assert (board.cursor.x, board.cursor.y) == (4, 0)
+    assert (board.cursor.display_x, board.cursor.y) == (4, 0)
 
 
 @pytest.mark.parametrize("x", [1, 2])

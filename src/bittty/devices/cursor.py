@@ -218,13 +218,19 @@ class CursorDevice(Device):
             self.carriage_return()
 
     def forward_index(self) -> None:
-        """DECFI — move right; at the right margin, pan the margin box one column left."""
-        self.cancel_pending_wrap()
-        right = self.board.blitter.right_margin
-        if self.x == right and right < self.board.width - 1:
+        """DECFI — move right; at the right margin, pan the margin box one column left.
+
+        At the page border DECFI is ignored (DEC; xterm pans there too). Neither case
+        disturbs a pending wrap.
+        """
+        column = self.display_x
+        if column == self.board.width - 1:
+            return
+        if column == self.board.blitter.right_margin:
             self.board.blitter.pan(1, full_page=True)
-        elif self.x < self.board.width - 1:
-            self.x += 1
+            return
+        self.cancel_pending_wrap()
+        self.x = column + 1
 
     def back_index(self) -> None:
         """DECBI — move left; at the left margin, pan the margin box one column right."""
@@ -256,19 +262,22 @@ class CursorDevice(Device):
         if 0 <= x < self.board.width:
             self.tab_stops.add(x)
 
-    def next_tab_stop(self) -> int:
-        """Return the next horizontal tab stop, clamped to the active boundary."""
+    def next_tab_stop(self, column: int) -> int:
+        """Return the next horizontal tab stop after column, clamped to the active boundary."""
         screen = self.board.blitter
-        right = screen.right_margin if screen.left_margin <= self.x <= screen.right_margin else self.board.width - 1
+        right = screen.right_margin if screen.left_margin <= column <= screen.right_margin else self.board.width - 1
         for stop in sorted(self.tab_stops):
-            if stop > self.x:
+            if stop > column:
                 return min(stop, right)
         return right
 
     def horizontal_tab(self) -> None:
-        """Advance to the next horizontal tab stop."""
-        self.cancel_pending_wrap()
-        self.x = self.next_tab_stop()
+        """Advance to the next horizontal tab stop; one with nowhere to go leaves a pending wrap (xterm)."""
+        column = self.display_x
+        stop = self.next_tab_stop(column)
+        if stop != column:
+            self.cancel_pending_wrap()
+            self.x = stop
 
     def previous_tab_stop(self) -> int:
         """Return the nearest tab stop left of the cursor, or column 0."""
@@ -362,13 +371,9 @@ class CursorDevice(Device):
         if character_count <= 0:
             return
         left, right = bounds if bounds is not None else (0, self.board.width)
-        if self.board.modes.auto_wrap:
-            self.x += character_count
-            if self.x >= right:
-                self.mark_pending_wrap((left, right))
-        else:
-            self.cancel_pending_wrap()
-            self.x = min(right - 1, self.x + character_count)
+        self.x += character_count
+        if self.x >= right:  # armed even under DECAWM reset, as in xterm; the next write decides
+            self.mark_pending_wrap((left, right))
 
     def save(self) -> None:
         """Save cursor position and attributes."""

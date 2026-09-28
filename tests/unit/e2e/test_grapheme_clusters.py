@@ -125,7 +125,7 @@ def test_width_growth_without_autowrap_backs_up():
     board.parser.feed("\ufe0f")
 
     assert cells(board, 0)[2:] == ["☀\ufe0f", ""]
-    assert (board.cursor.x, board.cursor.y) == (3, 0)
+    assert (board.cursor.display_x, board.cursor.y) == (3, 0)
 
 
 def test_width_shrink_releases_continuation_and_cancels_delayed_wrap():
