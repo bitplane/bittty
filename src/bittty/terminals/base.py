@@ -37,6 +37,7 @@ from ..present import (
     PresentEvent,
     PromptMark,
     ReverseScreenChanged,
+    SmoothScrollChanged,
     SyncOutputChanged,
     TitleChanged,
     WindowRequest,
@@ -100,6 +101,7 @@ class Terminal:
     def on_status_line(self, kind: str) -> None: ...
     def on_pointer_mode(self, mode: int) -> None: ...
     def on_chrome_resources(self, enabled: frozenset[str]) -> None: ...
+    def on_smooth_scroll(self, enabled: bool) -> None: ...
 
 
 # Event type -> adapter unpacking its fields into the corresponding hook.
@@ -127,4 +129,5 @@ _DISPATCH = {
     StatusLineChanged: lambda d, e: d.on_status_line(e.kind),
     PointerModeChanged: lambda d, e: d.on_pointer_mode(e.mode),
     ChromeResourcesChanged: lambda d, e: d.on_chrome_resources(e.enabled),
+    SmoothScrollChanged: lambda d, e: d.on_smooth_scroll(e.enabled),
 }

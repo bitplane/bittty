@@ -173,6 +173,13 @@ class StatusLineChanged:
 
 
 @dataclass(frozen=True)
+class SmoothScrollChanged:
+    """DECSCLM: scroll smoothly (a DEC terminal's six lines a second) rather than jump."""
+
+    enabled: bool
+
+
+@dataclass(frozen=True)
 class ChromeResourcesChanged:
     """The xterm resources the chrome carries out (a scrollbar, scrolling to the bottom,
     selections and the clipboard) that are now enabled, by name."""
@@ -204,4 +211,5 @@ PresentEvent = (
     | StatusLineChanged
     | PointerModeChanged
     | ChromeResourcesChanged
+    | SmoothScrollChanged
 )

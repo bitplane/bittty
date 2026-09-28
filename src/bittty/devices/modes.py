@@ -20,6 +20,7 @@ from ..present import (
     KeyboardLockChanged,
     MouseCaptureChanged,
     ReverseScreenChanged,
+    SmoothScrollChanged,
     SyncOutputChanged,
 )
 from .base import Device
@@ -41,6 +42,7 @@ class ModeEffect(Enum):
     KEYBOARD_LOCK = "keyboard-lock"
     KEYBOARD_INDICATOR = "keyboard-indicator"
     CHROME_RESOURCES = "chrome-resources"
+    SMOOTH_SCROLL = "smooth-scroll"
 
 
 class MouseProtocol(Enum):
@@ -349,6 +351,9 @@ MODE_SPECS: tuple[ModeSpec, ...] = (
         "reverse_screen",
         queryable=True,
         effects=frozenset({ModeEffect.REVERSE}),
+    ),
+    ModeSpec(
+        mp.DEC_SMOOTH_SCROLL, 4, True, "smooth_scroll", queryable=True, effects=frozenset({ModeEffect.SMOOTH_SCROLL})
     ),
     ModeSpec(mp.DEC_ORIGIN, 6, True, "origin_mode", queryable=True),
     ModeSpec(mp.DEC_AUTOWRAP, 7, True, "auto_wrap", default=True, queryable=True),
@@ -716,6 +721,7 @@ class ModeDevice(Device):
         self._last_cursor_blinking: bool | None = None
         self._last_reverse_screen: bool | None = None
         self._last_sync: bool | None = None
+        self._last_smooth_scroll: bool | None = None
         self._last_ambiguous_width: int | None = None
         self._last_grapheme_clustering: bool | None = None
         self._last_keyboard_locked: bool | None = None
@@ -920,6 +926,10 @@ class ModeDevice(Device):
             if force or self.keyboard_locked != self._last_keyboard_locked:
                 self._last_keyboard_locked = self.keyboard_locked
                 self.board.present(KeyboardLockChanged(self.keyboard_locked))
+        elif effect is ModeEffect.SMOOTH_SCROLL:
+            if force or self.smooth_scroll != self._last_smooth_scroll:
+                self._last_smooth_scroll = self.smooth_scroll
+                self.board.present(SmoothScrollChanged(self.smooth_scroll))
         elif effect is ModeEffect.CHROME_RESOURCES:
             enabled = self.chrome_resources()
             if force or enabled != self._last_chrome_resources:

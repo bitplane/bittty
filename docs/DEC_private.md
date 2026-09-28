@@ -10,7 +10,7 @@ Related ANSI modes: KAM (`CSI 2 h/l`) and SRM (`CSI 12 h/l`) implement keyboard 
 | 1 | DEC | DECCKM - Cursor Keys Mode | ✅ |
 | 2 | DEC | DECANM - ANSI/VT52 Mode (xterm's fifteen VT52 controls and keys) | ✅ |
 | 3 | DEC | DECCOLM - Column | ✅ |
-| 4 | DEC | DECSCLM - Scrolling | X |
+| 4 | DEC | DECSCLM - Scrolling (the chrome animates; on_smooth_scroll) | ✅ |
 | 5 | DEC | DECSCNM - Screen Mode (light or dark screen) | ✅ |
 | 6 | DEC | DECOM - Origin Mode | ✅ |
 | 7 | DEC | DECAWM - Auto Wrap Mode | ✅ |

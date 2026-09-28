@@ -21,7 +21,6 @@ def _term(model=None):
 @pytest.mark.parametrize(
     "mode",
     [
-        4,
         20,
         68,
         80,

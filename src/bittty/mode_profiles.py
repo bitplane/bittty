@@ -17,6 +17,7 @@ ANSI_NEWLINE = "ansi.newline"
 DEC_CURSOR_APPLICATION = "dec.cursor-application"
 DEC_ANSI = "dec.ansi"  # reset: VT52 mode
 DEC_COLUMN_MODE = "dec.column-mode"
+DEC_SMOOTH_SCROLL = "dec.smooth-scroll"
 XTERM_COLUMN_MODE = "xterm.column-mode"
 TMUX_COLUMN_MODE = "tmux.column-mode"
 KITTY_COLUMN_MODE = "kitty.column-mode"
@@ -119,6 +120,7 @@ VT100_MODE_CAPABILITIES = frozenset(
     {
         ANSI_NEWLINE,
         DEC_ANSI,
+        DEC_SMOOTH_SCROLL,
         DEC_CURSOR_APPLICATION,
         DEC_COLUMN_MODE,
         DEC_REVERSE_SCREEN,
@@ -164,6 +166,7 @@ XTERM_MODE_CAPABILITIES = (
             DEC_ANSI,
             DEC_CURSOR_APPLICATION,
             XTERM_COLUMN_MODE,
+            DEC_SMOOTH_SCROLL,
             DEC_REVERSE_SCREEN,
             DEC_ORIGIN,
             DEC_AUTOWRAP,

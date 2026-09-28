@@ -281,6 +281,7 @@ VT320 = Model(
     upss="%5",
     keyboard_types=(),  # the language alone, as the VT220 reports it
     fixed_modes=_fixed(4, "10"),  # HEM
+    power_on_modes=frozenset({4}),  # smooth scroll
 )
 
 VT420 = Model(
@@ -307,6 +308,7 @@ VT420 = Model(
     macro_space=6144,  # the VT510's figure: the VT420 guide does not give one
     page_memory=((24, 6), (25, 5), (36, 4), (48, 3), (72, 2)),  # a single session
     fixed_modes=UNIMPLEMENTED_ANSI_MODES | _fixed(4, "?60"),  # DECHCCM
+    power_on_modes=frozenset({4}),  # smooth scroll
 )
 
 VT510 = Model(
@@ -337,6 +339,7 @@ VT510 = Model(
     status_line_type=1,  # the indicator, the Set-Up default
     page_memory=((24, 3), (25, 2), (36, 2)),  # DECSLPP; any other page size is a single page
     fixed_modes=UNIMPLEMENTED_ANSI_MODES | _fixed(4, "?60"),  # as the VT420
+    power_on_modes=frozenset({4}),  # smooth scroll
     macro_space=6144,  # "6 Kbytes of memory available for the storage of macros"
     upss="%5",
     keyboard_types=(4, 5),  # LK450, PCXAL
