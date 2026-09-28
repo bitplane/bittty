@@ -90,7 +90,7 @@ class KeyMap:
     # The VT220 keypad: ',' where a PC has '+', Ctrl-',' is '-', and the keypad's
     # editing legends send keypad codes.
     vt220_keypad: bool = False
-    meta_prefix: bool = False  # Alt/Meta always ESC-prefix text and keypad keys (tmux)
+    keypad_meta_prefix: bool = False  # Alt/Meta ESC-prefix keypad keys too (tmux)
 
 
 def apply_modifier(sequence: str, modifier: int, *, keypad: bool = False) -> str:
@@ -161,12 +161,12 @@ SCREEN_KEYMAP = KeyMap(
 )
 
 # tmux 3.6 (checked with send-keys): screen's keys, but modified Home/End take the xterm
-# CSI 1;m H/F forms, Alt/Meta is always an ESC prefix on text and keypad keys, and the
+# CSI 1;m H/F forms, Alt/Meta is always an ESC prefix on keypad keys as well as text, and the
 # numeric keypad's Enter is LF.
 TMUX_KEYMAP = replace(
     SCREEN_KEYMAP,
     modified={"home": CSI + "H", "end": CSI + "F"},
-    meta_prefix=True,
+    keypad_meta_prefix=True,
     numeric={**KEYPAD_NUMERIC, "Enter": "\n"},
 )
 

@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from .. import constants
 from ..keyboard_protocol import ALIASES, KEYPAD_LEGACY, KEYPAD_NAMES, encode_key
 from ..keyboard_styles import STYLE_KEYMAPS, KeyboardStyle
-from ..keymap import KEYPAD_POSITIONS, PF_KEYS, KeyMap, apply_modifier
+from ..keymap import DEC_FUNCTION_CODES, KEYPAD_POSITIONS, PF_KEYS, KeyMap, apply_modifier
 from ..keys import LEGACY_MODIFIERS, KeyEvent, KeyModifiers, legacy_modifiers, valid_text, xterm_modifier
 from ..options import DEC_KEYBOARD_LEDS, DEC_USER_KEYS, KITTY_KEYBOARD
 from .modes import ModeEffect
@@ -19,6 +20,9 @@ if TYPE_CHECKING:
 from .base import Device
 
 M = KeyModifiers
+
+# Raw input: DECCKM rewrites CSI A-D to SS3 A-D.
+_NORMAL_CURSOR_KEY = re.compile(r"\x1b\[([ABCD])")
 
 # All five enhancements are implemented by the explicit key-event encoder.
 _KITTY_SUPPORTED = 31
@@ -66,24 +70,8 @@ class _KittyState:
         self.stack.clear()
 
 
-# DECUDK numbers the definable keys F6-F20; map them to bittty's function-key numbers.
-_DECUDK_CODE_TO_FKEY = {
-    17: 6,
-    18: 7,
-    19: 8,
-    20: 9,
-    21: 10,
-    23: 11,
-    24: 12,
-    25: 13,
-    26: 14,
-    28: 15,
-    29: 16,
-    31: 17,
-    32: 18,
-    33: 19,
-    34: 20,
-}
+# DECUDK numbers the definable keys F6-F20 by their VT220 codes.
+_DECUDK_CODE_TO_FKEY = {code: n for n, code in enumerate(DEC_FUNCTION_CODES, 1) if n >= 6}
 
 
 class KeyboardDevice(Device):
@@ -374,11 +362,7 @@ class KeyboardDevice(Device):
     def _legacy_escape_prefix(self, mods: KeyModifiers) -> bool:
         """Whether legacy Alt/Meta policy prefixes this input with ESC."""
         modes = self.board.modes
-        return bool(
-            (mods & M.ALT and modes.alt_sends_escape)
-            or (mods & M.META and modes.meta_sends_escape)
-            or (mods & (M.ALT | M.META) and self.keymap.meta_prefix)
-        )
+        return bool((mods & M.ALT and modes.alt_sends_escape) or (mods & M.META and modes.meta_sends_escape))
 
     def _send_key(self, sequence: str, mods: KeyModifiers, *, keypad: bool = False) -> None:
         """Send a keymap sequence, folding in the modifiers if the keymap encodes them."""
@@ -386,7 +370,7 @@ class KeyboardDevice(Device):
         modifiers = keymap.modifiers or (keymap.modifiers_with_other_keys and self.modify_other_keys)
         if modifiers and (keymap.keypad_modifiers or not keypad):
             sequence = apply_modifier(sequence, xterm_modifier(mods), keypad=keypad)
-        elif keypad and keymap.meta_prefix and mods & (M.ALT | M.META):
+        elif keypad and keymap.keypad_meta_prefix and mods & (M.ALT | M.META):
             sequence = constants.ESC + sequence
         self.board.transmit_keyboard(sequence)
 
@@ -465,16 +449,12 @@ class KeyboardDevice(Device):
         if mods & M.CTRL:
             char = local_text = "\x7f" if char == "?" else _x_control(char)  # xterm: Ctrl-? is DEL
 
-        if len(char) == 1:
-            # Escape-prefix policy wins over the older eighth-bit Meta form.
-            if self._legacy_escape_prefix(mods):
-                char = constants.ESC + char
-                self.input(char, local_text=local_text, margin_key=local_text.isprintable())
-            elif mods & (M.ALT | M.META) and self.board.modes.eight_bit_input and ord(char) < 128:
-                # xterm in a UTF-8 locale sends the shifted code as a character.
-                self.input(chr(ord(char) | 0x80), local_text=local_text, margin_key=local_text.isprintable())
-            else:
-                self.input(char, local_text=local_text, margin_key=local_text.isprintable())
+        # Escape-prefix policy wins over the older eighth-bit Meta form.
+        if self._legacy_escape_prefix(mods):
+            char = constants.ESC + char
+        elif mods & (M.ALT | M.META) and self.board.modes.eight_bit_input and ord(char) < 128:
+            char = chr(ord(char) | 0x80)  # xterm in a UTF-8 locale sends the shifted code as a character
+        self.input(char, local_text=local_text, margin_key=local_text.isprintable())
 
     def input_fkey(self, num: int, modifier: int = constants.KEY_MOD_NONE) -> None:
         """Encode a function key using any user-defined string, else the keymap."""
@@ -508,7 +488,7 @@ class KeyboardDevice(Device):
         if numeric or self.board.modes.numeric_keypad:
             text = keymap.numeric.get(key)
             if text is not None:
-                prefix = constants.ESC if keymap.meta_prefix and mods & (M.ALT | M.META) else ""
+                prefix = constants.ESC if keymap.keypad_meta_prefix and mods & (M.ALT | M.META) else ""
                 self.board.transmit_keyboard(prefix + text, local_text=text, margin_key=text.isprintable())
             return
         sequence = keymap.keypad.get(key)
@@ -610,20 +590,7 @@ class KeyboardDevice(Device):
             data = self.translate_application_cursor_keys(data)
         self.board.transmit_keyboard(data, local_text=local_text, margin_key=margin_key)
 
-    def translate_application_cursor_keys(self, data: str) -> str:
+    @staticmethod
+    def translate_application_cursor_keys(data: str) -> str:
         """Translate embedded normal cursor-key CSI sequences to application mode."""
-        result = []
-        index = 0
-        while index < len(data):
-            if (
-                data[index] == constants.ESC
-                and index + 2 < len(data)
-                and data[index + 1] == "["
-                and data[index + 2] in "ABCD"
-            ):
-                result.append(f"{constants.ESC}O{data[index + 2]}")
-                index += 3
-            else:
-                result.append(data[index])
-                index += 1
-        return "".join(result)
+        return _NORMAL_CURSOR_KEY.sub("\x1bO\\1", data)

@@ -211,6 +211,7 @@ TMUX = Model(
     mode_capabilities=TMUX_MODE_CAPABILITIES,
     color_depth="256",
     keymap=TMUX_KEYMAP,
+    power_on_modes=frozenset({1036, 1039}),  # Alt/Meta is always an ESC prefix
 )
 
 # rxvt-unicode — keymap and colours from terminfo (rxvt-unicode-256color). DA1 is VT100+AVO;
