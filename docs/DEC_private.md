@@ -146,8 +146,8 @@ Related ANSI modes: KAM (`CSI 2 h/l`) and SRM (`CSI 12 h/l`) implement keyboard 
 | 2002 | xterm | Enable readline mouse button-2 | X |
 | 2003 | xterm | Enable readline mouse button-3 | X |
 | 2004 | xterm | Set bracketed paste mode | ✅ |
-| 2005 | xterm | Enable readline character-quoting | X |
-| 2006 | xterm | Enable readline newline pasting | X |
+| 2005 | xterm | Enable readline character-quoting (the xterm model's pastes) | ✅ |
+| 2006 | xterm | Enable readline newline pasting (the xterm model's pastes) | ✅ |
 | 2026 | Contour | Synchronized Output (frontend event) | ✅ |
 | 2027 | mintty | Rewrap on resize (deprecated) | X |
 | 2027 | Contour | Grapheme cluster processing (stdio destination-gated) | ✅ |

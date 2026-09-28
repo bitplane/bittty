@@ -13,6 +13,7 @@ from ..keymap import DEC_FUNCTION_CODES, KEYPAD_POSITIONS, PF_KEYS, KeyMap, appl
 from ..keys import LEGACY_MODIFIERS, KeyEvent, KeyModifiers, legacy_modifiers, valid_text, xterm_modifier
 from ..charsets import KEYBOARD_LANGUAGES, KEYBOARD_NATIONAL_SETS, get_charset
 from ..options import (
+    XTERM_PASTE,
     DEC_KEY_MEMORY,
     DEC_KEYBOARD_DIALECT,
     DEC_KEYBOARD_LEDS,
@@ -72,6 +73,10 @@ _X_CONTROL_ALIASES = {
     "8": "\x7f",
     "/": "\x1f",
 }
+
+
+# xterm's disallowedPasteControls (BS, DEL, ENQ, EOT, ESC and NUL), which it pastes as spaces.
+_DISALLOWED_PASTE = str.maketrans(dict.fromkeys("\b\x7f\x05\x04\x1b\x00", " "))
 
 
 def _x_control(char: str) -> str:
@@ -688,16 +693,29 @@ class KeyboardDevice(Device):
         """A complete paste or bounded chunks of one bracketed transaction."""
         if phase not in ("complete", "start", "chunk", "end"):
             raise ValueError("invalid paste phase")
-        if phase == "complete":
-            data = f"\x1b[200~{text}\x1b[201~" if self.board.modes.bracketed_paste else text
-        else:
-            if phase == "start":
-                self.paste_bracketed = self.board.modes.bracketed_paste
-            prefix = "\x1b[200~" if phase == "start" and self.paste_bracketed else ""
-            suffix = "\x1b[201~" if phase == "end" and self.paste_bracketed else ""
-            data = prefix + text + suffix
-        if data:
-            self.board.transmit_keyboard(data, local_text=text)
+        if phase == "start":
+            self.paste_bracketed = self.board.modes.bracketed_paste
+        bracketed = self.board.modes.bracketed_paste if phase == "complete" else self.paste_bracketed
+        prefix = "\x1b[200~" if bracketed and phase in ("complete", "start") else ""
+        suffix = "\x1b[201~" if bracketed and phase in ("complete", "end") else ""
+        if XTERM_PASTE in self.board.model.provides:
+            self._paste_as_xterm(prefix, text, suffix)
+        elif prefix + text + suffix:
+            self.board.transmit_keyboard(prefix + text + suffix, local_text=text)
+
+    def _paste_as_xterm(self, prefix: str, text: str, suffix: str) -> None:
+        """Newlines as carriage returns (unless mode 2006), disallowed controls as spaces, and
+        under mode 2005 each byte quoted with Ctrl-V (literal-next)."""
+        modes = self.board.modes
+        pasted = text.translate(_DISALLOWED_PASTE)
+        if not modes.readline_newline:
+            pasted = pasted.replace("\n", "\r")
+        if not modes.readline_quoting:
+            if prefix + pasted + suffix:
+                self.board.transmit_keyboard(prefix + pasted + suffix, local_text=text)
+            return
+        quoted = b"".join(b"\x16" + bytes([byte]) for byte in pasted.encode())
+        self.board.transmit_keyboard_bytes(prefix.encode() + quoted + suffix.encode(), local_text=text)
 
     def input(self, data: str, *, local_text: str | None = None, margin_key: bool = False) -> None:
         """Translate control codes based on terminal modes and send to the host."""

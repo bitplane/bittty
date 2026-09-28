@@ -53,6 +53,7 @@ DEC_KEYBOARD_DIALECT = "dec.keyboard-dialect"  # DECKBD: the host selects the ke
 DEC_KEY_MEMORY = "dec.key-memory"  # DECPKA and DECRQPKFM: programmed key memory
 DEC_EXTENDED_CPR = "dec.extended-cpr"  # DECXCPR: the cursor report with its page (VT420)
 DEC_HOST_LINE = "dec.host-line"  # the host line's settings: DECSCS, DECSFC, DECSPP, DECSCP and DECSTRL
+XTERM_PASTE = "xterm.paste"  # pastes go with newlines as CR and disallowed controls as spaces
 DEC_UPSS = "dec.upss"  # DECAUPSS: the host assigns the user-preferred supplemental set
 XTERM_EXTRAS = "xterm.extras"  # title modes, pointer mode and XTREPORTSGR
 XTERM_MODIFY_KEYS = "xterm.modify-keys"  # key modifier resources beyond modifyOtherKeys, and their query

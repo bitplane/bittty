@@ -73,6 +73,8 @@ XTERM_ALLOW_COLUMN = "xterm.allow-column"
 XTERM_EXTENDED_REVERSE_WRAP = "xterm.extended-reverse-wrap"
 XTERM_ALLOW_ALT_SCREEN = "xterm.allow-alt-screen"
 XTERM_BRACKETED_PASTE = "xterm.bracketed-paste"
+XTERM_READLINE_QUOTING = "xterm.readline-quoting"
+XTERM_READLINE_NEWLINE = "xterm.readline-newline"
 XTERM_SYNC_OUTPUT = "xterm.sync-output"
 UNICODE_GRAPHEME_CLUSTERING = "unicode.grapheme-clustering"
 UNICODE_AMBIGUOUS_WIDTH = "unicode.ambiguous-width"
@@ -197,6 +199,8 @@ XTERM_MODE_CAPABILITIES = (
             XTERM_EXTENDED_REVERSE_WRAP,
             XTERM_ALLOW_ALT_SCREEN,
             XTERM_BRACKETED_PASTE,
+            XTERM_READLINE_QUOTING,
+            XTERM_READLINE_NEWLINE,
         }
     )
     | XTERM_CHROME_RESOURCES
@@ -349,8 +353,9 @@ KITTY_MODE_CAPABILITIES = frozenset(
     }
 )
 
-# The native model keeps bittty extensions separate from the xterm profile.
-BITTTY_MODE_CAPABILITIES = XTERM_MODE_CAPABILITIES | frozenset(
+# The native model keeps bittty extensions separate from the xterm profile. It relays pastes
+# as the outer terminal gave them, so it has none of xterm's readline paste modes.
+BITTTY_MODE_CAPABILITIES = XTERM_MODE_CAPABILITIES - {XTERM_READLINE_QUOTING, XTERM_READLINE_NEWLINE} | frozenset(
     {
         XTERM_HP_KEYS,
         XTERM_SCO_KEYS,
@@ -376,6 +381,7 @@ ALL_MODE_CAPABILITIES = (
     PRINTER_PORT_MODE_CAPABILITIES
     | HOST_LINE_MODE_CAPABILITIES
     | BITTTY_MODE_CAPABILITIES
+    | XTERM_MODE_CAPABILITIES
     | VT100_MODE_CAPABILITIES
     | VT220_MODE_CAPABILITIES
     | VT510_MODE_CAPABILITIES

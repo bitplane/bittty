@@ -57,6 +57,7 @@ from .options import (
     VT510_PRINTER_PORT,
     XTERM_EXTRAS,
     XTERM_MODIFY_KEYS,
+    XTERM_PASTE,
     XTERM_PRINTER_PIPE,
     Option,
     PrinterCapabilities,
@@ -165,6 +166,7 @@ XTERM = Model(
     control_capabilities=EDITING
     | frozenset(
         {DEC_KEYBOARD_LEDS, DEC_USER_KEYS, XTERM_MODIFY_KEYS, XTERM_EXTRAS, DEC_DISPLAYED_EXTENT, DEC_EXTENDED_CPR}
+        | {XTERM_PASTE}
     ),
     power_on_modes=frozenset({1034}),  # eightBitInput
     # Captured from xterm 407: DEC modes it knows but cannot change, and its one permanent set.
