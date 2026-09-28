@@ -43,6 +43,7 @@ DEC_PRINT_EXTENT = "dec.print-extent"
 DEC_CURSOR_VISIBLE = "dec.cursor-visible"
 DEC_NATIONAL_CHARSET = "dec.national-charset"
 XTERM_REVERSE_WRAP = "xterm.reverse-wrap"
+XTERM_MORE_FIX = "xterm.more-fix"
 XTERM_ALT_SCREEN_47 = "xterm.alt-screen-47"
 DEC_NUMERIC_KEYPAD = "dec.numeric-keypad"
 DEC_BACKARROW = "dec.backarrow"
@@ -177,6 +178,7 @@ XTERM_MODE_CAPABILITIES = (
             DEC_CURSOR_VISIBLE,
             DEC_NATIONAL_CHARSET,
             XTERM_MARGIN_BELL,
+            XTERM_MORE_FIX,
             XTERM_REVERSE_WRAP,
             XTERM_ALT_SCREEN_47,
             DEC_NUMERIC_KEYPAD,

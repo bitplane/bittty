@@ -72,6 +72,9 @@ def _fixed(status: int, *modes: str) -> frozenset[tuple[bool, int, int]]:
 
 # The ECMA-48 modes DEC terminals (and xterm) never implemented: GATM, SRTM, VEM, HEM, PUM,
 # FEAM, FETM, MATM, TTM, SATM, TSM and EBM, permanently reset (VT420 user guide table 9-2).
+# CRM (show controls): "The host cannot change the setting of CRM. You can only change CRM
+# from set-up" (VT320 and VT420 user guides); bittty has no Set-Up, so it stays reset.
+SET_UP_CRM = _fixed(2, "3")
 UNIMPLEMENTED_ANSI_MODES = _fixed(4, "1", "5", "7", "10", "11", "13", "14", "15", "16", "17", "18", "19")
 
 
@@ -173,6 +176,8 @@ XTERM = Model(
     fixed_modes=UNIMPLEMENTED_ANSI_MODES
     | _fixed(4, "?8", "?10", "?11", "?16", "?46", "?53", "?59", "?60", "?61", "?64", "?68", "?73", "?81")
     | _fixed(3, "?14")
+    | _fixed(2, "3", "?80", "?8452")  # CRM, and the sixel modes of a build without sixel
+    | _fixed(1, "?1070")
     | XTERM_READ_ONLY_RESOURCES,
     # The sets of xterm's default VT4xx level (charproc.c scs_table): not the VT100's
     # alternate ROMs nor JIS Roman, nor the VT5xx sets.
@@ -280,7 +285,7 @@ VT320 = Model(
     decrqss_valid_is_one=False,
     upss="%5",
     keyboard_types=(),  # the language alone, as the VT220 reports it
-    fixed_modes=_fixed(4, "10"),  # HEM
+    fixed_modes=_fixed(4, "10") | SET_UP_CRM,  # HEM
     power_on_modes=frozenset({4}),  # smooth scroll
 )
 
@@ -307,7 +312,7 @@ VT420 = Model(
     keyboard_types=(1, 1),  # LK401
     macro_space=6144,  # the VT510's figure: the VT420 guide does not give one
     page_memory=((24, 6), (25, 5), (36, 4), (48, 3), (72, 2)),  # a single session
-    fixed_modes=UNIMPLEMENTED_ANSI_MODES | _fixed(4, "?60"),  # DECHCCM
+    fixed_modes=UNIMPLEMENTED_ANSI_MODES | SET_UP_CRM | _fixed(4, "?60"),  # DECHCCM
     power_on_modes=frozenset({4}),  # smooth scroll
 )
 
@@ -338,7 +343,7 @@ VT510 = Model(
     decrqss_valid_is_one=False,
     status_line_type=1,  # the indicator, the Set-Up default
     page_memory=((24, 3), (25, 2), (36, 2)),  # DECSLPP; any other page size is a single page
-    fixed_modes=UNIMPLEMENTED_ANSI_MODES | _fixed(4, "?60"),  # as the VT420
+    fixed_modes=UNIMPLEMENTED_ANSI_MODES | SET_UP_CRM | _fixed(4, "?60"),  # as the VT420
     power_on_modes=frozenset({4}),  # smooth scroll
     macro_space=6144,  # "6 Kbytes of memory available for the storage of macros"
     upss="%5",

@@ -46,3 +46,20 @@ def test_vt420_permanently_reset_modes(model, mode):
 
 def test_vt320_horizontal_editing_is_permanently_reset():
     assert _status(VT320, "10") == ["\x1b[10;4$y"] * 2
+
+
+@pytest.mark.parametrize(("mode", "status"), [("3", 2), ("?80", 2), ("?8452", 2), ("?1070", 1)])
+def test_xterm_modes_the_host_cannot_set(mode, status):
+    """CRM, and the sixel modes of a build without sixel (captured from xterm 407)."""
+    assert _status(XTERM, mode) == [f"\x1b[{mode};{status}$y"] * 2
+
+
+@pytest.mark.parametrize("model", [VT320, VT420, VT510])
+def test_crm_is_set_up_only(model):
+    """ "The host cannot change the setting of CRM. You can only change CRM from set-up." """
+    assert _status(model, "3") == ["\x1b[3;2$y"] * 2
+
+
+def test_the_more_fix_is_kept_though_nothing_reads_it():
+    """xterm 407 stores its curses workaround (41) and reports it, and nothing else."""
+    assert _status(XTERM, "?41") == ["\x1b[?41;2$y", "\x1b[?41;1$y"]

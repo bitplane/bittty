@@ -390,6 +390,8 @@ MODE_SPECS: tuple[ModeSpec, ...] = (
     ),
     ModeSpec(mp.DEC_NATIONAL_CHARSET, 42, True, "national_charset_mode", queryable=True),
     ModeSpec(mp.XTERM_MARGIN_BELL, 44, True, "margin_bell", queryable=True, apply_fn=_margin_bell),
+    # xterm's curses workaround (the more(1) fix): xterm 407 keeps and reports it, and nothing reads it.
+    ModeSpec(mp.XTERM_MORE_FIX, 41, True, "more_fix", queryable=True),
     ModeSpec(mp.XTERM_REVERSE_WRAP, 45, True, "reverse_wraparound", queryable=True),
     ModeSpec(
         mp.XTERM_ALT_SCREEN_47,
