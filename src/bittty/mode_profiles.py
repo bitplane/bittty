@@ -15,6 +15,7 @@ ANSI_NEWLINE = "ansi.newline"
 
 # DEC and xterm private modes
 DEC_CURSOR_APPLICATION = "dec.cursor-application"
+DEC_ANSI = "dec.ansi"  # reset: VT52 mode
 DEC_COLUMN_MODE = "dec.column-mode"
 XTERM_COLUMN_MODE = "xterm.column-mode"
 TMUX_COLUMN_MODE = "tmux.column-mode"
@@ -87,6 +88,7 @@ PRINTER_PORT_MODE_CAPABILITIES = frozenset({DEC_PRINT_FORM_FEED, DEC_PRINT_EXTEN
 # and the mode semantics bittty currently implements.
 VT100_MODE_CAPABILITIES = ANSI_MODE_CAPABILITIES | frozenset(
     {
+        DEC_ANSI,
         DEC_CURSOR_APPLICATION,
         DEC_COLUMN_MODE,
         DEC_REVERSE_SCREEN,
@@ -129,6 +131,7 @@ XTERM_MODE_CAPABILITIES = frozenset(
         ANSI_INSERT,
         ANSI_SEND_RECEIVE,
         ANSI_NEWLINE,
+        DEC_ANSI,
         DEC_CURSOR_APPLICATION,
         XTERM_COLUMN_MODE,
         DEC_REVERSE_SCREEN,
@@ -235,6 +238,7 @@ URXVT_MODE_CAPABILITIES = frozenset(
     {
         ANSI_INSERT,
         ANSI_NEWLINE,
+        DEC_ANSI,
         DEC_CURSOR_APPLICATION,
         XTERM_COLUMN_MODE,
         DEC_REVERSE_SCREEN,

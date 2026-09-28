@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 from .. import constants
 from ..keyboard_protocol import ALIASES, KEYPAD_LEGACY, KEYPAD_NAMES, encode_key
 from ..keyboard_styles import STYLE_KEYMAPS, KeyboardStyle
-from ..keymap import DEC_FUNCTION_CODES, KEYPAD_POSITIONS, PF_KEYS, KeyMap, apply_modifier
+from ..keymap import DEC_FUNCTION_CODES, KEYPAD_POSITIONS, PF_KEYS, KeyMap, apply_modifier, vt52_keymap
 from ..keys import LEGACY_MODIFIERS, KeyEvent, KeyModifiers, legacy_modifiers, valid_text, xterm_modifier
 from ..options import DEC_KEYBOARD_LEDS, DEC_USER_KEYS, KITTY_KEYBOARD, XTERM_MODIFY_KEYS
 from .modes import ModeEffect
@@ -410,8 +410,9 @@ class KeyboardDevice(Device):
 
     @property
     def keymap(self) -> KeyMap:
-        """The active keymap: an xterm keyboard selection, else the model's own."""
-        return STYLE_KEYMAPS.get(self.style, self.board.model.keymap)
+        """The active keymap: an xterm keyboard selection, else the model's own; in VT52 mode, its VT52 form."""
+        keymap = STYLE_KEYMAPS.get(self.style, self.board.model.keymap)
+        return keymap if self.board.modes.ansi_mode else vt52_keymap(keymap)
 
     def _legacy_escape_prefix(self, mods: KeyModifiers) -> bool:
         """Whether legacy Alt/Meta policy prefixes this input with ESC."""

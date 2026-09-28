@@ -74,6 +74,12 @@ class CursorDevice(Device):
         if y is not None:
             self.y = max(0, min(y, self.board.height - 1))
 
+    def vt52_position(self, row: int, column: int) -> None:
+        """VT52 ESC Y — a row or column off the screen leaves that coordinate alone (xterm 407)."""
+        board = self.board
+        x = column if 0 <= column < board.width else self.display_x
+        self.set_position(x, row if 0 <= row < board.height else self.y)
+
     def move_to(self, x: int | None, y: int | None) -> None:
         """Apply a CUP/HVP/VPA move, honouring origin mode (DECOM).
 

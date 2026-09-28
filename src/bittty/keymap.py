@@ -113,6 +113,24 @@ def apply_modifier(sequence: str, modifier: int, *, keypad: bool = False, placem
     return f"{prefix}{params + ';' if params else ''}{modifier}{sequence[-1]}"
 
 
+def vt52_keymap(keymap: KeyMap) -> KeyMap:
+    """What a keymap sends in VT52 mode (xterm 407): ESC-letter cursor keys, F1-F4 and PF1-PF4
+    as ESC P-S, ESC ? keypad codes, and no modifiers; its other keys are unchanged.
+    """
+    keys = {key: ESC + final for key, final in ARROWS.items()} | {"home": ESC + "H", "end": ESC + "F"}
+    keys |= {f"{bank}{n}": ESC + final for bank in ("f", "pf") for n, final in enumerate("PQRS", 1)}
+    return replace(
+        keymap,
+        keys={**keymap.keys, **keys},
+        application=keys,
+        modified={},
+        modifiers=False,
+        modifiers_with_other_keys=False,
+        keypad_modifiers=False,
+        keypad={key: ESC + "?" + sequence[len(SS3) :] for key, sequence in keymap.keypad.items()},
+    )
+
+
 # The VT220 function-key codes for F1-F20; xterm continues from F21 as n + 21.
 DEC_FUNCTION_CODES = (11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 23, 24, 25, 26, 28, 29, 31, 32, 33, 34)
 DEC_EDITING = {"find": "1~", "insert": "2~", "delete": "3~", "select": "4~", "pageup": "5~", "pagedown": "6~"}

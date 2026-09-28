@@ -151,6 +151,10 @@ def _restore_delete(device: ModeDevice) -> None:
     device.board.keyboard.delete_mode = device.board.keyboard.saved_delete_mode
 
 
+def _decanm(device: ModeDevice, value: bool) -> None:
+    device.board.set_vt52(not value)
+
+
 def _dec_deccolm(device: ModeDevice, value: bool) -> None:
     device.board.blitter.set_column_mode(132 if value else 80)
 
@@ -307,6 +311,7 @@ MODE_SPECS: tuple[ModeSpec, ...] = (
     ModeSpec(mp.ANSI_NEWLINE, 20, False, "linefeed_newline_mode", queryable=True),
     # DEC private modes
     ModeSpec(mp.DEC_CURSOR_APPLICATION, 1, True, "cursor_application_mode", queryable=True),
+    ModeSpec(mp.DEC_ANSI, 2, True, "ansi_mode", default=True, queryable=True, apply_fn=_decanm),
     ModeSpec(mp.DEC_COLUMN_MODE, 3, True, apply_fn=_dec_deccolm, status_fn=_column_status),
     ModeSpec(mp.XTERM_COLUMN_MODE, 3, True, apply_fn=_xterm_deccolm, status_fn=_column_status),
     ModeSpec(mp.TMUX_COLUMN_MODE, 3, True, apply_fn=_tmux_deccolm, status_fn=_tmux_column_status),

@@ -347,6 +347,10 @@ DEC_TECHNICAL = {
 }
 
 # Character set designators
+# The VT52 graphics set, as xterm 407 renders it (ESC F in VT52 mode); the 3/, 5/ and 7/
+# fractions and the reserved codes have no character and show as blanks.
+VT52_GRAPHICS = dict(zip("_`abcdefghijklmnopqrstuvwxyz{|}~", "  ▮⅟   °±→…÷↓⎺⎺⎻⎻⎼⎼⎽⎽₀₁₂₃₄₅₆₇₈₉¶"))
+
 CHARSETS = {
     "A": UK_NATIONAL,  # UK
     "B": {},  # US ASCII (no changes)
@@ -371,6 +375,7 @@ CHARSETS = {
     "Y": ITALIAN_NATIONAL,  # Italian
     "Z": SPANISH_NATIONAL,  # Spanish
     "%6": PORTUGUESE_NATIONAL,  # Portuguese (multi-char designator)
+    "vt52": VT52_GRAPHICS,  # no designator: VT52 mode selects it with ESC F
 }
 
 # SCS designators whose recognition is controlled by DECNRCM on terminals

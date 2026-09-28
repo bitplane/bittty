@@ -87,6 +87,29 @@ CSI_TERM_RE = re.compile(r"(?P<csi_final>[\x40-\x7E])|(?P<cancel>[\x18\x1A])")
 # STRING terminators: allow ST or BEL for all string classes, plus cancel.
 STR_TERM_RE = re.compile(r"(?P<st>(?:\x1b\\|\x9C))|(?P<bel>\x07)|(?P<cancel>[\x18\x1A])")
 
+# VT52 mode: text, C0 controls, ESC Y row column, and ESC with one character. An ESC
+# (or ESC Y and its coordinates) cut off at the end of the buffer waits for more.
+VT52_RE = re.compile(
+    r"(?P<text>[^\x00-\x1f\x7f]+)|(?P<cup>\x1bY[\s\S]{2})|(?P<trail>\x1b(?:Y[\s\S]?)?\Z)"
+    r"|(?P<esc>\x1b[\s\S])|(?P<ctrl>[\x00-\x1f\x7f])"
+)
+_VT52_OPS = {
+    "A": Operation("CUU", (1,)),
+    "B": Operation("CUD", (1,)),
+    "C": Operation("CUF", (1,)),
+    "D": Operation("CUB", (1,)),
+    "F": Operation("VT52_GRAPHICS", (True,)),
+    "G": Operation("VT52_GRAPHICS", (False,)),
+    "H": Operation("CUP", (0, 0)),
+    "I": Operation("RI"),
+    "J": Operation("ED", (0,)),
+    "K": Operation("EL", (0,)),
+    "Z": Operation("VT52_IDENTIFY"),
+    "=": Operation("DECKPAM"),
+    ">": Operation("DECKPNM"),
+    "<": Operation("VT52_EXIT"),
+}
+
 PAIRED = {"osc", "dcs", "apc", "pm", "sos", "csi"}
 STANDALONES = {"ss2", "ss3", "esc", "esc_charset", "esc_charset2", "ctrl", "bel"}
 
@@ -174,6 +197,7 @@ class Parser:
         self._csi_memo: dict = {}
         # REP repeats only a graphic character printed immediately before it (xterm), so
         # every other token, even one that does nothing, makes the blitter forget it.
+        self.vt52 = False  # DECANM reset: the VT52 grammar replaces the ANSI one
         self._printed = getattr(sink, "blitter", None) if registry is not None else None
         if self._printed is None:
             self._printed = _Unprinted()
@@ -206,6 +230,10 @@ class Parser:
         printed = self._printed
 
         while True:
+            if self.vt52:
+                if self._feed_vt52():
+                    break
+                continue
             if self.mode is None:
                 # ---- GROUND: scan for next token
                 trail_start: int | None = None
@@ -248,6 +276,8 @@ class Parser:
                         entry[0](entry[1])
                         printed.last_printed_char = None
                         self.pos = end
+                        if self.vt52:  # DECANM reset: the rest is VT52
+                            break
                         continue
                     if kind == "crlf":
                         if crlf_h is not None:
@@ -291,6 +321,8 @@ class Parser:
 
                 # if we entered a mode, handle it now
                 if self.mode is None:
+                    if self.vt52:
+                        continue
                     break
 
             if self.mode == "csi":
@@ -350,6 +382,36 @@ class Parser:
             self.mode = None
             # loop to handle next token immediately
 
+        self._compact()
+
+    def _feed_vt52(self) -> bool:
+        """Scan in VT52 mode; True once the buffer is used up, False on leaving VT52 mode."""
+        for m in VT52_RE.finditer(self.buffer, self.pos):
+            kind, data = m.lastgroup, m.group()
+            if kind == "trail":
+                return True
+            self.pos = m.end()
+            if kind == "text":
+                if self._print_text is not None:
+                    self._print_text(data)
+                else:
+                    self.dispatch("print", data)
+                continue
+            if kind == "cup":
+                self.emit(Operation("VT52_CUP", (ord(data[2]) - 32, ord(data[3]) - 32), data))
+            elif kind == "esc":
+                operation = _VT52_OPS.get(data[1])
+                if operation is not None:
+                    self.emit(operation)
+            elif data not in "\x0e\x0f":  # no locking shifts in VT52 mode
+                self.dispatch("bel" if data == "\x07" else "ctrl", data)
+            self._printed.last_printed_char = None
+            if not self.vt52:
+                return False
+        self.pos = len(self.buffer)
+        return True
+
+    def _compact(self) -> None:
         # compact processed buffer
         if self.pos > 0:
             delta = self.pos

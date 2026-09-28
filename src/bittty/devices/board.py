@@ -394,6 +394,8 @@ class Board:
     def reset(self, hard: bool = True) -> None:
         """Reset the terminal. hard is RIS (full power-on); soft is DECSTR. Both leave the status line."""
         self.blitter.select_active_display(False)
+        if hard:
+            self.set_vt52(False)
         self.style.reset()
         self.modes.reset(hard=hard, reconcile=False)
         self.cursor.reset(hard=hard)
@@ -404,6 +406,23 @@ class Board:
         if hard:
             self.palette.reset()
         self.modes.reconcile_all()
+
+    def set_vt52(self, on: bool) -> None:
+        """Enter or leave VT52 mode (DECANM): its own parser, ASCII charsets and no autowrap.
+
+        The ANSI charsets and DECAWM wait for the return, as in xterm 407.
+        """
+        if on == self.parser.vt52:
+            return
+        self.parser.vt52 = on
+        self.modes.ansi_mode = not on
+        if on:
+            self._ansi_state = self.charset.save(), self.modes.auto_wrap
+            self.charset.restore((0, 2, ("B", "B", "B", "B")))
+            self.modes.auto_wrap = False
+        else:
+            charsets, self.modes.auto_wrap = self._ansi_state
+            self.charset.restore(charsets)
 
     def get_device(self, name: str):
         """Return a plugged-in device by slot name."""

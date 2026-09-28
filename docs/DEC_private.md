@@ -8,7 +8,7 @@ Related ANSI modes: KAM (`CSI 2 h/l`) and SRM (`CSI 12 h/l`) implement keyboard 
 | Mode | Origin | Description | Supported |
 | :--- | :--- | :--- | :--- |
 | 1 | DEC | DECCKM - Cursor Keys Mode | ✅ |
-| 2 | DEC | DECANM - ANSI/VT52 Mode | X |
+| 2 | DEC | DECANM - ANSI/VT52 Mode (xterm's fifteen VT52 controls and keys) | ✅ |
 | 3 | DEC | DECCOLM - Column | ✅ |
 | 4 | DEC | DECSCLM - Scrolling | X |
 | 5 | DEC | DECSCNM - Screen Mode (light or dark screen) | ✅ |

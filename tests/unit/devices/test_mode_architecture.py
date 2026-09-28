@@ -40,6 +40,7 @@ def test_hardware_profiles_expose_only_documented_implemented_modes():
         (False, 4),
         (False, 20),
         (True, 1),
+        (True, 2),
         (True, 3),
         (True, 5),
         (True, 6),

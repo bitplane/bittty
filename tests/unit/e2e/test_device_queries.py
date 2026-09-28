@@ -139,13 +139,13 @@ def test_decrqm_private_mode_query_alternate_screen():
     assert transport.flush_count == 2
 
 
-def test_decrqm_private_mode_query_unimplemented_ansi_mode():
-    """DECANM is not implemented, so it must not be advertised."""
+def test_decrqm_reports_ansi_mode_set():
+    """DECANM is set (ANSI) unless VT52 mode is on, where DECRQM cannot be sent at all."""
     _terminal, parser, transport = terminal_with_transport()
 
     parser.feed("\x1b[?2$p")
 
-    assert transport.data == ["\033[?2;0$y"]
+    assert transport.data == ["\033[?2;1$y"]
 
 
 def test_decrqm_ansi_mode_query_insert_mode():

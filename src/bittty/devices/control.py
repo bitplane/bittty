@@ -38,6 +38,11 @@ class ControlDevice(Device):
             "S7C1T": lambda op: setattr(self.board, "c1_eightbit", False),
             "S8C1T": lambda op: setattr(self.board, "c1_eightbit", True),
             "ANSI_LEVEL": lambda op: setattr(self.board, "ansi_conformance_level", op.args[0]),
+            # VT52 mode's own controls (the rest reuse the ANSI operations)
+            "VT52_CUP": lambda op: self.cursor.vt52_position(*op.args),
+            "VT52_IDENTIFY": lambda op: self.board.host.write("\x1b/Z", flush=True),  # a VT52 emulated by a VT100
+            "VT52_GRAPHICS": lambda op: self.charset.set_g0_charset("vt52" if op.args[0] else "B"),
+            "VT52_EXIT": lambda op: self.board.modes.set_mode(2, True, private=True),
         }
 
     def carriage_return_line_feed(self) -> None:
