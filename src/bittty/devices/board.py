@@ -399,8 +399,8 @@ class Board:
         self.blitter.reset(hard=hard)
         self.printer.reset(hard=hard)
         self.keyboard.reset(hard=hard)
+        self.charset.reset()
         if hard:
-            self.charset.reset()
             self.palette.reset()
         self.modes.reconcile_all()
 

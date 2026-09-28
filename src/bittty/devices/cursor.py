@@ -411,8 +411,11 @@ class CursorDevice(Device):
         board.charset.restore(saved.charsets)
 
     def reset(self, hard: bool = True) -> None:
-        """Home the cursor and clear saved state; a hard reset restores default tab stops."""
-        self.set_position(0, 0)
+        """Clear saved state; a hard reset also homes the cursor and restores default tab stops.
+
+        DECSTR leaves the cursor, and any pending wrap, where it is (xterm 407).
+        """
         self.saved = {False: SavedCursor(), True: SavedCursor()}
         if hard:
+            self.set_position(0, 0)
             self.tab_stops = set(range(8, self.board.width, 8))

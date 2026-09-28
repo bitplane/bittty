@@ -212,8 +212,8 @@ def test_mode_change_and_reset_discard_pending_assembly():
     board.parser.feed("e\x1b[?2027l\u0301")
     assert cells(board)[:2] == ["e", "\u0301"]
 
-    board.parser.feed("\x1b[?2027h\u0600\x1b[!pA")
-    assert cells(board)[0] == "A"
+    board.parser.feed("\x1b[?2027h\u0600\x1b[!pA")  # DECSTR leaves the cursor in column 2
+    assert cells(board)[:3] == ["e", "\u0301", "A"]
 
 
 # --- insert mode (IRM) under clustering --- #

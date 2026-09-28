@@ -633,7 +633,7 @@ class Blitter(Device):
         """Restore the full scroll region; a hard reset also clears both pages to primary."""
         self.reset_grapheme_state()
         self.set_scroll_region(0, self.board.height - 1)
-        self.reset_left_right_margins()
+        self.left_margin, self.right_margin = 0, self.board.width - 1  # a pending wrap survives DECSTR
         if not hard:
             return
         self.in_alt_screen = False

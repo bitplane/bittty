@@ -103,3 +103,21 @@ def test_decrc_restores_what_decsc_saved(sequence, report):
 def test_decrc_restores_a_pending_wrap():
     board = _run(FILL + "\x1b7\x1b[5;5H\x1b8Y")
     assert _lines(board, 2) == [" " * 74 + "abcdef", "Y"]
+
+
+# --- DECSTR leaves the cursor where it is --- #
+
+
+@pytest.mark.parametrize(
+    ("sequence", "report"),
+    [
+        ("\x1b[5;5H\x1b[!p", "5;5;1;@;@;@;0;2;@;BBBB"),
+        (
+            '\x1b[5;10r\x1b[?6h\x1b[1;31m\x1b(0\x1b[1"q\x1b[3;3H\x1b[!p',
+            "7;3;1;@;@;@;0;2;@;BBBB",
+        ),  # and resets the charsets
+        (FILL + "\x1b[!p", "1;80;1;@;@;H;0;2;@;BBBB"),  # with its pending wrap
+    ],
+)
+def test_decstr_keeps_the_cursor(sequence, report):
+    assert _deccir(_run(sequence)) == report
