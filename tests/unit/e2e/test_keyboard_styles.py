@@ -246,3 +246,50 @@ def test_stdio_translates_known_outer_keys_without_changing_outer_protocol():
     terminal.handle_input(b"\x1b[200~\x1bOP\x1b[A\x1b[201~")
     assert wire.text == "\x1bp\x1bA\x1bOP\x1b[A"
     assert terminal.host_keyboard_flags is None
+
+
+# XTGETTCAP key strings reported by xterm 407 with each keyboard selected
+# (this build omits HP and SCO), fed to the xterm profile.
+@pytest.mark.parametrize(
+    "mode,key,mods,expected",
+    [
+        (1051, "f1", KeyModifiers(0), "\x1b[224z"),  # kf1
+        (1051, "f6", KeyModifiers(0), "\x1b[229z"),  # kf6
+        (1051, "f9", KeyModifiers(0), "\x1b[232z"),  # kf9
+        (1051, "f13", KeyModifiers(0), "\x1b[194z"),  # kf13
+        (1051, "up", KeyModifiers(0), "\x1bOA"),  # kcuu1
+        (1051, "home", KeyModifiers(0), "\x1b[214z"),  # khome
+        (1051, "end", KeyModifiers(0), "\x1b[220z"),  # kend
+        (1051, "insert", KeyModifiers(0), "\x1b[2z"),  # kich1
+        (1051, "pageup", KeyModifiers(0), "\x1b[216z"),  # kpp
+        (1051, "pagedown", KeyModifiers(0), "\x1b[222z"),  # knp
+        (1051, "up", KeyModifiers.SHIFT, "\x1b[1;2A"),  # kUP
+        (1051, "home", KeyModifiers.SHIFT, "\x1b[214;2z"),  # kHOM
+        (1060, "f1", KeyModifiers(0), "\x1b[11~"),  # kf1
+        (1060, "f6", KeyModifiers(0), "\x1b[17~"),  # kf6
+        (1060, "f9", KeyModifiers(0), "\x1b[20~"),  # kf9
+        (1060, "f13", KeyModifiers(0), "\x1b[25~"),  # kf13
+        (1060, "up", KeyModifiers(0), "\x1b[A"),  # kcuu1
+        (1060, "home", KeyModifiers(0), "\x1b[H"),  # khome
+        (1060, "end", KeyModifiers(0), "\x1b[F"),  # kend
+        (1060, "insert", KeyModifiers(0), "\x1b[2~"),  # kich1
+        (1060, "pageup", KeyModifiers(0), "\x1b[5~"),  # kpp
+        (1060, "pagedown", KeyModifiers(0), "\x1b[6~"),  # knp
+        (1060, "up", KeyModifiers.SHIFT, "\x1b[A"),  # kUP
+        (1060, "home", KeyModifiers.SHIFT, "\x1b[H"),  # kHOM
+        (1061, "f1", KeyModifiers(0), "\x1bOP"),  # kf1
+        (1061, "f6", KeyModifiers(0), "\x1b[17~"),  # kf6
+        (1061, "f9", KeyModifiers(0), "\x1b[20~"),  # kf9
+        (1061, "f13", KeyModifiers(0), "\x1b[25~"),  # kf13
+        (1061, "up", KeyModifiers(0), "\x1b[A"),  # kcuu1
+        (1061, "home", KeyModifiers(0), "\x1b[1~"),  # khome
+        (1061, "end", KeyModifiers(0), "\x1b[4~"),  # kend
+        (1061, "insert", KeyModifiers(0), "\x1b[2~"),  # kich1
+        (1061, "pageup", KeyModifiers(0), "\x1b[5~"),  # kpp
+        (1061, "pagedown", KeyModifiers(0), "\x1b[6~"),  # knp
+    ],
+)
+def test_xterm_reports_the_same_key_strings(mode, key, mods, expected):
+    board, wire = driver(mode, XTERM)
+    board.input_key_event(KeyEvent(key, mods))
+    assert wire.text == expected

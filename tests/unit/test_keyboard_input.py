@@ -104,3 +104,10 @@ def test_interrupted_sequence_does_not_swallow_later_key_reports():
     term, connection = terminal()
     term.handle_input("\x1b[97;\x1b[98;;98u")
     assert "".join(connection.data) == "\x1b[97;\x1b[98;;98u"
+
+
+def test_legacy_keys_from_tmux_reach_a_kitty_child():
+    """tmux 3.6 (send-keys a Up F3 C-a) accepts no outer flags and delivers these bytes."""
+    term, connection = terminal(flags=None)
+    term.handle_input(b"a\x1b[A\x1bOR\x01")
+    assert "".join(connection.data) == "\x1b[0;;97u\x1b[A\x1b[13~\x01"
