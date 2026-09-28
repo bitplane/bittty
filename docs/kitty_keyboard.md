@@ -41,6 +41,7 @@ while eight-bit input (1034) is set, they set the eighth bit and send that chara
 (UTF-8 on the wire, as xterm does in a UTF-8 locale), and with neither they are dropped.
 Alt follows xterm's `altIsNotMeta` behaviour. The xterm profile powers on with 1034, as
 xterm does, so Alt-a sends `á`; the bittty profile powers on with 1036 and 1039 (ESC).
+The Linux console (`VC_META`) and kitty always send ESC; their hosts cannot change it.
 
 DECARM (mode 8, bittty and DEC hardware profiles) filters explicit repeat events;
 legacy bytes cannot distinguish repeats. Repeat timing and historical per-key

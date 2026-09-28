@@ -4,7 +4,7 @@ import pytest
 
 from bittty import Board, KeyEvent, KeyModifiers
 from bittty.connections import MemoryConnection
-from bittty.model import BITTTY, LINUX, SCREEN, TMUX, VT100, VT220, XTERM
+from bittty.model import BITTTY, KITTY, LINUX, SCREEN, TMUX, VT100, VT220, XTERM
 
 M = KeyModifiers
 
@@ -280,3 +280,20 @@ def test_bittty_alt_and_meta_send_escape(mods):
     board.feed_host_data("\x1bc")
     board.input_key_event(KeyEvent("a", mods, text="a"))
     assert wire.text == "\x1ba\x1ba"
+
+
+@pytest.mark.parametrize(
+    "mods, expected",
+    [(M.ALT, "\x1ba"), (M.ALT | M.SHIFT, "\x1bA"), (M.ALT | M.CTRL, "\x1b\x01")],
+)
+@pytest.mark.parametrize("model", [LINUX, KITTY], ids=["linux", "kitty"])
+def test_alt_text_keys_send_escape_on_linux_and_kitty(model, mods, expected):
+    """Linux keyboard.c powers on with VC_META (k_meta: ESC, key); kitty's legacy
+    text keys "output the byte for ESC" when Alt is held. Neither can turn it off
+    with a private mode, and RIS keeps it."""
+    board, wire = driver(model)
+    text = "A" if mods & M.SHIFT else "a"
+    board.input_key_event(KeyEvent("a", mods, text=text, shifted_key="A"))
+    board.feed_host_data("\x1bc\x1b[?1036l\x1b[?1039l")
+    board.input_key_event(KeyEvent("a", mods, text=text, shifted_key="A"))
+    assert wire.text == expected * 2

@@ -80,7 +80,8 @@ class Model:
     # DEC hardware uses 0 for a valid DECRQSS request; modern emulators use 1.
     decrqss_valid_is_one: bool = True
     udk_capacity: int = 4096  # byte budget for downloaded function-key strings
-    # Private modes this terminal sets at power-on (and RIS), beyond each mode's own default.
+    # Private-mode registers this terminal sets at power-on (and RIS), beyond each mode's own
+    # default. A register outside the mode repertoire is fixed: the host cannot change it.
     power_on_modes: frozenset[int] = frozenset()
 
     @property
@@ -184,6 +185,7 @@ LINUX = Model(
     color_depth="256",
     palette=VGA_PALETTE,
     keymap=LINUX_KEYMAP,
+    power_on_modes=frozenset({1036, 1039}),  # keyboard.c KBD_DEFMODE sets VC_META: Alt sends ESC
 )
 
 # GNU screen — a VT100+AVO emulator; keymap and colours from terminfo (screen-256color).
@@ -248,6 +250,7 @@ KITTY = Model(
     color_depth="truecolor",
     keymap=XTERM_KEYMAP,
     control_capabilities=frozenset({KITTY_KEYBOARD}),
+    power_on_modes=frozenset({1036, 1039}),  # legacy text keys: Alt sends ESC
 )
 
 DEFAULT = BITTTY
