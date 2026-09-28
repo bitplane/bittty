@@ -436,13 +436,14 @@ class Blitter(Device):
         self.board.cursor.move_to(0, 0)
 
     def insert_lines(self, count: int) -> None:
-        """Insert blank lines at cursor position."""
+        """Insert blank lines at the cursor's row, then return to the left margin (as xterm does)."""
         cursor = self.board.cursor
         cursor.cancel_pending_wrap()
         if count <= 0 or not (
             self.scroll_top <= cursor.y <= self.scroll_bottom and self.left_margin <= cursor.x <= self.right_margin
         ):
             return
+        cursor.x = self.left_margin
 
         if self.left_margin == 0 and self.right_margin == self.board.width - 1 and self.board.style.current.bg is None:
             self.current_page.scroll_region_down(cursor.y, self.scroll_bottom, count)
@@ -457,13 +458,14 @@ class Blitter(Device):
             )
 
     def delete_lines(self, count: int) -> None:
-        """Delete lines at cursor position."""
+        """Delete lines at the cursor's row, then return to the left margin (as xterm does)."""
         cursor = self.board.cursor
         cursor.cancel_pending_wrap()
         if count <= 0 or not (
             self.scroll_top <= cursor.y <= self.scroll_bottom and self.left_margin <= cursor.x <= self.right_margin
         ):
             return
+        cursor.x = self.left_margin
 
         if self.left_margin == 0 and self.right_margin == self.board.width - 1 and self.board.style.current.bg is None:
             self.current_page.scroll_region_up(cursor.y, self.scroll_bottom, count)
