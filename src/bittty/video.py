@@ -713,6 +713,65 @@ class Video:
         self.row_gen = [0] * height
         self._touch_page()
 
+    def reflow(self, width: int, height: int, cursor: tuple[int, int]) -> tuple[int, int]:
+        """Re-wrap the page's soft-wrapped lines to a new width; return where the cursor goes.
+
+        A logical line is a run of rows joined by their wrap flags. Each is cut into rows of the
+        new width, never splitting a wide character, and every row but its last wraps. Trailing
+        blanks are dropped, except up to the cursor. Rows past the new height go: blank rows below
+        the cursor first, then rows at the top (no further than the cursor's), then at the bottom.
+        """
+        cursor_x, cursor_y = cursor
+        blank = self._empty_cell
+        lines: list[list[Cell]] = []
+        cells: list[Cell] = []
+        cursor_at: tuple[int, int] | None = None  # (logical line, cell offset)
+        for y in range(self.height):
+            if y == cursor_y:
+                cursor_at = (len(lines), len(cells) + cursor_x)
+            cells.extend(self.grid[y])
+            if not self.wrapped_lines[y] or y == self.height - 1:
+                keep = cursor_at[1] + 1 if cursor_at and cursor_at[0] == len(lines) else 0
+                while len(cells) > keep and cells[-1] == blank:
+                    cells.pop()
+                lines.append(cells)
+                cells = []
+
+        rows: list[list[Cell]] = []
+        wrapped: list[bool] = []
+        new_cursor = (0, 0)  # (row, column)
+        for index, line in enumerate(lines):
+            start = len(rows)
+            row: list[Cell] = []
+            for offset, cell in enumerate(line):
+                if cell[1] == CONTINUATION and row:  # a wide glyph's tail stays with its head
+                    row.append(cell)
+                else:
+                    size = 2 if line[offset + 1 : offset + 2] and line[offset + 1][1] == CONTINUATION else 1
+                    if len(row) + size > width:
+                        rows.append(row + [blank] * (width - len(row)))
+                        row = []
+                    row.append(cell)
+                if (index, offset) == cursor_at:
+                    new_cursor = (len(rows), len(row) - 1)
+            rows.append(row + [blank] * (width - len(row)))
+            wrapped += [True] * (len(rows) - start - 1) + [False]
+
+        # Too many rows: blank ones below the cursor go first, then rows at the top.
+        while len(rows) > height and len(rows) - 1 > new_cursor[0] and all(cell == blank for cell in rows[-1]):
+            rows.pop()
+            wrapped.pop()
+        top = max(0, min(len(rows) - height, new_cursor[0]))
+        rows, wrapped = rows[top : top + height], wrapped[top : top + height]
+        rows += [self._create_empty_row(width) for _ in range(height - len(rows))]
+        wrapped += [False] * (height - len(wrapped))
+        self.grid, self.wrapped_lines = rows, wrapped
+        self.line_attributes = [constants.LINE_SINGLE] * height
+        self.width, self.height = width, height
+        self.row_gen = [0] * height
+        self._touch_page()
+        return min(new_cursor[1], width - 1), min(new_cursor[0] - top, height - 1)
+
     def link_extent(self, x: int, y: int) -> tuple | None:
         """The contiguous same-link run containing (x, y) on its row.
 

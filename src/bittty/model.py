@@ -131,6 +131,8 @@ class Model:
     fixed_modes: frozenset[tuple[bool, int, int]] = frozenset()
     # Minutes without activity before the screen blanks at power-on; 0 never (the VT510's CRT saver).
     blank_timeout: int = 0
+    # Whether resizing re-wraps soft-wrapped lines (VTE and kitty always do).
+    reflows: bool = False
     # Page memory as (lines per page, pages) pairs; a page size not listed has one page (DECSLPP).
     page_memory: tuple[tuple[int, int], ...] = ()
 
@@ -217,7 +219,7 @@ BITTTY = Model(
             DEC_EXTENDED_CPR,
         }
     ),
-    power_on_modes=frozenset({1036, 1039}),  # Alt and Meta send ESC
+    power_on_modes=frozenset({1036, 1039, 2028}),  # Alt and Meta send ESC; text reflow
     fixed_modes=XTERM_READ_ONLY_RESOURCES,
     macro_space=6144,
     upss="%5",
@@ -418,6 +420,7 @@ GNOME = Model(
     mode_capabilities=VTE_MODE_CAPABILITIES,
     color_depth="truecolor",
     keymap=XTERM_KEYMAP,
+    reflows=True,
 )
 
 # kitty — live-verified (TERM=xterm-kitty). DA2 firmware field 4000 is the kitty version
@@ -432,6 +435,7 @@ KITTY = Model(
     color_depth="truecolor",
     keymap=XTERM_KEYMAP,
     control_capabilities=EDITING | {KITTY_KEYBOARD},
+    reflows=True,
     power_on_modes=frozenset({1036, 1039}),  # legacy text keys: Alt sends ESC
 )
 

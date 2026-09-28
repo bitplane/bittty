@@ -14,14 +14,14 @@ def test_output_waits_for_both_pages_and_pty_resize(monkeypatch, direct):
     board = Board(width=8, height=4)
     board.pty = MemoryConnection()
     entered, release, attempted, completed = (Event() for _ in range(4))
-    resize_page = board.blitter.primary_page.resize
+    reflow_page = board.blitter.primary_page.reflow  # bittty reflows the primary page
 
-    def paused_resize(width, height):
+    def paused_reflow(width, height, cursor):
         entered.set()  # Board dimensions changed, but pages have not.
         assert release.wait(2)
-        resize_page(width, height)
+        return reflow_page(width, height, cursor)
 
-    monkeypatch.setattr(board.blitter.primary_page, "resize", paused_resize)
+    monkeypatch.setattr(board.blitter.primary_page, "reflow", paused_reflow)
 
     def output():
         attempted.set()

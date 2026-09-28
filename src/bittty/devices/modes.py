@@ -655,6 +655,7 @@ MODE_SPECS: tuple[ModeSpec, ...] = (
 
 
 MODE_SPECS += (
+    ModeSpec(mp.CONTOUR_TEXT_REFLOW, 2028, True, "text_reflow", queryable=True),
     ModeSpec(mp.XTERM_READLINE_QUOTING, 2005, True, "readline_quoting", queryable=True),
     ModeSpec(mp.XTERM_READLINE_NEWLINE, 2006, True, "readline_newline", queryable=True),
     _keyboard_style(mp.XTERM_SUN_KEYS, 1051, KeyboardStyle.SUN),

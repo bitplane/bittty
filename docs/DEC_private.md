@@ -151,7 +151,7 @@ Related ANSI modes: KAM (`CSI 2 h/l`) and SRM (`CSI 12 h/l`) implement keyboard 
 | 2026 | Contour | Synchronized Output (frontend event) | ✅ |
 | 2027 | mintty | Rewrap on resize (deprecated) | X |
 | 2027 | Contour | Grapheme cluster processing (stdio destination-gated) | ✅ |
-| 2028 | Contour | Text reflow | X |
+| 2028 | Contour | Text reflow (bittty, on by default; gnome and kitty always reflow) | ✅ |
 | 2029 | Contour | Passive Mouse Tracking | X |
 | 2030 | Contour | Report grid cell selection | X |
 | 2031 | Contour | Color palette updates | X |

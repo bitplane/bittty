@@ -87,6 +87,7 @@ XTERM_SYNC_OUTPUT = "xterm.sync-output"
 UNICODE_GRAPHEME_CLUSTERING = "unicode.grapheme-clustering"
 UNICODE_AMBIGUOUS_WIDTH = "unicode.ambiguous-width"
 INBAND_RESIZE = "bittty.inband-resize"
+CONTOUR_TEXT_REFLOW = "contour.text-reflow"
 DEC_NUMLOCK = "dec.numlock"
 DEC_CAPSLOCK = "dec.capslock"
 DEC_LED_HOST_INDICATOR = "dec.led-host-indicator"
@@ -379,6 +380,7 @@ BITTTY_MODE_CAPABILITIES = XTERM_MODE_CAPABILITIES - {XTERM_READLINE_QUOTING, XT
         XTERM_SCO_KEYS,
         DEC_NO_CLEAR_COLUMN,
         DEC_RIGHT_TO_LEFT,
+        CONTOUR_TEXT_REFLOW,
         DEC_AUTO_REPEAT,
         MINTTY_APPLICATION_ESCAPE,
         MINTTY_ESCAPE_FS,

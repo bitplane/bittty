@@ -61,6 +61,12 @@ type (the chrome hears `on_status_line`), and DECSASD sends writes there as to a
 display, where only column positions apply and nothing scrolls. `blitter.main_page` stays on
 the main display for the chrome, and `capture_status_line()` reads the status line.
 
+On a width change, a terminal that reflows (gnome and kitty always; bittty under mode 2028,
+on by default) re-wraps page memory's soft-wrapped lines to the new width, never splitting a
+wide character, and the cursor keeps its place in its line. Rows that no longer fit go from
+below the cursor if blank, then from the top. The alternate screen is cut, as every page is
+on terminals that do not reflow.
+
 The terminal frontend reports its measured ambiguous-character width through `TerminalCaps`;
 mode 8840 may override that baseline for future writes.
 

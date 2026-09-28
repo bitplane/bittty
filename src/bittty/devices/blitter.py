@@ -354,11 +354,21 @@ class Blitter(Device):
         """Resize terminal dimensions and the video pages (leaving the status line first)."""
         self.select_active_display(False)
         self.reset_grapheme_state()
-        self.board.width = width
-        self.board.height = height
+        board, cursor = self.board, self.board.cursor
+        reflow = width != board.width and (board.model.reflows or board.modes.text_reflow)
+        here = (cursor.display_x, cursor.y)  # before the new width clamps it
+        board.width = width
+        board.height = height
 
+        # Page memory re-wraps its soft-wrapped lines on a terminal that reflows; the
+        # alternate screen, like every page elsewhere, is cut at the new width.
         for page in self.videos:
-            page.resize(width, height)
+            if not reflow or page is self.alt_page:
+                page.resize(width, height)
+            elif page is self.current_page:
+                cursor.set_position(*page.reflow(width, height, here))
+            else:
+                page.reflow(width, height, (0, 0))
         self._fit_page_memory()
         self.current_page = self.alt_page if self.in_alt_screen else self.primary_page
         self.status_page.resize(width, 1)

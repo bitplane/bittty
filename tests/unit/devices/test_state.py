@@ -1,9 +1,11 @@
+from bittty.model import XTERM
 from bittty import Board
 from bittty.constants import DEFAULT_TERMINAL_WIDTH, DEFAULT_TERMINAL_HEIGHT, DECAWM_AUTOWRAP, IRM_INSERT_REPLACE
 
 
 def test_resize():
-    board = Board(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT)
+    """A terminal that cuts lines clamps the cursor (bittty reflows: see test_reflow)."""
+    board = Board(width=DEFAULT_TERMINAL_WIDTH, height=DEFAULT_TERMINAL_HEIGHT, model=XTERM)
     board.cursor.x = 70
     board.cursor.y = 20
 
