@@ -1,6 +1,6 @@
 """Video memory: the 2D cell grid the blitter writes and terminals render.
 
-A Board has two pages of it (primary and alternate).
+A Board has pages of it: page memory for the primary screen, and the alternate screen.
 """
 
 from __future__ import annotations

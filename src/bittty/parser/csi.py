@@ -176,6 +176,9 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
     if final_char == "q" and ">" in intermediates:  # XTVERSION - report terminal name/version
         return Operation("XTVERSION", (param(params, 0, 0),), raw_csi_data)
 
+    if final_char == "v" and '"' in intermediates:  # DECRQDE - Request Displayed Extent
+        return Operation("DECRQDE", (), raw_csi_data)
+
     if final_char == "p" and '"' in intermediates:  # DECSCL - Set Conformance Level
         return Operation("DECSCL", (tuple(params),), raw_csi_data)
 
@@ -264,6 +267,12 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
             return Operation("SL", (count,), raw_csi_data)
         if final_char == "A":  # SR - Scroll Right
             return Operation("SR", (count,), raw_csi_data)
+        if final_char == "P":  # PPA - Page Position Absolute
+            return Operation("PPA", (count,), raw_csi_data)
+        if final_char == "Q":  # PPR - Page Position Relative
+            return Operation("PPR", (count,), raw_csi_data)
+        if final_char == "R":  # PPB - Page Position Backward
+            return Operation("PPB", (count,), raw_csi_data)
         if final_char == "t":  # DECSWBV - Set Warning Bell Volume
             return Operation("DECSWBV", (volume,), raw_csi_data)
         if final_char == "u":  # DECSMBV - Set Margin Bell Volume
@@ -415,6 +424,12 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
     if final_char == "i":  # MC - Media Copy (printer control), DEC private with ?
         ps = param(params, 0, 0)
         return Operation("DECMC" if "?" in intermediates else "MC", (ps,), raw_csi_data)
+
+    if final_char == "U":  # NP - Next Page
+        return Operation("NP", (param_count(params),), raw_csi_data)
+
+    if final_char == "V":  # PP - Preceding Page
+        return Operation("PP", (param_count(params),), raw_csi_data)
 
     if final_char == "W":  # CTC / DECST8C - Cursor Tabulation Control
         if "?" in intermediates:  # DECST8C - reset to a tab stop every 8 columns

@@ -35,6 +35,7 @@ from .mode_profiles import (
     XTERM_MODE_CAPABILITIES,
 )
 from .options import (
+    DEC_DISPLAYED_EXTENT,
     DEC_KEYBOARD_LEDS,
     DEC_PRINTER_PORT,
     DEC_STATUS_LINE,
@@ -90,6 +91,8 @@ class Model:
     status_line_type: int = 0
     # Bytes of macro memory (DECDMAC); None: no macro reports at all. xterm answers with none.
     macro_space: int | None = None
+    # Page memory as (lines per page, pages) pairs; a page size not listed has one page (DECSLPP).
+    page_memory: tuple[tuple[int, int], ...] = ()
 
     @property
     def capabilities(self) -> frozenset[str]:
@@ -104,6 +107,10 @@ class Model:
         if not self.options:
             return self.control_capabilities
         return self.control_capabilities.union(*(option.provides for option in self.options))
+
+    def pages_for(self, lines: int) -> int:
+        """How many pages of this height page memory holds."""
+        return dict(self.page_memory).get(lines, 1)
 
     @property
     def printer_capabilities(self) -> PrinterCapabilities:
@@ -121,7 +128,9 @@ XTERM = Model(
     da2_response="\033[>1;10;0c",
     mode_capabilities=XTERM_MODE_CAPABILITIES,
     options=frozenset({XTERM_PRINTER_PIPE, LOCATOR_PORT}),
-    control_capabilities=frozenset({DEC_KEYBOARD_LEDS, DEC_USER_KEYS, XTERM_MODIFY_KEYS, XTERM_EXTRAS}),
+    control_capabilities=frozenset(
+        {DEC_KEYBOARD_LEDS, DEC_USER_KEYS, XTERM_MODIFY_KEYS, XTERM_EXTRAS, DEC_DISPLAYED_EXTENT}
+    ),
     power_on_modes=frozenset({1034}),  # eightBitInput
     macro_space=0,  # xterm 407 reports no macro space
 )
@@ -135,7 +144,15 @@ BITTTY = Model(
     keymap=BITTTY_KEYMAP,
     options=frozenset({VT510_PRINTER_PORT, LOCATOR_PORT}),
     control_capabilities=frozenset(
-        {KITTY_KEYBOARD, DEC_KEYBOARD_LEDS, DEC_USER_KEYS, XTERM_MODIFY_KEYS, DEC_STATUS_LINE, XTERM_EXTRAS}
+        {
+            KITTY_KEYBOARD,
+            DEC_KEYBOARD_LEDS,
+            DEC_USER_KEYS,
+            XTERM_MODIFY_KEYS,
+            DEC_STATUS_LINE,
+            XTERM_EXTRAS,
+            DEC_DISPLAYED_EXTENT,
+        }
     ),
     power_on_modes=frozenset({1036, 1039}),  # Alt and Meta send ESC
     macro_space=6144,
@@ -182,9 +199,10 @@ VT510 = Model(
     color_depth="monochrome",
     keymap=VT220_KEYMAP,
     options=frozenset({VT510_PRINTER_PORT}),
-    control_capabilities=frozenset({DEC_KEYBOARD_LEDS, DEC_USER_KEYS, DEC_STATUS_LINE}),
+    control_capabilities=frozenset({DEC_KEYBOARD_LEDS, DEC_USER_KEYS, DEC_STATUS_LINE, DEC_DISPLAYED_EXTENT}),
     decrqss_valid_is_one=False,
     status_line_type=1,  # the indicator, the Set-Up default
+    page_memory=((24, 3), (25, 2), (36, 2)),  # DECSLPP; any other page size is a single page
     macro_space=6144,  # "6 Kbytes of memory available for the storage of macros"
 )
 

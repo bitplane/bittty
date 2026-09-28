@@ -50,6 +50,12 @@ alternate). A width-2 character has an empty continuation cell. The board writes
 the blitter; terminals read it on their own cadence (pull) via `capture_pane()`,
 `capture_text()`, or `get_line()`.
 
+Models with page memory (the VT510: 3 pages of 24 lines, 2 of 25 or 36, else one) keep the
+primary screen as one of several pages. NP/PP/PPA/PPR/PPB move the cursor between them, and
+DECPCCM decides whether the display follows: while it is reset, `blitter.main_page` stays on
+the displayed page and `blitter.cursor_on_display` is false, so the chrome hides the cursor.
+DECCRA and DECRQCRA name pages; DECCIR and DECRQDE report them.
+
 Models with a DEC status line (VT510, bittty) add a one-row status page. DECSSDT picks its
 type (the chrome hears `on_status_line`), and DECSASD sends writes there as to a one-row
 display, where only column positions apply and nothing scrolls. `blitter.main_page` stays on

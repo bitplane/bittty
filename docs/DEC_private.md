@@ -68,7 +68,7 @@ Related ANSI modes: KAM (`CSI 2 h/l`) and SRM (`CSI 12 h/l`) implement keyboard 
 | 59 | DEC | DECKKDM - Kanji/Katakana Display Mode | X |
 | 60 | DEC | DECHCCM - Horizontal Cursor Coupling | X |
 | 61 | DEC | DECVCCM - Vertical Cursor Coupling Mode | X |
-| 64 | DEC | DECPCCM - Page Cursor Coupling Mode | X |
+| 64 | DEC | DECPCCM - Page Cursor Coupling Mode | ✅ |
 | 65 | DEC | DECBCMM - Business Color Matching Mode | X |
 | 66 | DEC | DECNKM - Numeric Keypad Mode | ✅ |
 | 67 | DEC | DECBKM - Backarrow Key Mode | ✅ |

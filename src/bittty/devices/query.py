@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 from .. import constants
 from ..operations import Operation
-from ..options import DEC_STATUS_LINE, XTERM_EXTRAS
+from ..options import DEC_DISPLAYED_EXTENT, DEC_STATUS_LINE, XTERM_EXTRAS
 from ..present import (
     ClipboardChanged,
     ConsoleRequest,
@@ -93,6 +93,8 @@ class QueryDevice(Device):
         if XTERM_EXTRAS in board.model.provides:
             self.handlers["XTREPORTSGR"] = self.report_rendition
             self._status_reporters[">t"] = lambda: ";".join(str(int(mode)) for mode in board.title.modes)
+        if DEC_DISPLAYED_EXTENT in board.model.provides:
+            self.handlers["DECRQDE"] = self.report_displayed_extent
         if DEC_STATUS_LINE in board.model.provides:
             self._status_reporters["$~"] = lambda: str(blitter.status_type)  # DECSSDT
             self._status_reporters["$}"] = lambda: str(int(blitter.status_active))  # DECSASD
@@ -204,6 +206,12 @@ class QueryDevice(Device):
         base = {"block": 1, "underline": 3, "bar": 5}.get(self.board.cursor.shape, 1)
         return str(base if self.board.modes.cursor_blinking else base + 1)
 
+    def report_displayed_extent(self, operation: Operation) -> None:
+        """DECRQDE — the display's size, its top-left in page memory (always 1;1: no panning) and page."""
+        board = self.board
+        page = 1 if board.blitter.in_alt_screen else board.blitter.shown_page + 1
+        board.host.write(f'\x1b[{board.height};{board.width};1;1;{page}"w', flush=True)
+
     def report_presentation_state(self, operation: Operation) -> None:
         """DECRQPSR — cursor information (1, DECCIR) or tab stops (2, DECTABSR); anything else is ignored."""
         ps = operation.args[0]
@@ -221,16 +229,18 @@ class QueryDevice(Device):
             board.modes.origin_mode, charset.single_shift == 2, charset.single_shift == 3, cursor.wrap_pending
         )
         scss = "@"  # every designated set is a 94-character set: the 96-set SCS forms aren't parsed
-        position = f"{cursor.y + 1};{cursor.display_x + 1};1"
+        page = 1 if board.blitter.in_alt_screen else board.blitter.page + 1
+        position = f"{cursor.y + 1};{cursor.display_x + 1};{page}"
         shifts = f"{charset.current_charset};{charset.gr}"
         return f"{position};{srend};{satt};{sflag};{shifts};{scss};{''.join(charset.charset_array)}"
 
     def restore_cursor_information(self, operation: Operation) -> None:
         """DECRSPS 1 — restore a DECCIR report; one placing the cursor off the screen is rejected whole."""
-        row, column, srend, satt, sflag, gl, gr, designators = operation.args
+        row, column, page, srend, satt, sflag, gl, gr, designators = operation.args
         board, cursor, charset = self.board, self.board.cursor, self.board.charset
         if not (0 < row <= board.height and 0 < column <= board.width):
             return
+        board.blitter.move_to_page(page - 1)
         board.modes.set_mode(6, bool(sflag & 1), private=True)  # DECOM first: setting it homes the cursor
         cursor.set_position(column - 1, row - 1)
         if sflag & 8:
@@ -396,7 +406,7 @@ class QueryDevice(Device):
         left = max(0, min(at(3, 1) - 1, width - 1))
         bottom = max(top, min(at(4, height) - 1, height - 1))
         right = max(left, min(at(5, width) - 1, width - 1))
-        page = self.board.blitter.current_page
+        page = self.board.blitter.page_at(at(1, 1))
         total = 0
         for y in range(top, bottom + 1):
             for x in range(left, right + 1):

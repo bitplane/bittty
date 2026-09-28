@@ -42,8 +42,8 @@ chrome a human looks at, and two full-duplex ports connect the board to its outs
 
 **Video** (`src/bittty/video.py`)
 - Video memory: a 2D cell grid, each cell a (Style, char) pair. The board writes it through
-  the blitter; terminals read it (pull) via `capture_pane()`/`get_line()`. Two pages:
-  primary and alternate
+  the blitter; terminals read it (pull) via `capture_pane()`/`get_line()`. Pages: page
+  memory for the primary screen (several on the VT510), and the alternate screen
 
 **Parser** (`src/bittty/parser/core.py`)
 - State machine for processing ANSI escape sequences (C0, CSI, OSC, DCS, DEC private modes)

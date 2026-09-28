@@ -27,7 +27,11 @@ class Blitter(Device):
 
     def __init__(self, board: Board) -> None:
         self.board = board
-        self.primary_page = Video(board.width, board.height, board.width_policy)
+        # Page memory: the primary screen is one of these pages. `page` has the cursor and
+        # `shown_page` is on display; they part only while DECPCCM is reset.
+        self.pages = [Video(board.width, board.height, board.width_policy)]
+        self.page = self.shown_page = 0
+        self._fit_page_memory()
         self.alt_page = Video(board.width, board.height, board.width_policy)
         self.current_page = self.primary_page
         self.in_alt_screen = False
@@ -80,16 +84,82 @@ class Blitter(Device):
             "DECDWL": lambda op: self.set_line_attribute(constants.LINE_DOUBLE_WIDTH),
             "DECSWL": lambda op: self.set_line_attribute(constants.LINE_SINGLE),
         }
+        if board.model.page_memory:
+            self.handlers.update(
+                {
+                    "NP": lambda op: self.move_to_page(self.page + op.args[0], home=True),
+                    "PP": lambda op: self.move_to_page(self.page - op.args[0], home=True),
+                    "PPA": lambda op: self.move_to_page(op.args[0] - 1),
+                    "PPR": lambda op: self.move_to_page(self.page + op.args[0]),
+                    "PPB": lambda op: self.move_to_page(self.page - op.args[0]),
+                }
+            )
         if DEC_STATUS_LINE in board.model.provides:
             self.handlers["DECSSDT"] = lambda op: self.select_status_type(op.args[0])
             self.handlers["DECSASD"] = lambda op: self.select_active_display(op.args[0] == 1)
 
-    # --- status line --- #
+    # --- page memory --- #
+
+    @property
+    def primary_page(self) -> Video:
+        """The primary screen: the page of page memory the cursor is on."""
+        return self.pages[self.page]
+
+    @property
+    def videos(self) -> tuple[Video, ...]:
+        """Every full-screen page: page memory and the alternate screen."""
+        return (*self.pages, self.alt_page)
 
     @property
     def main_page(self) -> Video:
         """The page the main display shows, even while writes go to the status line."""
-        return self._main[0] if self.status_active else self.current_page
+        return self.alt_page if self.in_alt_screen else self.pages[self.shown_page]
+
+    @property
+    def cursor_on_display(self) -> bool:
+        """Whether the cursor is on the displayed page, rather than the status line or another page."""
+        return not self.status_active and self.current_page is self.main_page
+
+    def _fit_page_memory(self) -> None:
+        """Hold as many pages as the model's memory has at this page size, keeping those that fit."""
+        board = self.board
+        count = board.model.pages_for(board.height)
+        del self.pages[count:]
+        self.pages += [Video(board.width, board.height, board.width_policy) for _ in range(count - len(self.pages))]
+        self.page = min(self.page, count - 1)
+        self.shown_page = min(self.shown_page, count - 1)
+
+    def page_at(self, number: int | None) -> Video:
+        """A page of memory by its one-based number (default and minimum 1, clamped to the last).
+
+        On the alternate screen or the status line the page named is the one being written.
+        """
+        if self.in_alt_screen or self.status_active:
+            return self.current_page
+        return self.pages[min(max(number or 1, 1), len(self.pages)) - 1]
+
+    def move_to_page(self, index: int, *, home: bool = False) -> None:
+        """NP/PP (home) and PPA/PPR/PPB (same row and column): the cursor to another page.
+
+        The index is clamped to page memory; with one page, or off the primary screen, nothing moves.
+        """
+        if len(self.pages) == 1 or self.in_alt_screen or self.status_active:
+            return
+        self.reset_grapheme_state()
+        self.page = min(max(index, 0), len(self.pages) - 1)
+        self.current_page = self.primary_page
+        if self.board.modes.page_cursor_coupling:
+            self.shown_page = self.page
+        if home:
+            self.board.cursor.move_to(0, 0)
+        else:
+            self.board.cursor.cancel_pending_wrap()
+
+    def couple_display(self) -> None:
+        """DECPCCM set: the display shows the cursor's page."""
+        self.shown_page = self.page
+
+    # --- status line --- #
 
     def select_status_type(self, kind: int) -> None:
         """DECSSDT — none (0), indicator (1) or host-writable (2); a new host-writable line is empty."""
@@ -232,8 +302,10 @@ class Blitter(Device):
         self.board.width = width
         self.board.height = height
 
-        self.primary_page.resize(width, height)
-        self.alt_page.resize(width, height)
+        for page in self.videos:
+            page.resize(width, height)
+        self._fit_page_memory()
+        self.current_page = self.alt_page if self.in_alt_screen else self.primary_page
         self.status_page.resize(width, 1)
         # A resize restores the full page, both ways: keeping scroll_top while
         # clamping scroll_bottom can invert the region, and an inverted region
@@ -256,8 +328,8 @@ class Blitter(Device):
         self.select_active_display(False)
         self.reset_grapheme_state()
         self.board.width = columns
-        self.primary_page.resize(columns, self.board.height)
-        self.alt_page.resize(columns, self.board.height)
+        for page in self.videos:
+            page.resize(columns, self.board.height)
         self.status_page.resize(columns, 1)
 
         if full_width_region:
@@ -271,8 +343,8 @@ class Blitter(Device):
     def set_width_policy(self, policy: WidthPolicy) -> None:
         """Use a new policy for future writes on both video pages."""
         self.reset_grapheme_state()
-        self.primary_page.width_policy = policy
-        self.alt_page.width_policy = policy
+        for page in self.videos:
+            page.width_policy = policy
 
     def clear_screen(self, mode: int = constants.ERASE_FROM_CURSOR_TO_END) -> None:
         """Clear screen."""
@@ -401,25 +473,26 @@ class Blitter(Device):
                 self._selective_clear(x, y)
 
     def copy_rectangle(self, params) -> None:
-        """DECCRA — copy a rectangle to another origin (Pts;Pls;Pbs;Prs;Pps;Ptd;Pld;Ppd)."""
+        """DECCRA — copy a rectangle to another origin (Pts;Pls;Pbs;Prs;Pps;Ptd;Pld;Ppd), between pages."""
         t, left, b, r = self._rectangle(*self._four(params))
         p = list(params) + [None] * 8
+        source, target = self.page_at(p[4]), self.page_at(p[7])
         dt = (p[5] - 1) if p[5] else 0
         dl = (p[6] - 1) if p[6] else 0
         cells = []
         for y in range(t, b + 1):
-            row = [self.current_page.get_cell(x, y) for x in range(left, r + 1)]
+            row = [source.get_cell(x, y) for x in range(left, r + 1)]
             # A rectangle containing only half of a wide glyph copies blanks
             # at that edge, never an orphaned fragment.
             if row and row[0][1] == "":
                 row[0] = (row[0][0], " ")
-            if row and r + 1 < self.board.width and self.current_page.get_cell(r + 1, y)[1] == "":
+            if row and r + 1 < self.board.width and source.get_cell(r + 1, y)[1] == "":
                 row[-1] = (row[-1][0], " ")
             cells.append(row)
         for dy, row in enumerate(cells):
             ty = dt + dy
             if 0 <= ty < self.board.height and 0 <= dl < self.board.width:
-                self.current_page.replace_cells(dl, ty, row)
+                target.replace_cells(dl, ty, row)
 
     def set_attr_change_extent(self, ps: int) -> None:
         """DECSACE — 2 = rectangle, else stream (a wrapping run; the power-on default)."""
@@ -711,11 +784,12 @@ class Blitter(Device):
         if not hard:
             return
         self.in_alt_screen = False
+        self.page = self.shown_page = 0
         self.current_page = self.primary_page
         self.attr_change_extent = "stream"
         self.status_page.clear_line(0, constants.ERASE_ALL, 0, "")  # RIS erases the status line
         self.select_status_type(self.board.model.status_line_type)
-        for buf in (self.primary_page, self.alt_page):
+        for buf in self.videos:
             buf.reset_line_attributes()
             buf.reset_wrapped_lines()
             for y in range(self.board.height):

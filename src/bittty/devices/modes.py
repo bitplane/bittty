@@ -225,8 +225,8 @@ def _allow_alt_screen(device: ModeDevice, value: bool) -> None:
 def _declrmm(device: ModeDevice, value: bool) -> None:
     if value:
         # Horizontal margins and row-wide double-size attributes cannot coexist.
-        device.board.blitter.primary_page.reset_line_attributes()
-        device.board.blitter.alt_page.reset_line_attributes()
+        for page in device.board.blitter.videos:
+            page.reset_line_attributes()
     else:
         # Disabling left/right margin mode resets the margins to the full width.
         device.board.blitter.reset_left_right_margins()
@@ -238,6 +238,11 @@ def _column_status(device: ModeDevice) -> int:
 
 def _alt_screen_status(device: ModeDevice) -> int:
     return 1 if device.board.blitter.in_alt_screen else 2
+
+
+def _page_coupling(device: ModeDevice, value: bool) -> None:
+    if value:
+        device.board.blitter.couple_display()
 
 
 def _ambiguous_width(device: ModeDevice, value: bool) -> None:
@@ -384,6 +389,15 @@ MODE_SPECS: tuple[ModeSpec, ...] = (
         "left_right_margin_mode",
         queryable=True,
         apply_fn=_declrmm,
+    ),
+    ModeSpec(
+        mp.DEC_PAGE_COUPLING,
+        64,
+        True,
+        "page_cursor_coupling",
+        default=True,
+        queryable=True,
+        apply_fn=_page_coupling,
     ),
     ModeSpec(mp.DEC_NO_CLEAR_COLUMN, 95, True, "no_clear_column_mode", queryable=True),
     ModeSpec(mp.DEC_AUTO_ANSWERBACK, 100, True, "auto_answerback", queryable=True),

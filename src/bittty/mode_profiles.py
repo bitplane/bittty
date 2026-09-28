@@ -46,6 +46,7 @@ DEC_NUMERIC_KEYPAD = "dec.numeric-keypad"
 DEC_BACKARROW = "dec.backarrow"
 DEC_LEFT_RIGHT_MARGINS = "dec.left-right-margins"
 DEC_NO_CLEAR_COLUMN = "dec.no-clear-column"
+DEC_PAGE_COUPLING = "dec.page-coupling"
 DEC_IGNORE_NULL = "dec.ignore-null"
 XTERM_MOUSE_NORMAL = "xterm.mouse-normal"
 XTERM_FOCUS = "xterm.focus"
@@ -113,6 +114,7 @@ VT510_MODE_CAPABILITIES = VT220_MODE_CAPABILITIES | frozenset(
         DEC_BACKARROW,
         DEC_LEFT_RIGHT_MARGINS,
         DEC_NO_CLEAR_COLUMN,
+        DEC_PAGE_COUPLING,
         DEC_IGNORE_NULL,
         DEC_NUMLOCK,
         DEC_CAPSLOCK,

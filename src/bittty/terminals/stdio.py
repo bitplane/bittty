@@ -246,7 +246,7 @@ class StdioTerminal(Terminal):
                 print(f"\033[{y + 1}H{page.get_line(y, width=self.width)}\033[K", end="")
         self.draw_chrome()
         board = self.board
-        if board.modes.cursor_visible and board.cursor.y < self.height and not board.blitter.status_active:
+        if board.modes.cursor_visible and board.cursor.y < self.height and board.blitter.cursor_on_display:
             print(f"\033[{board.cursor.y + 1};{board.cursor.display_x + 1}H\033[?25h", end="", flush=True)
         else:
             print(end="", flush=True)
