@@ -9,7 +9,14 @@ from typing import TYPE_CHECKING
 
 from .. import constants
 from ..operations import Operation
-from ..options import DEC_DISPLAYED_EXTENT, DEC_STATUS_LINE, DEC_TERMINAL_STATE, DEC_UPSS, XTERM_EXTRAS
+from ..options import (
+    DEC_DISPLAYED_EXTENT,
+    DEC_EXTENDED_CPR,
+    DEC_STATUS_LINE,
+    DEC_TERMINAL_STATE,
+    DEC_UPSS,
+    XTERM_EXTRAS,
+)
 from ..parser import Parser
 from ..present import (
     ClipboardChanged,
@@ -96,6 +103,8 @@ class QueryDevice(Device):
             self._status_reporters[">t"] = lambda: ";".join(str(int(mode)) for mode in board.title.modes)
         if DEC_DISPLAYED_EXTENT in board.model.provides:
             self.handlers["DECRQDE"] = self.report_displayed_extent
+        if DEC_EXTENDED_CPR in board.model.provides:
+            self.handlers["DECXCPR"] = self.report_extended_cursor_position
         if DEC_TERMINAL_STATE in board.model.provides:
             self.handlers["DECRQTSR"] = self.report_terminal_state
             self.handlers["DECRSTS"] = self.restore_terminal_state
@@ -144,6 +153,12 @@ class QueryDevice(Device):
         row = self.board.cursor.y + 1
         col = self.board.cursor.display_x + 1
         self.board.host.write(f"\033[{row};{col}R", flush=True)
+
+    def report_extended_cursor_position(self, operation: Operation) -> None:
+        """DECXCPR — the cursor position and the page it is on."""
+        row = self.board.cursor.y + 1
+        col = self.board.cursor.display_x + 1
+        self.board.host.write(f"\033[?{row};{col};{self.board.blitter.page_number}R", flush=True)
 
     def report_device_status(self, operation: Operation) -> None:
         self.board.host.write("\033[0n", flush=True)
@@ -266,8 +281,7 @@ class QueryDevice(Device):
         )
         scss = _bit_field(*(designation.startswith("96") for designation in charset.charset_array))
         designations = "".join(designation.removeprefix("96") for designation in charset.charset_array)
-        page = 1 if board.blitter.in_alt_screen else board.blitter.page + 1
-        position = f"{cursor.y + 1};{cursor.display_x + 1};{page}"
+        position = f"{cursor.y + 1};{cursor.display_x + 1};{board.blitter.page_number}"
         shifts = f"{charset.current_charset};{charset.gr}"
         return f"{position};{srend};{satt};{sflag};{shifts};{scss};{designations}"
 

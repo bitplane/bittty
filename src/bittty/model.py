@@ -36,6 +36,7 @@ from .mode_profiles import (
 )
 from .options import (
     DEC_DISPLAYED_EXTENT,
+    DEC_EXTENDED_CPR,
     DEC_KEY_MEMORY,
     DEC_KEYBOARD_DIALECT,
     DEC_KEYBOARD_LEDS,
@@ -138,7 +139,7 @@ XTERM = Model(
     mode_capabilities=XTERM_MODE_CAPABILITIES,
     options=frozenset({XTERM_PRINTER_PIPE, LOCATOR_PORT}),
     control_capabilities=frozenset(
-        {DEC_KEYBOARD_LEDS, DEC_USER_KEYS, XTERM_MODIFY_KEYS, XTERM_EXTRAS, DEC_DISPLAYED_EXTENT}
+        {DEC_KEYBOARD_LEDS, DEC_USER_KEYS, XTERM_MODIFY_KEYS, XTERM_EXTRAS, DEC_DISPLAYED_EXTENT, DEC_EXTENDED_CPR}
     ),
     power_on_modes=frozenset({1034}),  # eightBitInput
     # The sets of xterm's default VT4xx level (charproc.c scs_table): not the VT100's
@@ -173,6 +174,7 @@ BITTTY = Model(
             DEC_TERMINAL_STATE,
             DEC_KEYBOARD_DIALECT,
             DEC_KEY_MEMORY,
+            DEC_EXTENDED_CPR,
         }
     ),
     power_on_modes=frozenset({1036, 1039}),  # Alt and Meta send ESC
@@ -233,6 +235,7 @@ VT510 = Model(
             DEC_TERMINAL_STATE,
             DEC_KEYBOARD_DIALECT,
             DEC_KEY_MEMORY,
+            DEC_EXTENDED_CPR,
         }
     ),
     decrqss_valid_is_one=False,

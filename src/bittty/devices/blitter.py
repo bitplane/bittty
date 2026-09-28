@@ -116,6 +116,11 @@ class Blitter(Device):
         return self.alt_page if self.in_alt_screen else self.pages[self.shown_page]
 
     @property
+    def page_number(self) -> int:
+        """The one-based page the cursor is on, as reports give it; the alternate screen is page 1."""
+        return 1 if self.in_alt_screen else self.page + 1
+
+    @property
     def cursor_on_display(self) -> bool:
         """Whether the cursor is on the displayed page, rather than the status line or another page."""
         return not self.status_active and self.current_page is self.main_page

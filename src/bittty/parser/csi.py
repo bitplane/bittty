@@ -145,7 +145,7 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
         if code == 5:
             return Operation("DSR", (code,), raw_csi_data)
         if code == 6:
-            return Operation("CPR", (code,), raw_csi_data)
+            return Operation("DECXCPR" if intermediates == ["?"] else "CPR", (code,), raw_csi_data)
 
     if final_char == "c":  # DA - Device Attributes
         code = param(params, 0, 0)
