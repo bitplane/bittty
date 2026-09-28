@@ -34,10 +34,10 @@ def test_rep_with_different_counts():
     parser.feed(f"{ESC}[10b")
     assert board.blitter.current_page.get_line_text(0)[2:13] == "==========="
 
-    # Test count = 0 (should do nothing)
-    pos = board.cursor.x
+    # Test count = 0 (means one, as in xterm)
+    parser.feed("-")
     parser.feed(f"{ESC}[0b")
-    assert board.cursor.x == pos
+    assert board.blitter.current_page.get_line_text(0)[13:15] == "--"
 
 
 def test_rep_with_no_parameter():

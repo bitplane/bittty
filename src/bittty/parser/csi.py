@@ -16,6 +16,11 @@ def param(params, index=0, default=None):
     return params[index] if len(params) > index and params[index] is not None else default
 
 
+def param_count(params):
+    """A count parameter: missing or zero means one (xterm)."""
+    return (params[0] if params else None) or 1
+
+
 @lru_cache(maxsize=1000)
 def parse_csi_params(data):
     """Parse CSI parameters when actually needed.
@@ -117,13 +122,13 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
             col = (p[1] if len(p) > 1 and p[1] is not None else 1) - 1
             return Operation("CUP" if final_char == "H" else "HVP", (col, row), raw_csi_data)
         if final_char == "A":  # CUU
-            return Operation("CUU", (params[0] if params and params[0] is not None else 1,), raw_csi_data)
+            return Operation("CUU", (param_count(params),), raw_csi_data)
         if final_char == "B":  # CUD
-            return Operation("CUD", (params[0] if params and params[0] is not None else 1,), raw_csi_data)
+            return Operation("CUD", (param_count(params),), raw_csi_data)
         if final_char == "C":  # CUF
-            return Operation("CUF", (params[0] if params and params[0] is not None else 1,), raw_csi_data)
+            return Operation("CUF", (param_count(params),), raw_csi_data)
         if final_char == "D":  # CUB
-            return Operation("CUB", (params[0] if params and params[0] is not None else 1,), raw_csi_data)
+            return Operation("CUB", (param_count(params),), raw_csi_data)
 
     if final_char == "n":  # DSR/CPR - Device Status Report / Cursor Position Report
         code = param(params, 0, 0)
@@ -230,12 +235,12 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
         if final_char == "w":  # DECEFR - Enable Filter Rectangle
             return Operation("DECEFR", (tuple(params),), raw_csi_data)
         if final_char == "}":  # DECIC - Insert Column(s)
-            return Operation("DECIC", (param(params, 0, 1),), raw_csi_data)
+            return Operation("DECIC", (param_count(params),), raw_csi_data)
         if final_char == "~":  # DECDC - Delete Column(s)
-            return Operation("DECDC", (param(params, 0, 1),), raw_csi_data)
+            return Operation("DECDC", (param_count(params),), raw_csi_data)
 
     if " " in intermediates:  # SPACE-intermediate functions (DECSCUSR handled above)
-        count = param(params, 0, 1)
+        count = param_count(params)
         volume = param(params, 0, 0)
         if final_char == "@":  # SL - Scroll Left (data pans left, right edge blanks)
             return Operation("SL", (count,), raw_csi_data)
@@ -298,27 +303,27 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
         return Operation("HPA", (col,), raw_csi_data)
 
     if final_char == "E":  # CNL - Cursor Next Line
-        count = param(params, 0, 1)
+        count = param_count(params)
         return Operation("CNL", (count,), raw_csi_data)
 
     if final_char == "F":  # CPL - Cursor Previous Line
-        count = param(params, 0, 1)
+        count = param_count(params)
         return Operation("CPL", (count,), raw_csi_data)
 
     if final_char == "a":  # HPR - Horizontal Position Relative
-        count = param(params, 0, 1)
+        count = param_count(params)
         return Operation("HPR", (count,), raw_csi_data)
 
     if final_char == "e":  # VPR - Vertical Position Relative
-        count = param(params, 0, 1)
+        count = param_count(params)
         return Operation("VPR", (count,), raw_csi_data)
 
     if final_char == "I":  # CHT - Cursor Horizontal (Forward) Tab
-        count = param(params, 0, 1)
+        count = param_count(params)
         return Operation("CHT", (count,), raw_csi_data)
 
     if final_char == "Z":  # CBT - Cursor Backward Tab
-        count = param(params, 0, 1)
+        count = param_count(params)
         return Operation("CBT", (count,), raw_csi_data)
 
     if final_char == "g":  # TBC - Tab Clear
@@ -340,27 +345,27 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
         return Operation("DECSEL" if "?" in intermediates else "EL", (mode,), raw_csi_data)
 
     if final_char == "L":  # IL - Insert Lines
-        count = param(params, 0, 1)
+        count = param_count(params)
         return Operation("IL", (count,), raw_csi_data)
 
     if final_char == "M":  # DL - Delete Lines
-        count = param(params, 0, 1)
+        count = param_count(params)
         return Operation("DL", (count,), raw_csi_data)
 
     if final_char == "@":  # ICH - Insert Characters
-        count = param(params, 0, 1)
+        count = param_count(params)
         return Operation("ICH", (count,), raw_csi_data)
 
     if final_char == "P":  # DCH - Delete Characters
-        count = param(params, 0, 1)
+        count = param_count(params)
         return Operation("DCH", (count,), raw_csi_data)
 
     if final_char == "X":  # ECH - Erase Character
-        count = param(params, 0, 1)
+        count = param_count(params)
         return Operation("ECH", (count,), raw_csi_data)
 
     if final_char == "S":  # SU - Scroll Up
-        count = param(params, 0, 1)
+        count = param_count(params)
         return Operation("SU", (count,), raw_csi_data)
 
     if final_char == "T":  # SD - Scroll Down
@@ -378,15 +383,15 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
         return Operation("SAVE", raw=raw_csi_data)
 
     if final_char == "b":  # REP - Repeat
-        count = param(params, 0, 1)
+        count = param_count(params)
         return Operation("REP", (count,), raw_csi_data)
 
     if final_char == "j":  # HPB - Horizontal Position Backward
-        count = param(params, 0, 1)
+        count = param_count(params)
         return Operation("HPB", (count,), raw_csi_data)
 
     if final_char == "k":  # VPB - Vertical Position Backward
-        count = param(params, 0, 1)
+        count = param_count(params)
         return Operation("VPB", (count,), raw_csi_data)
 
     if final_char == "i":  # MC - Media Copy (printer control), DEC private with ?
