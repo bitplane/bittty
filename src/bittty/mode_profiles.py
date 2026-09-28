@@ -32,6 +32,7 @@ XTERM_HP_KEYS = "xterm.hp-keys"
 XTERM_SCO_KEYS = "xterm.sco-keys"
 XTERM_LEGACY_KEYS = "xterm.legacy-keys"
 XTERM_VT220_KEYS = "xterm.vt220-keys"
+XTERM_TERMCAP_KEYS = "xterm.termcap-keys"
 DEC_AUTO_ANSWERBACK = "dec.auto-answerback"
 DEC_CONCEAL_ANSWERBACK = "dec.conceal-answerback"
 XTERM_MARGIN_BELL = "xterm.margin-bell"
@@ -159,6 +160,7 @@ XTERM_MODE_CAPABILITIES = (
             XTERM_SUN_KEYS,
             XTERM_LEGACY_KEYS,
             XTERM_VT220_KEYS,
+            XTERM_TERMCAP_KEYS,
             ANSI_KEYBOARD_ACTION,
             ANSI_INSERT,
             ANSI_SEND_RECEIVE,

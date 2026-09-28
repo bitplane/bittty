@@ -6,7 +6,21 @@ These are xterm compatibility modes, not full Sun/HP/SCO terminal models.
 
 from enum import Enum
 
-from .keymap import ARROWS, CSI, DEC_EDITING, ESC, PF_KEYS, SS3, KeyMap, dec_function_keys
+from dataclasses import replace
+
+from .keymap import (
+    ARROWS,
+    CSI,
+    DEC_EDITING,
+    ESC,
+    KEYPAD_NUMERIC,
+    PF_KEYS,
+    SS3,
+    XTERM_KEYMAP,
+    KeyMap,
+    apply_modifier,
+    dec_function_keys,
+)
 
 
 class KeyboardStyle(Enum):
@@ -16,6 +30,7 @@ class KeyboardStyle(Enum):
     SCO = "sco"
     LEGACY = "legacy"
     VT220 = "vt220"
+    TERMCAP = "termcap"
 
 
 _SUN_CODES = (*range(224, 234), *range(192, 202), *range(208, 223), 234, 235)
@@ -31,6 +46,15 @@ _DEC_KEYS = {key: CSI + body for key, body in DEC_EDITING.items()} | {
 _CURSOR = {"home": "H", "end": "F", "begin": "E"}
 _DEC_CURSOR = _CSI_ARROWS | {key: CSI + final for key, final in _CURSOR.items()}
 _DEC_APPLICATION = _SS3_ARROWS | {key: SS3 + final for key, final in _CURSOR.items()}
+
+# xterm's terminfo entry: the SS3 cursor keys, F13-F24 as Shift-F1-F12 and F25-F35 as
+# Ctrl-F1-F11 in their modified forms, and the keypad's Enter as SS3 M (xterm 407).
+_SHIFTED_BANK = [SS3 + final for final in "PQRS"] + [dec_function_keys(5, 12)[f"f{n}"] for n in range(5, 13)]
+_TERMINFO_KEYS = {
+    **_DEC_APPLICATION,
+    **{f"f{n + 12}": apply_modifier(sequence, 2) for n, sequence in enumerate(_SHIFTED_BANK, 1)},
+    **{f"f{n + 24}": apply_modifier(sequence, 5) for n, sequence in enumerate(_SHIFTED_BANK[:11], 1)},
+}
 
 STYLE_KEYMAPS = {
     KeyboardStyle.SUN: KeyMap(
@@ -110,6 +134,13 @@ STYLE_KEYMAPS = {
         modifiers_with_other_keys=True,
         ctrl_function_offset=10,
         delete_is_del=True,
+    ),
+    # Modified keys send what they otherwise would.
+    KeyboardStyle.TERMCAP: replace(
+        XTERM_KEYMAP,
+        keys={**XTERM_KEYMAP.keys, **_TERMINFO_KEYS},
+        modified={**{key: XTERM_KEYMAP.keys[key] for key in _TERMINFO_KEYS}, "kp_enter": "\r"},
+        numeric={**KEYPAD_NUMERIC, "Enter": SS3 + "M"},
     ),
     KeyboardStyle.VT220: KeyMap(
         keys={

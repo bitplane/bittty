@@ -607,7 +607,8 @@ class KeyboardDevice(Device):
             if key == "," and mods & M.CTRL:
                 key, mods = "-", mods & ~M.CTRL
         if numeric or self.board.modes.numeric_keypad:
-            text = keymap.numeric.get(key)
+            # A keymap may give a modified keypad key its own text (xterm's termcap keys).
+            text = (mods and keymap.modified.get(f"kp_{key.lower()}")) or keymap.numeric.get(key)
             if text is not None:
                 prefix = constants.ESC if keymap.keypad_meta_prefix and mods & (M.ALT | M.META) else ""
                 self.board.transmit_keyboard(prefix + text, local_text=text, margin_key=text.isprintable())

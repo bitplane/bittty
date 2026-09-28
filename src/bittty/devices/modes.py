@@ -114,7 +114,7 @@ class ModeSpec:
 # --- side effects for modes that do more than flip a flag --- #
 
 
-_KEYBOARD_MODES = (1051, 1052, 1053, 1060, 1061)
+_KEYBOARD_MODES = (1050, 1051, 1052, 1053, 1060, 1061)
 
 
 def _save_keyboard_style(device: ModeDevice) -> None:
@@ -633,6 +633,7 @@ MODE_SPECS += (
     _keyboard_style(mp.XTERM_SCO_KEYS, 1053, KeyboardStyle.SCO),
     _keyboard_style(mp.XTERM_LEGACY_KEYS, 1060, KeyboardStyle.LEGACY),
     _keyboard_style(mp.XTERM_VT220_KEYS, 1061, KeyboardStyle.VT220),
+    _keyboard_style(mp.XTERM_TERMCAP_KEYS, 1050, KeyboardStyle.TERMCAP),
 )
 
 # xterm resources the chrome carries out, by mode: (capability, name, xterm 407's default).

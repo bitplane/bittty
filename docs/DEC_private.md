@@ -133,7 +133,7 @@ Related ANSI modes: KAM (`CSI 2 h/l`) and SRM (`CSI 12 h/l`) implement keyboard 
 | 1047 | xterm | Use Alternate Screen Buffer | ✅ |
 | 1048 | xterm | Save cursor as in DECSC | ✅ |
 | 1049 | xterm | Save cursor as in DECSC and use alternate screen buffer | ✅ |
-| 1050 | xterm | Set terminfo/termcap function-key mode | X |
+| 1050 | xterm | Set terminfo/termcap function-key mode | ✅ |
 | 1051 | xterm | Set Sun function-key mode | ✅ |
 | 1052 | xterm | Set HP function-key mode | ✅ |
 | 1053 | xterm | Set SCO function-key mode | ✅ |
