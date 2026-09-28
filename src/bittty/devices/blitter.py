@@ -7,12 +7,15 @@ from typing import TYPE_CHECKING
 from .. import constants
 from ..clusters import ClusterWriter
 from ..operations import Operation
+from ..options import DEC_STATUS_LINE
+from ..present import StatusLineChanged
 from ..style import Style, parse_sgr_sequence
 from ..video import Video
 from .base import Device
 from .modes import ModeEffect
 
 _REVERSE_ATTRS = {1: "bold", 4: "underline", 5: "blink", 7: "reverse"}
+_STATUS_LINE_KINDS = ("none", "indicator", "host-writable")  # DECSSDT 0-2
 
 if TYPE_CHECKING:
     from ..width import WidthPolicy
@@ -35,6 +38,13 @@ class Blitter(Device):
         self.attr_change_extent = "stream"  # DECSACE: "stream" (power-on) or "rectangle"
         self.last_printed_char = ""  # REP before any printing repeats nothing
         self._clusters = ClusterWriter(self)
+        # The status line (DECSSDT/DECSASD) is a one-row display of its own: while it is
+        # active, writes go to status_page and the main display's context waits in _main.
+        self.status_type = board.model.status_line_type
+        self.status_page = Video(board.width, 1, board.width_policy)
+        self.status_active = False
+        self._main: tuple | None = None
+        self._status_x = 0
         self.handlers = {
             "DECSLRM": self.apply_left_right_margins,
             "DECSCPP": lambda op: self.board.set_page_columns(op.args[0]),
@@ -70,6 +80,54 @@ class Blitter(Device):
             "DECDWL": lambda op: self.set_line_attribute(constants.LINE_DOUBLE_WIDTH),
             "DECSWL": lambda op: self.set_line_attribute(constants.LINE_SINGLE),
         }
+        if DEC_STATUS_LINE in board.model.provides:
+            self.handlers["DECSSDT"] = lambda op: self.select_status_type(op.args[0])
+            self.handlers["DECSASD"] = lambda op: self.select_active_display(op.args[0] == 1)
+
+    # --- status line --- #
+
+    @property
+    def main_page(self) -> Video:
+        """The page the main display shows, even while writes go to the status line."""
+        return self._main[0] if self.status_active else self.current_page
+
+    def select_status_type(self, kind: int) -> None:
+        """DECSSDT — none (0), indicator (1) or host-writable (2); a new host-writable line is empty."""
+        if kind not in (0, 1, 2) or kind == self.status_type:
+            return
+        if kind != 2:
+            self.select_active_display(False)
+        else:
+            self.status_page.clear_line(0, constants.ERASE_ALL, 0, "")
+        self.status_type = kind
+        self.board.present(StatusLineChanged(_STATUS_LINE_KINDS[kind]))
+
+    def select_active_display(self, status: bool) -> None:
+        """DECSASD — send data to the host-writable status line, or back to the main display.
+
+        The status line is a one-row display: only column positions operate there.
+        """
+        status = status and self.status_type == 2
+        if status == self.status_active:
+            return
+        board, cursor = self.board, self.board.cursor
+        self.reset_grapheme_state()
+        here = (cursor.display_x, cursor.y, cursor.wrap_pending)
+        if status:
+            self._main = (self.current_page, board.height, self.scroll_top, self.scroll_bottom,
+                          self.left_margin, self.right_margin, *here)  # fmt: skip
+            self.current_page, board.height = self.status_page, 1
+            self.scroll_top = self.scroll_bottom = self.left_margin = 0
+            self.right_margin = board.width - 1
+            x, y, wrap = self._status_x, 0, False
+        else:
+            self._status_x = here[0]
+            (self.current_page, board.height, self.scroll_top, self.scroll_bottom,
+             self.left_margin, self.right_margin, x, y, wrap) = self._main  # fmt: skip
+        self.status_active = status
+        cursor.set_position(x, y)
+        if wrap:
+            cursor.arm_pending_wrap()
 
     def set_line_attribute(self, attribute: str) -> None:
         """DECDHL/DECDWL/DECSWL — set the cursor line's width/height attribute."""
@@ -168,13 +226,15 @@ class Blitter(Device):
         self.write_text(self.last_printed_char * count)
 
     def resize(self, width: int, height: int) -> None:
-        """Resize terminal dimensions and both video pages."""
+        """Resize terminal dimensions and the video pages (leaving the status line first)."""
+        self.select_active_display(False)
         self.reset_grapheme_state()
         self.board.width = width
         self.board.height = height
 
         self.primary_page.resize(width, height)
         self.alt_page.resize(width, height)
+        self.status_page.resize(width, 1)
         # A resize restores the full page, both ways: keeping scroll_top while
         # clamping scroll_bottom can invert the region, and an inverted region
         # stops line feed scrolling at all.
@@ -193,10 +253,12 @@ class Blitter(Device):
         old_right = self.right_margin
         full_width_region = old_left == 0 and old_right == old_width - 1
 
+        self.select_active_display(False)
         self.reset_grapheme_state()
         self.board.width = columns
         self.primary_page.resize(columns, self.board.height)
         self.alt_page.resize(columns, self.board.height)
+        self.status_page.resize(columns, 1)
 
         if full_width_region:
             self.left_margin = 0
@@ -506,8 +568,8 @@ class Blitter(Device):
         self._shift_line_segment(cursor.y, cursor.x, self.right_margin, count)
 
     def scroll(self, lines: int) -> None:
-        """Scroll content within the active scroll region."""
-        if lines == 0 or self.scroll_top > self.scroll_bottom:
+        """Scroll content within the active scroll region; the status line never scrolls."""
+        if lines == 0 or self.scroll_top > self.scroll_bottom or self.status_active:
             return
 
         abs_lines = abs(lines)
@@ -645,6 +707,8 @@ class Blitter(Device):
         self.in_alt_screen = False
         self.current_page = self.primary_page
         self.attr_change_extent = "stream"
+        self.status_page.clear_line(0, constants.ERASE_ALL, 0, "")  # RIS erases the status line
+        self.select_status_type(self.board.model.status_line_type)
         for buf in (self.primary_page, self.alt_page):
             buf.reset_line_attributes()
             buf.reset_wrapped_lines()

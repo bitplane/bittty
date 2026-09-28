@@ -232,7 +232,7 @@ class StdioTerminal(Terminal):
         child wants it visible (DECTCEM). The host hollows it on unfocus by
         itself, exactly like a real terminal.
         """
-        page = self.board.blitter.current_page
+        page = self.board.blitter.main_page  # this chrome draws no status line
         if page is self._seen_page:
             rows = page.dirty_rows(self._seen_gen)
         else:
@@ -246,7 +246,7 @@ class StdioTerminal(Terminal):
                 print(f"\033[{y + 1}H{page.get_line(y, width=self.width)}\033[K", end="")
         self.draw_chrome()
         board = self.board
-        if board.modes.cursor_visible and board.cursor.y < self.height:
+        if board.modes.cursor_visible and board.cursor.y < self.height and not board.blitter.status_active:
             print(f"\033[{board.cursor.y + 1};{board.cursor.display_x + 1}H\033[?25h", end="", flush=True)
         else:
             print(end="", flush=True)

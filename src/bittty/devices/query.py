@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING
 
 from .. import constants
 from ..operations import Operation
+from ..options import DEC_STATUS_LINE
 from ..present import (
     ClipboardChanged,
     ConsoleRequest,
@@ -89,6 +90,9 @@ class QueryDevice(Device):
             '"p': lambda: f"{self.board.conformance_level};{0 if self.board.c1_eightbit else 1}",
             "*x": lambda: "2" if blitter.attr_change_extent == "rectangle" else "0",
         }
+        if DEC_STATUS_LINE in board.model.provides:
+            self._status_reporters["$~"] = lambda: str(blitter.status_type)  # DECSSDT
+            self._status_reporters["$}"] = lambda: str(int(blitter.status_active))  # DECSASD
 
     def handle_cwd(self, operation: Operation) -> None:
         """OSC 7 — record the reported working directory."""
@@ -323,6 +327,7 @@ class QueryDevice(Device):
         As in xterm, a VT200-or-later level selects 8-bit controls unless the second parameter is 1.
         """
         params = operation.args[0]
+        self.board.blitter.select_active_display(False)  # DECSCL leaves the status line (VT510)
         if params and params[0] is not None:
             self.board.conformance_level = params[0]
             self.board.c1_eightbit = params[0] > 61 and (*params, None)[1] != 1

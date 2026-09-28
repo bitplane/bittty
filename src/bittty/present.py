@@ -158,6 +158,13 @@ class GraphemeClusteringChanged:
     enabled: bool
 
 
+@dataclass(frozen=True)
+class StatusLineChanged:
+    """DECSSDT chose the status line: "none", "indicator" or "host-writable"."""
+
+    kind: str
+
+
 PresentEvent = (
     Bell
     | TitleChanged
@@ -179,4 +186,5 @@ PresentEvent = (
     | SyncOutputChanged
     | AmbiguousWidthChanged
     | GraphemeClusteringChanged
+    | StatusLineChanged
 )

@@ -26,6 +26,7 @@ from ..present import (
     CwdChanged,
     FontChanged,
     GraphemeClusteringChanged,
+    StatusLineChanged,
     KeyboardIndicatorChanged,
     KeyboardLockChanged,
     MouseCaptureChanged,
@@ -94,6 +95,7 @@ class Terminal:
     def on_sync_output(self, enabled: bool) -> None: ...
     def on_ambiguous_width(self, width: int) -> None: ...
     def on_grapheme_clustering(self, enabled: bool) -> None: ...
+    def on_status_line(self, kind: str) -> None: ...
 
 
 # Event type -> adapter unpacking its fields into the corresponding hook.
@@ -118,4 +120,5 @@ _DISPATCH = {
     SyncOutputChanged: lambda d, e: d.on_sync_output(e.enabled),
     AmbiguousWidthChanged: lambda d, e: d.on_ambiguous_width(e.width),
     GraphemeClusteringChanged: lambda d, e: d.on_grapheme_clustering(e.enabled),
+    StatusLineChanged: lambda d, e: d.on_status_line(e.kind),
 }

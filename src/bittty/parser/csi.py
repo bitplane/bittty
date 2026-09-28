@@ -211,6 +211,12 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
         if stack_op is not None:
             return Operation(stack_op, (tuple(params),), raw_csi_data)
 
+    if final_char == "}" and "$" in intermediates:  # DECSASD - Select Active Status Display
+        return Operation("DECSASD", (param(params, 0, 0),), raw_csi_data)
+
+    if final_char == "~" and "$" in intermediates:  # DECSSDT - Select Status Display Type
+        return Operation("DECSSDT", (param(params, 0, 0),), raw_csi_data)
+
     if "$" in intermediates:  # DEC rectangular-area functions
         rect = {
             "x": "DECFRA",  # Fill Rectangular Area

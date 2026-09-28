@@ -50,6 +50,11 @@ alternate). A width-2 character has an empty continuation cell. The board writes
 the blitter; terminals read it on their own cadence (pull) via `capture_pane()`,
 `capture_text()`, or `get_line()`.
 
+Models with a DEC status line (VT510, bittty) add a one-row status page. DECSSDT picks its
+type (the chrome hears `on_status_line`), and DECSASD sends writes there as to a one-row
+display, where only column positions apply and nothing scrolls. `blitter.main_page` stays on
+the main display for the chrome, and `capture_status_line()` reads the status line.
+
 The terminal frontend reports its measured ambiguous-character width through `TerminalCaps`;
 mode 8840 may override that baseline for future writes.
 

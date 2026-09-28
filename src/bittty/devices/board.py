@@ -392,7 +392,8 @@ class Board:
         self.keyboard.report_focus(focused)
 
     def reset(self, hard: bool = True) -> None:
-        """Reset the terminal. hard is RIS (full power-on); soft is DECSTR."""
+        """Reset the terminal. hard is RIS (full power-on); soft is DECSTR. Both leave the status line."""
+        self.blitter.select_active_display(False)
         self.style.reset()
         self.modes.reset(hard=hard, reconcile=False)
         self.cursor.reset(hard=hard)
@@ -419,7 +420,7 @@ class Board:
 
     def get_content(self):
         """Get current screen content as raw page data."""
-        return self.blitter.current_page.get_content()
+        return self.blitter.main_page.get_content()
 
     def capture_pane(self) -> str:
         """Capture screen content: a pure pull of video memory as ANSI lines.
@@ -427,8 +428,8 @@ class Board:
         No cursor or pointer is composited in — the chrome renders those from
         the board's registers (cursor.x/y, modes.cursor_visible, mouse.x/y).
         """
-        page = self.blitter.current_page
-        return "\n".join(page.get_line(y, width=self.width) for y in range(self.height))
+        page = self.blitter.main_page
+        return "\n".join(page.get_line(y, width=self.width) for y in range(page.height))
 
     def capture_text(self, *, trim: bool = True) -> str:
         """Capture the active screen as plain text.
@@ -437,13 +438,17 @@ class Board:
         at the bottom are omitted. Set ``trim=False`` to preserve trailing
         blank cells and rows; width-2 continuation cells emit no text.
         """
-        page = self.blitter.current_page
-        lines = [page.get_line_text(y) for y in range(self.height)]
+        page = self.blitter.main_page
+        lines = [page.get_line_text(y) for y in range(page.height)]
         if trim:
             lines = [line.rstrip(" ") for line in lines]
             while lines and not lines[-1]:
                 lines.pop()
         return "\n".join(lines)
+
+    def capture_status_line(self) -> str:
+        """The host-writable status line as plain text, trailing blanks removed."""
+        return self.blitter.status_page.get_line_text(0).rstrip(" ")
 
     def link_at(self, x: int, y: int) -> tuple | None:
         """The hyperlink under a cell: (uri, link_id) or None.

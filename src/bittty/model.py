@@ -37,6 +37,7 @@ from .mode_profiles import (
 from .options import (
     DEC_KEYBOARD_LEDS,
     DEC_PRINTER_PORT,
+    DEC_STATUS_LINE,
     DEC_USER_KEYS,
     KITTY_KEYBOARD,
     LOCATOR_PORT,
@@ -84,6 +85,8 @@ class Model:
     # Private-mode registers this terminal sets at power-on (and RIS), beyond each mode's own
     # default. A register outside the mode repertoire is fixed: the host cannot change it.
     power_on_modes: frozenset[int] = frozenset()
+    # DECSSDT at power-on and RIS (0 none, 1 indicator); the status line needs DEC_STATUS_LINE.
+    status_line_type: int = 0
 
     @property
     def capabilities(self) -> frozenset[str]:
@@ -127,7 +130,9 @@ BITTTY = Model(
     mode_capabilities=BITTTY_MODE_CAPABILITIES,
     keymap=BITTTY_KEYMAP,
     options=frozenset({VT510_PRINTER_PORT, LOCATOR_PORT}),
-    control_capabilities=frozenset({KITTY_KEYBOARD, DEC_KEYBOARD_LEDS, DEC_USER_KEYS, XTERM_MODIFY_KEYS}),
+    control_capabilities=frozenset(
+        {KITTY_KEYBOARD, DEC_KEYBOARD_LEDS, DEC_USER_KEYS, XTERM_MODIFY_KEYS, DEC_STATUS_LINE}
+    ),
     power_on_modes=frozenset({1036, 1039}),  # Alt and Meta send ESC
 )
 
@@ -172,8 +177,9 @@ VT510 = Model(
     color_depth="monochrome",
     keymap=VT220_KEYMAP,
     options=frozenset({VT510_PRINTER_PORT}),
-    control_capabilities=frozenset({DEC_KEYBOARD_LEDS, DEC_USER_KEYS}),
+    control_capabilities=frozenset({DEC_KEYBOARD_LEDS, DEC_USER_KEYS, DEC_STATUS_LINE}),
     decrqss_valid_is_one=False,
+    status_line_type=1,  # the indicator, the Set-Up default
 )
 
 LINUX = Model(
