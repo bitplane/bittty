@@ -134,6 +134,8 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
         code = param(params, 0, 0)
         if intermediates == ["?"] and code == 15:
             return Operation("DSR_PRINTER", (code,), raw_csi_data)
+        if intermediates == ["?"] and code == 26:
+            return Operation("DSR_KEYBOARD", (), raw_csi_data)
         if intermediates == ["?"] and code == 25:
             return Operation("DSR_USER_KEYS", (), raw_csi_data)
         if intermediates == ["?"] and code == 62:  # DECMSR request
@@ -270,6 +272,8 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
             return Operation("SL", (count,), raw_csi_data)
         if final_char == "A":  # SR - Scroll Right
             return Operation("SR", (count,), raw_csi_data)
+        if final_char == "}":  # DECKBD - Keyboard Language Selection
+            return Operation("DECKBD", (param(params, 0, 0), param(params, 1, 0)), raw_csi_data)
         if final_char == "P":  # PPA - Page Position Absolute
             return Operation("PPA", (count,), raw_csi_data)
         if final_char == "Q":  # PPR - Page Position Relative

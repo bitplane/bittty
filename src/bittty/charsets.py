@@ -380,6 +380,30 @@ NATIONAL_CHARSET_DESIGNATORS = frozenset(
 SUPPLEMENTAL_SETS = {(0, "%5"): "%5"} | {(1, name.removeprefix("96")): name for name in ISO_SETS}
 
 
+# Keyboard languages (DECKBD and the keyboard DSR), and the national replacement set each
+# selects for national mode: the VT510 manual's table 8-9 lists, less the sets bittty lacks
+# (Greek, Hebrew, Russian, SCS, Turkish). Dutch has none on the VT510, though the VT220's had.
+KEYBOARD_LANGUAGES = frozenset({*range(17), 19, 22, *range(28, 32), 33, 34, 35, 36, 38, 39, 40})
+KEYBOARD_NATIONAL_SETS = {
+    2: "A",  # British
+    3: "R",  # Flemish
+    4: "Q",  # French Canadian
+    5: "E",  # Danish
+    6: "5",  # Finnish
+    7: "K",  # German
+    9: "Y",  # Italian
+    10: "=",  # Swiss (French)
+    11: "=",  # Swiss (German)
+    12: "7",  # Swedish
+    13: "E",  # Norwegian
+    14: "R",  # French/Belgian
+    15: "Z",  # Spanish
+    16: "%6",  # Portuguese
+    28: "Q",  # Canadian (English)
+    40: "Z",  # Latin American
+}
+
+
 def get_charset(designator: str) -> dict:
     """Get character set mapping for a designator."""
     return CHARSETS.get(designator, {})

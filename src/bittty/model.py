@@ -35,6 +35,7 @@ from .mode_profiles import (
     XTERM_MODE_CAPABILITIES,
 )
 from .options import (
+    DEC_KEYBOARD_DIALECT,
     DEC_DISPLAYED_EXTENT,
     DEC_KEYBOARD_LEDS,
     DEC_PRINTER_PORT,
@@ -95,6 +96,9 @@ class Model:
     macro_space: int | None = None
     # The user-preferred supplemental set at power-on (DECRQUPSS); None: no such report.
     upss: str | None = None
+    # The keyboard DSR's Ptyp for a VT and an enhanced PC layout; () is the VT220's report of
+    # the language alone, and None no report at all.
+    keyboard_types: tuple[int, ...] | None = None
     # Page memory as (lines per page, pages) pairs; a page size not listed has one page (DECSLPP).
     page_memory: tuple[tuple[int, int], ...] = ()
 
@@ -143,6 +147,7 @@ XTERM = Model(
         | {"Z", "7", "H", "="}
     ),
     macro_space=0,  # xterm 407 reports no macro space
+    keyboard_types=(0, 0),
     upss="B",  # xterm has no user-preferred set in UTF-8 and reports ASCII (charproc.c)
 )
 
@@ -165,11 +170,13 @@ BITTTY = Model(
             DEC_DISPLAYED_EXTENT,
             DEC_UPSS,
             DEC_TERMINAL_STATE,
+            DEC_KEYBOARD_DIALECT,
         }
     ),
     power_on_modes=frozenset({1036, 1039}),  # Alt and Meta send ESC
     macro_space=6144,
     upss="%5",
+    keyboard_types=(4, 5),
 )
 
 VT100 = Model(
@@ -201,6 +208,7 @@ VT220 = Model(
     options=frozenset({DEC_PRINTER_PORT}),
     control_capabilities=frozenset({DEC_USER_KEYS}),
     udk_capacity=256,
+    keyboard_types=(),
 )
 
 VT510 = Model(
@@ -214,13 +222,22 @@ VT510 = Model(
     keymap=VT220_KEYMAP,
     options=frozenset({VT510_PRINTER_PORT}),
     control_capabilities=frozenset(
-        {DEC_KEYBOARD_LEDS, DEC_USER_KEYS, DEC_STATUS_LINE, DEC_DISPLAYED_EXTENT, DEC_UPSS, DEC_TERMINAL_STATE}
+        {
+            DEC_KEYBOARD_LEDS,
+            DEC_USER_KEYS,
+            DEC_STATUS_LINE,
+            DEC_DISPLAYED_EXTENT,
+            DEC_UPSS,
+            DEC_TERMINAL_STATE,
+            DEC_KEYBOARD_DIALECT,
+        }
     ),
     decrqss_valid_is_one=False,
     status_line_type=1,  # the indicator, the Set-Up default
     page_memory=((24, 3), (25, 2), (36, 2)),  # DECSLPP; any other page size is a single page
     macro_space=6144,  # "6 Kbytes of memory available for the storage of macros"
     upss="%5",
+    keyboard_types=(4, 5),  # LK450, PCXAL
 )
 
 LINUX = Model(

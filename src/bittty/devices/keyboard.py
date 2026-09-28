@@ -11,7 +11,8 @@ from ..keyboard_protocol import ALIASES, KEYPAD_LEGACY, KEYPAD_NAMES, encode_key
 from ..keyboard_styles import STYLE_KEYMAPS, KeyboardStyle
 from ..keymap import DEC_FUNCTION_CODES, KEYPAD_POSITIONS, PF_KEYS, KeyMap, apply_modifier, vt52_keymap
 from ..keys import LEGACY_MODIFIERS, KeyEvent, KeyModifiers, legacy_modifiers, valid_text, xterm_modifier
-from ..options import DEC_KEYBOARD_LEDS, DEC_USER_KEYS, KITTY_KEYBOARD, XTERM_MODIFY_KEYS
+from ..charsets import KEYBOARD_LANGUAGES, KEYBOARD_NATIONAL_SETS, get_charset
+from ..options import DEC_KEYBOARD_DIALECT, DEC_KEYBOARD_LEDS, DEC_USER_KEYS, KITTY_KEYBOARD, XTERM_MODIFY_KEYS
 from .modes import ModeEffect
 
 if TYPE_CHECKING:
@@ -120,6 +121,10 @@ class KeyboardDevice(Device):
         self.led_caps = False
         self.led_scroll = False
         self.leds_fitted = DEC_KEYBOARD_LEDS in board.model.provides
+        # The keyboard: its language (North American) and whether its layout is enhanced PC.
+        self.language = 1
+        self.pc_layout = False
+        self._national_keys: dict[int, str] = {}  # what national mode sends for a character
         self.handlers = {
             "XTMODKEYS": self.set_modify_keys,
         }
@@ -131,6 +136,10 @@ class KeyboardDevice(Device):
             self.handlers["DSR_USER_KEYS"] = self.report_user_keys
         if self.leds_fitted:
             self.handlers["DECLL"] = self.load_leds
+        if board.model.keyboard_types is not None:
+            self.handlers["DSR_KEYBOARD"] = self.report_keyboard
+        if DEC_KEYBOARD_DIALECT in board.model.provides:
+            self.handlers["DECKBD"] = self.select_keyboard
         if KITTY_KEYBOARD in board.model.provides:
             # A terminal that does not speak the protocol does not answer its
             # negotiation at all — real xterm never replies to CSI ? u.
@@ -249,6 +258,26 @@ class KeyboardDevice(Device):
         self.board.host.write(f"{constants.ESC}[?{self.kitty_flags}u", flush=True)
 
     # --- keyboard indicator LEDs (DECLL, modes 108/109/110) --- #
+
+    def report_keyboard(self, operation: Operation) -> None:
+        """DSR — the keyboard language; and, past the VT220, its status (ready) and type."""
+        types = self.board.model.keyboard_types
+        fields = f";0;{types[self.pc_layout]}" if types else ""
+        self.board.host.write(f"\x1b[?27;{self.language}{fields}n", flush=True)
+
+    def select_keyboard(self, operation: Operation) -> None:
+        """DECKBD — the keyboard layout (VT, or 2: enhanced PC) and language; anything else is ignored."""
+        layout, language = operation.args
+        if layout not in (0, 1, 2) or language not in KEYBOARD_LANGUAGES:
+            return
+        self.pc_layout = layout == 2
+        self.language = language or 1
+        national = get_charset(KEYBOARD_NATIONAL_SETS.get(self.language, "B"))
+        self._national_keys = {ord(char): code for code, char in national.items()}
+
+    def _national(self, text: str) -> str:
+        """In national mode the keyboard sends its language's national replacement set."""
+        return text.translate(self._national_keys) if self.board.modes.national_charset_mode else text
 
     def load_leds(self, operation: Operation) -> None:
         """DECLL (CSI Ps q) — load the host keyboard indications."""
@@ -604,10 +633,10 @@ class KeyboardDevice(Device):
             else:
                 self._named_key(key[3:], mods)
         elif event.text and not bits & 62 and not (bits & M.SHIFT and self.modify_other_keys >= 2):
-            self.board.transmit_keyboard(event.text, local_text=event.text, margin_key=True)
+            self.board.transmit_keyboard(self._national(event.text), local_text=event.text, margin_key=True)
         elif event.text and len(event.text) > 1 and not bits & KeyModifiers.CTRL:
             prefix = constants.ESC if self._legacy_escape_prefix(mods) else ""
-            self.board.transmit_keyboard(prefix + event.text, local_text=event.text, margin_key=True)
+            self.board.transmit_keyboard(prefix + self._national(event.text), local_text=event.text, margin_key=True)
         else:
             char = {"escape": "\x1b", "enter": "\r", "tab": "\t", "backspace": "\x08"}.get(key, key)
             if event.text and len(event.text) == 1 and not bits & KeyModifiers.CTRL:
@@ -628,7 +657,7 @@ class KeyboardDevice(Device):
                     chunk = text[offset : offset + 128]
                     self.board.transmit_keyboard(self._kitty_sequence(0, 1, chunk), local_text=chunk)
             return
-        self.board.transmit_keyboard(text, local_text=text)
+        self.board.transmit_keyboard(self._national(text), local_text=text)
 
     def input_paste(self, text: str, phase: str = "complete") -> None:
         """A complete paste or bounded chunks of one bracketed transaction."""
