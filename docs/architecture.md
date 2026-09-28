@@ -94,7 +94,7 @@ Ports are full-duplex jacks on the board; connections are the cables that plug i
 
 ## The Model (`bittty.Model`)
 
-The model number: the emulation profile as data (XTERM, VT220, VT510, LINUX...). DA
+The model number: the emulation profile as data (XTERM, VT100, VT102, VT220, VT320, VT420, VT510, LINUX...). DA
 responses, keymaps, mode and printer repertoires, charsets. A board is constructed with a
 model the way a VT220 ships with its ROMs.
 

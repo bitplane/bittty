@@ -37,6 +37,11 @@ NO_PRINTER = PrinterCapabilities(media_copy=False, configuration=False)
 # not recognised at all, so these gate whether a device registers its handlers
 # rather than what a mode table resolves to. They come from an installed option
 # (the locator port) or from the model's own software (the kitty protocol).
+# The editing functions came in two generations: IL, DL and DCH with the VT102, and
+# ICH and ECH with the VT220. Every model since has both.
+DEC_LINE_EDITING = "dec.line-editing"
+DEC_CHARACTER_EDITING = "dec.character-editing"
+EDITING = frozenset({DEC_LINE_EDITING, DEC_CHARACTER_EDITING})
 DEC_LOCATOR = "dec.locator"
 KITTY_KEYBOARD = "kitty.keyboard"
 DEC_KEYBOARD_LEDS = "dec.keyboard-leds"

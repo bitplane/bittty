@@ -29,12 +29,17 @@ from .mode_profiles import (
     TMUX_MODE_CAPABILITIES,
     URXVT_MODE_CAPABILITIES,
     VT100_MODE_CAPABILITIES,
+    VT102_MODE_CAPABILITIES,
     VT220_MODE_CAPABILITIES,
+    VT320_MODE_CAPABILITIES,
+    VT420_MODE_CAPABILITIES,
     VT510_MODE_CAPABILITIES,
     VTE_MODE_CAPABILITIES,
     XTERM_MODE_CAPABILITIES,
 )
 from .options import (
+    DEC_LINE_EDITING,
+    EDITING,
     DEC_DISPLAYED_EXTENT,
     DEC_EXTENDED_CPR,
     DEC_KEY_MEMORY,
@@ -85,7 +90,7 @@ class Model:
     options: frozenset[Option] = field(default_factory=frozenset)
     # Non-mode control functions in the model's own software (e.g. the kitty
     # keyboard protocol), as opposed to being contributed by a fitted option.
-    control_capabilities: frozenset[str] = frozenset()
+    control_capabilities: frozenset[str] = EDITING
     # DEC hardware uses 0 for a valid DECRQSS request; modern emulators use 1.
     decrqss_valid_is_one: bool = True
     udk_capacity: int = 4096  # byte budget for downloaded function-key strings
@@ -138,7 +143,8 @@ XTERM = Model(
     da2_response="\033[>1;10;0c",
     mode_capabilities=XTERM_MODE_CAPABILITIES,
     options=frozenset({XTERM_PRINTER_PIPE, LOCATOR_PORT}),
-    control_capabilities=frozenset(
+    control_capabilities=EDITING
+    | frozenset(
         {DEC_KEYBOARD_LEDS, DEC_USER_KEYS, XTERM_MODIFY_KEYS, XTERM_EXTRAS, DEC_DISPLAYED_EXTENT, DEC_EXTENDED_CPR}
     ),
     power_on_modes=frozenset({1034}),  # eightBitInput
@@ -161,7 +167,8 @@ BITTTY = Model(
     mode_capabilities=BITTTY_MODE_CAPABILITIES,
     keymap=BITTTY_KEYMAP,
     options=frozenset({VT510_PRINTER_PORT, LOCATOR_PORT}),
-    control_capabilities=frozenset(
+    control_capabilities=EDITING
+    | frozenset(
         {
             KITTY_KEYBOARD,
             DEC_KEYBOARD_LEDS,
@@ -194,6 +201,20 @@ VT100 = Model(
     charsets=frozenset({"B", "A", "0", "1", "2"}),
     color_depth="monochrome",
     keymap=VT100_KEYMAP,
+    control_capabilities=frozenset(),  # the editing functions arrived with the VT102
+)
+
+VT102 = Model(
+    name="vt102",
+    da1_response="\033[?6c",  # VT102 user guide
+    da2_response=None,
+    da3_response=None,
+    mode_capabilities=VT102_MODE_CAPABILITIES,
+    charsets=VT100.charsets,
+    color_depth="monochrome",
+    keymap=VT100_KEYMAP,
+    options=frozenset({DEC_PRINTER_PORT}),
+    control_capabilities=frozenset({DEC_LINE_EDITING}),  # IL, DL and DCH; ICH and ECH came with the VT220
 )
 
 VT220 = Model(
@@ -210,9 +231,53 @@ VT220 = Model(
     color_depth="monochrome",
     keymap=VT220_KEYMAP,
     options=frozenset({DEC_PRINTER_PORT}),
-    control_capabilities=frozenset({DEC_USER_KEYS}),
+    control_capabilities=EDITING | {DEC_USER_KEYS},
     udk_capacity=256,
     keyboard_types=(),
+)
+
+# VT320 and VT420 from their user guides' control-sequence references (EK-VT320-UU-001,
+# EK-VT420-UU-002). The soft character set (DA 7) is left out of DA, as bittty has none;
+# as with the VT220 and VT510, the firmware version in secondary DA is a stand-in.
+VT320 = Model(
+    name="vt320",
+    da1_response="\033[?63;1;2;6;8;9c",
+    da2_response="\033[>24;10;0c",
+    da3_response=None,
+    mode_capabilities=VT320_MODE_CAPABILITIES,
+    charsets=VT220.charsets | {"%5", ">", "96A", "9", "`", "%6"},
+    color_depth="monochrome",
+    keymap=VT220_KEYMAP,
+    options=frozenset({DEC_PRINTER_PORT}),
+    control_capabilities=EDITING | {DEC_USER_KEYS, DEC_STATUS_LINE, DEC_UPSS, DEC_TERMINAL_STATE},
+    decrqss_valid_is_one=False,
+    upss="%5",
+    keyboard_types=(),  # the language alone, as the VT220 reports it
+)
+
+VT420 = Model(
+    name="vt420",
+    da1_response="\033[?64;1;2;6;8;9;15;18;21c",  # not 19: bittty has one session
+    da2_response="\033[>41;10;0c",
+    mode_capabilities=VT420_MODE_CAPABILITIES,
+    charsets=VT320.charsets,
+    color_depth="monochrome",
+    keymap=VT220_KEYMAP,
+    options=frozenset({DEC_PRINTER_PORT}),
+    control_capabilities=EDITING
+    | {
+        DEC_USER_KEYS,
+        DEC_STATUS_LINE,
+        DEC_UPSS,
+        DEC_TERMINAL_STATE,
+        DEC_DISPLAYED_EXTENT,
+        DEC_EXTENDED_CPR,
+    },
+    decrqss_valid_is_one=False,
+    upss="%5",
+    keyboard_types=(1, 1),  # LK401
+    macro_space=6144,  # the VT510's figure: the VT420 guide does not give one
+    page_memory=((24, 6), (25, 5), (36, 4), (48, 3), (72, 2)),  # a single session
 )
 
 VT510 = Model(
@@ -225,7 +290,8 @@ VT510 = Model(
     color_depth="monochrome",
     keymap=VT220_KEYMAP,
     options=frozenset({VT510_PRINTER_PORT}),
-    control_capabilities=frozenset(
+    control_capabilities=EDITING
+    | frozenset(
         {
             DEC_KEYBOARD_LEDS,
             DEC_USER_KEYS,
@@ -322,7 +388,7 @@ KITTY = Model(
     mode_capabilities=KITTY_MODE_CAPABILITIES,
     color_depth="truecolor",
     keymap=XTERM_KEYMAP,
-    control_capabilities=frozenset({KITTY_KEYBOARD}),
+    control_capabilities=EDITING | {KITTY_KEYBOARD},
     power_on_modes=frozenset({1036, 1039}),  # legacy text keys: Alt sends ESC
 )
 
@@ -334,8 +400,10 @@ PERSONALITIES: dict[str, Model] = {
     "xterm": XTERM,
     "xterm-256color": XTERM,
     "vt100": VT100,
-    "vt102": VT100,
+    "vt102": VT102,
     "vt220": VT220,
+    "vt320": VT320,
+    "vt420": VT420,
     "vt510": VT510,
     "linux": LINUX,
     "screen": SCREEN,

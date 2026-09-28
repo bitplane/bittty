@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from .. import constants
 from ..clusters import ClusterWriter
 from ..operations import Operation
-from ..options import DEC_STATUS_LINE
+from ..options import DEC_CHARACTER_EDITING, DEC_LINE_EDITING, DEC_STATUS_LINE
 from ..present import StatusLineChanged
 from ..style import Style, parse_sgr_sequence
 from ..video import Video
@@ -63,11 +63,6 @@ class Blitter(Device):
             "DECCARA": lambda op: self.change_attributes_rectangle(op.args[0]),
             "DECRARA": lambda op: self.reverse_attributes_rectangle(op.args[0]),
             "DECSACE": lambda op: self.set_attr_change_extent(op.args[0]),
-            "IL": lambda op: self.insert_lines(op.args[0]),
-            "DL": lambda op: self.delete_lines(op.args[0]),
-            "ICH": lambda op: self.insert_characters(op.args[0], self.board.style.current),
-            "DCH": lambda op: self.delete_characters(op.args[0]),
-            "ECH": lambda op: self.erase_characters(op.args[0]),
             "SU": lambda op: self.scroll(op.args[0]),
             "SD": lambda op: self.scroll(-op.args[0]),
             "SL": lambda op: self.pan(op.args[0]),
@@ -84,6 +79,13 @@ class Blitter(Device):
             "DECDWL": lambda op: self.set_line_attribute(constants.LINE_DOUBLE_WIDTH),
             "DECSWL": lambda op: self.set_line_attribute(constants.LINE_SINGLE),
         }
+        if DEC_LINE_EDITING in board.model.provides:
+            self.handlers["IL"] = lambda op: self.insert_lines(op.args[0])
+            self.handlers["DL"] = lambda op: self.delete_lines(op.args[0])
+            self.handlers["DCH"] = lambda op: self.delete_characters(op.args[0])
+        if DEC_CHARACTER_EDITING in board.model.provides:
+            self.handlers["ICH"] = lambda op: self.insert_characters(op.args[0], self.board.style.current)
+            self.handlers["ECH"] = lambda op: self.erase_characters(op.args[0])
         if board.model.page_memory:
             self.handlers.update(
                 {

@@ -36,8 +36,7 @@ def test_hardware_profiles_expose_only_documented_implemented_modes():
     vt100 = Board(model=VT100)
     vt220 = Board(model=VT220)
 
-    expected_vt100 = {
-        (False, 4),
+    expected_vt100 = {  # no IRM: the VT102 added it
         (False, 20),
         (True, 1),
         (True, 2),
@@ -50,6 +49,7 @@ def test_hardware_profiles_expose_only_documented_implemented_modes():
     assert set(vt100.modes._modes) == expected_vt100
     assert set(vt220.modes._modes) == expected_vt100 | {
         (False, 2),
+        (False, 4),
         (False, 12),
         (True, 18),
         (True, 19),
