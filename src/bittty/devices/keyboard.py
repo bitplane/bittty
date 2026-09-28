@@ -12,7 +12,14 @@ from ..keyboard_styles import STYLE_KEYMAPS, KeyboardStyle
 from ..keymap import DEC_FUNCTION_CODES, KEYPAD_POSITIONS, PF_KEYS, KeyMap, apply_modifier, vt52_keymap
 from ..keys import LEGACY_MODIFIERS, KeyEvent, KeyModifiers, legacy_modifiers, valid_text, xterm_modifier
 from ..charsets import KEYBOARD_LANGUAGES, KEYBOARD_NATIONAL_SETS, get_charset
-from ..options import DEC_KEYBOARD_DIALECT, DEC_KEYBOARD_LEDS, DEC_USER_KEYS, KITTY_KEYBOARD, XTERM_MODIFY_KEYS
+from ..options import (
+    DEC_KEY_MEMORY,
+    DEC_KEYBOARD_DIALECT,
+    DEC_KEYBOARD_LEDS,
+    DEC_USER_KEYS,
+    KITTY_KEYBOARD,
+    XTERM_MODIFY_KEYS,
+)
 from .modes import ModeEffect
 
 if TYPE_CHECKING:
@@ -138,6 +145,9 @@ class KeyboardDevice(Device):
             self.handlers["DECLL"] = self.load_leds
         if board.model.keyboard_types is not None:
             self.handlers["DSR_KEYBOARD"] = self.report_keyboard
+        if DEC_KEY_MEMORY in board.model.provides:
+            self.handlers["DECPKA"] = self.program_key_action
+            self.handlers["DECRQPKFM"] = self.report_key_memory
         if DEC_KEYBOARD_DIALECT in board.model.provides:
             self.handlers["DECKBD"] = self.select_keyboard
         if KITTY_KEYBOARD in board.model.provides:
@@ -186,6 +196,21 @@ class KeyboardDevice(Device):
                     self.user_defined_keys[fkey] = value
                     used += len(value)
         self.user_keys_locked = lock == 0
+
+    def program_key_action(self, operation: Operation) -> None:
+        """DECPKA — 1 locks the keys; 2 (factory defaults) and 3 (the saved definitions: bittty
+        has no Set-Up to save any) clear them, unless they are locked."""
+        action = operation.args[0]
+        if action == 1:
+            self.user_keys_locked = True
+        elif action in (2, 3) and not self.user_keys_locked:
+            self.user_defined_keys.clear()
+
+    def report_key_memory(self, operation: Operation) -> None:
+        """DECRQPKFM — DECPKFMR: the programmable keys' memory, total and free, in bytes."""
+        total = self.board.model.udk_capacity
+        free = total - sum(map(len, self.user_defined_keys.values()))
+        self.board.host.write(f"\x1b[{total};{free}+y", flush=True)
 
     def report_user_keys(self, operation: Operation) -> None:
         """DSR 25 reports the download lock, not the keyboard action lock."""

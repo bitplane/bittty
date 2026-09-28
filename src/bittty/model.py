@@ -35,8 +35,9 @@ from .mode_profiles import (
     XTERM_MODE_CAPABILITIES,
 )
 from .options import (
-    DEC_KEYBOARD_DIALECT,
     DEC_DISPLAYED_EXTENT,
+    DEC_KEY_MEMORY,
+    DEC_KEYBOARD_DIALECT,
     DEC_KEYBOARD_LEDS,
     DEC_PRINTER_PORT,
     DEC_STATUS_LINE,
@@ -171,6 +172,7 @@ BITTTY = Model(
             DEC_UPSS,
             DEC_TERMINAL_STATE,
             DEC_KEYBOARD_DIALECT,
+            DEC_KEY_MEMORY,
         }
     ),
     power_on_modes=frozenset({1036, 1039}),  # Alt and Meta send ESC
@@ -230,6 +232,7 @@ VT510 = Model(
             DEC_UPSS,
             DEC_TERMINAL_STATE,
             DEC_KEYBOARD_DIALECT,
+            DEC_KEY_MEMORY,
         }
     ),
     decrqss_valid_is_one=False,
@@ -238,6 +241,7 @@ VT510 = Model(
     macro_space=6144,  # "6 Kbytes of memory available for the storage of macros"
     upss="%5",
     keyboard_types=(4, 5),  # LK450, PCXAL
+    udk_capacity=804,  # the programmable keys' memory, which DECUDK shares
 )
 
 LINUX = Model(
