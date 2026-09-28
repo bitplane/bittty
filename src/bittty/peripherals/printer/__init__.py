@@ -1,4 +1,5 @@
-"""Virtual printers: the far end of the board's auxiliary printer cable.
+"""Virtual printers: the far end of the board's auxiliary printer cable, and the hardcopy
+terminal, a printer on the host line.
 
 The only public entry to this package. Module internals (`languages`, `pages`)
 are not part of the API.
@@ -6,6 +7,7 @@ are not part of the API.
 
 from __future__ import annotations
 
+from .hardcopy import LA120, HardcopyTerminal
 from .languages import (
     PrintDirection,
     PrinterCharacterSet,
@@ -46,6 +48,8 @@ __all__ = [
     "GENERIC_DEC_AND_IBM_PRINTER",
     "GENERIC_DEC_PPL2_PRINTER",
     "GENERIC_PROPRINTER",
+    "HardcopyTerminal",
+    "LA120",
     "LETTER_PAGE_GEOMETRY",
     "PRINT_UNITS_PER_INCH",
     "PrintDirection",

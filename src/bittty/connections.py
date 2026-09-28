@@ -412,6 +412,13 @@ class MemoryPrinter:
         """Inject bytes arriving from the printer toward the host."""
         self._inbound.put_nowait(data)
 
+    def take_inbound(self) -> bytes:
+        """Everything the printer has sent that nobody has read yet, removed from the line."""
+        data = bytearray()
+        while not self._inbound.empty():
+            data += self._inbound.get_nowait()
+        return bytes(data)
+
     def configure(self, configuration: PrinterConfiguration) -> None:
         """Record a configuration snapshot, as a virtual adapter would."""
         self.configuration = configuration

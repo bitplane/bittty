@@ -173,8 +173,11 @@ The axes that have architectural consequences:
 - **Graphics** — the LA50 prints dot graphics at 72 dpi vertical, 144 or 180 horizontal; the
   LN03 has graphics. Not yet modelled, and the gate for VT340 graphics printing.
 - **Some printers are terminals.** The LA36 and LA120 DECwriter are hardcopy *terminals*: a
-  machine whose video memory is paper. That makes the page store the video of a hardcopy
-  terminal, and a future `HardcopyTerminal` chrome the symmetric sibling of `StdioTerminal`.
+  machine whose video memory is paper. `HardcopyTerminal` (in `peripherals/printer`, since it
+  is a printer) plugs a `VirtualPrinter` into the host line through a `HostPort`, exactly where
+  a board would go: the host's output prints, the printer's reports (the LA120 identifies as
+  `CSI ? 2 c`) answer the host, and the keyboard transmits, printing what is typed only under
+  local echo. The page store is its video.
 
 Terminal side: effectively every real DEC terminal had a printer port (VT100 with the EIA
 auxiliary port, VT102 onward as standard, through the VT510). No software emulator has one
