@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import base64
 from typing import TYPE_CHECKING
 
@@ -22,6 +24,11 @@ from .base import Device
 
 if TYPE_CHECKING:
     from .board import Board
+
+
+# style_to_ansi writes extended colours in their semicolon forms.
+_INDEXED_COLOR = re.compile(r"\b([345]8);5;(\d+)")
+_DIRECT_COLOR = re.compile(r"\b([345]8);2;(\d+);(\d+);(\d+)")
 
 
 def _bit_field(*flags) -> str:
@@ -168,8 +175,10 @@ class QueryDevice(Device):
         return reporter() + request if reporter else None
 
     def _sgr_status(self) -> str:
+        """The rendition as xterm reports it: reset first, colours from 16 up in their colon forms."""
         ansi = style_to_ansi(self.board.style.current)
-        return ansi[2:-1] if ansi else "0"
+        params = _INDEXED_COLOR.sub(r"\1:5:\2", _DIRECT_COLOR.sub(r"\1:2::\2:\3:\4", ansi[2:-1]))
+        return f"0;{params}" if params else "0"
 
     def _cursor_style_status(self) -> str:
         base = {"block": 1, "underline": 3, "bar": 5}.get(self.board.cursor.shape, 1)

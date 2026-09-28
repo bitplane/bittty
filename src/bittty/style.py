@@ -313,23 +313,31 @@ def parse_sgr_with_reset(ansi: str) -> tuple[Style | None, bool]:
 _UNDERLINE_STYLES = {"0": "none", "1": "single", "2": "double", "3": "curly", "4": "dotted", "5": "dashed"}
 
 
+def _color_arguments(fields, count: int) -> tuple[int, ...] | None:
+    """SGR colour arguments: missing or empty ones are 0 (xterm); None unless all are numbers up to 255."""
+    fields = (*fields, *("",) * (count - len(fields)))
+    if not all(field.isascii() and (field == "" or field.isdecimal()) for field in fields):
+        return None
+    values = tuple(int(field or 0) for field in fields)
+    return values if max(values) <= 255 else None
+
+
+def _extended_color(mode: str, fields) -> Color | None:
+    """An indexed (5) or direct (2) colour from its arguments, or None if they are unusable."""
+    if mode == "5":
+        values = _color_arguments(fields[:1], 1)
+        return Color("indexed", values[0]) if values else None
+    if mode == "2":
+        values = _color_arguments(fields[:3], 3)
+        return Color("rgb", values) if values else None
+    return None
+
+
 def _colon_color(parts: list[str]) -> Color | None:
-    """Parse an ITU colon-form colour: 38:5:n or 38:2[:id]:r:g:b."""
+    """Parse an ITU colon-form colour: 38:5:n, or 38:2:r:g:b and 38:2:colour-space:r:g:b."""
     if len(parts) < 3:
         return None
-    if parts[1] == "5":
-        try:
-            return Color("indexed", int(parts[2]))
-        except ValueError:
-            return None
-    if parts[1] == "2":
-        nums = [p for p in parts[2:] if p != ""]
-        if len(nums) >= 3:
-            try:
-                return Color("rgb", (int(nums[-3]), int(nums[-2]), int(nums[-1])))
-            except ValueError:
-                return None
-    return None
+    return _extended_color(parts[1], parts[3:] if parts[1] == "2" and len(parts) >= 6 else parts[2:])
 
 
 # Plain flag tokens: turn a mask on / explicitly off.
@@ -338,7 +346,6 @@ _TOKEN_ON = {
     "01": _BOLD,
     "2": _DIM,
     "3": _ITALIC,
-    "4": _UNDERLINE,
     "5": _BLINK,
     "6": _BLINK,  # rapid blink; rendered the same
     "7": _REVERSE,
@@ -361,6 +368,7 @@ _TOKEN_OFF = {
 }
 _IDEOGRAM_TOKENS = {"60": 1, "61": 2, "62": 3, "63": 4, "64": 5, "65": 6}  # -> _IDEOGRAMS index
 _COLOR_SLOTS = {"38": "fg", "48": "bg", "58": "underline_color"}
+_COLOR_ARGUMENT_COUNTS = {"5": 1, "2": 3}
 
 
 @lru_cache(maxsize=10000)
@@ -378,13 +386,11 @@ def interpret(tokens: tuple[str, ...]) -> Style:
             head = parts[0]
             if head == "4":
                 ul = _UNDERLINE_STYLES.get(parts[1] if len(parts) > 1 else "1", "single")
-                s |= _UNDERLINE
-                s &= ~_ULSTYLE_MASK
+                s |= _UNDERLINE | _ULSTYLE_MASK
                 v &= ~(_UNDERLINE | _ULSTYLE_MASK)
                 if ul != "none":
                     v |= _UNDERLINE
                     if ul != "single":
-                        s |= _ULSTYLE_MASK
                         v |= _ULSTYLES.index(ul) << _ULSTYLE_SHIFT
             elif head in _COLOR_SLOTS:
                 color = _colon_color(parts)
@@ -402,6 +408,9 @@ def interpret(tokens: tuple[str, ...]) -> Style:
         elif token == "0" or token == "00":  # reset
             s = v = 0
             colors = {"fg": None, "bg": None, "underline_color": None}
+        elif token == "4":  # single underline, replacing any other style (4 is 4:1)
+            s |= _UNDERLINE | _ULSTYLE_MASK
+            v = (v & ~_ULSTYLE_MASK) | _UNDERLINE
         elif token == "21":  # double underline
             s |= _UNDERLINE | _ULSTYLE_MASK
             v = (v & ~_ULSTYLE_MASK) | _UNDERLINE | (_ULSTYLES.index("double") << _ULSTYLE_SHIFT)
@@ -421,15 +430,12 @@ def interpret(tokens: tuple[str, ...]) -> Style:
         elif token == "49":
             colors["bg"] = Color("default")
         elif (slot := _COLOR_SLOTS.get(token)) is not None:  # extended colour (indexed or rgb)
-            if i + 1 < len(tokens):
-                mode = tokens[i + 1]
-                if mode == "5" and i + 2 < len(tokens):
-                    colors[slot] = Color("indexed", int(tokens[i + 2]))
-                    i += 2
-                elif mode == "2" and i + 4 < len(tokens):
-                    r, g, b = int(tokens[i + 2]), int(tokens[i + 3]), int(tokens[i + 4])
-                    colors[slot] = Color("rgb", (r, g, b))
-                    i += 4
+            mode = tokens[i + 1] if i + 1 < len(tokens) else ""
+            arguments = tokens[i + 2 : i + 2 + _COLOR_ARGUMENT_COUNTS.get(mode, 0)]
+            color = _extended_color(mode, arguments) if "" not in arguments else None  # xterm: empty voids it
+            if color is not None:
+                colors[slot] = color
+            i += 1 + len(arguments) if mode in _COLOR_ARGUMENT_COUNTS else 0
         elif token.isdigit():
             n = int(token)
             if 30 <= n <= 37:
@@ -599,8 +605,6 @@ def style_to_ansi(style: Style) -> str:
         elif uc.mode == "rgb":
             r, g, b = uc.value
             params.append(f"58;2;{r};{g};{b}")
-        elif uc.mode == "default":
-            params.append("59")
 
     if not params:
         return ""

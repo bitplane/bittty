@@ -18,7 +18,7 @@ def test_decrqss_reports_current_sgr():
     parser, transport = _driver()
     parser.feed("\x1b[1;31m")  # bold, red
     parser.feed("\x1bP$qm\x1b\\")  # DECRQSS for SGR
-    assert transport.data == ["\x1bP1$r1;31m\x1b\\"]
+    assert transport.data == ["\x1bP1$r0;1;31m\x1b\\"]
 
 
 def test_decrqss_reports_default_sgr_as_zero():
@@ -112,3 +112,55 @@ def test_decrqss_reports_settings_as_xterm_does(setup, setting, reply):
     parser.feed(setup)
     parser.feed(f"\x1bP$q{setting}\x1b\\")
     assert transport.data == [f"\x1bP1$r{reply}\x1b\\"]
+
+
+@pytest.mark.parametrize(
+    ("sgr", "reply"),
+    [
+        ("1", "0;1m"),
+        ("6", "0;5m"),
+        ("38;5;9", "0;91m"),
+        ("48;5;9", "0;101m"),
+        ("38;5;16", "0;38:5:16m"),
+        ("38;2;1;2;3", "0;38:2::1:2:3m"),
+        ("38:2::1:2:3", "0;38:2::1:2:3m"),
+        ("38:2:1:2:3", "0;38:2::1:2:3m"),  # no colour-space field
+        ("38:2:0:1:2:3", "0;38:2::1:2:3m"),
+        ("48:2::1:2:3", "0;48:2::1:2:3m"),
+        ("38:2::1:2:3;48:5:7", "0;38:2::1:2:3;47m"),
+        ("38;2;1;2;3;4", "0;4;38:2::1:2:3m"),  # RGB takes exactly three
+        ("38;2;1;2", "0;38:2::1:2:0m"),  # missing components are 0
+        ("38:2:::1:2", "0;38:2::0:1:2m"),  # so are empty colon arguments
+        ("38;5;;1", "0;1m"),  # but an empty semicolon argument voids the colour it belongs to
+        ("38;2;;1;2;3", "0;3m"),
+        ("48;2;1;;", "0m"),
+        ("38;5", "0;30m"),
+        ("38:5:", "0;30m"),
+        ("38:5", "0m"),
+        ("38:2", "0m"),
+        ("38:2::300:2:3", "0m"),  # out of range: ignored
+        ("38;5;300", "0m"),
+        ("31;39", "0m"),
+        ("59", "0m"),
+        ("4;24", "0m"),
+    ],
+)
+def test_decrqss_reports_sgr_as_xterm_does(sgr, reply):
+    """Replies captured from xterm 407."""
+    parser, transport = _driver()
+    parser.feed(f"\x1b[{sgr}m\x1bP$qm\x1b\\")
+    assert transport.data == [f"\x1bP1$r{reply}\x1b\\"]
+
+
+@pytest.mark.parametrize("sgr", ["38;5;;1", "38;2;;1;2;3", "38;5;<", "38:5:x", "48;2;1;;"])
+def test_malformed_colour_arguments_do_not_raise(sgr):
+    parser, transport = _driver()
+    parser.feed(f"\x1b[{sgr}m\x1bP$qm\x1b\\")
+    assert transport.data[0].startswith("\x1bP1$r")
+
+
+def test_sgr_4_is_a_single_underline_again():
+    """4 means 4:1 (kitty), so it replaces a curly underline rather than keeping its style."""
+    parser, transport = _driver()
+    parser.feed("\x1b[4:3m\x1b[4m\x1bP$qm\x1b\\")
+    assert transport.data == ["\x1bP1$r0;4m\x1b\\"]
