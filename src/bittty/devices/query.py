@@ -29,6 +29,11 @@ def _bit_field(*flags) -> str:
     return chr(0x40 | sum(1 << bit for bit, on in enumerate(flags) if on))
 
 
+def _flags_of(field: int, count: int) -> tuple[bool | None, ...]:
+    """The first count flags of a report's bit field, as style flags (True or None)."""
+    return tuple(True if field >> bit & 1 else None for bit in range(count))
+
+
 class QueryDevice(Device):
     """Applies terminal query operations to the current board implementation."""
 
@@ -44,6 +49,10 @@ class QueryDevice(Device):
             "DECRQM": self.report_mode_status,
             "DECRQSS": self.report_status_string,
             "DECRQPSR": self.report_presentation_state,
+            "DECRSPS_CIR": self.restore_cursor_information,
+            "DECRSPS_TABS": lambda op: setattr(
+                board.cursor, "tab_stops", {stop - 1 for stop in op.args[0] if 0 < stop <= board.width}
+            ),
             "OSC_CLIPBOARD": self.handle_clipboard,
             "XTWINOPS": self.handle_window_op,
             "DECSCL": self.set_conformance_level,
@@ -186,6 +195,25 @@ class QueryDevice(Device):
         position = f"{cursor.y + 1};{cursor.display_x + 1};1"
         shifts = f"{charset.current_charset};{charset.gr}"
         return f"{position};{srend};{satt};{sflag};{shifts};{scss};{''.join(charset.charset_array)}"
+
+    def restore_cursor_information(self, operation: Operation) -> None:
+        """DECRSPS 1 — restore a DECCIR report; one placing the cursor off the screen is rejected whole."""
+        row, column, srend, satt, sflag, gl, gr, designators = operation.args
+        board, cursor, charset = self.board, self.board.cursor, self.board.charset
+        if not (0 < row <= board.height and 0 < column <= board.width):
+            return
+        board.modes.set_mode(6, bool(sflag & 1), private=True)  # DECOM first: setting it homes the cursor
+        cursor.set_position(column - 1, row - 1)
+        if sflag & 8:
+            cursor.arm_pending_wrap()
+        bold, underline, blink, reverse = _flags_of(srend, 4)
+        board.style.current = board.style.current.replace(
+            bold=bold, underline=underline, blink=blink, reverse=reverse, protected=_flags_of(satt, 1)[0]
+        )
+        charset.single_shift = {2: 2, 4: 3}.get(sflag & 6)
+        charset.current_charset, charset.gr = gl, gr
+        for index, designator in enumerate(designators[:4]):
+            charset.designate(index, designator)
 
     def _tab_stops(self) -> str:
         """DECTABSR: the tab stop columns, one-based and separated by '/'."""

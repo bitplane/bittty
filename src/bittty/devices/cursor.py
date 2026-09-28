@@ -157,6 +157,13 @@ class CursorDevice(Device):
         self._wrap_left, self._wrap_right = bounds
         self._wrap_y = self.y
 
+    def arm_pending_wrap(self) -> None:
+        """Re-arm delayed wrap if the cursor sits in the last column of its margins (a restored report)."""
+        bounds = self.write_bounds()
+        if self.x == bounds[1] - 1:
+            self.x = bounds[1]
+            self.mark_pending_wrap(bounds)
+
     def _pending_wrap_is_valid(self) -> bool:
         return self._wrap_pending and self.x == self._wrap_right and self.y == self._wrap_y
 

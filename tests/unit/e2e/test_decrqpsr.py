@@ -59,3 +59,55 @@ def test_other_presentation_state_requests_get_no_reply(ps):
     parser, transport = _driver()
     parser.feed(f"\x1b[{ps}$w")
     assert transport.data == []
+
+
+# --- DECRSPS (DCS Ps $ t Pt ST): restore a report --- #
+
+
+def _restore(parser, transport, ps, report):
+    parser.feed(f"\x1bP{ps}$t{report}\x1b\\\x1b[{ps}$w")
+    reply = transport.data.pop()
+    return reply[len(f"\x1bP{ps}$u") : -2]
+
+
+@pytest.mark.parametrize(
+    "report",
+    [
+        "5;10;1;O;A;@;1;1;@;0BBB",
+        "3;4;1;@;@;A;0;2;@;BBBB",  # origin mode
+        "1;80;1;@;@;H;0;2;@;BBBB",  # pending wrap
+        "2;3;1;@;@;B;0;2;@;BBBB",  # SS2
+        "2;3;1;@;@;D;0;2;@;BBBB",  # SS3
+    ],
+)
+def test_decrsps_restores_a_cursor_information_report(report):
+    parser, transport = _driver()
+    assert _restore(parser, transport, 1, report) == report
+
+
+def test_decrsps_restores_the_modes_and_rendition_it_reports():
+    parser, transport = _driver()
+    board = parser.sink
+    parser.feed("\x1bP1$t1;80;1;G;A;I;0;2;@;BBBB\x1b\\X")
+    assert board.modes.origin_mode is True
+    style, char = board.blitter.current_page.get_cell(0, 1)  # the pending wrap took X to the next row
+    assert char == "X"
+    assert (style.bold, style.underline, style.blink, style.reverse, style.protected) == (True, True, True, None, True)
+
+
+@pytest.mark.parametrize("report", ["2;3", "99;999;1;@;@;@;0;2;@;BBBB", "x;y"])
+def test_decrsps_rejects_an_incomplete_or_offscreen_report(report):
+    parser, transport = _driver()
+    parser.feed("\x1b[2;3H\x1bN")
+    assert _restore(parser, transport, 1, report) == "2;3;1;@;@;B;0;2;@;BBBB"
+
+
+def test_decrsps_designates_only_the_sets_given():
+    parser, transport = _driver()
+    assert _restore(parser, transport, 1, "4;5;1;@;@;@;0;2;@;00") == "4;5;1;@;@;@;0;2;@;00BB"
+
+
+@pytest.mark.parametrize(("report", "restored"), [("3/7/80", "3/7/80"), ("", ""), ("5//x/9", "5")])
+def test_decrsps_replaces_tab_stops(report, restored):
+    parser, transport = _driver()
+    assert _restore(parser, transport, 2, report) == restored
