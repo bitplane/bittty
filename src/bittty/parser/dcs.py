@@ -24,10 +24,11 @@ def parse_dcs_operation(string_buffer: str, raw: str = "") -> Operation:
         match = _DECCIR.fullmatch(string_buffer[3:])
         if match is None:
             return Operation("DCS_UNHANDLED", (string_buffer,), raw)
-        row, column, page, srend, satt, sflag, gl, gr, _scss, designators = match.groups()
+        row, column, page, srend, satt, sflag, gl, gr, scss, designators = match.groups()
         flags = (ord(srend) - 0x40, ord(satt) - 0x40, ord(sflag) - 0x40)
         sets = tuple(re.findall(r"[ -/]*[0-~]", designators))
-        return Operation("DECRSPS_CIR", (int(row), int(column), int(page), *flags, int(gl), int(gr), sets), raw)
+        operands = (int(row), int(column), int(page), *flags, int(gl), int(gr), ord(scss) - 0x40, sets)
+        return Operation("DECRSPS_CIR", operands, raw)
     if string_buffer.startswith("2$t"):  # DECRSPS - restore a DECTABSR tab stop report
         stops = re.match(r"[0-9]+(?:/[0-9]+)*", string_buffer[3:])
         return Operation("DECRSPS_TABS", (tuple(map(int, stops[0].split("/"))) if stops else (),), raw)

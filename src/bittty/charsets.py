@@ -51,6 +51,26 @@ DEC_SUPPLEMENTAL = {chr(code): chr(code + 0x80) for code in range(0x21, 0x7F)} |
     **dict.fromkeys("$&,-./48>P^p~", _RESERVED),
 }
 
+
+def _iso_upper_half(codec: str) -> dict:
+    """An ISO 8859 upper half as a 96-character set: GL code c shows the codepage's c + 0x80."""
+    return {
+        chr(code): bytes([code + 0x80]).decode(codec, errors="replace").replace("\ufffd", _RESERVED)
+        for code in range(0x20, 0x80)
+    }
+
+
+# ISO 2022 96-character sets (ESC - F, ESC . F, ESC / F). Their designators are stored
+# prefixed with "96", since "A" and "B" also name 94-character sets.
+ISO_SETS = {
+    "96A": _iso_upper_half("latin_1"),  # ISO Latin-1 Supplemental
+    "96B": _iso_upper_half("iso8859_2"),  # ISO Latin-2 Supplemental
+    "96F": _iso_upper_half("iso8859_7"),  # ISO Greek Supplemental
+    "96H": _iso_upper_half("iso8859_8"),  # ISO Hebrew Supplemental
+    "96L": _iso_upper_half("iso8859_5"),  # ISO Latin-Cyrillic
+    "96M": _iso_upper_half("iso8859_9"),  # ISO Latin-5 Supplemental
+}
+
 # UK National Replacement Character Set (ESC ( A)
 # Only differs from ASCII in one position
 UK_NATIONAL = {
@@ -344,6 +364,7 @@ CHARSETS = {
     "Z": SPANISH_NATIONAL,  # Spanish
     "%6": PORTUGUESE_NATIONAL,  # Portuguese (multi-char designator)
     "vt52": VT52_GRAPHICS,  # no designator: VT52 mode selects it with ESC F
+    **ISO_SETS,
 }
 
 # SCS designators whose recognition is controlled by DECNRCM on terminals
@@ -355,8 +376,8 @@ NATIONAL_CHARSET_DESIGNATORS = frozenset(
 
 
 # Sets DECAUPSS can make the user-preferred supplemental set, by (DECAUPSS Pn, designator):
-# Pn 0 names a 94-character set.
-SUPPLEMENTAL_SETS = frozenset({(0, "%5")})
+# Pn 0 names a 94-character set and 1 a 96-character set.
+SUPPLEMENTAL_SETS = {(0, "%5"): "%5"} | {(1, name.removeprefix("96")): name for name in ISO_SETS}
 
 
 def get_charset(designator: str) -> dict:

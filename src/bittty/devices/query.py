@@ -228,15 +228,16 @@ class QueryDevice(Device):
         sflag = _bit_field(
             board.modes.origin_mode, charset.single_shift == 2, charset.single_shift == 3, cursor.wrap_pending
         )
-        scss = "@"  # every designated set is a 94-character set: the 96-set SCS forms aren't parsed
+        scss = _bit_field(*(designation.startswith("96") for designation in charset.charset_array))
+        designations = "".join(designation.removeprefix("96") for designation in charset.charset_array)
         page = 1 if board.blitter.in_alt_screen else board.blitter.page + 1
         position = f"{cursor.y + 1};{cursor.display_x + 1};{page}"
         shifts = f"{charset.current_charset};{charset.gr}"
-        return f"{position};{srend};{satt};{sflag};{shifts};{scss};{''.join(charset.charset_array)}"
+        return f"{position};{srend};{satt};{sflag};{shifts};{scss};{designations}"
 
     def restore_cursor_information(self, operation: Operation) -> None:
         """DECRSPS 1 — restore a DECCIR report; one placing the cursor off the screen is rejected whole."""
-        row, column, page, srend, satt, sflag, gl, gr, designators = operation.args
+        row, column, page, srend, satt, sflag, gl, gr, scss, designators = operation.args
         board, cursor, charset = self.board, self.board.cursor, self.board.charset
         if not (0 < row <= board.height and 0 < column <= board.width):
             return
@@ -251,8 +252,8 @@ class QueryDevice(Device):
         )
         charset.single_shift = {2: 2, 4: 3}.get(sflag & 6)
         charset.current_charset, charset.gr = gl, gr
-        for index, designator in enumerate(designators[:4]):
-            charset.designate(index, designator)
+        for index, (designator, is_96) in enumerate(zip(designators[:4], _flags_of(scss, 4))):
+            charset.designate(index, ("96" if is_96 else "") + designator)
 
     def _tab_stops(self) -> str:
         """DECTABSR: the tab stop columns, one-based and separated by '/'."""

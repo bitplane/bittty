@@ -135,6 +135,12 @@ XTERM = Model(
         {DEC_KEYBOARD_LEDS, DEC_USER_KEYS, XTERM_MODIFY_KEYS, XTERM_EXTRAS, DEC_DISPLAYED_EXTENT}
     ),
     power_on_modes=frozenset({1034}),  # eightBitInput
+    # The sets of xterm's default VT4xx level (charproc.c scs_table): not the VT100's
+    # alternate ROMs nor JIS Roman, nor the VT5xx sets.
+    charsets=frozenset(
+        {"B", "A", "0", "<", "%5", ">", "96A", "%6", "4", "5", "C", "R", "f", "Q", "9", "K", "Y", "E", "6", "`"}
+        | {"Z", "7", "H", "="}
+    ),
     macro_space=0,  # xterm 407 reports no macro space
     upss="B",  # xterm has no user-preferred set in UTF-8 and reports ASCII (charproc.c)
 )
@@ -201,7 +207,7 @@ VT510 = Model(
     da2_response="\033[>61;10;0c",
     da3_response=None,
     mode_capabilities=VT510_MODE_CAPABILITIES,
-    charsets=VT220.charsets | {"%5"},
+    charsets=VT220.charsets | {"%5", ">", "f", "9", "`", "96A", "96B", "96F", "96H", "96L", "96M"},
     color_depth="monochrome",
     keymap=VT220_KEYMAP,
     options=frozenset({VT510_PRINTER_PORT}),

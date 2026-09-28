@@ -63,10 +63,14 @@ def parse_hash_operation(data: str) -> Operation | None:
 
 
 CHARSET_OPERATION_NAMES = {
-    "(": "SCS_G0",
-    ")": "SCS_G1",
-    "*": "SCS_G2",
-    "+": "SCS_G3",
+    "(": ("SCS_G0", ""),
+    ")": ("SCS_G1", ""),
+    "*": ("SCS_G2", ""),
+    "+": ("SCS_G3", ""),
+    # 96-character sets, whose designators are stored prefixed with "96"
+    "-": ("SCS_G1", "96"),
+    ".": ("SCS_G2", "96"),
+    "/": ("SCS_G3", "96"),
 }
 
 
@@ -75,8 +79,8 @@ def parse_charset_operation(data: str) -> Operation | None:
     if len(data) < 3:
         return None
 
-    name = CHARSET_OPERATION_NAMES.get(data[1])
+    name, size = CHARSET_OPERATION_NAMES.get(data[1], (None, ""))
     if name is None:
         return None
 
-    return Operation(name, (data[2:],), data)
+    return Operation(name, (size + data[2:],), data)

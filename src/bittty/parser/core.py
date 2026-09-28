@@ -45,8 +45,9 @@ GROUND_PATTERNS = {
     "sos": r"(?:\x1bX|\x98)",
     "csi": r"(?:\x1b\[|\x9B)",
     # SCS (charset designation) MUST precede generic ESC minis
-    # G0-G3, with a designator of one final or an intermediate and a final (ESC ( % 5)
-    "esc_charset": r"\x1b[()*+][ -/]?[0-~]",
+    # G0-G3 94-character and G1-G3 96-character sets, with a designator of one final or
+    # an intermediate and a final (ESC ( % 5)
+    "esc_charset": r"\x1b[()*+\-./][ -/]?[0-~]",
     # Singles / minis
     "ss2": r"(?:\x1bN|\x8E)",
     "ss3": r"(?:\x1bO|\x8F)",
@@ -60,7 +61,7 @@ GROUND_PATTERNS = {
     # two-char prefix ( ) * + # % SP at buffer end. MUST precede the generic 'esc'
     # alternative, or a chunk split after e.g. ESC ( is consumed as an ESC mini and
     # the designator that arrives next chunk prints as text.
-    "trail": r"(?:\x1b(?:[\[\]P_^X()*+#%\x20]|[()*+][ -/])?|\x90|\x9B|\x9D|\x9E|\x9F|\x98)\Z",
+    "trail": r"(?:\x1b(?:[\[\]P_^X()*+#%\x20]|[()*+\-./][ -/]?)?|\x90|\x9B|\x9D|\x9E|\x9F|\x98)\Z",
     # Generic simple ESC minis (not starters for paired strings)
     # excludes [, ], P, _, ^, X, and ST (\)
     "esc": r"\x1b[^][P_^XO\x1b]",  # a stray ESC \ (ST) is one of these: it does nothing
