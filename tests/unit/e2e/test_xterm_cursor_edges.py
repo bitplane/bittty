@@ -190,3 +190,37 @@ def _margins(board):
 def test_margins_as_xterm_sets_them(sequence, margins, cursor):
     board = _run(sequence)
     assert (_margins(board), _cursor(board)) == (margins, cursor)
+
+
+# --- text within DECSLRM margins: bounded by the right margin from its left, wraps to the left margin --- #
+
+LR = "\x1b[?69h\x1b[10;30s"
+Q = "Q" * 30
+
+
+@pytest.mark.parametrize(
+    ("sequence", "lines", "cursor"),
+    [
+        (LR + "\x1b[2;5H" + Q, ["", "    " + "Q" * 26, " " * 9 + "QQQQ"], (3, 14)),  # left of the margin
+        (LR + "\x1b[2;35H" + "Q" * 50, ["", " " * 34 + "Q" * 46, " " * 9 + "QQQQ"], (3, 14)),  # right of it
+        ("\x1b[5;10r" + LR + "\x1b[2;15H" + Q, ["", " " * 14 + "Q" * 16, " " * 9 + "Q" * 14], (3, 24)),  # any row
+        ("\x1b[1;3r" + LR + "\x1b[3;5H" + Q, ["", " " * 9 + "Q" * 21, "    " + "Q" * 9], (3, 14)),  # scrolls the box
+        ("\x1b[1;3r" + LR + "\x1b[24;15H" + Q, ["", "", ""], (24, 24)),  # below the region: no scroll
+    ],
+)
+def test_text_between_left_and_right_margins(sequence, lines, cursor):
+    board = _run(sequence)
+    assert (_lines(board), _cursor(board)) == (lines, cursor)
+
+
+@pytest.mark.parametrize(
+    ("sequence", "cursor"),
+    [
+        (LR + "\x1b[2;5H\r", (2, 1)),  # left of the margin: the screen edge
+        (LR + "\x1b[2;15H\r", (2, 10)),
+        (LR + "\x1b[2;35H\r", (2, 10)),
+        (LR + "\x1b[2;5H\x1bE", (3, 1)),  # NEL
+    ],
+)
+def test_carriage_return_goes_to_the_left_margin_from_its_right(sequence, cursor):
+    assert _cursor(_run(sequence)) == cursor

@@ -153,9 +153,10 @@ class CursorDevice(Device):
             count -= 1
 
     def carriage_return(self) -> None:
-        """Move cursor to the beginning of the current line."""
+        """Move to the left margin, or to the screen edge from left of it (xterm 407)."""
+        left = self.board.blitter.left_margin
         self.cancel_pending_wrap()
-        self.x = self.board.blitter.left_margin
+        self.x = left if self.x >= left else 0
 
     def cancel_pending_wrap(self) -> None:
         """Clear delayed wrap without changing the physical cursor column."""
@@ -196,19 +197,16 @@ class CursorDevice(Device):
         if self._pending_wrap_is_valid():
             return self._wrap_left, self._wrap_right
         self._wrap_pending = False
+        # On any row (xterm 407): text runs to the right margin from its left, else to the
+        # screen edge, and wraps to the left margin either way.
         screen = self.board.blitter
-        if screen.scroll_top <= self.y <= screen.scroll_bottom and screen.left_margin <= self.x <= screen.right_margin:
-            return screen.left_margin, screen.right_margin + 1
-        return 0, self.board.width
+        right = screen.right_margin + 1 if self.x <= screen.right_margin else self.board.width
+        return screen.left_margin, right
 
     def _within_horizontal_margins(self) -> bool:
-        """Whether the cursor belongs to the active column range.
-
-        ``x == width`` is the delayed-wrap sentinel for the final screen
-        column, so it still belongs to a margin ending at that column.
-        """
+        """Whether the cursor's physical column lies within the left and right margins."""
         screen = self.board.blitter
-        return screen.left_margin <= self.x <= screen.right_margin or self._pending_wrap_is_valid()
+        return screen.left_margin <= self.display_x <= screen.right_margin
 
     def line_feed(self, is_wrapped: bool = False, print_trigger: str | None = None) -> None:
         """Move down one line, scrolling the active scroll region if needed."""
