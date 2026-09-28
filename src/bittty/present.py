@@ -172,6 +172,14 @@ class StatusLineChanged:
     kind: str
 
 
+@dataclass(frozen=True)
+class ChromeResourcesChanged:
+    """The xterm resources the chrome carries out (a scrollbar, scrolling to the bottom,
+    selections and the clipboard) that are now enabled, by name."""
+
+    enabled: frozenset[str]
+
+
 PresentEvent = (
     Bell
     | TitleChanged
@@ -195,4 +203,5 @@ PresentEvent = (
     | GraphemeClusteringChanged
     | StatusLineChanged
     | PointerModeChanged
+    | ChromeResourcesChanged
 )

@@ -80,6 +80,27 @@ INBAND_RESIZE = "bittty.inband-resize"
 DEC_NUMLOCK = "dec.numlock"
 DEC_CAPSLOCK = "dec.capslock"
 DEC_LED_HOST_INDICATOR = "dec.led-host-indicator"
+# xterm resources the chrome carries out
+XTERM_SCROLLBAR = "xterm.scrollbar"
+XTERM_FONT_SHIFTING = "xterm.font-shifting"
+XTERM_SCROLL_ON_OUTPUT = "xterm.scroll-on-output"
+XTERM_SCROLL_ON_KEY = "xterm.scroll-on-key"
+XTERM_FAST_SCROLL = "xterm.fast-scroll"
+XTERM_KEEP_SELECTION = "xterm.keep-selection"
+XTERM_SELECT_TO_CLIPBOARD = "xterm.select-to-clipboard"
+XTERM_KEEP_CLIPBOARD = "xterm.keep-clipboard"
+XTERM_CHROME_RESOURCES = frozenset(
+    {
+        XTERM_SCROLLBAR,
+        XTERM_FONT_SHIFTING,
+        XTERM_SCROLL_ON_OUTPUT,
+        XTERM_SCROLL_ON_KEY,
+        XTERM_FAST_SCROLL,
+        XTERM_KEEP_SELECTION,
+        XTERM_SELECT_TO_CLIPBOARD,
+        XTERM_KEEP_CLIPBOARD,
+    }
+)
 
 ANSI_MODE_CAPABILITIES = frozenset({ANSI_INSERT, ANSI_NEWLINE})
 
@@ -128,54 +149,57 @@ VT510_MODE_CAPABILITIES = VT420_MODE_CAPABILITIES | frozenset(
 )
 
 # xterm as Debian builds it (xterm 407): no HP or SCO function keys, and no DECNCSM.
-XTERM_MODE_CAPABILITIES = frozenset(
-    {
-        XTERM_SUN_KEYS,
-        XTERM_LEGACY_KEYS,
-        XTERM_VT220_KEYS,
-        ANSI_KEYBOARD_ACTION,
-        ANSI_INSERT,
-        ANSI_SEND_RECEIVE,
-        ANSI_NEWLINE,
-        DEC_ANSI,
-        DEC_CURSOR_APPLICATION,
-        XTERM_COLUMN_MODE,
-        DEC_REVERSE_SCREEN,
-        DEC_ORIGIN,
-        DEC_AUTOWRAP,
-        XTERM_MOUSE_X10,
-        XTERM_CURSOR_BLINK,
-        DEC_CURSOR_VISIBLE,
-        DEC_NATIONAL_CHARSET,
-        XTERM_MARGIN_BELL,
-        XTERM_REVERSE_WRAP,
-        XTERM_ALT_SCREEN_47,
-        DEC_NUMERIC_KEYPAD,
-        DEC_BACKARROW,
-        DEC_LEFT_RIGHT_MARGINS,
-        XTERM_MOUSE_NORMAL,
-        XTERM_FOCUS,
-        XTERM_MOUSE_BUTTON,
-        XTERM_MOUSE_ANY,
-        XTERM_MOUSE_UTF8,
-        XTERM_MOUSE_SGR,
-        XTERM_ALTERNATE_SCROLL,
-        URXVT_MOUSE,
-        XTERM_EIGHT_BIT_INPUT,
-        XTERM_SPECIAL_MODIFIERS,
-        XTERM_META_ESCAPE,
-        XTERM_DELETE,
-        XTERM_ALT_ESCAPE,
-        XTERM_BELL_URGENT,
-        XTERM_BELL_RAISE,
-        XTERM_ALT_SCREEN_1047,
-        XTERM_SAVE_CURSOR_1048,
-        XTERM_ALT_SCREEN_1049,
-        XTERM_ALLOW_COLUMN,
-        XTERM_EXTENDED_REVERSE_WRAP,
-        XTERM_ALLOW_ALT_SCREEN,
-        XTERM_BRACKETED_PASTE,
-    }
+XTERM_MODE_CAPABILITIES = (
+    frozenset(
+        {
+            XTERM_SUN_KEYS,
+            XTERM_LEGACY_KEYS,
+            XTERM_VT220_KEYS,
+            ANSI_KEYBOARD_ACTION,
+            ANSI_INSERT,
+            ANSI_SEND_RECEIVE,
+            ANSI_NEWLINE,
+            DEC_ANSI,
+            DEC_CURSOR_APPLICATION,
+            XTERM_COLUMN_MODE,
+            DEC_REVERSE_SCREEN,
+            DEC_ORIGIN,
+            DEC_AUTOWRAP,
+            XTERM_MOUSE_X10,
+            XTERM_CURSOR_BLINK,
+            DEC_CURSOR_VISIBLE,
+            DEC_NATIONAL_CHARSET,
+            XTERM_MARGIN_BELL,
+            XTERM_REVERSE_WRAP,
+            XTERM_ALT_SCREEN_47,
+            DEC_NUMERIC_KEYPAD,
+            DEC_BACKARROW,
+            DEC_LEFT_RIGHT_MARGINS,
+            XTERM_MOUSE_NORMAL,
+            XTERM_FOCUS,
+            XTERM_MOUSE_BUTTON,
+            XTERM_MOUSE_ANY,
+            XTERM_MOUSE_UTF8,
+            XTERM_MOUSE_SGR,
+            XTERM_ALTERNATE_SCROLL,
+            URXVT_MOUSE,
+            XTERM_EIGHT_BIT_INPUT,
+            XTERM_SPECIAL_MODIFIERS,
+            XTERM_META_ESCAPE,
+            XTERM_DELETE,
+            XTERM_ALT_ESCAPE,
+            XTERM_BELL_URGENT,
+            XTERM_BELL_RAISE,
+            XTERM_ALT_SCREEN_1047,
+            XTERM_SAVE_CURSOR_1048,
+            XTERM_ALT_SCREEN_1049,
+            XTERM_ALLOW_COLUMN,
+            XTERM_EXTENDED_REVERSE_WRAP,
+            XTERM_ALLOW_ALT_SCREEN,
+            XTERM_BRACKETED_PASTE,
+        }
+    )
+    | XTERM_CHROME_RESOURCES
 )
 
 LINUX_MODE_CAPABILITIES = frozenset(

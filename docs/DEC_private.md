@@ -37,10 +37,10 @@ Related ANSI modes: KAM (`CSI 2 h/l`) and SRM (`CSI 12 h/l`) implement keyboard 
 | 25 | DEC | DECTCEM - Text Cursor Enable Mode | ✅ |
 | 27 | DEC PPL | DECPSP - Proportional Spacing | ✅ |
 | 29 | DEC PPL | DECPSM - Pitch Select Mode | ✅ |
-| 30 | rxvt | Show scrollbar | X |
+| 30 | rxvt | Show scrollbar (a chrome resource: kept, reported and passed to the chrome) | ✅ |
 | 34 | DEC | DECRLM - Cursor Right to Left Mode | X |
 | 35 | DEC | DECHEBM - Hebrew (Keyboard) Mode | X |
-| 35 | rxvt | Enable font-shifting functions | X |
+| 35 | rxvt | Enable font-shifting functions (a chrome resource: kept, reported and passed to the chrome) | ✅ |
 | 36 | DEC | DECHEM - Hebrew Encoding Mode | X |
 | 38 | DEC | DECTEK - Tektronix 4010/4014 Mode | X |
 | 40 | DEC PPL | DECCRNLM - Carriage Return/New Line Mode | ✅ |
@@ -112,9 +112,9 @@ Related ANSI modes: KAM (`CSI 2 h/l`) and SRM (`CSI 12 h/l`) implement keyboard 
 | 1005 | xterm | Enable UTF-8 Mouse Mode | ✅ |
 | 1006 | xterm | Enable SGR Mouse Mode | ✅ |
 | 1007 | xterm | Enable Alternate Scroll Mode | ✅ |
-| 1010 | rxvt | Scroll to bottom on tty output | X |
-| 1011 | rxvt | Scroll to bottom on key press | X |
-| 1014 | xterm | Enable fastScroll resource | X |
+| 1010 | rxvt | Scroll to bottom on tty output (a chrome resource: kept, reported and passed to the chrome) | ✅ |
+| 1011 | rxvt | Scroll to bottom on key press (a chrome resource: kept, reported and passed to the chrome) | ✅ |
+| 1014 | xterm | Enable fastScroll resource (a chrome resource: kept, reported and passed to the chrome) | ✅ |
 | 1015 | urxvt | Enable urxvt Mouse Mode | ✅ |
 | 1016 | xterm | Enable SGR Mouse PixelMode | X |
 | 1021 | rxvt | Bold/italic implies high intensity | X |
@@ -123,11 +123,11 @@ Related ANSI modes: KAM (`CSI 2 h/l`) and SRM (`CSI 12 h/l`) implement keyboard 
 | 1036 | xterm | Send ESC when Meta modifies a key | ✅ |
 | 1037 | xterm | Send DEL from the editing-keypad Delete key | ✅ |
 | 1039 | xterm | Send ESC when Alt modifies a key | ✅ |
-| 1040 | xterm | Keep selection even if not highlighted | X |
-| 1041 | xterm | Use the CLIPBOARD selection | X |
+| 1040 | xterm | Keep selection even if not highlighted (a chrome resource: kept, reported and passed to the chrome) | ✅ |
+| 1041 | xterm | Use the CLIPBOARD selection (a chrome resource: kept, reported and passed to the chrome) | ✅ |
 | 1042 | xterm | Enable Urgency window manager hint when Control-G is received | ✅ |
 | 1043 | xterm | Enable raising of the window when Control-G is received | ✅ |
-| 1044 | xterm | Reuse the most recent data copied to CLIPBOARD | X |
+| 1044 | xterm | Reuse the most recent data copied to CLIPBOARD (a chrome resource: kept, reported and passed to the chrome) | ✅ |
 | 1045 | xterm | Extended Reverse-wraparound mode (XTREVWRAP2) | ✅ |
 | 1046 | xterm | Enable switching to/from Alternate Screen Buffer | ✅ |
 | 1047 | xterm | Use Alternate Screen Buffer | ✅ |

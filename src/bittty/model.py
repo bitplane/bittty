@@ -74,6 +74,11 @@ def _fixed(status: int, *modes: str) -> frozenset[tuple[bool, int, int]]:
 UNIMPLEMENTED_ANSI_MODES = _fixed(4, "1", "5", "7", "10", "11", "13", "14", "15", "16", "17", "18", "19")
 
 
+# The xterm resources it reports but the host cannot set: cursor blink, utf8, cjkWidth,
+# emojiWidth and privateWidth (xterm 407's values).
+XTERM_READ_ONLY_RESOURCES = _fixed(2, "?13", "?1021", "?1022") | _fixed(1, "?1020", "?1023")
+
+
 @dataclass(frozen=True)
 class Model:
     """A terminal type expressed as data."""
@@ -165,7 +170,8 @@ XTERM = Model(
     # Captured from xterm 407: DEC modes it knows but cannot change, and its one permanent set.
     fixed_modes=UNIMPLEMENTED_ANSI_MODES
     | _fixed(4, "?8", "?10", "?11", "?16", "?46", "?53", "?59", "?60", "?61", "?64", "?68", "?73", "?81")
-    | _fixed(3, "?14"),
+    | _fixed(3, "?14")
+    | XTERM_READ_ONLY_RESOURCES,
     # The sets of xterm's default VT4xx level (charproc.c scs_table): not the VT100's
     # alternate ROMs nor JIS Roman, nor the VT5xx sets.
     charsets=frozenset(
@@ -203,6 +209,7 @@ BITTTY = Model(
         }
     ),
     power_on_modes=frozenset({1036, 1039}),  # Alt and Meta send ESC
+    fixed_modes=XTERM_READ_ONLY_RESOURCES,
     macro_space=6144,
     upss="%5",
     keyboard_types=(4, 5),

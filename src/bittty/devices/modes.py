@@ -12,6 +12,7 @@ from ..keyboard_styles import KeyboardStyle
 from ..operations import Operation
 from ..present import (
     AmbiguousWidthChanged,
+    ChromeResourcesChanged,
     CursorBlinkChanged,
     CursorVisibilityChanged,
     GraphemeClusteringChanged,
@@ -39,6 +40,7 @@ class ModeEffect(Enum):
     GRAPHEME = "grapheme"
     KEYBOARD_LOCK = "keyboard-lock"
     KEYBOARD_INDICATOR = "keyboard-indicator"
+    CHROME_RESOURCES = "chrome-resources"
 
 
 class MouseProtocol(Enum):
@@ -626,6 +628,37 @@ MODE_SPECS += (
     _keyboard_style(mp.XTERM_VT220_KEYS, 1061, KeyboardStyle.VT220),
 )
 
+# xterm resources the chrome carries out, by mode: (capability, name, xterm 407's default).
+# The board keeps them and tells the chrome which are enabled.
+CHROME_RESOURCES = {
+    30: (mp.XTERM_SCROLLBAR, "scrollbar", False),
+    35: (mp.XTERM_FONT_SHIFTING, "font-shifting", True),
+    1010: (mp.XTERM_SCROLL_ON_OUTPUT, "scroll-on-output", True),
+    1011: (mp.XTERM_SCROLL_ON_KEY, "scroll-on-key", False),
+    1014: (mp.XTERM_FAST_SCROLL, "fast-scroll", True),
+    1040: (mp.XTERM_KEEP_SELECTION, "keep-selection", True),
+    1041: (mp.XTERM_SELECT_TO_CLIPBOARD, "select-to-clipboard", False),
+    1044: (mp.XTERM_KEEP_CLIPBOARD, "keep-clipboard", False),
+}
+
+
+def _chrome_attr(name: str) -> str:
+    return "chrome_" + name.replace("-", "_")
+
+
+MODE_SPECS += tuple(
+    ModeSpec(
+        capability,
+        number,
+        True,
+        _chrome_attr(name),
+        default=default,
+        queryable=True,
+        effects=frozenset({ModeEffect.CHROME_RESOURCES}),
+    )
+    for number, (capability, name, default) in CHROME_RESOURCES.items()
+)
+
 MODE_BY_CAPABILITY = {mode.capability: mode for mode in MODE_SPECS}
 if len(MODE_BY_CAPABILITY) != len(MODE_SPECS):
     raise RuntimeError("duplicate mode capability ID")
@@ -688,6 +721,7 @@ class ModeDevice(Device):
         # and a DECLL write that leaves the display unchanged must emit nothing.
         self._last_keyboard_indicators: tuple[bool, bool, bool] = (False, False, False)
         self._set_defaults()
+        self._last_chrome_resources = self.chrome_resources()  # the chrome starts with the defaults
         self.handlers = {
             "SM": self.apply_mode_operation,
             "RM": self.apply_mode_operation,
@@ -884,6 +918,11 @@ class ModeDevice(Device):
             if force or self.keyboard_locked != self._last_keyboard_locked:
                 self._last_keyboard_locked = self.keyboard_locked
                 self.board.present(KeyboardLockChanged(self.keyboard_locked))
+        elif effect is ModeEffect.CHROME_RESOURCES:
+            enabled = self.chrome_resources()
+            if force or enabled != self._last_chrome_resources:
+                self._last_chrome_resources = enabled
+                self.board.present(ChromeResourcesChanged(enabled))
         elif effect is ModeEffect.KEYBOARD_INDICATOR:
             keyboard = self.board.keyboard
             if not keyboard.leds_fitted and (True, 110) not in self._modes:
@@ -892,6 +931,14 @@ class ModeDevice(Device):
             if force or lights != self._last_keyboard_indicators:
                 self._last_keyboard_indicators = lights
                 self.board.present(KeyboardIndicatorChanged(*lights))
+
+    def chrome_resources(self) -> frozenset[str]:
+        """The chrome resources this terminal has that are enabled."""
+        return frozenset(
+            name
+            for number, (_, name, _) in CHROME_RESOURCES.items()
+            if (True, number) in self._modes and getattr(self, _chrome_attr(name))
+        )
 
     def set_cursor_blinking(self, enabled: bool) -> None:
         """Set cursor blink state and notify the attached terminal on an edge."""

@@ -19,6 +19,7 @@ from ..caps import TerminalCaps
 from ..present import (
     AmbiguousWidthChanged,
     Bell,
+    ChromeResourcesChanged,
     ClipboardChanged,
     ConsoleRequest,
     CursorBlinkChanged,
@@ -98,6 +99,7 @@ class Terminal:
     def on_grapheme_clustering(self, enabled: bool) -> None: ...
     def on_status_line(self, kind: str) -> None: ...
     def on_pointer_mode(self, mode: int) -> None: ...
+    def on_chrome_resources(self, enabled: frozenset[str]) -> None: ...
 
 
 # Event type -> adapter unpacking its fields into the corresponding hook.
@@ -124,4 +126,5 @@ _DISPATCH = {
     GraphemeClusteringChanged: lambda d, e: d.on_grapheme_clustering(e.enabled),
     StatusLineChanged: lambda d, e: d.on_status_line(e.kind),
     PointerModeChanged: lambda d, e: d.on_pointer_mode(e.mode),
+    ChromeResourcesChanged: lambda d, e: d.on_chrome_resources(e.enabled),
 }
