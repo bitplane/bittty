@@ -42,6 +42,9 @@ class Blitter(Device):
         self.attr_change_extent = "stream"  # DECSACE: "stream" (power-on) or "rectangle"
         self.last_printed_char = ""  # REP before any printing repeats nothing
         self._clusters = ClusterWriter(self)
+        self.grapheme_clustering = False
+        self.right_to_left = False  # DECRLM
+        self._rtl_wrap_at: tuple[int, int] | None = None  # where a right-to-left line was filled
         # The status line (DECSSDT/DECSASD) is a one-row display of its own: while it is
         # active, writes go to status_page and the main display's context waits in _main.
         self.status_type = board.model.status_line_type
@@ -277,10 +280,55 @@ class Blitter(Device):
     def set_grapheme_clustering(self, enabled: bool) -> None:
         """Switch the write callable so disabled mode has no per-run branch."""
         self.reset_grapheme_state()
-        if enabled:
+        self.grapheme_clustering = enabled
+        self._select_writer()
+
+    def set_right_to_left(self, enabled: bool) -> None:
+        """DECRLM — text runs right to left, and CR and BS turn round with it."""
+        self.reset_grapheme_state()
+        self.right_to_left = enabled
+        self._rtl_wrap_at = None
+        self.board.cursor.set_right_to_left(enabled)
+        self._select_writer()
+
+    def _select_writer(self) -> None:
+        """The write callable for the current direction and clustering, chosen once rather than per run."""
+        self.__dict__.pop("write_text", None)
+        if self.right_to_left:
+            self.write_text = self._write_right_to_left
+        elif self.grapheme_clustering:
             self.write_text = self._clusters.write
-        else:
-            self.__dict__.pop("write_text", None)
+
+    def _write_right_to_left(self, text: str, ansi_code: str = "") -> None:
+        """DECRLM: each character goes at the cursor, which then moves left (VT510).
+
+        In insert mode the characters from the cursor to the left margin shift left first. A
+        character printed at the left margin (or column 1, left of it) leaves the cursor there;
+        the next one, under autowrap, starts the next line at the right margin. Characters are
+        written one by one: grapheme clustering does not apply.
+        """
+        board, cursor = self.board, self.board.cursor
+        style = ansi_code or board.style.current
+        for char in board.charset.translate(text):
+            width = board.width_policy.width(char)
+            if not 0 < width <= board.width:
+                continue
+            if self._rtl_wrap_at == (cursor.x, cursor.y) and board.modes.auto_wrap:
+                right = self.right_margin if cursor.x >= self.left_margin else board.width - 1
+                cursor.line_feed(is_wrapped=True)
+                cursor.x = right
+            self._rtl_wrap_at = None
+            left = self.left_margin if cursor.x >= self.left_margin else 0
+            x = max(cursor.x - width + 1, left)
+            if board.modes.insert_mode:
+                self._shift_line_segment(cursor.y, left, cursor.x, width)
+            self.current_page.set(x, cursor.y, char, style)
+            if x == left:
+                cursor.x = left
+                self._rtl_wrap_at = (left, cursor.y)
+            else:
+                cursor.x = x - 1
+            self.last_printed_char = char
 
     def reset_grapheme_state(self) -> None:
         """Forget streaming state without changing already-written cells."""
@@ -790,6 +838,7 @@ class Blitter(Device):
         self.left_margin, self.right_margin = 0, self.board.width - 1  # a pending wrap survives DECSTR
         if not hard:
             return
+        self.set_right_to_left(False)
         self.in_alt_screen = False
         self.page = self.shown_page = 0
         self.current_page = self.primary_page

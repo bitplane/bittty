@@ -38,7 +38,7 @@ Related ANSI modes: KAM (`CSI 2 h/l`) and SRM (`CSI 12 h/l`) implement keyboard 
 | 27 | DEC PPL | DECPSP - Proportional Spacing | ✅ |
 | 29 | DEC PPL | DECPSM - Pitch Select Mode | ✅ |
 | 30 | rxvt | Show scrollbar (a chrome resource: kept, reported and passed to the chrome) | ✅ |
-| 34 | DEC | DECRLM - Cursor Right to Left Mode | X |
+| 34 | DEC | DECRLM - Cursor Right to Left Mode | ✅ |
 | 35 | DEC | DECHEBM - Hebrew (Keyboard) Mode | X |
 | 35 | rxvt | Enable font-shifting functions (a chrome resource: kept, reported and passed to the chrome) | ✅ |
 | 36 | DEC | DECHEM - Hebrew Encoding Mode | X |

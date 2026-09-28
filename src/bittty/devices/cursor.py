@@ -164,6 +164,29 @@ class CursorDevice(Device):
         self.cancel_pending_wrap()
         self.x = left if self.x >= left else 0
 
+    def set_right_to_left(self, enabled: bool) -> None:
+        """DECRLM: CR goes to the right-most column and BS moves right."""
+        self.cancel_pending_wrap()
+        if enabled:
+            self.carriage_return = self._carriage_return_right_to_left
+            self.backspace = self._backspace_right_to_left
+        else:
+            self.__dict__.pop("carriage_return", None)
+            self.__dict__.pop("backspace", None)
+
+    def _right_most(self) -> int:
+        """The right margin, or the screen edge from right of it."""
+        right = self.board.blitter.right_margin
+        return right if self.x <= right else self.board.width - 1
+
+    def _carriage_return_right_to_left(self) -> None:
+        self.cancel_pending_wrap()
+        self.x = self._right_most()
+
+    def _backspace_right_to_left(self) -> None:
+        self.cancel_pending_wrap()
+        self.x = min(self.x + 1, self._right_most())
+
     def cancel_pending_wrap(self) -> None:
         """Clear delayed wrap without changing the physical cursor column."""
         if self._pending_wrap_is_valid():

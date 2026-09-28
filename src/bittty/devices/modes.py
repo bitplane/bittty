@@ -262,6 +262,10 @@ def _host_line_mode(field: str) -> dict:
     return {"apply_fn": apply, "status_fn": status}
 
 
+def _right_to_left(device: ModeDevice, value: bool) -> None:
+    device.board.blitter.set_right_to_left(value)
+
+
 def _crt_saver(device: ModeDevice, value: bool) -> None:
     """DECCRTSM drives the blank-timeout register: the VT510 blanks after 30 minutes."""
     device.board.blank_timeout = 30 if value else 0
@@ -366,6 +370,7 @@ MODE_SPECS: tuple[ModeSpec, ...] = (
         mp.DEC_SMOOTH_SCROLL, 4, True, "smooth_scroll", queryable=True, effects=frozenset({ModeEffect.SMOOTH_SCROLL})
     ),
     ModeSpec(mp.DEC_ORIGIN, 6, True, "origin_mode", queryable=True),
+    ModeSpec(mp.DEC_RIGHT_TO_LEFT, 34, True, "right_to_left", queryable=True, apply_fn=_right_to_left),
     # CRT settings the chrome carries out; it reads them here and from board.blank_timeout.
     ModeSpec(mp.DEC_INTERLACE, 9, True, "interlace", queryable=True),
     ModeSpec(mp.DEC_CRT_SAVER, 97, True, apply_fn=_crt_saver, status_fn=_crt_saver_status),

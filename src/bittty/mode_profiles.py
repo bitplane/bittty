@@ -18,6 +18,7 @@ DEC_CURSOR_APPLICATION = "dec.cursor-application"
 DEC_ANSI = "dec.ansi"  # reset: VT52 mode
 DEC_COLUMN_MODE = "dec.column-mode"
 DEC_SMOOTH_SCROLL = "dec.smooth-scroll"
+DEC_RIGHT_TO_LEFT = "dec.right-to-left"
 DEC_INTERLACE = "dec.interlace"
 DEC_CRT_SAVER = "dec.crt-saver"
 DEC_OVERSCAN = "dec.overscan"
@@ -155,6 +156,7 @@ VT510_MODE_CAPABILITIES = VT420_MODE_CAPABILITIES | frozenset(
         DEC_NO_CLEAR_COLUMN,
         DEC_CRT_SAVER,
         DEC_OVERSCAN,
+        DEC_RIGHT_TO_LEFT,
         DEC_IGNORE_NULL,
         DEC_NUMLOCK,
         DEC_CAPSLOCK,
@@ -376,6 +378,7 @@ BITTTY_MODE_CAPABILITIES = XTERM_MODE_CAPABILITIES - {XTERM_READLINE_QUOTING, XT
         XTERM_HP_KEYS,
         XTERM_SCO_KEYS,
         DEC_NO_CLEAR_COLUMN,
+        DEC_RIGHT_TO_LEFT,
         DEC_AUTO_REPEAT,
         MINTTY_APPLICATION_ESCAPE,
         MINTTY_ESCAPE_FS,
