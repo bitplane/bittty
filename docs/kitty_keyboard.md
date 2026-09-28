@@ -36,6 +36,16 @@ Shift-printable, Ctrl-2 as NUL, Escape, Backspace, escape-prefixed or bare Alt/M
 level 2 reports them too. The code is the shifted character (`CSI 27;6;65~` for
 Ctrl-Shift-A). Mode 1037 is a keyboard setting that RIS and DECSTR keep, as in xterm.
 
+The xterm and bittty profiles also take xterm's other modifier resources (`CSI > Pp ; Pv m`),
+answer XTQMODKEYS (`CSI ? Pp m`) in that same form, and take XTFMTKEYS (`CSI > Pp ; Pv f`).
+modifyCursorKeys (1) and modifyFunctionKeys (2) place the modifier: 0 first, keeping SS3;
+1 first behind CSI; 2 second (the default); 3 second, marked `CSI >`. At 4 and above the
+cursor and editing keypads (1) or F1–F35 (2) send `CSI 27 ; mod ; code ~`, the code being
+the X keysym moved into the private-use area; a format of 1 selects `CSI code ; mod u`, and
+formatOtherKeys does the same for modifyOtherKeys. modifyKeyboard, modifyKeypadKeys and
+resources 6–7 are stored and reported only. RIS and DECSTR restore every resource; a bare
+`CSI > m` restores none, as in xterm 407. Other profiles take modifyOtherKeys alone.
+
 Alt and Meta on text keys prefix ESC when 1039 (Alt) or 1036 (Meta) is set; otherwise,
 while eight-bit input (1034) is set, they set the eighth bit and send that character
 (UTF-8 on the wire, as xterm does in a UTF-8 locale), and with neither they are dropped.

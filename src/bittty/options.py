@@ -41,6 +41,7 @@ DEC_LOCATOR = "dec.locator"
 KITTY_KEYBOARD = "kitty.keyboard"
 DEC_KEYBOARD_LEDS = "dec.keyboard-leds"
 DEC_USER_KEYS = "dec.user-keys"
+XTERM_MODIFY_KEYS = "xterm.modify-keys"  # key modifier resources beyond modifyOtherKeys, and their query
 
 
 @dataclass(frozen=True)

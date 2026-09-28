@@ -11,7 +11,7 @@ from ..keyboard_protocol import ALIASES, KEYPAD_LEGACY, KEYPAD_NAMES, encode_key
 from ..keyboard_styles import STYLE_KEYMAPS, KeyboardStyle
 from ..keymap import DEC_FUNCTION_CODES, KEYPAD_POSITIONS, PF_KEYS, KeyMap, apply_modifier
 from ..keys import LEGACY_MODIFIERS, KeyEvent, KeyModifiers, legacy_modifiers, valid_text, xterm_modifier
-from ..options import DEC_KEYBOARD_LEDS, DEC_USER_KEYS, KITTY_KEYBOARD
+from ..options import DEC_KEYBOARD_LEDS, DEC_USER_KEYS, KITTY_KEYBOARD, XTERM_MODIFY_KEYS
 from .modes import ModeEffect
 
 if TYPE_CHECKING:
@@ -29,6 +29,29 @@ _KITTY_SUPPORTED = 31
 # The spec: "Terminals should limit the size of the stack as appropriate, to
 # prevent Denial-of-Service attacks." Full stack evicts its oldest entry.
 _KITTY_STACK_MAX = 8
+# xterm's key modifier resources (XTMODKEYS Pp) at their initial values: modifyKeyboard,
+# modifyCursorKeys, modifyFunctionKeys, modifyKeypadKeys, modifyOtherKeys, (5, reserved),
+# modifyModifierKeys and modifySpecialKeys. XTFMTKEYS formats start at 0: CSI 27 ; mod ; code ~.
+# modifyKeyboard (the legacy/VT220 keyboards) and resources 3, 6 and 7 are stored and
+# reported but change no encoding.
+_MODIFY_KEYS_INITIAL = (0, 2, 2, 0, 0, 0, 0, 0)
+_FORMAT_KEYS_INITIAL = (0,) * 8
+# Named keys governed by modifyCursorKeys (1: the cursor and editing keypads) and
+# modifyFunctionKeys (2: F1-F35). At level 4 they report CSI 27 ; mod ; code ~, where the
+# code is the key's X keysym moved into the private-use area; Delete reports DEL (xterm 407).
+_EXTENDED_KEYS = {
+    **{
+        name: (1, keysym - 0x1D00)
+        for name, keysym in (
+            ("home", 0xFF50), ("left", 0xFF51), ("up", 0xFF52), ("right", 0xFF53), ("down", 0xFF54),
+            ("pageup", 0xFF55), ("pagedown", 0xFF56), ("end", 0xFF57), ("begin", 0xFF58),
+            ("select", 0xFF60), ("insert", 0xFF63), ("find", 0xFF68),
+        )
+    },
+    "delete": (1, 0x7F),
+    **{f"f{n}": (2, 0xFFBE + n - 1 - 0x1D00) for n in range(1, 36)},
+}  # fmt: skip
+_EDITING_KEYPAD = frozenset({"insert", "delete", "pageup", "pagedown", "find", "select"})
 # Xlib's Control translation (XLookupString) beyond '@'-'~': the digit and punctuation aliases.
 _X_CONTROL_ALIASES = {
     " ": "\0",
@@ -85,7 +108,10 @@ class KeyboardDevice(Device):
         self.saved_style = KeyboardStyle.DEFAULT
         self.delete_mode: bool | None = None  # mode 1037, once set; else the keymap's default
         self.saved_delete_mode: bool | None = None
-        self.modify_other_keys = 0  # xterm modifyOtherKeys level (0/1/2)
+        self.modify_keys = list(_MODIFY_KEYS_INITIAL)  # XTMODKEYS resources
+        self.format_keys = list(_FORMAT_KEYS_INITIAL)  # XTFMTKEYS resources
+        # A terminal without xterm's modifier resources still negotiates modifyOtherKeys.
+        self._modify_resources = range(8) if XTERM_MODIFY_KEYS in board.model.provides else (4,)
         self.paste_bracketed = False
         # Built directly: the blitter these key off does not exist yet.
         self._kitty = {False: _KittyState(), True: _KittyState()}
@@ -97,6 +123,9 @@ class KeyboardDevice(Device):
         self.handlers = {
             "XTMODKEYS": self.set_modify_keys,
         }
+        if XTERM_MODIFY_KEYS in board.model.provides:
+            self.handlers["XTQMODKEYS"] = self.report_modify_keys
+            self.handlers["XTFMTKEYS"] = lambda op: self._set_resource(self.format_keys, _FORMAT_KEYS_INITIAL, op)
         if DEC_USER_KEYS in board.model.provides:
             self.handlers["DECUDK"] = self.set_user_keys
             self.handlers["DSR_USER_KEYS"] = self.report_user_keys
@@ -159,13 +188,34 @@ class KeyboardDevice(Device):
 
     # --- modern keyboard negotiation (xterm modifyOtherKeys, Kitty protocol) --- #
 
+    @property
+    def modify_other_keys(self) -> int:
+        """xterm modifyOtherKeys level (0/1/2)."""
+        return self.modify_keys[4]
+
     def set_modify_keys(self, operation: Operation) -> None:
-        """XTMODKEYS (CSI > Pp ; Pv m) — set a key-modifier resource; Pp 4 is modifyOtherKeys."""
+        """XTMODKEYS (CSI > Pp ; Pv m) — set a key-modifier resource, or restore it without Pv."""
+        self._set_resource(self.modify_keys, _MODIFY_KEYS_INITIAL, operation)
+
+    def _set_resource(self, values: list[int], initial: tuple[int, ...], operation: Operation) -> None:
+        """Set an XTMODKEYS/XTFMTKEYS resource. As in xterm 407, a bare CSI > m (or f) restores nothing."""
         params = operation.args[0]
-        resource = params[0] if params and params[0] is not None else 0
-        value = params[1] if len(params) > 1 and params[1] is not None else 0
-        if resource == 4:
-            self.modify_other_keys = value
+        resource = params[0] if params else None
+        if resource in self._modify_resources and resource != 5:  # 5 is reserved
+            values[resource] = params[1] if len(params) > 1 and params[1] is not None else initial[resource]
+
+    def report_modify_keys(self, operation: Operation) -> None:
+        """XTQMODKEYS (CSI ? Pp m) — answer in XTMODKEYS form, so the reply restores the setting."""
+        resource = operation.args[0]
+        if resource in self._modify_resources:
+            self.board.host.write(f"{constants.ESC}[>{resource};{self.modify_keys[resource]}m", flush=True)
+
+    def _extended_key(self, code: int, mods: KeyModifiers, resource: int) -> str:
+        """xterm's CSI 27 ; mod ; code ~, or CSI code ; mod u when the resource's format is 1."""
+        modifier = xterm_modifier(mods)
+        if self.format_keys[resource]:
+            return f"{constants.ESC}[{code};{modifier}u"
+        return f"{constants.ESC}[27;{modifier};{code}~"
 
     def kitty_push(self, operation: Operation) -> None:
         """CSI > flags u — save the current flags and adopt new ones."""
@@ -313,7 +363,7 @@ class KeyboardDevice(Device):
                     encode = bool(mods)
         if not encode:
             return None
-        return f"{constants.ESC}[27;{xterm_modifier(mods)};{ord(char)}~"
+        return self._extended_key(ord(char), mods, 4)
 
     def _filter_alt_meta(self, mods: KeyModifiers, char: str) -> KeyModifiers:
         """Leave Alt/Meta to the legacy encodings at level 1 (xterm filterAltMeta).
@@ -337,14 +387,18 @@ class KeyboardDevice(Device):
             self.board.host.write(f"{constants.ESC}[I" if focused else f"{constants.ESC}[O", flush=True)
 
     def reset(self, hard: bool = True) -> None:
-        """RIS clears the modern-keyboard negotiation state, on both screens."""
+        """RIS clears the modern-keyboard negotiation state, on both screens.
+
+        Both resets restore xterm's key modifier resources, as xterm 407 does.
+        """
+        self.modify_keys[:] = _MODIFY_KEYS_INITIAL
+        self.format_keys[:] = _FORMAT_KEYS_INITIAL
         if hard:
             # Xterm keyboard selection survives RIS, unlike its saved slot.
             self.saved_style = KeyboardStyle.DEFAULT
             self.saved_delete_mode = None  # the setting itself survives, like the keyboard selection
             self.user_defined_keys.clear()
             self.user_keys_locked = False
-            self.modify_other_keys = 0
             for state in self._kitty.values():
                 state.clear()
             self.led_num = self.led_caps = self.led_scroll = False
@@ -364,12 +418,12 @@ class KeyboardDevice(Device):
         modes = self.board.modes
         return bool((mods & M.ALT and modes.alt_sends_escape) or (mods & M.META and modes.meta_sends_escape))
 
-    def _send_key(self, sequence: str, mods: KeyModifiers, *, keypad: bool = False) -> None:
+    def _send_key(self, sequence: str, mods: KeyModifiers, *, keypad: bool = False, placement: int = 2) -> None:
         """Send a keymap sequence, folding in the modifiers if the keymap encodes them."""
         keymap = self.keymap
         modifiers = keymap.modifiers or (keymap.modifiers_with_other_keys and self.modify_other_keys)
         if modifiers and (keymap.keypad_modifiers or not keypad):
-            sequence = apply_modifier(sequence, xterm_modifier(mods), keypad=keypad)
+            sequence = apply_modifier(sequence, xterm_modifier(mods), keypad=keypad, placement=placement)
         elif keypad and keymap.keypad_meta_prefix and mods & (M.ALT | M.META):
             sequence = constants.ESC + sequence
         self.board.transmit_keyboard(sequence)
@@ -396,8 +450,15 @@ class KeyboardDevice(Device):
         application = keymap.application if self.board.modes.cursor_application_mode and not self.kitty_flags else {}
         modified = keymap.modified if mods else {}
         sequence = modified.get(name) or application.get(name) or keymap.keys.get(name)
-        if sequence is not None:
-            self._send_key(sequence, mods, keypad=name in PF_KEYS)
+        if sequence is None:
+            return
+        resource, code = _EXTENDED_KEYS.get(name, (None, None))
+        level = self.modify_keys[resource] if resource and keymap.modifiers else 2
+        if level >= 4:
+            self.board.transmit_keyboard(self._extended_key(code, mods, resource))
+            return
+        placement = 2 if name in _EDITING_KEYPAD else level  # below 4, xterm leaves these alone
+        self._send_key(sequence, mods, keypad=name in PF_KEYS, placement=placement)
 
     def input_key(self, char: str, modifier: int = constants.KEY_MOD_NONE) -> None:
         """Convert key + modifier to standard control codes, then send to input()."""

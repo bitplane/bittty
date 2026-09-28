@@ -102,7 +102,7 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
 
     params, intermediates, final_char = parse_csi_params(raw_csi_data)
 
-    if final_char == "m" and ">" not in raw_csi_data:  # SGR - Select Graphic Rendition
+    if final_char == "m" and raw_csi_data[2:3] not in ("?", ">"):  # SGR - Select Graphic Rendition
         style, reset = parse_sgr_with_reset(raw_csi_data)
         return Operation("SGR", (style, reset), raw_csi_data)
 
@@ -248,6 +248,12 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
 
     if final_char == "m" and ">" in intermediates:  # XTMODKEYS - set key-modifier options
         return Operation("XTMODKEYS", (tuple(params),), raw_csi_data)
+
+    if final_char == "m" and "?" in intermediates:  # XTQMODKEYS - query a key-modifier option
+        return Operation("XTQMODKEYS", (param(params, 0, None),), raw_csi_data)
+
+    if final_char == "f" and ">" in intermediates:  # XTFMTKEYS - set key-format options
+        return Operation("XTFMTKEYS", (tuple(params),), raw_csi_data)
 
     if final_char == "u":  # Kitty keyboard protocol (private markers) or SCORC restore-cursor
         if ">" in intermediates:  # push flags onto the stack

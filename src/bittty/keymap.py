@@ -93,19 +93,23 @@ class KeyMap:
     keypad_meta_prefix: bool = False  # Alt/Meta ESC-prefix keypad keys too (tmux)
 
 
-def apply_modifier(sequence: str, modifier: int, *, keypad: bool = False) -> str:
+def apply_modifier(sequence: str, modifier: int, *, keypad: bool = False, placement: int = 2) -> str:
     """Fold an xterm modifier parameter into a key sequence.
 
-    ``ESC O X`` becomes ``ESC [ 1 ; mod X``, ``ESC [ n ~`` becomes ``ESC [ n ; mod ~``
-    and a bare ``ESC X`` becomes ``ESC [ 1 ; mod X``. Keypad keys keep their SS3
-    form, ``ESC O mod X``, as in xterm.
+    ``placement`` is xterm's modifyCursorKeys/modifyFunctionKeys level. At the
+    default, 2, ``ESC O X`` becomes ``ESC [ 1 ; mod X``, ``ESC [ n ~`` becomes
+    ``ESC [ n ; mod ~`` and a bare ``ESC X`` becomes ``ESC [ 1 ; mod X``; 3 marks
+    that ``ESC [ >``. Level 0 puts a lone modifier first, keeping the prefix
+    (``ESC O mod X``); 1 does so behind CSI. Keypad keys keep their SS3 form,
+    ``ESC O mod X``, as in xterm.
     """
     if modifier <= 1:
         return sequence
     prefix = sequence[:2] if sequence.startswith((CSI, SS3)) else ESC
     params = sequence[len(prefix) : -1]
-    if not keypad:
-        prefix, params = CSI, params or "1"
+    if not keypad and placement:
+        prefix = CSI + ">" if placement == 3 else CSI
+        params = params or ("1" if placement > 1 else "")
     return f"{prefix}{params + ';' if params else ''}{modifier}{sequence[-1]}"
 
 

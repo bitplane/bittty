@@ -59,9 +59,9 @@ def test_alt_sends_escape_beats_modify_other_keys_level_one():
     """xterm filterAltMeta: at level 1 an escape-prefixed or bare Alt stays legacy; level 2 reports it."""
     board = board_with_pty()
     board.modes.alt_sends_escape = True
-    board.keyboard.modify_other_keys = 1
+    board.feed_host_data("\x1b[>4;1m")
     board.keyboard.input_key("x", constants.KEY_MOD_ALT)
-    board.keyboard.modify_other_keys = 2
+    board.feed_host_data("\x1b[>4;2m")
     board.keyboard.input_key("x", constants.KEY_MOD_ALT)
 
     assert board.pty.data == ["\x1bx", "\x1b[27;3;120~"]
@@ -92,9 +92,9 @@ def test_meta_policy_beats_modify_other_keys_level_one():
     board = board_with_pty()
     board.modes.eight_bit_input = True
     board.modes.meta_sends_escape = True
-    board.keyboard.modify_other_keys = 1
+    board.feed_host_data("\x1b[>4;1m")
     board.keyboard.input_key("x", constants.KEY_MOD_META)
-    board.keyboard.modify_other_keys = 2
+    board.feed_host_data("\x1b[>4;2m")
     board.keyboard.input_key("x", constants.KEY_MOD_META)
 
     assert board.pty.data == ["\x1bx", "\x1b[27;9;120~"]

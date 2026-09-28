@@ -42,6 +42,7 @@ from .options import (
     LOCATOR_PORT,
     NO_PRINTER,
     VT510_PRINTER_PORT,
+    XTERM_MODIFY_KEYS,
     XTERM_PRINTER_PIPE,
     Option,
     PrinterCapabilities,
@@ -114,7 +115,7 @@ XTERM = Model(
     da2_response="\033[>1;10;0c",
     mode_capabilities=XTERM_MODE_CAPABILITIES,
     options=frozenset({XTERM_PRINTER_PIPE, LOCATOR_PORT}),
-    control_capabilities=frozenset({DEC_KEYBOARD_LEDS, DEC_USER_KEYS}),
+    control_capabilities=frozenset({DEC_KEYBOARD_LEDS, DEC_USER_KEYS, XTERM_MODIFY_KEYS}),
     power_on_modes=frozenset({1034}),  # eightBitInput
 )
 
@@ -126,7 +127,7 @@ BITTTY = Model(
     mode_capabilities=BITTTY_MODE_CAPABILITIES,
     keymap=BITTTY_KEYMAP,
     options=frozenset({VT510_PRINTER_PORT, LOCATOR_PORT}),
-    control_capabilities=frozenset({KITTY_KEYBOARD, DEC_KEYBOARD_LEDS, DEC_USER_KEYS}),
+    control_capabilities=frozenset({KITTY_KEYBOARD, DEC_KEYBOARD_LEDS, DEC_USER_KEYS, XTERM_MODIFY_KEYS}),
     power_on_modes=frozenset({1036, 1039}),  # Alt and Meta send ESC
 )
 
