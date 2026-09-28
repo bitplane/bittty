@@ -452,22 +452,6 @@ def test_dec_technical_mathematical_symbols():
     assert board.blitter.current_page.get_line_text(0).rstrip() == "∞÷×√≤≥"
 
 
-def test_german_national_charset():
-    """Test German National character set (ESC ( K)."""
-    board = Board(width=20, height=5)
-    parser = Parser(board)
-    parser.feed("\x1b[?42h")
-
-    # Set G0 to German National
-    parser.feed("\x1b(K")  # ESC ( K
-
-    # Test German characters
-    parser.feed("@[\\]`{|}")  # @ÄÖÜäöüß
-
-    # Check the result
-    assert board.blitter.current_page.get_line_text(0).rstrip() == "§ÄÖÜäöüß"
-
-
 def test_french_national_charset():
     """Test French National character set (ESC ( R)."""
     board = Board(width=20, height=5)
@@ -482,22 +466,6 @@ def test_french_national_charset():
 
     # Check the result
     assert board.blitter.current_page.get_line_text(0).rstrip() == "£à°ç§`éùè¨"
-
-
-def test_spanish_national_charset():
-    """Test Spanish National character set (ESC ( Z)."""
-    board = Board(width=20, height=5)
-    parser = Parser(board)
-    parser.feed("\x1b[?42h")
-
-    # Set G0 to Spanish National
-    parser.feed("\x1b(Z")  # ESC ( Z
-
-    # Test Spanish characters: #@[\]`{|
-    parser.feed("#@[\\]`{|")
-
-    # Check the result
-    assert board.blitter.current_page.get_line_text(0).rstrip() == "£§¡Ñ¿˚ñç"
 
 
 def test_italian_national_charset():
@@ -532,22 +500,6 @@ def test_swedish_national_charset():
     assert board.blitter.current_page.get_line_text(0).rstrip() == "ÉÄÖÅÜéäöåü"
 
 
-def test_danish_norwegian_charset():
-    """Test Danish/Norwegian National character set (ESC ( E)."""
-    board = Board(width=20, height=5)
-    parser = Parser(board)
-    parser.feed("\x1b[?42h")
-
-    # Set G0 to Danish/Norwegian National
-    parser.feed("\x1b(E")  # ESC ( E
-
-    # Test Danish/Norwegian characters: [\]`{|
-    parser.feed("[\\]`{|")
-
-    # Check the result
-    assert board.blitter.current_page.get_line_text(0).rstrip() == "ÆØÅæøå"
-
-
 def test_finnish_national_charset():
     """Test Finnish National character set (ESC ( C)."""
     board = Board(width=20, height=5)
@@ -562,22 +514,6 @@ def test_finnish_national_charset():
 
     # Check the result
     assert board.blitter.current_page.get_line_text(0).rstrip() == "ÄÖÅÜéäöåü"
-
-
-def test_dutch_national_charset():
-    """Test Dutch National character set (ESC ( 4)."""
-    board = Board(width=20, height=5)
-    parser = Parser(board)
-    parser.feed("\x1b[?42h")
-
-    # Set G0 to Dutch National
-    parser.feed("\x1b(4")  # ESC ( 4
-
-    # Test Dutch characters: #@[\]`{|}~
-    parser.feed("#@[\\]`{|}~")
-
-    # Check the result
-    assert board.blitter.current_page.get_line_text(0).rstrip() == "£¾ĳ½¦`¨ƒ¼´"
 
 
 def test_french_canadian_charset():

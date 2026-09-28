@@ -57,18 +57,8 @@ UK_NATIONAL = {
     "#": "£",  # Pound sign replaces hash
 }
 
-# Danish/Norwegian National Character Set (ESC ( E)
+# Norwegian/Danish National Character Set (ESC ( E, 6 or `)
 DANISH_NORWEGIAN = {
-    "[": "Æ",
-    "\\": "Ø",
-    "]": "Å",
-    "`": "æ",
-    "{": "ø",
-    "|": "å",
-}
-
-# Danish/Norwegian Alternative Character Set (ESC ( 6)
-DANISH_NORWEGIAN_ALT = {
     "@": "Ä",
     "[": "Æ",
     "\\": "Ø",
@@ -87,7 +77,7 @@ DUTCH_NATIONAL = {
     "@": "¾",
     "[": "ĳ",
     "\\": "½",
-    "]": "¦",
+    "]": "|",
     "`": "`",
     "{": "¨",
     "|": "ƒ",
@@ -142,10 +132,10 @@ GERMAN_NATIONAL = {
     "[": "Ä",
     "\\": "Ö",
     "]": "Ü",
-    "`": "ä",
-    "{": "ö",
-    "|": "ü",
-    "}": "ß",
+    "{": "ä",
+    "|": "ö",
+    "}": "ü",
+    "~": "ß",
 }
 
 # Italian National Character Set (ESC ( Y)
@@ -173,9 +163,9 @@ PORTUGUESE_NATIONAL = {
     "[": "Ã",
     "\\": "Ç",
     "]": "Õ",
-    "`": "ã",
-    "{": "ç",
-    "|": "õ",
+    "{": "ã",
+    "|": "ç",
+    "}": "õ",
 }
 
 # Spanish National Character Set (ESC ( Z)
@@ -185,9 +175,9 @@ SPANISH_NATIONAL = {
     "[": "¡",
     "\\": "Ñ",
     "]": "¿",
-    "`": "˚",
-    "{": "ñ",
-    "|": "ç",
+    "{": "°",
+    "|": "ñ",
+    "}": "ç",
 }
 
 # Swedish National Character Set (ESC ( H or ESC ( 7)
@@ -337,16 +327,19 @@ CHARSETS = {
     ">": DEC_TECHNICAL,  # DEC Technical
     "4": DUTCH_NATIONAL,  # Dutch
     "5": FINNISH_NATIONAL,  # Finnish (alternative)
-    "6": DANISH_NORWEGIAN_ALT,  # Danish/Norwegian alternative
+    "6": DANISH_NORWEGIAN,  # Norwegian/Danish (alternative)
+    "`": DANISH_NORWEGIAN,  # Norwegian/Danish (alternative)
     "7": SWEDISH_NATIONAL,  # Swedish (alternative)
     "=": SWISS_NATIONAL,  # Swiss
     "C": FINNISH_NATIONAL,  # Finnish
-    "E": DANISH_NORWEGIAN,  # Danish/Norwegian
+    "E": DANISH_NORWEGIAN,  # Norwegian/Danish
     "H": SWEDISH_NATIONAL,  # Swedish
     "J": JAPANESE_ROMAN,  # Japanese Roman
     "K": GERMAN_NATIONAL,  # German
     "Q": FRENCH_CANADIAN,  # French Canadian
+    "9": FRENCH_CANADIAN,  # French Canadian (alternative)
     "R": FRENCH_NATIONAL,  # French
+    "f": FRENCH_NATIONAL,  # French (alternative)
     "Y": ITALIAN_NATIONAL,  # Italian
     "Z": SPANISH_NATIONAL,  # Spanish
     "%6": PORTUGUESE_NATIONAL,  # Portuguese (multi-char designator)
@@ -357,7 +350,7 @@ CHARSETS = {
 # which implement that mode. Older profiles such as the VT100 have no
 # DECNRCM switch and retain their model-specific SCS behaviour.
 NATIONAL_CHARSET_DESIGNATORS = frozenset(
-    {"A", "4", "5", "6", "7", "=", "C", "E", "H", "J", "K", "Q", "R", "Y", "Z", "%6"}
+    {"A", "4", "5", "6", "`", "7", "=", "9", "C", "E", "f", "H", "J", "K", "Q", "R", "Y", "Z", "%6"}
 )
 
 
