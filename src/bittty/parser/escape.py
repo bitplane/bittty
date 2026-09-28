@@ -79,4 +79,4 @@ def parse_charset_operation(data: str) -> Operation | None:
     if name is None:
         return None
 
-    return Operation(name, (data[2],), data)
+    return Operation(name, (data[2:],), data)

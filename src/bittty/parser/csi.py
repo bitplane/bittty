@@ -298,6 +298,8 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
             return Operation("KITTY_SET", (flags, mode), raw_csi_data)
         if "?" in intermediates:  # query current flags
             return Operation("KITTY_QUERY", (), raw_csi_data)
+        if "&" in intermediates:  # DECRQUPSS - Request User-Preferred Supplemental Set
+            return Operation("DECRQUPSS", (), raw_csi_data)
         if not intermediates:
             return Operation("RESTORE", raw=raw_csi_data)
 

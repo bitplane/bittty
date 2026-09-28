@@ -39,6 +39,7 @@ from .options import (
     DEC_KEYBOARD_LEDS,
     DEC_PRINTER_PORT,
     DEC_STATUS_LINE,
+    DEC_UPSS,
     DEC_USER_KEYS,
     KITTY_KEYBOARD,
     LOCATOR_PORT,
@@ -91,6 +92,8 @@ class Model:
     status_line_type: int = 0
     # Bytes of macro memory (DECDMAC); None: no macro reports at all. xterm answers with none.
     macro_space: int | None = None
+    # The user-preferred supplemental set at power-on (DECRQUPSS); None: no such report.
+    upss: str | None = None
     # Page memory as (lines per page, pages) pairs; a page size not listed has one page (DECSLPP).
     page_memory: tuple[tuple[int, int], ...] = ()
 
@@ -133,6 +136,7 @@ XTERM = Model(
     ),
     power_on_modes=frozenset({1034}),  # eightBitInput
     macro_space=0,  # xterm 407 reports no macro space
+    upss="B",  # xterm has no user-preferred set in UTF-8 and reports ASCII (charproc.c)
 )
 
 BITTTY = Model(
@@ -152,10 +156,12 @@ BITTTY = Model(
             DEC_STATUS_LINE,
             XTERM_EXTRAS,
             DEC_DISPLAYED_EXTENT,
+            DEC_UPSS,
         }
     ),
     power_on_modes=frozenset({1036, 1039}),  # Alt and Meta send ESC
     macro_space=6144,
+    upss="%5",
 )
 
 VT100 = Model(
@@ -195,15 +201,16 @@ VT510 = Model(
     da2_response="\033[>61;10;0c",
     da3_response=None,
     mode_capabilities=VT510_MODE_CAPABILITIES,
-    charsets=VT220.charsets,
+    charsets=VT220.charsets | {"%5"},
     color_depth="monochrome",
     keymap=VT220_KEYMAP,
     options=frozenset({VT510_PRINTER_PORT}),
-    control_capabilities=frozenset({DEC_KEYBOARD_LEDS, DEC_USER_KEYS, DEC_STATUS_LINE, DEC_DISPLAYED_EXTENT}),
+    control_capabilities=frozenset({DEC_KEYBOARD_LEDS, DEC_USER_KEYS, DEC_STATUS_LINE, DEC_DISPLAYED_EXTENT, DEC_UPSS}),
     decrqss_valid_is_one=False,
     status_line_type=1,  # the indicator, the Set-Up default
     page_memory=((24, 3), (25, 2), (36, 2)),  # DECSLPP; any other page size is a single page
     macro_space=6144,  # "6 Kbytes of memory available for the storage of macros"
+    upss="%5",
 )
 
 LINUX = Model(

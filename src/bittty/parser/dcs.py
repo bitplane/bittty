@@ -31,6 +31,9 @@ def parse_dcs_operation(string_buffer: str, raw: str = "") -> Operation:
     if string_buffer.startswith("2$t"):  # DECRSPS - restore a DECTABSR tab stop report
         stops = re.match(r"[0-9]+(?:/[0-9]+)*", string_buffer[3:])
         return Operation("DECRSPS_TABS", (tuple(map(int, stops[0].split("/"))) if stops else (),), raw)
+    match = re.fullmatch(r"([01])!u([ -/]?[0-~])", string_buffer)
+    if match is not None:  # DECAUPSS - Assign User-Preferred Supplemental Set
+        return Operation("DECAUPSS", (int(match[1]), match[2]), raw)
     match = _DECDMAC.fullmatch(string_buffer)
     if match is not None:  # DECDMAC - Define Macro
         pid, pdt, pen, body = match.groups()

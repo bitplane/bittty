@@ -38,42 +38,17 @@ DEC_SPECIAL_GRAPHICS = {
     "z": "≥",  # Greater than or equal
 }
 
-# DEC Supplemental Graphics (ESC ( %5)
-# Extended Latin characters
-DEC_SUPPLEMENTAL = {
-    "\xa0": " ",  # Non-breaking space
-    "\xa1": "¡",  # Inverted exclamation
-    "\xa2": "¢",  # Cent sign
-    "\xa3": "£",  # Pound sign
-    "\xa4": "¤",  # Currency sign
-    "\xa5": "¥",  # Yen sign
-    "\xa6": "¦",  # Broken bar
-    "\xa7": "§",  # Section sign
-    "\xa8": "¨",  # Diaeresis
-    "\xa9": "©",  # Copyright
-    "\xaa": "ª",  # Feminine ordinal
-    "\xab": "«",  # Left guillemet
-    "\xac": "¬",  # Not sign
-    "\xad": "\u00ad",  # Soft hyphen
-    "\xae": "®",  # Registered trademark
-    "\xaf": "¯",  # Macron
-    "\xb0": "°",  # Degree sign
-    "\xb1": "±",  # Plus-minus
-    "\xb2": "²",  # Superscript 2
-    "\xb3": "³",  # Superscript 3
-    "\xb4": "´",  # Acute accent
-    "\xb5": "µ",  # Micro sign
-    "\xb6": "¶",  # Pilcrow
-    "\xb7": "·",  # Middle dot
-    "\xb8": "¸",  # Cedilla
-    "\xb9": "¹",  # Superscript 1
-    "\xba": "º",  # Masculine ordinal
-    "\xbb": "»",  # Right guillemet
-    "\xbc": "¼",  # One quarter
-    "\xbd": "½",  # One half
-    "\xbe": "¾",  # Three quarters
-    "\xbf": "¿",  # Inverted question mark
-    # ... continues with accented characters À-ÿ
+# DEC Supplemental Graphic (ESC ( %5): the upper half of the DEC multinational set, so GL
+# code c shows c + 0x80, save DEC's own glyphs and the reserved positions (a reversed "?",
+# as xterm's charsets.h renders them).
+_RESERVED = "\u2426"
+DEC_SUPPLEMENTAL = {chr(code): chr(code + 0x80) for code in range(0x21, 0x7F)} | {
+    "(": "¤",
+    "W": "Œ",
+    "]": "Ÿ",
+    "w": "œ",
+    "}": "ÿ",
+    **dict.fromkeys("$&,-./48>P^p~", _RESERVED),
 }
 
 # UK National Replacement Character Set (ESC ( A)
@@ -358,7 +333,7 @@ CHARSETS = {
     "1": {},  # Alternate ROM (same as ASCII usually)
     "2": {},  # Alternate ROM Special Graphics
     "U": {},  # Linux console: IBM PC ROM / CP437 (passthrough under Unicode)
-    "<": DEC_SUPPLEMENTAL,  # DEC Supplemental
+    "%5": DEC_SUPPLEMENTAL,  # DEC Supplemental Graphic ("<", the user-preferred set, resolves to a set)
     ">": DEC_TECHNICAL,  # DEC Technical
     "4": DUTCH_NATIONAL,  # Dutch
     "5": FINNISH_NATIONAL,  # Finnish (alternative)
@@ -384,6 +359,11 @@ CHARSETS = {
 NATIONAL_CHARSET_DESIGNATORS = frozenset(
     {"A", "4", "5", "6", "7", "=", "C", "E", "H", "J", "K", "Q", "R", "Y", "Z", "%6"}
 )
+
+
+# Sets DECAUPSS can make the user-preferred supplemental set, by (DECAUPSS Pn, designator):
+# Pn 0 names a 94-character set.
+SUPPLEMENTAL_SETS = frozenset({(0, "%5")})
 
 
 def get_charset(designator: str) -> dict:

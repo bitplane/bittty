@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from ..charsets import NATIONAL_CHARSET_DESIGNATORS, get_charset
+from ..charsets import CHARSETS, NATIONAL_CHARSET_DESIGNATORS, SUPPLEMENTAL_SETS, get_charset
+from ..operations import Operation
+from ..options import DEC_UPSS
 from .base import Device
 
 if TYPE_CHECKING:
@@ -25,6 +27,8 @@ class CharsetDevice(Device):
         self.single_shift: int | None = None
         self.cache = {}
         self.charset_array = ["B", "B", "B", "B"]
+        # What "<" designates: the user-preferred supplemental set (DEC Supplemental on a VT220).
+        self.preferred = board.model.upss or "%5"
         self.handlers = {
             "SS2": lambda op: self.single_shift_2(),
             "SS3": lambda op: self.single_shift_3(),
@@ -38,11 +42,21 @@ class CharsetDevice(Device):
             "SCS_G2": lambda op: self.designate(2, op.args[0]),
             "SCS_G3": lambda op: self.designate(3, op.args[0]),
         }
+        if board.model.upss is not None:
+            self.handlers["DECRQUPSS"] = lambda op: board.host.write(f"\x1bP0!u{self.preferred}\x1b\\", flush=True)
+        if DEC_UPSS in board.model.provides:
+            self.handlers["DECAUPSS"] = self.assign_preferred
 
     def _recognizes(self, designator: str) -> bool:
-        """Whether the model's charset repertoire includes this designator."""
+        """Whether this is a set bittty has and the model's charset repertoire includes it."""
         charsets = self.board.model.charsets
-        return charsets is None or designator in charsets
+        return (designator in CHARSETS or designator == "<") and (charsets is None or designator in charsets)
+
+    def assign_preferred(self, operation: Operation) -> None:
+        """DECAUPSS — make a supplemental set the one "<" designates; any other is ignored."""
+        if operation.args in SUPPLEMENTAL_SETS:
+            self.preferred = operation.args[1]
+            self.cache.pop("<", None)
 
     def designate(self, index: int, designator: str) -> None:
         """Apply an SCS G-set designation, ignoring charsets the terminal lacks."""
@@ -88,7 +102,9 @@ class CharsetDevice(Device):
 
     def _get_charset_map(self, charset_designator: str):
         if charset_designator not in self.cache:
-            self.cache[charset_designator] = get_charset(charset_designator)
+            self.cache[charset_designator] = get_charset(
+                self.preferred if charset_designator == "<" else charset_designator
+            )
         return self.cache[charset_designator]
 
     def set_g0_charset(self, charset: str) -> None:

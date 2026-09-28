@@ -45,8 +45,8 @@ GROUND_PATTERNS = {
     "sos": r"(?:\x1bX|\x98)",
     "csi": r"(?:\x1b\[|\x9B)",
     # SCS (charset designation) MUST precede generic ESC minis
-    "esc_charset": r"\x1b[()][A-Za-z0-9<>=@]",  # G0/G1
-    "esc_charset2": r"\x1b[*+][A-Za-z0-9<>=@]",  # G2/G3
+    # G0-G3, with a designator of one final or an intermediate and a final (ESC ( % 5)
+    "esc_charset": r"\x1b[()*+][ -/]?[0-~]",
     # Singles / minis
     "ss2": r"(?:\x1bN|\x8E)",
     "ss3": r"(?:\x1bO|\x8F)",
@@ -60,7 +60,7 @@ GROUND_PATTERNS = {
     # two-char prefix ( ) * + # % SP at buffer end. MUST precede the generic 'esc'
     # alternative, or a chunk split after e.g. ESC ( is consumed as an ESC mini and
     # the designator that arrives next chunk prints as text.
-    "trail": r"(?:\x1b(?:[\[\]P_^X()*+#%\x20])?|\x90|\x9B|\x9D|\x9E|\x9F|\x98)\Z",
+    "trail": r"(?:\x1b(?:[\[\]P_^X()*+#%\x20]|[()*+][ -/])?|\x90|\x9B|\x9D|\x9E|\x9F|\x98)\Z",
     # Generic simple ESC minis (not starters for paired strings)
     # excludes [, ], P, _, ^, X, and ST (\)
     "esc": r"\x1b[^][P_^XO\x1b]",  # a stray ESC \ (ST) is one of these: it does nothing
@@ -118,7 +118,7 @@ _VT52_OPS = {
 }
 
 PAIRED = {"osc", "dcs", "apc", "pm", "sos", "csi"}
-STANDALONES = {"ss2", "ss3", "esc", "esc_charset", "esc_charset2", "ctrl", "bel"}
+STANDALONES = {"ss2", "ss3", "esc", "esc_charset", "ctrl", "bel"}
 
 # Raw 8-bit C1 format/area controls -> their operation names (same as the 7-bit ESC forms).
 _C1_CTRL_NAMES = {"\x84": "IND", "\x85": "NEL", "\x88": "HTS", "\x8d": "RI", "\x96": "SPA", "\x97": "EPA"}
@@ -465,7 +465,7 @@ class Parser:
         if kind == "esc":
             self.emit(parse_escape_operation(data) or Operation("ESC", raw=data))
             return
-        if kind in ("esc_charset", "esc_charset2"):
+        if kind == "esc_charset":
             self.emit(parse_charset_operation(data) or Operation("SCS", raw=data))
             return
         if kind == "esc_hash":
