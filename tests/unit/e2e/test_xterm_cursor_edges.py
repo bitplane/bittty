@@ -164,3 +164,29 @@ def test_rep_survives_a_chunk_boundary():
     board.feed_host_data("A")
     board.feed_host_data("\x1b[3b")
     assert board.blitter.current_page.get_line_text(0).rstrip() == "AAAA"
+
+
+# --- margins: invalid regions are ignored, zeros are defaults, the right margin is clamped --- #
+
+
+def _margins(board):
+    blitter = board.blitter
+    return (blitter.scroll_top + 1, blitter.scroll_bottom + 1), (blitter.left_margin + 1, blitter.right_margin + 1)
+
+
+@pytest.mark.parametrize(
+    ("sequence", "margins", "cursor"),
+    [
+        ("\x1b[3;3H\x1b[10;5r", ((1, 24), (1, 80)), (3, 3)),  # inverted: ignored, cursor stays
+        ("\x1b[3;3H\x1b[5;5r", ((1, 24), (1, 80)), (3, 3)),  # one line: ignored
+        ("\x1b[5;10r\x1b[3;3H\x1b[10;5r", ((5, 10), (1, 80)), (3, 3)),  # keeps the old region
+        ("\x1b[3;3H\x1b[0;0r", ((1, 24), (1, 80)), (1, 1)),  # zeros are the defaults
+        ("\x1b[3;3H\x1b[5;40r", ((5, 24), (1, 80)), (1, 1)),  # the bottom is clamped
+        ("\x1b[?69h\x1b[3;3H\x1b[10;99s", ((1, 24), (10, 80)), (1, 1)),  # so is the right margin
+        ("\x1b[?69h\x1b[3;3H\x1b[20;10s", ((1, 24), (1, 80)), (3, 3)),
+        ("\x1b[?69h\x1b[3;3H\x1b[10;10s", ((1, 24), (1, 80)), (3, 3)),
+    ],
+)
+def test_margins_as_xterm_sets_them(sequence, margins, cursor):
+    board = _run(sequence)
+    assert (_margins(board), _cursor(board)) == (margins, cursor)

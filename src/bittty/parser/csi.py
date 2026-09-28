@@ -373,8 +373,8 @@ def parse_csi_operation(raw_csi_data: str) -> Operation | None:
         return Operation("SD", (count,), raw_csi_data)
 
     if final_char == "r":  # DECSTBM - Set Top and Bottom Margins
-        top = (param(params, 0, 1)) - 1
-        bottom = (params[1] - 1) if len(params) > 1 and params[1] is not None else None
+        top = param_count(params) - 1  # 0, like a missing parameter, is the default
+        bottom = params[1] - 1 if len(params) > 1 and params[1] else None
         return Operation("DECSTBM", (top, bottom), raw_csi_data)
 
     if final_char == "s":  # DECSLRM (Pl;Pr) when margin mode is on, else Save Cursor (SCOSC)

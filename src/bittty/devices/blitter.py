@@ -431,8 +431,14 @@ class Blitter(Device):
         self.scroll_bottom = max(self.scroll_top, min(bottom, self.board.height - 1))
 
     def set_top_and_bottom_margins(self, top: int, bottom: int | None) -> None:
-        """DECSTBM — set the scroll region and home the cursor (origin-aware)."""
-        self.set_scroll_region(top, self.board.height - 1 if bottom is None else bottom)
+        """DECSTBM — set the scroll region and home the cursor (origin-aware).
+
+        A region of fewer than two lines is ignored, cursor and all (xterm 407).
+        """
+        bottom = self.board.height - 1 if bottom is None else min(bottom, self.board.height - 1)
+        if top >= bottom:
+            return
+        self.set_scroll_region(top, bottom)
         self.board.cursor.move_to(0, 0)
 
     def insert_lines(self, count: int) -> None:
@@ -596,8 +602,8 @@ class Blitter(Device):
         """DECSLRM — set the left/right margins (1-based; None/0 = extremes) and home the cursor."""
         width = self.board.width
         left1 = left or 1
-        right1 = right or width
-        if not (1 <= left1 < right1 <= width):
+        right1 = min(right or width, width)  # clamped to the screen, as in xterm 407
+        if not left1 < right1:
             return
         left0 = left1 - 1
         right0 = right1 - 1
