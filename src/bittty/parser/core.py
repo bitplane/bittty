@@ -63,7 +63,9 @@ GROUND_PATTERNS = {
     "trail": r"(?:\x1b(?:[\[\]P_^X()*+#%\x20])?|\x90|\x9B|\x9D|\x9E|\x9F|\x98)\Z",
     # Generic simple ESC minis (not starters for paired strings)
     # excludes [, ], P, _, ^, X, and ST (\)
-    "esc": r"\x1b[^][P_^XO\\]",
+    "esc": r"\x1b[^][P_^XO\x1b]",  # a stray ESC \ (ST) is one of these: it does nothing
+    # ESC ESC: the second ESC begins the sequence again, so the first is dropped.
+    "esc_esc": r"\x1b(?=\x1b)",
     # C0/C1 controls except BEL/CAN/SUB/ESC (ESC handled via others; ESC alone should hit 'trail')
     "ctrl": r"[\x00-\x06\x08-\x17\x19\x1C-\x1F\x7F]",
     # Raw 8-bit C1 format/area controls: IND NEL HTS RI SPA EPA.
@@ -82,10 +84,15 @@ def _compile(name_to_pat: dict[str, str]) -> re.Pattern:
 GROUND_RE = _compile(GROUND_PATTERNS)
 
 # CSI: only final byte or cancel. (No trail inside CSI; just wait for more.)
-CSI_TERM_RE = re.compile(r"(?P<csi_final>[\x40-\x7E])|(?P<cancel>[\x18\x1A])")
+# An ESC aborts the CSI and begins the next sequence; any other C0 control acts at once
+# and the CSI carries on around it (the DEC parser, as in xterm 407).
+CSI_TERM_RE = re.compile(
+    r"(?P<csi_final>[\x40-\x7E])|(?P<cancel>[\x18\x1A])|(?P<esc>\x1b)|(?P<ctrl>[\x00-\x17\x19\x1C-\x1F])"
+)
 
 # STRING terminators: allow ST or BEL for all string classes, plus cancel.
-STR_TERM_RE = re.compile(r"(?P<st>(?:\x1b\\|\x9C))|(?P<bel>\x07)|(?P<cancel>[\x18\x1A])")
+# An ESC that is not ST aborts the string, unperformed, and begins the next sequence.
+STR_TERM_RE = re.compile(r"(?P<st>(?:\x1b\\|\x9C))|(?P<bel>\x07)|(?P<cancel>[\x18\x1A])|(?P<esc>\x1b(?=[^\\]))")
 
 # VT52 mode: text, C0 controls, ESC Y row column, and ESC with one character. An ESC
 # (or ESC Y and its coordinates) cut off at the end of the buffer waits for more.
@@ -332,10 +339,16 @@ class Parser:
                     # incomplete CSI, wait for more
                     break
                 end = m.end()
-                if m.lastgroup == "cancel":
-                    # abort CSI
+                if m.lastgroup == "ctrl":
+                    control = m.group()
+                    self.dispatch("bel" if control == "\x07" else "ctrl", control)
+                    self.buffer = self.buffer[: m.start()] + self.buffer[end:]
+                    self._scan_from = m.start()
+                    continue
+                if m.lastgroup in ("cancel", "esc"):
+                    # abort CSI; an ESC stays to begin the next sequence
                     printed.last_printed_char = None
-                    self.pos = end
+                    self.pos = end if m.lastgroup == "cancel" else m.start()
                     self.mode = None
                     continue
                 # dispatch full sequence from introducer to final
@@ -370,10 +383,10 @@ class Parser:
                 # incomplete string, wait
                 break
             end = m.end()
-            if m.lastgroup == "cancel":
-                # abort string
+            if m.lastgroup in ("cancel", "esc"):
+                # abort string; an ESC stays to begin the next sequence
                 printed.last_printed_char = None
-                self.pos = end
+                self.pos = end if m.lastgroup == "cancel" else m.start()
                 self.mode = None
                 continue
             # include from starter to ST/BEL
@@ -431,6 +444,8 @@ class Parser:
         self._printed.last_printed_char = None
 
     def _dispatch_control(self, kind: str, data: str) -> None:
+        if kind == "esc_esc":
+            return
         # Standalones
         if kind == "bel":
             self.emit(_BEL_OP)

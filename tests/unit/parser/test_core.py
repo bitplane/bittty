@@ -37,21 +37,20 @@ def test_parse_string_sequence(sequence_type, data, expected):
 
 
 def test_parser_feed_interrupted_osc(parser, board):
-    """Test that the parser handles an OSC sequence interrupted by another escape."""
-    # OSC sequence containing an escape, split across two feeds
+    """An ESC that is not ST abandons the OSC and begins the next sequence (xterm 407)."""
     parser.feed("Hello \x1b]2;some text here\x1b[A")
     parser.feed("more text\x07world")
 
-    assert "Hello world" in board.capture_pane()
-    assert board.title.title == "some text here\x1b[Amore text"
+    assert "Hello more textworld" in board.capture_pane()
+    assert board.title.title != "some text here"
 
 
 def test_parser_feed_multiple_escapes(parser, board):
     """Test that the parser handles multiple escape characters correctly."""
     parser.feed("hello\x1b\x1b")
     assert "hello" in board.capture_pane()
-    # The two escape characters should be consumed and dispatched as 'esc' events
-    assert parser.buffer == ""
+    # The second ESC begins the sequence again, so it waits for what follows
+    assert parser.buffer == "\x1b"
 
 
 def test_parser_feed_simple_truncate(parser, board):
