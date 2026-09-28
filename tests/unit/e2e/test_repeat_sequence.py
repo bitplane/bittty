@@ -101,17 +101,15 @@ def test_rep_with_no_previous_character():
 
 
 def test_rep_after_control_sequence():
-    """Test REP after control sequences (should repeat last graphic char)."""
+    """REP repeats only a character printed immediately before it (xterm 407): a CUF between cancels it."""
     board = Board(width=20, height=10)
     parser = Parser(board)
 
     parser.feed("A")
     parser.feed(f"{ESC}[2C")  # Move cursor forward
-    parser.feed(f"{ESC}[3b")  # Repeat last char (A) 3 times
+    parser.feed(f"{ESC}[3b")
 
-    line = board.blitter.current_page.get_line_text(0)
-    assert line[0] == "A"
-    assert line[3:6] == "AAA"
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "A"
 
 
 def test_rep_complex_sequence():

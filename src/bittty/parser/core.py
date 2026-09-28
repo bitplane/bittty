@@ -137,6 +137,12 @@ def parse_string_sequence(data: str, sequence_type: str) -> str:
     return content
 
 
+class _Unprinted:
+    """Stands in for the blitter's REP memory when the sink has none."""
+
+    last_printed_char = None
+
+
 class Parser:
     """
     State machine: GROUND → (CSI | STRING[osc|dcs|apc|pm|sos]) → GROUND
@@ -166,6 +172,11 @@ class Parser:
         # Board sinks take printable text directly — no Operation wrapper per run.
         self._print_text = getattr(sink, "print_text", None) if registry is not None else None
         self._csi_memo: dict = {}
+        # REP repeats only a graphic character printed immediately before it (xterm), so
+        # every other token, even one that does nothing, makes the blitter forget it.
+        self._printed = getattr(sink, "blitter", None) if registry is not None else None
+        if self._printed is None:
+            self._printed = _Unprinted()
 
     # ---- internal helpers ----
     def _set_seq_bounds(self, start: int) -> None:
@@ -192,6 +203,7 @@ class Parser:
         print_text = self._print_text
         crlf_h = self._crlf_h
         csi_memo = self._csi_memo
+        printed = self._printed
 
         while True:
             if self.mode is None:
@@ -234,6 +246,7 @@ class Parser:
                             if len(csi_memo) < 4096:  # bounded like the parse cache
                                 csi_memo[raw] = entry
                         entry[0](entry[1])
+                        printed.last_printed_char = None
                         self.pos = end
                         continue
                     if kind == "crlf":
@@ -241,6 +254,7 @@ class Parser:
                             crlf_h(_CRLF_OP)
                         else:
                             handle(_CRLF_OP)
+                        printed.last_printed_char = None
                         self.pos = end
                         continue
 
@@ -288,6 +302,7 @@ class Parser:
                 end = m.end()
                 if m.lastgroup == "cancel":
                     # abort CSI
+                    printed.last_printed_char = None
                     self.pos = end
                     self.mode = None
                     continue
@@ -325,6 +340,7 @@ class Parser:
             end = m.end()
             if m.lastgroup == "cancel":
                 # abort string
+                printed.last_printed_char = None
                 self.pos = end
                 self.mode = None
                 continue
@@ -349,7 +365,10 @@ class Parser:
         if kind == "print":
             self.emit(Operation("PRINT", (data,), data))
             return
+        self._dispatch_control(kind, data)
+        self._printed.last_printed_char = None
 
+    def _dispatch_control(self, kind: str, data: str) -> None:
         # Standalones
         if kind == "bel":
             self.emit(_BEL_OP)

@@ -33,7 +33,7 @@ class Blitter(Device):
         self.left_margin = 0
         self.right_margin = board.width - 1
         self.attr_change_extent = "stream"  # DECSACE: "stream" (power-on) or "rectangle"
-        self.last_printed_char = " "
+        self.last_printed_char = ""  # REP before any printing repeats nothing
         self._clusters = ClusterWriter(self)
         self.handlers = {
             "DECSLRM": self.apply_left_right_margins,
@@ -644,7 +644,7 @@ class Blitter(Device):
             buf.reset_wrapped_lines()
             for y in range(self.board.height):
                 buf.clear_line(y, constants.ERASE_ALL, 0, "")
-        self.last_printed_char = " "
+        self.last_printed_char = ""
 
     def set_column_mode(self, columns: int) -> None:
         """DECCOLM — switch 80/132 columns; always clears the screen and homes the cursor."""

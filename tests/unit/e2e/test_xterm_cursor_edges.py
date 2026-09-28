@@ -121,3 +121,46 @@ def test_decrc_restores_a_pending_wrap():
 )
 def test_decstr_keeps_the_cursor(sequence, report):
     assert _deccir(_run(sequence)) == report
+
+
+# --- REP repeats only a graphic character printed immediately before it --- #
+
+
+@pytest.mark.parametrize(
+    ("sequence", "line"),
+    [
+        ("A\x1b[3b", "AAAA"),
+        ("A \x1b[2bB", "A   B"),
+        ("\x1b[3b", ""),  # nothing printed yet
+        ("A\x1bc\x1b[3b", ""),
+        ("A\x1b[2b\x1b[2b", "AAA"),  # nor does a REP count
+        ("A\n\x1b[3b", "A"),
+        ("A\r\x1b[3b", "A"),
+        ("A\x07\x1b[3b", "A"),
+        ("A\x00\x1b[3b", "A"),
+        ("A\x7f\x1b[3b", "A"),
+        ("A\x0f\x1b[3b", "A"),
+        ("A\x18\x1b[3b", "A"),  # CAN
+        ("A\x1b[1\x18\x1b[3b", "A"),  # a cancelled CSI
+        ("A\x1b[1m\x1b[3b", "A"),
+        ("A\x1b[99y\x1b[3b", "A"),  # unknown CSI
+        ("A\x1b%G\x1b[3b", "A"),
+        ("A\x1b7\x1b[3b", "A"),
+        ("A\x1b]2;x\x07\x1b[3b", "A"),
+        ("A\x1b_x\x1b\\\x1b[3b", "A"),
+        ("A\x1bP$qm\x1b\\\x1b[3b", "A"),
+        ("q\x1b(0\x1b[3b", "q"),
+    ],
+)
+def test_rep_needs_a_graphic_character_immediately_before(sequence, line):
+    board = Board(width=80, height=24, model=XTERM)
+    board.host.attach(MemoryConnection())
+    board.feed_host_data(sequence)
+    assert board.blitter.current_page.get_line_text(0).rstrip() == line
+
+
+def test_rep_survives_a_chunk_boundary():
+    board = Board(width=80, height=24, model=XTERM)
+    board.feed_host_data("A")
+    board.feed_host_data("\x1b[3b")
+    assert board.blitter.current_page.get_line_text(0).rstrip() == "AAAA"
