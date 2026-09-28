@@ -32,7 +32,7 @@ class Blitter(Device):
         self.scroll_bottom = board.height - 1
         self.left_margin = 0
         self.right_margin = board.width - 1
-        self.attr_change_extent = "rectangle"  # DECSACE: "rectangle" or "stream"
+        self.attr_change_extent = "stream"  # DECSACE: "stream" (power-on) or "rectangle"
         self.last_printed_char = " "
         self._clusters = ClusterWriter(self)
         self.handlers = {
@@ -354,8 +354,8 @@ class Blitter(Device):
                 self.current_page.replace_cells(dl, ty, row)
 
     def set_attr_change_extent(self, ps: int) -> None:
-        """DECSACE — 1 = stream (wrapping run), else rectangle (default)."""
-        self.attr_change_extent = "stream" if ps == 1 else "rectangle"
+        """DECSACE — 2 = rectangle, else stream (a wrapping run; the power-on default)."""
+        self.attr_change_extent = "rectangle" if ps == 2 else "stream"
 
     def _extent_cells(self, params):
         """Yield (x, y) cells for DECCARA/DECRARA per DECSACE: a rectangle, or a wrapping stream."""
@@ -637,6 +637,7 @@ class Blitter(Device):
             return
         self.in_alt_screen = False
         self.current_page = self.primary_page
+        self.attr_change_extent = "stream"
         for buf in (self.primary_page, self.alt_page):
             buf.reset_line_attributes()
             buf.reset_wrapped_lines()

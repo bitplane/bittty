@@ -14,13 +14,14 @@ def _term(width=6, height=3):
 # --- DECSACE --- #
 
 
-def test_deccara_rectangle_extent_is_the_default():
+def test_deccara_stream_extent_is_the_default():
+    """xterm 407 powers on with DECSACE 0: a DECCARA from (1,5) to (2,6) runs to the row end."""
     board, parser, _ = _term()
-    parser.feed("\x1b[1;2;2;4;1$r")  # DECCARA bold over rows 1-2, cols 2-4 (rectangle)
+    parser.feed("\x1b[1;5;2;6;1$r")
     buf = board.blitter.current_page
-    assert buf.get_cell(0, 0)[0].bold is None  # outside the rectangle
-    assert buf.get_cell(1, 0)[0].bold is True  # inside (col 2 -> index 1)
-    assert buf.get_cell(5, 0)[0].bold is None  # outside on the right
+    assert buf.get_cell(3, 0)[0].bold is None  # before the stream start
+    assert buf.get_cell(5, 0)[0].bold is True  # past the rectangle's right edge
+    assert buf.get_cell(0, 1)[0].bold is True  # onto the next row
 
 
 def test_decsace_stream_extent_wraps():
@@ -38,11 +39,21 @@ def test_decsace_stream_extent_wraps():
     assert buf.get_cell(2, 1)[0].bold is None  # stops at the stream end
 
 
-def test_decsace_resets_to_rectangle():
+def test_decsace_selects_rectangle_only_with_2():
     board, parser, _ = _term()
-    parser.feed("\x1b[1*x")  # stream
-    parser.feed("\x1b[2*x")  # rectangle
+    parser.feed("\x1b[2*x")
     assert board.blitter.attr_change_extent == "rectangle"
+    parser.feed("\x1b[0*x")
+    assert board.blitter.attr_change_extent == "stream"
+
+
+def test_decsace_survives_decstr_but_not_ris():
+    """xterm 407: DECRQSS *x answers 2 after DECSTR and 0 after RIS."""
+    board, parser, _ = _term()
+    parser.feed("\x1b[2*x\x1b[!p")
+    assert board.blitter.attr_change_extent == "rectangle"
+    parser.feed("\x1bc")
+    assert board.blitter.attr_change_extent == "stream"
 
 
 # --- OSC special / Tektronix colours --- #
