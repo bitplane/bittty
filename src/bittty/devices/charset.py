@@ -134,6 +134,17 @@ class CharsetDevice(Device):
         """Single Shift 3 (SS3) - use G3 for next character only."""
         self.single_shift = 3
 
+    def save(self) -> tuple:
+        """GL, GR and the G0-G3 designations, for DECSC."""
+        return self.current_charset, self.gr, tuple(self.charset_array)
+
+    def restore(self, saved: tuple) -> None:
+        """Reinstate what save() returned (DECRC)."""
+        self.current_charset, self.gr, designations = saved
+        setters = (self.set_g0_charset, self.set_g1_charset, self.set_g2_charset, self.set_g3_charset)
+        for setter, designation in zip(setters, designations):
+            setter(designation)
+
     def reset(self) -> None:
         """Reset charset selections to US ASCII."""
         self.set_g0_charset("B")

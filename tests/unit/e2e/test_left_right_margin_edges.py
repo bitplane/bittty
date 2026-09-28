@@ -99,7 +99,8 @@ def test_editing_at_delayed_wrap_uses_the_physical_right_margin_cell():
     assert _lines(board)[0] == "  ABCDZ   "
 
 
-def test_saving_at_delayed_wrap_saves_the_physical_cursor_position():
+def test_saving_at_delayed_wrap_saves_the_wrap_too():
+    """DECSC keeps the wrap flag (VT510, xterm 407): after DECRC the next character wraps."""
     board = _board()
     board.cursor.set_position(2, 0)
     board.parser.feed("ABCDE")
@@ -109,8 +110,8 @@ def test_saving_at_delayed_wrap_saves_the_physical_cursor_position():
     board.cursor.restore()
     board.parser.feed("Z")
 
-    assert _lines(board)[0] == "  ABCDZ   "
-    assert (board.cursor.display_x, board.cursor.y) == (6, 0)
+    assert _lines(board)[:2] == ["  ABCDE   ", "  Z       "]
+    assert (board.cursor.display_x, board.cursor.y) == (3, 1)
 
 
 def test_margin_wrap_scrolls_only_the_scrolling_rectangle():

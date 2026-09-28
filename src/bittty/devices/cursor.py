@@ -2,12 +2,26 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from ..style import Style
 from .base import Device
 
 if TYPE_CHECKING:
     from .board import Board
+
+
+@dataclass(frozen=True, slots=True)
+class SavedCursor:
+    """What DECSC saves and DECRC restores; the defaults are what DECRC restores unsaved."""
+
+    x: int = 0
+    y: int = 0
+    wrap_pending: bool = False
+    style: Style = Style()  # the rendition, with DECSCA protection
+    origin_mode: bool = False
+    charsets: tuple = (0, 2, ("B", "B", "B", "B"))  # GL, GR and the G0-G3 designations
 
 
 class CursorDevice(Device):
@@ -17,9 +31,7 @@ class CursorDevice(Device):
         self.board = board
         self.x = 0
         self.y = 0
-        self.saved_x = 0
-        self.saved_y = 0
-        self.saved_ansi_code = ""
+        self.saved = {False: SavedCursor(), True: SavedCursor()}  # per screen: alternate?
         self.shape = "block"  # block | underline | bar (DECSCUSR)
         self.tab_stops = set(range(8, board.width, 8))
         self._wrap_pending = False
@@ -376,24 +388,31 @@ class CursorDevice(Device):
             self.mark_pending_wrap((left, right))
 
     def save(self) -> None:
-        """Save cursor position and attributes."""
-        self.cancel_pending_wrap()
-        self.saved_x = self.x
-        self.saved_y = self.y
-        self.saved_ansi_code = self.board.style.current_ansi_code
+        """DECSC — save the cursor state for this screen."""
+        board = self.board
+        self.saved[board.blitter.in_alt_screen] = SavedCursor(
+            self.display_x,
+            self.y,
+            self.wrap_pending,
+            board.style.current,
+            board.modes.origin_mode,
+            board.charset.save(),
+        )
 
     def restore(self) -> None:
-        """Restore cursor position and attributes."""
-        self.cancel_pending_wrap()
-        self.x = self.saved_x
-        self.y = self.saved_y
-        self.board.style.current_ansi_code = self.saved_ansi_code
+        """DECRC — restore this screen's saved cursor state, or the defaults if none was saved."""
+        board = self.board
+        saved = self.saved[board.blitter.in_alt_screen]
+        board.modes.set_mode(6, saved.origin_mode, private=True)  # first: setting DECOM homes the cursor
+        self.set_position(saved.x, saved.y)
+        if saved.wrap_pending:
+            self.arm_pending_wrap()
+        board.style.current = saved.style
+        board.charset.restore(saved.charsets)
 
     def reset(self, hard: bool = True) -> None:
         """Home the cursor and clear saved state; a hard reset restores default tab stops."""
         self.set_position(0, 0)
-        self.saved_x = 0
-        self.saved_y = 0
-        self.saved_ansi_code = ""
+        self.saved = {False: SavedCursor(), True: SavedCursor()}
         if hard:
             self.tab_stops = set(range(8, self.board.width, 8))

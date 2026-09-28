@@ -2,7 +2,7 @@
 
 import pytest
 
-from bittty import Board
+from bittty import Board, MemoryConnection
 from bittty.model import XTERM
 
 DIGITS = "0123456789" * 8
@@ -69,3 +69,37 @@ def test_pending_wrap_survives(sequence, lines):
 )
 def test_pending_wrap_is_still_reported(sequence):
     assert _run(sequence).cursor.wrap_pending
+
+
+# --- DECSC/DECRC save the whole cursor state, per screen --- #
+
+SET = '\x1b[5;10r\x1b[?6h\x1b[3;4H\x1b)0\x0e\x1b[1"q\x1b[1;31m'
+UNSET = '\x1b[?6l\x1b)B\x0f\x1b[0"q\x1b[0m\x1b[20;20H'
+
+
+def _deccir(board):
+    wire = MemoryConnection()
+    board.host.attach(wire)
+    board.feed_host_data("\x1b[1$w")
+    return wire.text[len("\x1bP1$u") : -2]
+
+
+@pytest.mark.parametrize(
+    ("sequence", "report"),
+    [
+        (SET + "\x1b7" + UNSET + "\x1b8", "7;4;1;A;A;A;1;2;@;B0BB"),  # DECSC
+        (SET + "\x1b[s" + UNSET + "\x1b[u", "7;4;1;A;A;A;1;2;@;B0BB"),  # SCOSC
+        ("\x1b[?6h\x1b[5;10r\x1b(0\x1b[10;10H\x1b8", "1;1;1;@;@;@;0;2;@;BBBB"),  # nothing saved: defaults
+        ("\x1b[20;20H\x1b7\x1b[5;10r\x1b[?6h\x1b8", "20;20;1;@;@;@;0;2;@;BBBB"),  # origin mode restored too
+        ("\x1b[5;5H\x1b7\x1b[?1047h\x1b[9;9H\x1b7\x1b[?1047l\x1b8", "5;5;1;@;@;@;0;2;@;BBBB"),  # one slot per screen
+        (FILL + "\x1b7\x1b[5;5HQ\x1b8", "1;80;1;@;@;H;0;2;@;BBBB"),  # the pending wrap
+    ],
+)
+def test_decrc_restores_what_decsc_saved(sequence, report):
+    board = _run(sequence)
+    assert _deccir(board) == report
+
+
+def test_decrc_restores_a_pending_wrap():
+    board = _run(FILL + "\x1b7\x1b[5;5H\x1b8Y")
+    assert _lines(board, 2) == [" " * 74 + "abcdef", "Y"]
