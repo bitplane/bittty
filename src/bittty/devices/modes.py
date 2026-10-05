@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from enum import Enum
+from operator import attrgetter
 from typing import TYPE_CHECKING
 
 from .. import mode_profiles as mp
@@ -19,6 +20,7 @@ from ..present import (
     KeyboardIndicatorChanged,
     KeyboardLockChanged,
     MouseCaptureChanged,
+    PresentEvent,
     ReverseScreenChanged,
     SmoothScrollChanged,
     SyncOutputChanged,
@@ -105,14 +107,28 @@ class ModeSpec:
         if self.status_fn is not None:
             return self.status_fn(device)
         if self.group is not None:
-            return 1 if getattr(device, self.group) == self.group_value else 2
-        if self.queryable and self.attr is not None:
-            state = getattr(device, self.attr)
-            return 1 if ((not state) if self.invert else state) else 2
-        return 0
+            is_set = getattr(device, self.group) == self.group_value
+        elif self.queryable and self.attr is not None:
+            is_set = getattr(device, self.attr) != self.invert
+        else:
+            return 0
+        return 1 if is_set else 2
 
 
 # --- side effects for modes that do more than flip a flag --- #
+
+
+def _status_of(is_set: Callable[[ModeDevice], bool]) -> Callable[[ModeDevice], int]:
+    """A DECRQM status function: 1 (set) while is_set holds, else 2 (reset)."""
+    return lambda device: 1 if is_set(device) else 2
+
+
+def _register(owner: Callable[[ModeDevice], object], attr: str) -> dict:
+    """A mode kept as a flag on another device: its setter and its DECRQM status."""
+    return {
+        "apply_fn": lambda device, value: setattr(owner(device), attr, value),
+        "status_fn": _status_of(lambda device: getattr(owner(device), attr)),
+    }
 
 
 _KEYBOARD_MODES = (1050, 1051, 1052, 1053, 1060, 1061)
@@ -138,7 +154,7 @@ def _keyboard_style(capability: str, number: int, style: KeyboardStyle) -> ModeS
         True,
         queryable=True,
         apply_fn=lambda d, enabled: setattr(d.board.keyboard, "style", style if enabled else KeyboardStyle.DEFAULT),
-        status_fn=lambda d: 1 if d.board.keyboard.style is style else 2,
+        status_fn=_status_of(lambda d: d.board.keyboard.style is style),
         save_fn=_save_keyboard_style,
         restore_fn=_restore_keyboard_style,
     )
@@ -237,12 +253,8 @@ def _declrmm(device: ModeDevice, value: bool) -> None:
         device.board.blitter.reset_left_right_margins()
 
 
-def _column_status(device: ModeDevice) -> int:
-    return 1 if device.board.width == 132 else 2
-
-
-def _alt_screen_status(device: ModeDevice) -> int:
-    return 1 if device.board.blitter.in_alt_screen else 2
+_column_status = _status_of(lambda device: device.board.width == 132)
+_alt_screen_status = _status_of(lambda device: device.board.blitter.in_alt_screen)
 
 
 def _page_coupling(device: ModeDevice, value: bool) -> None:
@@ -256,10 +268,7 @@ def _host_line_mode(field: str) -> dict:
     def apply(device: ModeDevice, value: bool) -> None:
         device.board.comm.update(**{field: value})
 
-    def status(device: ModeDevice) -> int:
-        return 1 if getattr(device.board.comm.line, field) else 2
-
-    return {"apply_fn": apply, "status_fn": status}
+    return {"apply_fn": apply, "status_fn": _status_of(lambda device: getattr(device.board.comm.line, field))}
 
 
 def _right_to_left(device: ModeDevice, value: bool) -> None:
@@ -271,8 +280,7 @@ def _crt_saver(device: ModeDevice, value: bool) -> None:
     device.board.blank_timeout = 30 if value else 0
 
 
-def _crt_saver_status(device: ModeDevice) -> int:
-    return 1 if device.board.blank_timeout else 2
+_crt_saver_status = _status_of(lambda device: bool(device.board.blank_timeout))
 
 
 def _ambiguous_width(device: ModeDevice, value: bool) -> None:
@@ -283,36 +291,22 @@ def _grapheme_clustering(device: ModeDevice, value: bool) -> None:
     device.board.blitter.set_grapheme_clustering(value)
 
 
-def _print_form_feed(device: ModeDevice, value: bool) -> None:
-    device.board.printer.print_form_feed = value
-
-
-def _print_form_feed_status(device: ModeDevice) -> int:
-    return 1 if device.board.printer.print_form_feed else 2
-
-
-def _print_extent(device: ModeDevice, value: bool) -> None:
-    device.board.printer.print_extent = value
-
-
-def _print_extent_status(device: ModeDevice) -> int:
-    return 1 if device.board.printer.print_extent else 2
+def _printer(device: ModeDevice):
+    return device.board.printer
 
 
 def _ignore_null(device: ModeDevice, value: bool) -> None:
     device.board.printer.set_ignore_null(value)
 
 
-def _ignore_null_status(device: ModeDevice) -> int:
-    return 1 if device.board.printer.configuration.ignore_null else 2
+_ignore_null_status = _status_of(lambda device: device.board.printer.configuration.ignore_null)
 
 
 def _conceal_answerback(device: ModeDevice, value: bool) -> None:
     device.board.set_answerback_concealed(value)
 
 
-def _conceal_answerback_status(device: ModeDevice) -> int:
-    return 1 if device.board.answerback_concealed else 2
+_conceal_answerback_status = _status_of(lambda device: device.board.answerback_concealed)
 
 
 def _inband_resize(device: ModeDevice, value: bool) -> None:
@@ -396,8 +390,8 @@ MODE_SPECS: tuple[ModeSpec, ...] = (
         queryable=True,
         effects=frozenset({ModeEffect.CURSOR_BLINK}),
     ),
-    ModeSpec(mp.DEC_PRINT_FORM_FEED, 18, True, apply_fn=_print_form_feed, status_fn=_print_form_feed_status),
-    ModeSpec(mp.DEC_PRINT_EXTENT, 19, True, apply_fn=_print_extent, status_fn=_print_extent_status),
+    ModeSpec(mp.DEC_PRINT_FORM_FEED, 18, True, **_register(_printer, "print_form_feed")),
+    ModeSpec(mp.DEC_PRINT_EXTENT, 19, True, **_register(_printer, "print_extent")),
     ModeSpec(
         mp.DEC_CURSOR_VISIBLE,
         25,
@@ -450,15 +444,8 @@ MODE_SPECS: tuple[ModeSpec, ...] = (
         apply_fn=_conceal_answerback,
         status_fn=_conceal_answerback_status,
     ),
-    ModeSpec(
-        mp.DEC_IGNORE_NULL,
-        102,
-        True,
-        "ignore_null",
-        queryable=True,
-        apply_fn=_ignore_null,
-        status_fn=_ignore_null_status,
-    ),
+    # The printer configuration holds this one; the printer's reset clears it on DECSTR too.
+    ModeSpec(mp.DEC_IGNORE_NULL, 102, True, apply_fn=_ignore_null, status_fn=_ignore_null_status),
     ModeSpec(mp.DEC_HALF_DUPLEX, 103, True, **_host_line_mode("half_duplex")),
     # Keyboard indicators: 108/109 are keyboard state the host may drive; 110
     # selects whether the LEDs show that state or DECLL-loaded host indications.
@@ -571,7 +558,7 @@ MODE_SPECS: tuple[ModeSpec, ...] = (
         True,
         queryable=True,
         apply_fn=_set_delete_mode,
-        status_fn=lambda d: 1 if d.board.keyboard.delete_sends_del else 2,
+        status_fn=_status_of(lambda d: d.board.keyboard.delete_sends_del),
         save_fn=_save_delete,
         restore_fn=_restore_delete,
     ),
@@ -746,21 +733,14 @@ class ModeDevice(Device):
         self._saved_private_modes: dict[int, bool | None] = {}
         self._batch_depth = 0
         self._pending_effects: set[ModeEffect] = set()
-        # Edge-trigger caches for frontend present events (None = not yet emitted).
-        self._last_mouse_capture: str | None = None
-        self._last_cursor_visible: bool | None = None
-        self._last_cursor_blinking: bool | None = None
-        self._last_reverse_screen: bool | None = None
-        self._last_sync: bool | None = None
-        self._last_smooth_scroll: bool | None = None
-        self._last_ambiguous_width: int | None = None
-        self._last_grapheme_clustering: bool | None = None
-        self._last_keyboard_locked: bool | None = None
-        # Not the None idiom above: an all-off "change" carries no information,
-        # and a DECLL write that leaves the display unchanged must emit nothing.
-        self._last_keyboard_indicators: tuple[bool, bool, bool] = (False, False, False)
         self._set_defaults()
-        self._last_chrome_resources = self.chrome_resources()  # the chrome starts with the defaults
+        # Edge-trigger cache: the state each present event last carried (absent = never sent).
+        # The chrome starts knowing two of them: its resources at their defaults, and
+        # its keyboard LEDs all off, so a DECLL write that leaves them dark emits nothing.
+        self._last: dict[ModeEffect, object] = {
+            ModeEffect.CHROME_RESOURCES: self.chrome_resources(),
+            ModeEffect.KEYBOARD_INDICATOR: (False, False, False),
+        }
         self.handlers = {
             "SM": self.apply_mode_operation,
             "RM": self.apply_mode_operation,
@@ -805,9 +785,7 @@ class ModeDevice(Device):
             self.insert_mode = False
             self.origin_mode = False
             self.cursor_visible = True
-            self.ignore_null = False
-            if hasattr(self, "keyboard_locked"):
-                self.keyboard_locked = False
+            self.keyboard_locked = False
         if reconcile:
             self.reconcile_all()
 
@@ -921,59 +899,12 @@ class ModeDevice(Device):
         self.reconcile(*ModeEffect, force=force)
 
     def _emit_effect(self, effect: ModeEffect, *, force: bool = False) -> None:
-        if effect is ModeEffect.MOUSE_CAPTURE:
-            state = self._mouse_capture()
-            if force or state != self._last_mouse_capture:
-                self._last_mouse_capture = state
-                self.board.present(MouseCaptureChanged(state))
-        elif effect is ModeEffect.CURSOR:
-            if force or self.cursor_visible != self._last_cursor_visible:
-                self._last_cursor_visible = self.cursor_visible
-                self.board.present(CursorVisibilityChanged(self.cursor_visible))
-        elif effect is ModeEffect.CURSOR_BLINK:
-            if force or self.cursor_blinking != self._last_cursor_blinking:
-                self._last_cursor_blinking = self.cursor_blinking
-                self.board.present(CursorBlinkChanged(self.cursor_blinking))
-        elif effect is ModeEffect.REVERSE:
-            if force or self.reverse_screen != self._last_reverse_screen:
-                self._last_reverse_screen = self.reverse_screen
-                self.board.present(ReverseScreenChanged(self.reverse_screen))
-        elif effect is ModeEffect.SYNC:
-            if force or self.synchronized_output != self._last_sync:
-                self._last_sync = self.synchronized_output
-                self.board.present(SyncOutputChanged(self.synchronized_output))
-        elif effect is ModeEffect.WIDTH:
-            if (True, 8840) not in self._modes:
-                return
-            width = 2 if self.ambiguous_width_double else 1
-            if force or width != self._last_ambiguous_width:
-                self._last_ambiguous_width = width
-                self.board.present(AmbiguousWidthChanged(width))
-        elif effect is ModeEffect.GRAPHEME:
-            if force or self.grapheme_clustering != self._last_grapheme_clustering:
-                self._last_grapheme_clustering = self.grapheme_clustering
-                self.board.present(GraphemeClusteringChanged(self.grapheme_clustering))
-        elif effect is ModeEffect.KEYBOARD_LOCK:
-            if force or self.keyboard_locked != self._last_keyboard_locked:
-                self._last_keyboard_locked = self.keyboard_locked
-                self.board.present(KeyboardLockChanged(self.keyboard_locked))
-        elif effect is ModeEffect.SMOOTH_SCROLL:
-            if force or self.smooth_scroll != self._last_smooth_scroll:
-                self._last_smooth_scroll = self.smooth_scroll
-                self.board.present(SmoothScrollChanged(self.smooth_scroll))
-        elif effect is ModeEffect.CHROME_RESOURCES:
-            enabled = self.chrome_resources()
-            if force or enabled != self._last_chrome_resources:
-                self._last_chrome_resources = enabled
-                self.board.present(ChromeResourcesChanged(enabled))
-        elif effect is ModeEffect.KEYBOARD_INDICATOR:
-            keyboard = self.board.keyboard
-            if not keyboard.leds_fitted and (True, 110) not in self._modes:
-                return  # this terminal has no keyboard LEDs to speak of
-            lights = keyboard.indicator_lights()
-            if force or lights != self._last_keyboard_indicators:
-                self._last_keyboard_indicators = lights
-                self.board.present(KeyboardIndicatorChanged(*lights))
+        state_of, event = _EFFECT_EVENTS[effect]
+        state = state_of(self)
+        if state is None or (not force and self._last.get(effect) == state):
+            return
+        self._last[effect] = state
+        self.board.present(event(state))
 
     def chrome_resources(self) -> frozenset[str]:
         """The chrome resources this terminal has that are enabled."""
@@ -1034,7 +965,7 @@ class ModeDevice(Device):
                 entry.save_fn(self)
                 self._saved_private_modes[param] = None
                 continue
-            status = self.get_private_mode_status(param)
+            status = self.mode_status(True, param)
             if status in (1, 2, 3, 4):
                 self._saved_private_modes[param] = status in (1, 3)
 
@@ -1048,9 +979,7 @@ class ModeDevice(Device):
                     continue
                 value = saved[param]
                 if value is None:
-                    restore = self._modes[(True, param)].restore_fn
-                    assert restore is not None
-                    restore(self)
+                    self._modes[(True, param)].restore_fn(self)
                 else:
                     yield param, value
 
@@ -1074,21 +1003,46 @@ class ModeDevice(Device):
         """(private, number, set) for each mode whose state setting or resetting it restores."""
         states = []
         for private, number in self._modes:
-            status = self.get_private_mode_status(number) if private else self.get_ansi_mode_status(number)
+            status = self.mode_status(private, number)
             if status in (1, 2) and (private, number) not in _ACTION_MODES:
                 states.append((private, number, status == 1))
         return states
 
-    def get_private_mode_status(self, mode: int) -> int:
-        key = (True, mode)
+    def mode_status(self, private: bool, mode: int) -> int:
+        """DECRQM status: 0 not recognised, 1 set, 2 reset, 3 permanently set, 4 permanently reset."""
+        key = (private, mode)
         if key in self._runtime_mode_status:
             return self._runtime_mode_status[key]
         entry = self._modes.get(key)
         return entry.status(self) if entry is not None else 0
 
-    def get_ansi_mode_status(self, mode: int) -> int:
-        key = (False, mode)
-        if key in self._runtime_mode_status:
-            return self._runtime_mode_status[key]
-        entry = self._modes.get(key)
-        return entry.status(self) if entry is not None else 0
+
+def _ambiguous_width_state(device: ModeDevice) -> int | None:
+    """1 or 2, on a terminal with mode 8840; None on one that cannot change it."""
+    if not device.recognizes(True, 8840):
+        return None
+    return 2 if device.ambiguous_width_double else 1
+
+
+def _indicator_state(device: ModeDevice) -> tuple[bool, bool, bool] | None:
+    """The keyboard LEDs (num, caps, scroll); None on a terminal with no LEDs to speak of."""
+    keyboard = device.board.keyboard
+    if not keyboard.leds_fitted and not device.recognizes(True, 110):
+        return None
+    return keyboard.indicator_lights()
+
+
+# Each frontend-facing effect: the state it reports (None: nothing to report) and its event.
+_EFFECT_EVENTS: dict[ModeEffect, tuple[Callable[[ModeDevice], object], Callable[[object], PresentEvent]]] = {
+    ModeEffect.MOUSE_CAPTURE: (ModeDevice._mouse_capture, MouseCaptureChanged),
+    ModeEffect.CURSOR: (attrgetter("cursor_visible"), CursorVisibilityChanged),
+    ModeEffect.CURSOR_BLINK: (attrgetter("cursor_blinking"), CursorBlinkChanged),
+    ModeEffect.REVERSE: (attrgetter("reverse_screen"), ReverseScreenChanged),
+    ModeEffect.SYNC: (attrgetter("synchronized_output"), SyncOutputChanged),
+    ModeEffect.WIDTH: (_ambiguous_width_state, AmbiguousWidthChanged),
+    ModeEffect.GRAPHEME: (attrgetter("grapheme_clustering"), GraphemeClusteringChanged),
+    ModeEffect.KEYBOARD_LOCK: (attrgetter("keyboard_locked"), KeyboardLockChanged),
+    ModeEffect.KEYBOARD_INDICATOR: (_indicator_state, lambda lights: KeyboardIndicatorChanged(*lights)),
+    ModeEffect.CHROME_RESOURCES: (ModeDevice.chrome_resources, ChromeResourcesChanged),
+    ModeEffect.SMOOTH_SCROLL: (attrgetter("smooth_scroll"), SmoothScrollChanged),
+}

@@ -159,18 +159,18 @@ def test_mode_query_save_restore_screen_and_reset(mode, default):
     board, wire = driver()
     board.feed_host_data(f"\x1b[?{mode}$p\x1b[?{mode}s\x1b[?{mode}{'l' if default == 1 else 'h'}".encode())
     board.feed_host_data("\x1b[?1049h\x1b[?1049l".encode())
-    assert board.modes.get_private_mode_status(mode) == 3 - default
+    assert board.modes.mode_status(True, mode) == 3 - default
     board.feed_host_data(f"\x1b[?{mode}r\x1b[?{mode}$p".encode())
     assert wire.text == f"\x1b[?{mode};{default}$y" * 2
     board.feed_host_data(f"\x1b[?{mode}{'l' if default == 1 else 'h'}\x1bc".encode())
-    assert board.modes.get_private_mode_status(mode) == default
+    assert board.modes.mode_status(True, mode) == default
 
 
 def test_xterm_does_not_advertise_new_modes():
     board, wire = driver(XTERM)
     board.feed_host_data("\x1b[?8l\x1b[?7727;7728h".encode())
     for mode, status in ((8, 4), (7727, 0), (7728, 0)):  # xterm 407 knows DECARM but fixes it reset
-        assert board.modes.get_private_mode_status(mode) == status
+        assert board.modes.mode_status(True, mode) == status
     board.input_key_event(KeyEvent("escape"))
     assert wire.text == "\x1b"
 

@@ -155,11 +155,11 @@ def test_cursor_application_interaction(mode, expected):
 @pytest.mark.parametrize("mode", MODES)
 def test_selection_query_reset_and_shared_save_slot(mode):
     board, wire = driver(mode)
-    assert [board.modes.get_private_mode_status(n) for n in MODES] == [1 if n == mode else 2 for n in MODES]
+    assert [board.modes.mode_status(True, n) for n in MODES] == [1 if n == mode else 2 for n in MODES]
     board.feed_host_data("\x1b[?1051s\x1b[?1061h\x1b[?1052r".encode())
-    assert board.modes.get_private_mode_status(mode) == 1
+    assert board.modes.mode_status(True, mode) == 1
     board.feed_host_data("\x1b[?1049h\x1b[?1049l\x1b[!p\x1bc".encode())
-    assert board.modes.get_private_mode_status(mode) == 1  # xterm keeps keyboard selection on RIS
+    assert board.modes.mode_status(True, mode) == 1  # xterm keeps keyboard selection on RIS
     board.feed_host_data("\x1b[?1053l".encode())  # reset any member restores default, not just the active one
     assert board.keyboard.style is KeyboardStyle.DEFAULT
     board.feed_host_data("\x1b[?1052r".encode())  # RIS cleared the saved slot

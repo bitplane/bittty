@@ -29,9 +29,9 @@ def test_mode_device_reports_query_status_from_its_state():
     modes.auto_wrap = False
     modes.cursor_visible = False
 
-    assert modes.get_ansi_mode_status(4) == 1
-    assert modes.get_ansi_mode_status(7) == 0  # ANSI mode 7 is not a real mode
-    assert modes.get_private_mode_status(25) == 2
+    assert modes.mode_status(False, 4) == 1
+    assert modes.mode_status(False, 7) == 0  # ANSI mode 7 is not a real mode
+    assert modes.mode_status(True, 25) == 2
 
 
 def test_mode_device_keypad_operations_and_side_effects():
@@ -49,7 +49,7 @@ def test_mode_device_keypad_operations_and_side_effects():
     # ANSI mode 1 is GATM, not a keypad switch — it must not be recognised.
     modes.set_mode(1, True)
     assert modes.application_keypad is False
-    assert modes.get_ansi_mode_status(1) == 0
+    assert modes.mode_status(False, 1) == 0
 
 
 def test_mode_device_alt_screen_and_save_restore_side_effects():

@@ -49,7 +49,7 @@ def test_kam_blocks_keyboard_origins_but_not_focus_or_mouse_reports():
 def test_srm_local_echo_is_direct_and_does_not_render_key_sequences():
     board, parser, transport, _ = _term()
     assert board.modes.local_echo is False
-    assert board.modes.get_ansi_mode_status(12) == 1
+    assert board.modes.mode_status(False, 12) == 1
 
     parser.feed("\x1b[12l")
     board.input("ab")
@@ -61,7 +61,7 @@ def test_srm_local_echo_is_direct_and_does_not_render_key_sequences():
     board.input("\b")
     board.input("Z")
     assert board.capture_text() == "aZ"
-    assert board.modes.get_ansi_mode_status(12) == 2
+    assert board.modes.mode_status(False, 12) == 2
 
 
 def test_kam_soft_reset_and_hard_mode_defaults():
@@ -114,7 +114,7 @@ def test_concealed_answerback_stays_transmittable_and_cannot_be_reset():
 
     assert board.answerback is None
     assert board.answerback_concealed is True
-    assert board.modes.get_private_mode_status(101) == 1
+    assert board.modes.mode_status(True, 101) == 1
     parser.feed("\x05")
     assert transport.data == ["secret"]
 
@@ -123,7 +123,7 @@ def test_concealed_answerback_stays_transmittable_and_cannot_be_reset():
     board.answerback = "replacement"
     assert board.answerback == "replacement"
     assert board.answerback_concealed is False
-    assert board.modes.get_private_mode_status(101) == 2
+    assert board.modes.mode_status(True, 101) == 2
 
 
 def test_margin_bell_rings_once_per_zone_and_rearms_on_a_new_row():
@@ -149,8 +149,8 @@ def test_bell_window_policies_are_ordered_and_queryable():
     board, parser, _, recorder = _term()
     parser.feed("\x1b[?1042h\x1b[?1043h\x07")
     assert recorder.events[-3:] == [Bell(), WindowRequest("urgent"), WindowRequest("raise")]
-    assert board.modes.get_private_mode_status(1042) == 1
-    assert board.modes.get_private_mode_status(1043) == 1
+    assert board.modes.mode_status(True, 1042) == 1
+    assert board.modes.mode_status(True, 1043) == 1
 
 
 def test_inband_resize_reports_enable_reenable_and_frontend_resizes():

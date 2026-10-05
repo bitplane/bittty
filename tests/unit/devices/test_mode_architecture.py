@@ -156,7 +156,7 @@ def test_deccolm_semantics_are_selected_by_model():
     assert tmux.width == 80
     assert (tmux.cursor.x, tmux.cursor.y) == (0, 0)
     assert tmux.blitter.current_page.get_cell(0, 0)[1] == " "
-    assert tmux.modes.get_private_mode_status(3) == 4
+    assert tmux.modes.mode_status(True, 3) == 4
 
     kitty, kitty_parser, _ = _board(KITTY)
     kitty.blitter.write_text("kitty")
@@ -164,13 +164,13 @@ def test_deccolm_semantics_are_selected_by_model():
     kitty_parser.feed("\x1b[?3h")
     assert kitty.width == 80
     assert (kitty.cursor.x, kitty.cursor.y) == (0, 0)
-    assert kitty.modes.get_private_mode_status(3) == 1
+    assert kitty.modes.mode_status(True, 3) == 1
     kitty.blitter.write_text("kept")
     kitty.cursor.set_position(3, 1)
     kitty_parser.feed("\x1b[?3l")
     assert (kitty.cursor.x, kitty.cursor.y) == (3, 1)
     assert kitty.blitter.current_page.get_cell(0, 0)[1] == "k"
-    assert kitty.modes.get_private_mode_status(3) == 2
+    assert kitty.modes.mode_status(True, 3) == 2
 
 
 def test_tracking_modes_are_mutually_exclusive_and_query_the_selector():
@@ -178,8 +178,8 @@ def test_tracking_modes_are_mutually_exclusive_and_query_the_selector():
 
     parser.feed("\x1b[?1000h\x1b[?1002h")
     assert board.modes.mouse_protocol is MouseProtocol.BUTTON
-    assert board.modes.get_private_mode_status(1000) == 2
-    assert board.modes.get_private_mode_status(1002) == 1
+    assert board.modes.mode_status(True, 1000) == 2
+    assert board.modes.mode_status(True, 1002) == 1
 
     # Resetting an inactive member is a no-op; resetting the selected one turns tracking off.
     parser.feed("\x1b[?1000l\x1b[?1000$p\x1b[?1002$p")
@@ -195,15 +195,15 @@ def test_mouse_encodings_are_mutually_exclusive_and_reset_to_legacy():
 
     parser.feed("\x1b[?1005h\x1b[?1015h")
     assert board.modes.mouse_encoding is MouseEncoding.URXVT
-    assert board.modes.get_private_mode_status(1005) == 2
-    assert board.modes.get_private_mode_status(1015) == 1
+    assert board.modes.mode_status(True, 1005) == 2
+    assert board.modes.mode_status(True, 1015) == 1
 
     parser.feed("\x1b[?1005l")
     assert board.modes.mouse_encoding is MouseEncoding.URXVT
 
     parser.feed("\x1b[?1015l")
     assert board.modes.mouse_encoding is MouseEncoding.LEGACY
-    assert board.modes.get_private_mode_status(1015) == 2
+    assert board.modes.mode_status(True, 1015) == 2
 
 
 def test_x10_reports_presses_only_and_ignores_modifiers():
@@ -233,7 +233,7 @@ def test_locator_and_xterm_tracking_replace_each_other_and_drive_capture():
     assert recorder.events[-1] == MouseCaptureChanged("basic")
 
     parser.feed("\x1b[1'z")
-    assert board.modes.get_private_mode_status(1000) == 2
+    assert board.modes.mode_status(True, 1000) == 2
     assert recorder.events[-1] == MouseCaptureChanged("any")
 
 
@@ -327,8 +327,8 @@ def test_an_option_contributes_modes_the_model_does_not_declare():
     same modes are unrecognised on the bare model.
     """
     bare = Board(model=VT100)
-    assert bare.modes.get_private_mode_status(18) == 0  # DECPFF: not recognised
-    assert bare.modes.get_private_mode_status(19) == 0  # DECPEX
+    assert bare.modes.mode_status(True, 18) == 0  # DECPFF: not recognised
+    assert bare.modes.mode_status(True, 19) == 0  # DECPEX
 
     fitted = Model(
         name="vt100+printer",
@@ -338,8 +338,8 @@ def test_an_option_contributes_modes_the_model_does_not_declare():
         options=frozenset({DEC_PRINTER_PORT}),
     )
     board = Board(model=fitted)
-    assert board.modes.get_private_mode_status(18) == 2  # recognised, reset
-    assert board.modes.get_private_mode_status(19) == 2
+    assert board.modes.mode_status(True, 18) == 2  # recognised, reset
+    assert board.modes.mode_status(True, 19) == 2
 
 
 def test_the_printer_repertoire_comes_from_the_installed_port():
@@ -360,7 +360,7 @@ def test_a_fitted_port_with_nothing_plugged_in_still_recognises_its_modes():
     """
     board = Board(model=VT220)
 
-    assert board.modes.get_private_mode_status(18) == 2  # known, despite no printer
+    assert board.modes.mode_status(True, 18) == 2  # known, despite no printer
     assert board.printer.port.connected is False
     assert board.printer.status is PrinterStatus.OFFLINE
 

@@ -172,7 +172,7 @@ class QueryDevice(Device):
 
     def report_mode_status(self, operation: Operation) -> None:
         mode, private = operation.args
-        status = self.modes.get_private_mode_status(mode) if private else self.modes.get_ansi_mode_status(mode)
+        status = self.modes.mode_status(private, mode)
         prefix = "?" if private else ""
         self.board.host.write(f"\033[{prefix}{mode};{status}$y", flush=True)
 

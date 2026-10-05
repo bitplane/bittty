@@ -131,7 +131,7 @@ def test_probe_synchronizes_initially_set_grapheme_mode(monkeypatch, capsys):
     assert capsys.readouterr().out == "\033[?2027l"
     assert display.initial_grapheme_clustering is True
     assert display.host_grapheme_clustering is False
-    assert display.board.modes.get_private_mode_status(2027) == 2
+    assert display.board.modes.mode_status(True, 2027) == 2
 
 
 def test_restore_terminal_restores_initial_grapheme_mode(capsys):
@@ -151,7 +151,7 @@ def test_unsupported_grapheme_mode_is_not_mirrored(capsys):
     display.on_grapheme_clustering(True)
 
     assert "\033[?2027" not in capsys.readouterr().out
-    assert display.board.modes.get_private_mode_status(2027) == 0
+    assert display.board.modes.mode_status(True, 2027) == 0
 
 
 def test_handle_sgr_mouse_sequence_reinjects(monkeypatch):
