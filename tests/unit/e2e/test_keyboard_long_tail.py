@@ -30,11 +30,11 @@ def test_udk_clear_merge_delete_and_shift():
     board.input_fkey(6, 2)
     assert wire.data == ["\x1b[17~", b"AB"]
     define(board, "17/44", "1;1")
-    assert board.keyboard.user_defined_keys == {6: b"D", 7: b"C"}
+    assert board.keyboard.user_keys.keys == {6: b"D", 7: b"C"}
     define(board, "17/", "1;1")
-    assert board.keyboard.user_defined_keys == {7: b"C"}
+    assert board.keyboard.user_keys.keys == {7: b"C"}
     define(board, "19/45")
-    assert board.keyboard.user_defined_keys == {8: b"E"}
+    assert board.keyboard.user_keys.keys == {8: b"E"}
 
 
 def test_udk_lock_status_operator_unlock_and_resets():
@@ -45,14 +45,14 @@ def test_udk_lock_status_operator_unlock_and_resets():
     assert wire.text == "\x1b[?20n\x1b[?21n"
     define(board, "17/42", "1;1")  # cannot unlock from DECUDK
     board.feed_host_data("\x1b[!p".encode())
-    assert board.keyboard.user_defined_keys == {6: b"A"}
-    assert board.keyboard.user_keys_locked
-    board.keyboard.set_user_keys_locked(False)
+    assert board.keyboard.user_keys.keys == {6: b"A"}
+    assert board.keyboard.user_keys.locked
+    board.keyboard.user_keys.locked = False
     define(board, "17/42")
-    assert board.keyboard.user_defined_keys == {6: b"B"}
+    assert board.keyboard.user_keys.keys == {6: b"B"}
     board.feed_host_data("\x1bc".encode())
-    assert board.keyboard.user_defined_keys == {}
-    assert not board.keyboard.user_keys_locked
+    assert board.keyboard.user_keys.keys == {}
+    assert not board.keyboard.user_keys.locked
 
 
 def test_udk_bytes_and_keyboard_lock():
@@ -69,9 +69,9 @@ def test_udk_bytes_and_keyboard_lock():
 def test_udk_capacity_is_sequential_and_released_by_deletion():
     board, _ = driver(VT220)
     define(board, "17/" + "41" * 250 + ";18/" + "42" * 7)
-    assert board.keyboard.user_defined_keys == {6: b"A" * 250}
+    assert board.keyboard.user_keys.keys == {6: b"A" * 250}
     define(board, "17/;18/" + "42" * 256, "1;1")
-    assert board.keyboard.user_defined_keys == {7: b"B" * 256}
+    assert board.keyboard.user_keys.keys == {7: b"B" * 256}
 
 
 def test_udk_fragmented_bytes_and_screen_switch():
@@ -92,15 +92,15 @@ def test_invalid_udk_header_does_not_clear_or_lock(params):
     board, _ = driver()
     define(board, "17/41")
     define(board, "17/42", params)
-    assert board.keyboard.user_defined_keys == {6: b"A"}
-    assert not board.keyboard.user_keys_locked
+    assert board.keyboard.user_keys.keys == {6: b"A"}
+    assert not board.keyboard.user_keys.locked
 
 
 def test_udk_bad_entries_do_not_become_text_or_replace_valid_keys():
     board, _ = driver()
     define(board, "17/41")
     define(board, "17/GG;18/4;19/4 1;999/43;20/44", "1;1")
-    assert board.keyboard.user_defined_keys == {6: b"A", 9: b"D"}
+    assert board.keyboard.user_keys.keys == {6: b"A", 9: b"D"}
     assert board.capture_text() == ""
 
 
@@ -111,7 +111,7 @@ def test_udk_repertoire(model, supported):
     board, wire = driver(model)
     define(board, "17/41")
     board.feed_host_data("\x1b[?25n".encode())
-    assert bool(board.keyboard.user_defined_keys) == supported
+    assert bool(board.keyboard.user_keys.keys) == supported
     assert wire.text == ("\x1b[?20n" if supported else "")
 
 

@@ -26,7 +26,7 @@ from .connections import (
     StreamPrinter,
 )
 from .devices.board import Board
-from .keys import KeyEvent, KeyModifiers
+from .keyboard import KeyEvent, KeyModifiers
 from .model import BITTTY, LINUX, VT100, VT102, VT220, VT320, VT420, VT510, XTERM, Model
 from .operations import Operation, OperationSink
 from .options import Option, PrinterCapabilities

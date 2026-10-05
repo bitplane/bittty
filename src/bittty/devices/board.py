@@ -17,7 +17,7 @@ from typing import Any
 from .. import constants
 from ..caps import TerminalCaps
 from ..connections import DisplayPort, HostPort
-from ..keys import KeyEvent
+from ..keyboard.keys import KeyEvent
 from ..model import DEFAULT, Model
 from ..operations import Operation
 from ..parser import Parser

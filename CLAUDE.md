@@ -82,6 +82,13 @@ chrome a human looks at, and two full-duplex ports connect the board to its outs
 - The model number: the emulation profile as data (XTERM, VT220, LINUX, ...) — DA
   responses, keymaps, mode repertoire, charsets
 
+**Keyboard** (`src/bittty/keyboard/`)
+- Key facts and their encodings, as data: `keys` (KeyEvent, KeyModifiers — what the chrome
+  reports), `keymap` (each model's KeyMap), `styles` (xterm's selectable keyboards) and
+  `kitty` (the Kitty protocol encoder, `KittyFlags`, `KittyStack`), `xterm` (XTMODKEYS
+  resources) and `udk` (DECUDK memory). The keyboard *device* (`devices/keyboard.py`) is
+  the card that uses them
+
 **Style** (`src/bittty/style.py`)
 - Packed-int text styling (colors, bold, italic, underline, etc.)
 - Parses SGR (Select Graphic Rendition) sequences; 16-color, 256-color, and RGB

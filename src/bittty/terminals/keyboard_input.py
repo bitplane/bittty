@@ -3,8 +3,8 @@
 import codecs
 import re
 
-from ..keyboard_protocol import FUNCTIONAL, UNICODE_KEYS
-from ..keys import KeyEvent, KeyModifiers
+from ..keyboard.kitty import ALL_FLAGS, FUNCTIONAL, UNICODE_KEYS, KittyFlags
+from ..keyboard.keys import KeyEvent, KeyModifiers
 
 _CSI = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 _ESCAPE = re.compile(r"\x1b[ -/]*[0-~]")
@@ -153,7 +153,7 @@ class KeyboardInput:
         keyboard_reply = _KEYBOARD_REPLY.fullmatch(raw) if raw.startswith("\x1b[?") else None
         if keyboard_reply is not None:
             if terminal.host_keyboard_pushed:
-                terminal.host_keyboard_flags = int(keyboard_reply.group(1)) & 31
+                terminal.host_keyboard_flags = int(keyboard_reply.group(1)) & ALL_FLAGS
         elif (raw[-1] in "Rcty" or raw.startswith("\x1b]")) and _REPLY.fullmatch(raw):
             return
         elif raw == "\x1b[200~":
@@ -182,7 +182,7 @@ class KeyboardInput:
 
     def _text(self, text):
         board = self.terminal.board
-        if not board.keyboard.kitty_flags & 8:
+        if not board.keyboard.kitty_flags & KittyFlags.REPORT_ALL_KEYS:
             board.display.input(text)
             return
         # Plain text gives no physical-key identity, even if the outer terminal
@@ -195,7 +195,9 @@ class KeyboardInput:
                 board.display.input(chunk)
 
     def flush_trailing(self):
-        disambiguated = bool((self.terminal.host_keyboard_flags or 0) & 9)
+        disambiguated = bool(
+            (self.terminal.host_keyboard_flags or 0) & (KittyFlags.DISAMBIGUATE | KittyFlags.REPORT_ALL_KEYS)
+        )
         if (
             self.pending.startswith("\x1b")
             and len(self.pending) <= 2

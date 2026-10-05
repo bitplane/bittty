@@ -9,7 +9,7 @@ from .. import constants
 if TYPE_CHECKING:
     from ..caps import TerminalCaps
     from ..devices.board import Board
-    from ..keys import KeyEvent
+    from ..keyboard.keys import KeyEvent
     from ..present import PresentEvent
 
 

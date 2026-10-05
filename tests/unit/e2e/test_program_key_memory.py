@@ -40,14 +40,14 @@ def test_free_memory_report(sequence, reply):
 
 def test_locking_stops_definitions():
     board, wire = _run("\x1b[1+z" + UDK("17/41") + "\x1b[?25n")
-    assert board.keyboard.user_defined_keys == {}
+    assert board.keyboard.user_keys.keys == {}
     assert wire.data == ["\x1b[?21n"]
 
 
 def test_no_action_does_nothing():
     board, _ = _run(UDK("17/41") + "\x1b[0+z\x1b[+z")
     board.input_key_event(KeyEvent("f6", KeyModifiers.SHIFT))
-    assert board.keyboard.user_defined_keys == {6: b"A"}
+    assert board.keyboard.user_keys.keys == {6: b"A"}
 
 
 def test_bittty_shares_the_vt510s_key_actions():
@@ -58,4 +58,4 @@ def test_bittty_shares_the_vt510s_key_actions():
 @pytest.mark.parametrize("model", [XTERM, LINUX])
 def test_terminals_without_programmable_keys_ignore_them(model):
     board, wire = _run("\x1b[1+z\x1b[+x", model)
-    assert wire.data == [] and not board.keyboard.user_keys_locked
+    assert wire.data == [] and not board.keyboard.user_keys.locked

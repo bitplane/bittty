@@ -11,14 +11,16 @@ from dataclasses import replace
 from .keymap import (
     ARROWS,
     CSI,
-    DEC_EDITING,
+    DEC_KEYS,
     ESC,
     KEYPAD_NUMERIC,
     PF_KEYS,
     SS3,
+    SS3_FUNCTION_KEYS,
     XTERM_KEYMAP,
     KeyMap,
     apply_modifier,
+    arrows,
     dec_function_keys,
 )
 
@@ -35,21 +37,16 @@ class KeyboardStyle(Enum):
 
 _SUN_CODES = (*range(224, 234), *range(192, 202), *range(208, 223), 234, 235)
 _SCO_FINALS = "MNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz@[\\]^_`{"
-_SS3_ARROWS = {key: SS3 + final for key, final in ARROWS.items()}
-_CSI_ARROWS = {key: CSI + final for key, final in ARROWS.items()}
-_DEC_KEYS = {key: CSI + body for key, body in DEC_EDITING.items()} | {
-    "help": CSI + "28~",
-    "menu": CSI + "29~",
-    "backtab": CSI + "Z",
-}
+_SS3_ARROWS = arrows(SS3)
+_DEC_KEYS = DEC_KEYS | {"backtab": CSI + "Z"}
 # Keys that follow DECCKM wherever a keyboard leaves them in their DEC form.
 _CURSOR = {"home": "H", "end": "F", "begin": "E"}
-_DEC_CURSOR = _CSI_ARROWS | {key: CSI + final for key, final in _CURSOR.items()}
+_DEC_CURSOR = arrows(CSI) | {key: CSI + final for key, final in _CURSOR.items()}
 _DEC_APPLICATION = _SS3_ARROWS | {key: SS3 + final for key, final in _CURSOR.items()}
 
 # xterm's terminfo entry: the SS3 cursor keys, F13-F24 as Shift-F1-F12 and F25-F35 as
 # Ctrl-F1-F11 in their modified forms, and the keypad's Enter as SS3 M (xterm 407).
-_SHIFTED_BANK = [SS3 + final for final in "PQRS"] + [dec_function_keys(5, 12)[f"f{n}"] for n in range(5, 13)]
+_SHIFTED_BANK = [*SS3_FUNCTION_KEYS.values(), *dec_function_keys(5, 12).values()]
 _TERMINFO_KEYS = {
     **_DEC_APPLICATION,
     **{f"f{n + 12}": apply_modifier(sequence, 2) for n, sequence in enumerate(_SHIFTED_BANK, 1)},
@@ -145,7 +142,7 @@ STYLE_KEYMAPS = {
     KeyboardStyle.VT220: KeyMap(
         keys={
             **dec_function_keys(),
-            **{f"f{n}": SS3 + final for n, final in enumerate("PQRS", 1)},
+            **SS3_FUNCTION_KEYS,
             **_DEC_KEYS,
             **_DEC_CURSOR,
             # The VT220 has Find and Select where a PC has Home and End.

@@ -55,6 +55,8 @@ def valid_text(text: str) -> bool:
 
 # The modifiers legacy encodings can express; Super/Hyper need the Kitty protocol.
 LEGACY_MODIFIERS = KeyModifiers.SHIFT | KeyModifiers.ALT | KeyModifiers.CTRL | KeyModifiers.META
+# The modifiers that make a keystroke a command rather than text: all but Shift and the locks.
+COMMAND_MODIFIERS = KeyModifiers.ALT | KeyModifiers.CTRL | KeyModifiers.SUPER | KeyModifiers.HYPER | KeyModifiers.META
 
 
 def legacy_modifiers(modifier: int) -> KeyModifiers:

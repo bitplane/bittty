@@ -4,7 +4,7 @@ import pytest
 
 from bittty import Board, KeyEvent, KeyModifiers
 from bittty.connections import MemoryConnection
-from bittty.keyboard_styles import KeyboardStyle
+from bittty.keyboard import KeyboardStyle
 from bittty.model import BITTTY, KITTY, VT220, XTERM
 from bittty.terminals import StdioTerminal
 

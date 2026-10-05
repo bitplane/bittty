@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from .keymap import (
+from .keyboard.keymap import (
     BITTTY_KEYMAP,
     LINUX_KEYMAP,
     SCREEN_KEYMAP,

@@ -3,14 +3,31 @@
 from __future__ import annotations
 
 import re
-from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
 from .. import constants
-from ..keyboard_protocol import ALIASES, KEYPAD_LEGACY, KEYPAD_NAMES, encode_key
-from ..keyboard_styles import STYLE_KEYMAPS, KeyboardStyle
-from ..keymap import DEC_FUNCTION_CODES, KEYPAD_POSITIONS, PF_KEYS, KeyMap, apply_modifier, vt52_keymap
-from ..keys import LEGACY_MODIFIERS, KeyEvent, KeyModifiers, legacy_modifiers, valid_text, xterm_modifier
+from ..keyboard.kitty import ALIASES, KEYPAD_LEGACY, KEYPAD_NAMES, KittyFlags, KittyStack, encode_key
+from ..keyboard.styles import STYLE_KEYMAPS, KeyboardStyle
+from ..keyboard.udk import UserKeys
+from ..keyboard.xterm import (
+    EDITING_KEYPAD,
+    EXTENDED_KEYS,
+    FORMAT_KEYS_INITIAL,
+    MODIFY_KEYS_INITIAL,
+    MODIFY_OTHER_KEYS,
+    KeyResources,
+    extended_key,
+)
+from ..keyboard.keymap import KEYPAD_POSITIONS, PF_KEYS, KeyMap, apply_modifier, vt52_keymap
+from ..keyboard.keys import (
+    COMMAND_MODIFIERS,
+    LEGACY_MODIFIERS,
+    KeyEvent,
+    KeyModifiers,
+    legacy_modifiers,
+    valid_text,
+    xterm_modifier,
+)
 from ..charsets import KEYBOARD_LANGUAGES, KEYBOARD_NATIONAL_SETS, get_charset
 from ..options import (
     XTERM_PASTE,
@@ -33,34 +50,6 @@ M = KeyModifiers
 # Raw input: DECCKM rewrites CSI A-D to SS3 A-D.
 _NORMAL_CURSOR_KEY = re.compile(r"\x1b\[([ABCD])")
 
-# All five enhancements are implemented by the explicit key-event encoder.
-_KITTY_SUPPORTED = 31
-# The spec: "Terminals should limit the size of the stack as appropriate, to
-# prevent Denial-of-Service attacks." Full stack evicts its oldest entry.
-_KITTY_STACK_MAX = 8
-# xterm's key modifier resources (XTMODKEYS Pp) at their initial values: modifyKeyboard,
-# modifyCursorKeys, modifyFunctionKeys, modifyKeypadKeys, modifyOtherKeys, (5, reserved),
-# modifyModifierKeys and modifySpecialKeys. XTFMTKEYS formats start at 0: CSI 27 ; mod ; code ~.
-# modifyKeyboard (the legacy/VT220 keyboards) and resources 3, 6 and 7 are stored and
-# reported but change no encoding.
-_MODIFY_KEYS_INITIAL = (0, 2, 2, 0, 0, 0, 0, 0)
-_FORMAT_KEYS_INITIAL = (0,) * 8
-# Named keys governed by modifyCursorKeys (1: the cursor and editing keypads) and
-# modifyFunctionKeys (2: F1-F35). At level 4 they report CSI 27 ; mod ; code ~, where the
-# code is the key's X keysym moved into the private-use area; Delete reports DEL (xterm 407).
-_EXTENDED_KEYS = {
-    **{
-        name: (1, keysym - 0x1D00)
-        for name, keysym in (
-            ("home", 0xFF50), ("left", 0xFF51), ("up", 0xFF52), ("right", 0xFF53), ("down", 0xFF54),
-            ("pageup", 0xFF55), ("pagedown", 0xFF56), ("end", 0xFF57), ("begin", 0xFF58),
-            ("select", 0xFF60), ("insert", 0xFF63), ("find", 0xFF68),
-        )
-    },
-    "delete": (1, 0x7F),
-    **{f"f{n}": (2, 0xFFBE + n - 1 - 0x1D00) for n in range(1, 36)},
-}  # fmt: skip
-_EDITING_KEYPAD = frozenset({"insert", "delete", "pageup", "pagedown", "find", "select"})
 # Xlib's Control translation (XLookupString) beyond '@'-'~': the digit and punctuation aliases.
 _X_CONTROL_ALIASES = {
     " ": "\0",
@@ -90,44 +79,23 @@ def _is_control(char: str) -> bool:
     return code < 0x20 or 0x7F <= code <= 0x9F
 
 
-@dataclass(slots=True)
-class _KittyState:
-    """Kitty flags and their push/pop stack for one screen.
-
-    The spec: "Terminals must maintain separate stacks for the main and
-    alternate screens."
-    """
-
-    flags: int = 0
-    stack: list[int] = field(default_factory=list)
-
-    def clear(self) -> None:
-        self.flags = 0
-        self.stack.clear()
-
-
-# DECUDK numbers the definable keys F6-F20 by their VT220 codes.
-_DECUDK_CODE_TO_FKEY = {code: n for n, code in enumerate(DEC_FUNCTION_CODES, 1) if n >= 6}
-
-
 class KeyboardDevice(Device):
     """Encodes keyboard input into terminal control sequences."""
 
     def __init__(self, board: Board) -> None:
         self.board = board
-        self.user_defined_keys: dict[int, bytes] = {}  # DECUDK: F-number -> wire bytes
-        self.user_keys_locked = False
+        self.user_keys = UserKeys(board.model.udk_capacity)  # DECUDK
         self.style = KeyboardStyle.DEFAULT
         self.saved_style = KeyboardStyle.DEFAULT
         self.delete_mode: bool | None = None  # mode 1037, once set; else the keymap's default
         self.saved_delete_mode: bool | None = None
-        self.modify_keys = list(_MODIFY_KEYS_INITIAL)  # XTMODKEYS resources
-        self.format_keys = list(_FORMAT_KEYS_INITIAL)  # XTFMTKEYS resources
         # A terminal without xterm's modifier resources still negotiates modifyOtherKeys.
-        self._modify_resources = range(8) if XTERM_MODIFY_KEYS in board.model.provides else (4,)
+        settable = range(8) if XTERM_MODIFY_KEYS in board.model.provides else (MODIFY_OTHER_KEYS,)
+        self.modify_keys = KeyResources(MODIFY_KEYS_INITIAL, settable)  # XTMODKEYS
+        self.format_keys = KeyResources(FORMAT_KEYS_INITIAL, settable)  # XTFMTKEYS
         self.paste_bracketed = False
         # Built directly: the blitter these key off does not exist yet.
-        self._kitty = {False: _KittyState(), True: _KittyState()}
+        self._kitty = {False: KittyStack(), True: KittyStack()}
         # DECLL-loaded host indications. One set, not per-screen: LEDs are physical.
         self.led_num = False
         self.led_caps = False
@@ -138,20 +106,20 @@ class KeyboardDevice(Device):
         self.pc_layout = False
         self._national_keys: dict[int, str] = {}  # what national mode sends for a character
         self.handlers = {
-            "XTMODKEYS": self.set_modify_keys,
+            "XTMODKEYS": lambda op: self.modify_keys.set(op.args[0]),
         }
         if XTERM_MODIFY_KEYS in board.model.provides:
             self.handlers["XTQMODKEYS"] = self.report_modify_keys
-            self.handlers["XTFMTKEYS"] = lambda op: self._set_resource(self.format_keys, _FORMAT_KEYS_INITIAL, op)
+            self.handlers["XTFMTKEYS"] = lambda op: self.format_keys.set(op.args[0])
         if DEC_USER_KEYS in board.model.provides:
-            self.handlers["DECUDK"] = self.set_user_keys
+            self.handlers["DECUDK"] = lambda op: self.user_keys.load(*op.args)
             self.handlers["DSR_USER_KEYS"] = self.report_user_keys
         if self.leds_fitted:
             self.handlers["DECLL"] = self.load_leds
         if board.model.keyboard_types is not None:
             self.handlers["DSR_KEYBOARD"] = self.report_keyboard
         if DEC_KEY_MEMORY in board.model.provides:
-            self.handlers["DECPKA"] = self.program_key_action
+            self.handlers["DECPKA"] = lambda op: self.user_keys.program(op.args[0])
             self.handlers["DECRQPKFM"] = self.report_key_memory
         if DEC_KEYBOARD_DIALECT in board.model.provides:
             self.handlers["DECKBD"] = self.select_keyboard
@@ -160,128 +128,47 @@ class KeyboardDevice(Device):
             # negotiation at all — real xterm never replies to CSI ? u.
             self.handlers.update(
                 {
-                    "KITTY_PUSH": self.kitty_push,
-                    "KITTY_POP": self.kitty_pop,
-                    "KITTY_SET": self.kitty_set,
+                    "KITTY_PUSH": lambda op: self.kitty.push(op.args[0]),
+                    "KITTY_POP": lambda op: self.kitty.pop(op.args[0]),
+                    "KITTY_SET": lambda op: self.kitty.set(*op.args),
                     "KITTY_QUERY": self.kitty_query,
                 }
             )
 
     @property
-    def _kitty_state(self) -> _KittyState:
+    def kitty(self) -> KittyStack:
+        """The active screen's Kitty flags and stack."""
         return self._kitty[self.board.blitter.in_alt_screen]
 
     @property
     def kitty_flags(self) -> int:
         """The active screen's Kitty progressive-enhancement flags."""
-        return self._kitty_state.flags
-
-    @kitty_flags.setter
-    def kitty_flags(self, value: int) -> None:
-        self._kitty_state.flags = value & _KITTY_SUPPORTED
-
-    @property
-    def kitty_stack(self) -> list[int]:
-        """The active screen's Kitty flag stack."""
-        return self._kitty_state.stack
-
-    def set_user_keys(self, operation: Operation) -> None:
-        """DECUDK — install user-defined strings for function keys."""
-        if self.user_keys_locked:
-            return
-        clear, lock, definitions = operation.args
-        if clear == 0:
-            self.user_defined_keys.clear()
-        used = sum(map(len, self.user_defined_keys.values()))
-        for code, value in definitions:
-            fkey = _DECUDK_CODE_TO_FKEY.get(code)
-            if fkey is not None:
-                used -= len(self.user_defined_keys.pop(fkey, b""))
-                if value and used + len(value) <= self.board.model.udk_capacity:
-                    self.user_defined_keys[fkey] = value
-                    used += len(value)
-        self.user_keys_locked = lock == 0
-
-    def program_key_action(self, operation: Operation) -> None:
-        """DECPKA — 1 locks the keys; 2 (factory defaults) and 3 (the saved definitions: bittty
-        has no Set-Up to save any) clear them, unless they are locked."""
-        action = operation.args[0]
-        if action == 1:
-            self.user_keys_locked = True
-        elif action in (2, 3) and not self.user_keys_locked:
-            self.user_defined_keys.clear()
+        return self.kitty.flags
 
     def report_key_memory(self, operation: Operation) -> None:
         """DECRQPKFM — DECPKFMR: the programmable keys' memory, total and free, in bytes."""
-        total = self.board.model.udk_capacity
-        free = total - sum(map(len, self.user_defined_keys.values()))
-        self.board.host.write(f"\x1b[{total};{free}+y", flush=True)
+        keys = self.user_keys
+        self.board.host.write(f"\x1b[{keys.capacity};{keys.free}+y", flush=True)
 
     def report_user_keys(self, operation: Operation) -> None:
         """DSR 25 reports the download lock, not the keyboard action lock."""
-        self.board.host.write(f"\x1b[?{21 if self.user_keys_locked else 20}n", flush=True)
-
-    def set_user_keys_locked(self, locked: bool) -> None:
-        """Operator Set-Up control; DECUDK cannot unlock downloaded keys."""
-        self.user_keys_locked = locked
+        self.board.host.write(f"\x1b[?{21 if self.user_keys.locked else 20}n", flush=True)
 
     # --- modern keyboard negotiation (xterm modifyOtherKeys, Kitty protocol) --- #
 
     @property
     def modify_other_keys(self) -> int:
         """xterm modifyOtherKeys level (0/1/2)."""
-        return self.modify_keys[4]
-
-    def set_modify_keys(self, operation: Operation) -> None:
-        """XTMODKEYS (CSI > Pp ; Pv m) — set a key-modifier resource, or restore it without Pv."""
-        self._set_resource(self.modify_keys, _MODIFY_KEYS_INITIAL, operation)
-
-    def _set_resource(self, values: list[int], initial: tuple[int, ...], operation: Operation) -> None:
-        """Set an XTMODKEYS/XTFMTKEYS resource. As in xterm 407, a bare CSI > m (or f) restores nothing."""
-        params = operation.args[0]
-        resource = params[0] if params else None
-        if resource in self._modify_resources and resource != 5:  # 5 is reserved
-            values[resource] = params[1] if len(params) > 1 and params[1] is not None else initial[resource]
+        return self.modify_keys[MODIFY_OTHER_KEYS]
 
     def report_modify_keys(self, operation: Operation) -> None:
         """XTQMODKEYS (CSI ? Pp m) — answer in XTMODKEYS form, so the reply restores the setting."""
         resource = operation.args[0]
-        if resource in self._modify_resources:
+        if resource in self.modify_keys.settable:
             self.board.host.write(f"{constants.ESC}[>{resource};{self.modify_keys[resource]}m", flush=True)
 
     def _extended_key(self, code: int, mods: KeyModifiers, resource: int) -> str:
-        """xterm's CSI 27 ; mod ; code ~, or CSI code ; mod u when the resource's format is 1."""
-        modifier = xterm_modifier(mods)
-        if self.format_keys[resource]:
-            return f"{constants.ESC}[{code};{modifier}u"
-        return f"{constants.ESC}[27;{modifier};{code}~"
-
-    def kitty_push(self, operation: Operation) -> None:
-        """CSI > flags u — save the current flags and adopt new ones."""
-        stack = self.kitty_stack
-        if len(stack) >= _KITTY_STACK_MAX:
-            stack.pop(0)  # spec: evict the oldest entry rather than grow forever
-        stack.append(self.kitty_flags)
-        self.kitty_flags = operation.args[0]
-
-    def kitty_pop(self, operation: Operation) -> None:
-        """CSI < n u — pop n saved flag-states off the stack.
-
-        Popping an empty stack zeroes the flags, and doing it again changes
-        nothing, so one pop past the stack depth is the whole of the effect.
-        """
-        for _ in range(min(operation.args[0], len(self.kitty_stack) + 1)):
-            self.kitty_flags = self.kitty_stack.pop() if self.kitty_stack else 0
-
-    def kitty_set(self, operation: Operation) -> None:
-        """CSI = flags ; mode u — set (1), add (2) or remove (3) flag bits."""
-        flags, mode = operation.args
-        if mode == 2:
-            self.kitty_flags = self.kitty_flags | flags
-        elif mode == 3:
-            self.kitty_flags = self.kitty_flags & ~flags
-        else:  # mode 1 (or default): replace
-            self.kitty_flags = flags
+        return extended_key(code, xterm_modifier(mods), self.format_keys[resource])
 
     def kitty_query(self, operation: Operation) -> None:
         """CSI ? u — report the current Kitty flags as CSI ? flags u."""
@@ -492,14 +379,13 @@ class KeyboardDevice(Device):
 
         Both resets restore xterm's key modifier resources, as xterm 407 does.
         """
-        self.modify_keys[:] = _MODIFY_KEYS_INITIAL
-        self.format_keys[:] = _FORMAT_KEYS_INITIAL
+        self.modify_keys.reset()
+        self.format_keys.reset()
         if hard:
             # Xterm keyboard selection survives RIS, unlike its saved slot.
             self.saved_style = KeyboardStyle.DEFAULT
             self.saved_delete_mode = None  # the setting itself survives, like the keyboard selection
-            self.user_defined_keys.clear()
-            self.user_keys_locked = False
+            self.user_keys.reset()
             for state in self._kitty.values():
                 state.clear()
             self.led_num = self.led_caps = self.led_scroll = False
@@ -554,12 +440,12 @@ class KeyboardDevice(Device):
         sequence = modified.get(name) or application.get(name) or keymap.keys.get(name)
         if sequence is None:
             return
-        resource, code = _EXTENDED_KEYS.get(name, (None, None))
+        resource, code = EXTENDED_KEYS.get(name, (None, None))
         level = self.modify_keys[resource] if resource and keymap.modifiers else 2
         if level >= 4:
             self.transmit(self._extended_key(code, mods, resource))
             return
-        placement = 2 if name in _EDITING_KEYPAD else level  # below 4, xterm leaves these alone
+        placement = 2 if name in EDITING_KEYPAD else level  # below 4, xterm leaves these alone
         self._send_key(sequence, mods, keypad=name in PF_KEYS, placement=placement)
 
     def input_key(self, char: str, modifier: int = constants.KEY_MOD_NONE) -> None:
@@ -628,8 +514,8 @@ class KeyboardDevice(Device):
         if mods & M.CTRL and keymap.ctrl_function_offset:  # xterm ctrlFKeys: a second bank, unmodified
             num += keymap.ctrl_function_offset
             mods &= ~M.CTRL
-        if keymap.user_keys and mods == M.SHIFT and num in self.user_defined_keys:
-            self.transmit(self.user_defined_keys[num])
+        if keymap.user_keys and mods == M.SHIFT and num in self.user_keys.keys:
+            self.transmit(self.user_keys.keys[num])
             return
         self._named_key(f"f{num}", mods)
 
@@ -706,7 +592,7 @@ class KeyboardDevice(Device):
                 self._legacy_numpad(position, mods)
             else:
                 self._named_key(key[3:], mods)
-        elif event.text and not bits & 62 and not (bits & M.SHIFT and self.modify_other_keys >= 2):
+        elif event.text and not bits & COMMAND_MODIFIERS and not (bits & M.SHIFT and self.modify_other_keys >= 2):
             self.transmit(self._national(event.text), local_text=event.text, margin_key=True)
         elif event.text and len(event.text) > 1 and not bits & KeyModifiers.CTRL:
             prefix = constants.ESC if self._legacy_escape_prefix(mods) else ""
@@ -725,8 +611,8 @@ class KeyboardDevice(Device):
             raise ValueError("committed text must not contain controls or surrogates")
         if not text:
             return
-        if self.kitty_flags & 8:
-            if self.kitty_flags & 16:
+        if self.kitty_flags & KittyFlags.REPORT_ALL_KEYS:
+            if self.kitty_flags & KittyFlags.REPORT_TEXT:
                 for offset in range(0, len(text), 128):
                     chunk = text[offset : offset + 128]
                     self.transmit(self._kitty_sequence(0, 1, chunk), local_text=chunk)

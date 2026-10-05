@@ -9,7 +9,7 @@ from operator import attrgetter
 from typing import TYPE_CHECKING
 
 from .. import mode_profiles as mp
-from ..keyboard_styles import KeyboardStyle
+from ..keyboard.styles import KeyboardStyle
 from ..operations import Operation
 from ..present import (
     AmbiguousWidthChanged,

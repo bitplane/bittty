@@ -78,11 +78,11 @@ def test_kitty_stack_is_bounded_against_push_spam():
     """The spec: bound the stack against DoS; a full stack evicts the oldest."""
     board, parser, _ = _term()
     parser.feed("\x1b[>1u" * 10_000)
-    assert len(board.keyboard.kitty_stack) <= 8
+    assert len(board.keyboard.kitty.stack) <= 8
 
     parser.feed("\x1b[<10000u")  # pop everything, and then some
     assert board.keyboard.kitty_flags == 0
-    assert board.keyboard.kitty_stack == []
+    assert board.keyboard.kitty.stack == []
 
 
 # --- the protocol is a model repertoire, not a universal answer --- #
@@ -126,7 +126,7 @@ def test_ris_clears_kitty_state_on_both_screens():
     assert board.keyboard.kitty_flags == 0
     parser.feed("\x1b[?1049h")
     assert board.keyboard.kitty_flags == 0
-    assert board.keyboard.kitty_stack == []
+    assert board.keyboard.kitty.stack == []
 
 
 # --- flag 1: disambiguate escape codes --- #
@@ -274,4 +274,4 @@ def test_ris_clears_modern_keyboard_state():
     kb = board.keyboard
     assert kb.modify_other_keys == 0
     assert kb.kitty_flags == 0
-    assert kb.kitty_stack == []
+    assert kb.kitty.stack == []

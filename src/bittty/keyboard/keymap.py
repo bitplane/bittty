@@ -3,7 +3,7 @@
 Real terminals diverge most in their non-text keys: a VT100 has only PF1-PF4 and no
 modifier encoding, while xterm sends F1-F63 and folds shift/alt/ctrl into a ``;mod``
 parameter. A `KeyMap` captures those differences as data. Model keymaps and xterm's
-selectable keyboards (see keyboard_styles) are both KeyMaps, and the keyboard device
+selectable keyboards (see styles) are both KeyMaps, and the keyboard device
 has a single encoder for them.
 
 Keys are named as in `KeyEvent`: ``up``, ``home``, ``f13``, plus ``pf1``-``pf4`` for
@@ -23,6 +23,8 @@ SS3 = ESC + "O"
 ARROWS = {"up": "A", "down": "B", "right": "C", "left": "D"}
 # The DEC keypad function keys PF1-PF4. Their modifiers stay inside the SS3 sequence.
 PF_KEYS = {f"pf{n}": SS3 + final for n, final in enumerate("PQRS", 1)}
+# F1-F4 sent as PF1-PF4 (xterm, the VT100's four keys, the VT220's local keys).
+SS3_FUNCTION_KEYS = {f"f{n}": PF_KEYS[f"pf{n}"] for n in range(1, 5)}
 
 # The numeric and application keypad, standard across the terminals modelled here.
 KEYPAD_NUMERIC = {str(d): str(d) for d in range(10)} | {
@@ -65,7 +67,7 @@ KEYPAD_POSITIONS = {
 }
 
 
-def _arrows(prefix: str) -> dict[str, str]:
+def arrows(prefix: str) -> dict[str, str]:
     return {key: prefix + final for key, final in ARROWS.items()}
 
 
@@ -75,7 +77,7 @@ class KeyMap:
 
     keys: Mapping[str, str]  # key name -> sequence
     # DECCKM replacements; the SS3 cursor keys by default.
-    application: Mapping[str, str] = field(default_factory=lambda: _arrows(SS3))
+    application: Mapping[str, str] = field(default_factory=lambda: arrows(SS3))
     modified: Mapping[str, str] = field(default_factory=dict)  # replacements when modifiers are folded in
     modifiers: bool = True  # whether shift/alt/ctrl are folded into the sequence
     modifiers_with_other_keys: bool = False  # ...or only once modifyOtherKeys is set (xterm legacy/VT220)
@@ -134,6 +136,8 @@ def vt52_keymap(keymap: KeyMap) -> KeyMap:
 # The VT220 function-key codes for F1-F20; xterm continues from F21 as n + 21.
 DEC_FUNCTION_CODES = (11, 12, 13, 14, 15, 17, 18, 19, 20, 21, 23, 24, 25, 26, 28, 29, 31, 32, 33, 34)
 DEC_EDITING = {"find": "1~", "insert": "2~", "delete": "3~", "select": "4~", "pageup": "5~", "pagedown": "6~"}
+# The VT220's editing keypad, Help and Do (which xterm calls menu).
+DEC_KEYS = {key: CSI + body for key, body in DEC_EDITING.items()} | {"help": CSI + "28~", "menu": CSI + "29~"}
 
 
 def dec_function_keys(first: int = 1, last: int = 63) -> dict[str, str]:
@@ -145,26 +149,24 @@ def dec_function_keys(first: int = 1, last: int = 63) -> dict[str, str]:
 # (xterm input.c; checked against xterm 407)
 XTERM_KEYMAP = KeyMap(
     keys={
-        **_arrows(CSI),
+        **arrows(CSI),
         "home": CSI + "H",
         "end": CSI + "F",
         "begin": CSI + "E",
-        **{key: CSI + body for key, body in DEC_EDITING.items()},
-        "help": CSI + "28~",
-        "menu": CSI + "29~",
+        **DEC_KEYS,
         "backtab": CSI + "Z",
         **PF_KEYS,
-        **{f"f{n}": SS3 + final for n, final in enumerate("PQRS", 1)},
+        **SS3_FUNCTION_KEYS,
         **dec_function_keys(5),
     },
-    application={**_arrows(SS3), "home": SS3 + "H", "end": SS3 + "F", "begin": SS3 + "E"},
+    application={**arrows(SS3), "home": SS3 + "H", "end": SS3 + "F", "begin": SS3 + "E"},
 )
 
 # bittty: xterm's keyboard, plus DECUDK strings on Shift-F6-F20 without selecting the VT220 keyboard.
 BITTTY_KEYMAP = replace(XTERM_KEYMAP, user_keys=True)
 
 # The xterm F1-F12 repertoire, reused by screen/tmux (verified against terminfo).
-_XTERM_FUNCTION_KEYS = {f"f{n}": SS3 + final for n, final in enumerate("PQRS", 1)} | dec_function_keys(5, 12)
+_XTERM_FUNCTION_KEYS = SS3_FUNCTION_KEYS | dec_function_keys(5, 12)
 # The xterm editing keypad (insert/delete/page), shared by screen/tmux/rxvt.
 _EDITING_KEYPAD = {key: CSI + DEC_EDITING[key] for key in ("insert", "delete", "pageup", "pagedown")}
 
@@ -173,7 +175,7 @@ _EDITING_KEYPAD = {key: CSI + DEC_EDITING[key] for key in ("insert", "delete", "
 SCREEN_KEYMAP = KeyMap(
     keys={
         **_XTERM_FUNCTION_KEYS,
-        **_arrows(CSI),
+        **arrows(CSI),
         "home": CSI + "1~",
         "end": CSI + "4~",
         **_EDITING_KEYPAD,
@@ -197,7 +199,7 @@ TMUX_KEYMAP = replace(
 URXVT_KEYMAP = KeyMap(
     keys={
         **dec_function_keys(1, 12),
-        **_arrows(CSI),
+        **arrows(CSI),
         "home": CSI + "7~",
         "end": CSI + "8~",
         **_EDITING_KEYPAD,
@@ -208,7 +210,7 @@ URXVT_KEYMAP = KeyMap(
 
 # VT100: four PF keys, arrow keys, no editing keypad and no modifier encoding.
 VT100_KEYMAP = KeyMap(
-    keys={**PF_KEYS, **{f"f{n}": SS3 + final for n, final in enumerate("PQRS", 1)}, **_arrows(CSI)},
+    keys={**PF_KEYS, **SS3_FUNCTION_KEYS, **arrows(CSI)},
     modifiers=False,
 )
 
@@ -217,14 +219,12 @@ VT100_KEYMAP = KeyMap(
 VT220_KEYMAP = KeyMap(
     keys={
         **PF_KEYS,
-        **{f"f{n}": SS3 + final for n, final in enumerate("PQRS", 1)},
+        **SS3_FUNCTION_KEYS,
         **dec_function_keys(6, 20),
-        **_arrows(CSI),
-        **{key: CSI + body for key, body in DEC_EDITING.items()},
+        **arrows(CSI),
+        **DEC_KEYS,
         "home": CSI + "1~",
         "end": CSI + "4~",
-        "help": CSI + "28~",
-        "menu": CSI + "29~",
     },
     modifiers=False,
     user_keys=True,
@@ -235,7 +235,7 @@ LINUX_KEYMAP = KeyMap(
     keys={
         **{f"f{n}": CSI + "[" + final for n, final in enumerate("ABCDE", 1)},
         **dec_function_keys(6, 12),
-        **_arrows(CSI),
+        **arrows(CSI),
         "home": CSI + "1~",
         "insert": CSI + "2~",
         "delete": CSI + "3~",

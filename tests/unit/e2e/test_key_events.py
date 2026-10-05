@@ -119,7 +119,7 @@ def test_all_flags_and_stacks_are_screen_local_and_reset():
     assert board.keyboard.kitty_flags == 31
     board.parser.feed("\x1bc\x1b[?1049h")
     assert board.keyboard.kitty_flags == 0
-    assert board.keyboard.kitty_stack == []
+    assert board.keyboard.kitty.stack == []
 
 
 def test_super_is_not_silently_lost_before_negotiation():
