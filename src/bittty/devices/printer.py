@@ -22,12 +22,10 @@ if TYPE_CHECKING:
     from .board import Board
 
 
-_ENTRY_TEXT = ("\x1b[5i", "\x9b5i")
-_EXIT_TEXT = ("\x1b[4i", "\x9b4i")
 # The host line is UTF-8: an eight-bit CSI arrives as U+009B (C2 9B), never as a bare
 # 0x9B, which is a continuation byte inside characters such as Û (C3 9B).
-_ENTRY_BYTES = tuple(pattern.encode() for pattern in _ENTRY_TEXT)
-_EXIT_BYTES = tuple(pattern.encode() for pattern in _EXIT_TEXT)
+_ENTRY_BYTES = ("\x1b[5i".encode(), "\x9b5i".encode())
+_EXIT_BYTES = ("\x1b[4i".encode(), "\x9b4i".encode())
 _FLOW_CONTROL_DELETE = b"\x00\x11\x13"
 
 
@@ -88,7 +86,6 @@ class PrinterDevice(Device):
         self.print_extent = False
         self.configuration = PrinterConfiguration()
         self._byte_pending = b""
-        self._text_pending = ""
         self._decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
         self.handlers = {
             "MC": self.media_copy,
@@ -293,18 +290,12 @@ class PrinterDevice(Device):
         text = self.board.blitter.current_page.get_line_text(y).rstrip()
         self.emit_text(text + "\r" + trigger)
 
-    def feed_host_data(self, data: bytes | str, normal_sink: Callable[[str], None]) -> None:
-        """Route host output around the parser while printer-controller mode is active."""
-        if not self.capabilities.media_copy:
-            if isinstance(data, bytes):
-                self._feed_normal_bytes(data, normal_sink)
-            elif data:
-                normal_sink(data)
-            return
-        if isinstance(data, bytes):
+    def feed_host_data(self, data: bytes, normal_sink: Callable[[str], None]) -> None:
+        """Decode host output for the parser, routed around it while printer-controller mode is active."""
+        if self.capabilities.media_copy:
             self._feed_host_bytes(data, normal_sink)
         else:
-            self._feed_host_text(data, normal_sink)
+            self._feed_normal_bytes(data, normal_sink)
 
     def _feed_normal_bytes(self, data: bytes, normal_sink: Callable[[str], None]) -> None:
         if data:
@@ -347,44 +338,6 @@ class PrinterDevice(Device):
             normal_sink(pattern.decode())
             data = data[index + len(pattern) :]
 
-    def _feed_host_text(self, data: str, normal_sink: Callable[[str], None]) -> None:
-        data = self._text_pending + data
-        self._text_pending = ""
-        while data:
-            if self.controller_mode:
-                patterns = _ENTRY_TEXT + _EXIT_TEXT
-                found = _first_pattern(data, patterns)
-                if found is None:
-                    keep = _partial_suffix_length(data, patterns)
-                    body = data[:-keep] if keep else data
-                    if body:
-                        filtered = self._filter_printer_text(body)
-                        self.emit_text(filtered)
-                    self._text_pending = data[-keep:] if keep else ""
-                    return
-                index, pattern = found
-                if index:
-                    filtered = self._filter_printer_text(data[:index])
-                    self.emit_text(filtered)
-                data = data[index + len(pattern) :]
-                if pattern in _EXIT_TEXT:
-                    normal_sink(pattern)
-                continue
-
-            found = _first_pattern(data, _ENTRY_TEXT)
-            if found is None:
-                keep = _partial_suffix_length(data, _ENTRY_TEXT)
-                body = data[:-keep] if keep else data
-                if body:
-                    normal_sink(body)
-                self._text_pending = data[-keep:] if keep else ""
-                return
-            index, pattern = found
-            if index:
-                normal_sink(data[:index])
-            normal_sink(pattern)
-            data = data[index + len(pattern) :]
-
     def _filter_printer_data(self, data: bytes) -> bytes:
         if not self.capabilities.configuration:
             return data.translate(None, _FLOW_CONTROL_DELETE)
@@ -395,18 +348,6 @@ class PrinterDevice(Device):
         if self.configuration.transmit_flow_control in software or self.configuration.receive_flow_control in software:
             delete.extend((0x11, 0x13))
         return data.translate(None, bytes(delete)) if delete else data
-
-    def _filter_printer_text(self, data: str) -> str:
-        if not self.capabilities.configuration:
-            return data.translate({0: None, 0x11: None, 0x13: None})
-        table: dict[int, None] = {}
-        if self.configuration.ignore_null:
-            table[0] = None
-        software = {FlowControl.XON_XOFF, FlowControl.BOTH}
-        if self.configuration.transmit_flow_control in software or self.configuration.receive_flow_control in software:
-            table[0x11] = None
-            table[0x13] = None
-        return data.translate(table) if table else data
 
     def reset(self, hard: bool = True) -> None:
         """Reset volatile modes while leaving the physical printer connected."""

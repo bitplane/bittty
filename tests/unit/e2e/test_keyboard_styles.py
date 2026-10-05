@@ -15,7 +15,7 @@ def driver(mode, model=BITTTY):
     board = Board(model=model)
     wire = MemoryConnection()
     board.host.attach(wire)
-    board.feed_host_data(f"\x1b[?{mode}h")
+    board.feed_host_data(f"\x1b[?{mode}h".encode())
     return board, wire
 
 
@@ -106,7 +106,7 @@ def test_shift_function_key(mode, expected):
 def test_modify_other_keys_unlocks_legacy_modifiers(mode, event, expected):
     """xterm 407: with modifyOtherKeys the legacy/VT220 keyboards fold modifiers in (after the Ctrl-Fn bank)."""
     board, wire = driver(mode)
-    board.feed_host_data("\x1b[>4;1m")
+    board.feed_host_data("\x1b[>4;1m".encode())
     board.input_key_event(event)
     assert wire.text == expected
 
@@ -114,7 +114,7 @@ def test_modify_other_keys_unlocks_legacy_modifiers(mode, event, expected):
 @pytest.mark.parametrize("mode", [1060, 1061])
 def test_legacy_keypad_modifiers_with_modify_other_keys(mode):
     board, wire = driver(mode)
-    board.feed_host_data("\x1b[>4;2m\x1b=")
+    board.feed_host_data("\x1b[>4;2m\x1b=".encode())
     board.input_key_event(KeyEvent("kp_enter", KeyModifiers.CTRL))
     assert wire.text == "\x1bO5M"
 
@@ -123,7 +123,7 @@ def test_legacy_keypad_modifiers_with_modify_other_keys(mode):
 def test_control_function_bank_and_shift_udk(mode):
     """xterm 407: ctrlFKeys is 10, so Ctrl-F1 is F11 and Ctrl-F10 is F20."""
     board, wire = driver(mode)
-    board.feed_host_data("\x1bP0;1|23/4142\x1b\\")
+    board.feed_host_data("\x1bP0;1|23/4142\x1b\\".encode())
     board.input_key_event(KeyEvent("f1", KeyModifiers.CTRL))
     assert wire.text == "\x1b[23~"
     wire.data.clear()
@@ -137,7 +137,7 @@ def test_control_function_bank_and_shift_udk(mode):
 @pytest.mark.parametrize("mode", [1051, 1052, 1053])
 def test_other_styles_do_not_apply_udk(mode):
     board, wire = driver(mode)
-    board.feed_host_data("\x1bP0;1|17/4142\x1b\\")
+    board.feed_host_data("\x1bP0;1|17/4142\x1b\\".encode())
     board.input_key_event(KeyEvent("f6", KeyModifiers.SHIFT))
     assert "AB" not in wire.text
 
@@ -147,7 +147,7 @@ def test_other_styles_do_not_apply_udk(mode):
 )
 def test_cursor_application_interaction(mode, expected):
     board, wire = driver(mode)
-    board.feed_host_data("\x1b[?1h")
+    board.feed_host_data("\x1b[?1h".encode())
     board.input_key_event(KeyEvent("up"))
     assert wire.text == expected
 
@@ -156,32 +156,32 @@ def test_cursor_application_interaction(mode, expected):
 def test_selection_query_reset_and_shared_save_slot(mode):
     board, wire = driver(mode)
     assert [board.modes.get_private_mode_status(n) for n in MODES] == [1 if n == mode else 2 for n in MODES]
-    board.feed_host_data("\x1b[?1051s\x1b[?1061h\x1b[?1052r")
+    board.feed_host_data("\x1b[?1051s\x1b[?1061h\x1b[?1052r".encode())
     assert board.modes.get_private_mode_status(mode) == 1
-    board.feed_host_data("\x1b[?1049h\x1b[?1049l\x1b[!p\x1bc")
+    board.feed_host_data("\x1b[?1049h\x1b[?1049l\x1b[!p\x1bc".encode())
     assert board.modes.get_private_mode_status(mode) == 1  # xterm keeps keyboard selection on RIS
-    board.feed_host_data("\x1b[?1053l")  # reset any member restores default, not just the active one
+    board.feed_host_data("\x1b[?1053l".encode())  # reset any member restores default, not just the active one
     assert board.keyboard.style is KeyboardStyle.DEFAULT
-    board.feed_host_data("\x1b[?1052r")  # RIS cleared the saved slot
+    board.feed_host_data("\x1b[?1052r".encode())  # RIS cleared the saved slot
     assert board.keyboard.style is KeyboardStyle.DEFAULT
     assert not wire.data
 
 
 def test_shared_save_last_writer_and_batched_order():
     board, _ = driver(1051)
-    board.feed_host_data("\x1b[?1061s\x1b[?1052h\x1b[?1053s\x1b[?1051h\x1b[?1060r")
+    board.feed_host_data("\x1b[?1061s\x1b[?1052h\x1b[?1053s\x1b[?1051h\x1b[?1060r".encode())
     assert board.keyboard.style is KeyboardStyle.HP
-    board.feed_host_data("\x1b[?1051;1053;1060h")
+    board.feed_host_data("\x1b[?1051;1053;1060h".encode())
     assert board.keyboard.style is KeyboardStyle.LEGACY
 
 
 def test_legacy_delete_explicit_override_and_save_restore():
     board, wire = driver(1060)
-    board.feed_host_data("\x1b[?1037s\x1b[?1037l")
+    board.feed_host_data("\x1b[?1037s\x1b[?1037l".encode())
     board.input_key_event(KeyEvent("delete"))
     assert wire.text == "\x1b[3~"
     wire.data.clear()
-    board.feed_host_data("\x1b[?1037r")
+    board.feed_host_data("\x1b[?1037r".encode())
     board.input_key_event(KeyEvent("delete"))
     assert wire.text == "\x7f"
 
@@ -192,7 +192,7 @@ def test_vt220_keypad_identity_and_arithmetic():
         board.input_key_event(KeyEvent(key, KeyModifiers(mods)))
     assert wire.text == "8,-+"
     wire.data.clear()
-    board.feed_host_data("\x1b=\x1b[?1h")
+    board.feed_host_data("\x1b=\x1b[?1h".encode())
     for key, mods in [("kp_up", 0), ("kp_add", 0), ("kp_add", 4), ("kp_add", 1)]:
         board.input_key_event(KeyEvent(key, KeyModifiers(mods)))
     assert wire.text == "\x1bOx\x1bOl\x1bOm\x1bOk"
@@ -201,14 +201,14 @@ def test_vt220_keypad_identity_and_arithmetic():
 @pytest.mark.parametrize("mode", MODES)
 def test_keypad_modifier_framing_and_numlock(mode):
     board, wire = driver(mode)
-    board.feed_host_data("\x1b=")
+    board.feed_host_data("\x1b=".encode())
     board.input_key_event(KeyEvent("kp_1", KeyModifiers.CTRL))
     assert wire.text == ("\x1bOq" if mode in (1060, 1061) else "\x1bO5q")
     wire.data.clear()
     board.input_key_event(KeyEvent("kp_1", KeyModifiers.NUM_LOCK, text="1"))
     assert wire.text == "1"
     wire.data.clear()
-    board.feed_host_data("\x1b[?1035l")
+    board.feed_host_data("\x1b[?1035l".encode())
     board.input_key_event(KeyEvent("kp_1", KeyModifiers.NUM_LOCK, text="1"))
     assert wire.text == "\x1bOq"
 
@@ -218,12 +218,12 @@ def test_kitty_precedence_and_release_suppression(mode):
     board, wire = driver(mode)
     board.input_key_event(KeyEvent("f1", event_type="release"))
     assert not wire.data
-    board.feed_host_data("\x1b[>31u")
+    board.feed_host_data("\x1b[>31u".encode())
     board.input_key_event(KeyEvent("f1", KeyModifiers.SHIFT))
     board.input_key_event(KeyEvent("kp_add"))
     assert wire.text == "\x1b[1;2P\x1b[57413u"
     wire.data.clear()
-    board.feed_host_data("\x1b[<u")
+    board.feed_host_data("\x1b[<u".encode())
     board.input_key_event(KeyEvent("f1"))
     assert wire.text != "\x1b[1;2P"
 
@@ -242,7 +242,7 @@ def test_stdio_translates_known_outer_keys_without_changing_outer_protocol():
     terminal = StdioTerminal()
     wire = MemoryConnection()
     terminal.board.host.attach(wire)
-    terminal.board.feed_host_data("\x1b[?1052h")
+    terminal.board.feed_host_data("\x1b[?1052h".encode())
     for part in (b"\x1b", b"O", b"P", b"\x1b", b"[", b"A"):
         terminal.handle_input(part)
     terminal.handle_input(b"\x1b[200~\x1bOP\x1b[A\x1b[201~")

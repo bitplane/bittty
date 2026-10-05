@@ -17,7 +17,7 @@ def _paste(setup, text=TEXT, model=XTERM):
     board = Board(model=model)
     wire = MemoryConnection()
     board.host.attach(wire)
-    board.feed_host_data(setup)
+    board.feed_host_data(setup.encode())
     board.input_paste(text)
     return wire.text
 
@@ -52,7 +52,7 @@ def test_decrqm(mode):
     board = Board(model=XTERM)
     wire = MemoryConnection()
     board.host.attach(wire)
-    board.feed_host_data(f"\x1b[?{mode}$p\x1b[?{mode}h\x1b[?{mode}$p")
+    board.feed_host_data(f"\x1b[?{mode}$p\x1b[?{mode}h\x1b[?{mode}$p".encode())
     assert wire.data == [f"\x1b[?{mode};2$y", f"\x1b[?{mode};1$y"]
 
 

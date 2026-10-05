@@ -37,7 +37,7 @@ def _run(sequence, model=XTERM):
     board.host.attach(wire)
     recorder = Recorder()
     board.display.attach(recorder)
-    board.feed_host_data(sequence)
+    board.feed_host_data(sequence.encode())
     return wire.data, [event.enabled for event in recorder.events if isinstance(event, ChromeResourcesChanged)]
 
 

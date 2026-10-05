@@ -16,7 +16,7 @@ def _run(sequence, model=VT510):
     board = Board(width=40, height=3, model=model)
     wire = MemoryConnection()
     board.host.attach(wire)
-    board.feed_host_data(sequence)
+    board.feed_host_data(sequence.encode())
     return board, wire
 
 

@@ -171,7 +171,3 @@ class UnixPTY(PTY):
             return await future
         except Exception:
             return b""
-
-    async def read_async(self, size: int = constants.DEFAULT_PTY_BUFFER_SIZE) -> str:
-        """Compatibility text read; the board's host port uses the raw method."""
-        return self._dec.decode(await self.read_bytes_async(size), final=False)

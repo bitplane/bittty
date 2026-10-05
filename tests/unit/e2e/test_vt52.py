@@ -18,7 +18,7 @@ def _run(sequence, model=XTERM):
     board = Board(width=80, height=24, model=model)
     wire = MemoryConnection()
     board.host.attach(wire)
-    board.feed_host_data(sequence)
+    board.feed_host_data(sequence.encode())
     return board, wire
 
 

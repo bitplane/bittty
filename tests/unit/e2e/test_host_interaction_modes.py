@@ -86,7 +86,7 @@ async def test_auto_answerback_fires_only_on_real_connect():
     assert attached.data == []
 
     connected = MemoryConnection()
-    board.host.connect(connected, board._dispatch_pty_data, on_idle=lambda: True)
+    board.host.connect(connected, board.feed_host_data, on_idle=lambda: True)
     await board.host._reader_task
     assert connected.data == ["VT510"]
 
@@ -96,13 +96,13 @@ async def test_enabling_auto_answerback_on_a_live_connection_waits_for_reconnect
     board = Board(model=VT510)
     board.answerback = "hello"
     first = MemoryConnection()
-    board.host.connect(first, board._dispatch_pty_data, on_idle=lambda: True)
+    board.host.connect(first, board.feed_host_data, on_idle=lambda: True)
     await board.host._reader_task
     board.modes.set_private_modes((100,), True)
     assert first.data == []
 
     second = MemoryConnection()
-    board.host.connect(second, board._dispatch_pty_data, on_idle=lambda: True)
+    board.host.connect(second, board.feed_host_data, on_idle=lambda: True)
     await board.host._reader_task
     assert second.data == ["hello"]
 

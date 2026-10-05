@@ -29,7 +29,7 @@ def _key(event, setup="\x1b[?1050h", model=XTERM):
     board = Board(model=model)
     wire = MemoryConnection()
     board.host.attach(wire)
-    board.feed_host_data(setup)
+    board.feed_host_data(setup.encode())
     board.input_key_event(event)
     return wire.text
 
@@ -63,7 +63,7 @@ def test_decrqm():
     board = Board(model=XTERM)
     wire = MemoryConnection()
     board.host.attach(wire)
-    board.feed_host_data("\x1b[?1050$p\x1b[?1050h\x1b[?1050$p")
+    board.feed_host_data("\x1b[?1050$p\x1b[?1050h\x1b[?1050$p".encode())
     assert wire.data == ["\x1b[?1050;2$y", "\x1b[?1050;1$y"]
 
 

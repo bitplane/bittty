@@ -10,7 +10,7 @@ DIGITS = "0123456789" * 8
 
 def _run(sequence):
     board = Board(width=80, height=24, model=XTERM)
-    board.feed_host_data(sequence)
+    board.feed_host_data(sequence.encode())
     return board
 
 
@@ -80,7 +80,7 @@ UNSET = '\x1b[?6l\x1b)B\x0f\x1b[0"q\x1b[0m\x1b[20;20H'
 def _deccir(board):
     wire = MemoryConnection()
     board.host.attach(wire)
-    board.feed_host_data("\x1b[1$w")
+    board.feed_host_data("\x1b[1$w".encode())
     return wire.text[len("\x1bP1$u") : -2]
 
 
@@ -155,14 +155,14 @@ def test_decstr_keeps_the_cursor(sequence, report):
 def test_rep_needs_a_graphic_character_immediately_before(sequence, line):
     board = Board(width=80, height=24, model=XTERM)
     board.host.attach(MemoryConnection())
-    board.feed_host_data(sequence)
+    board.feed_host_data(sequence.encode())
     assert board.blitter.current_page.get_line_text(0).rstrip() == line
 
 
 def test_rep_survives_a_chunk_boundary():
     board = Board(width=80, height=24, model=XTERM)
-    board.feed_host_data("A")
-    board.feed_host_data("\x1b[3b")
+    board.feed_host_data("A".encode())
+    board.feed_host_data("\x1b[3b".encode())
     assert board.blitter.current_page.get_line_text(0).rstrip() == "AAAA"
 
 

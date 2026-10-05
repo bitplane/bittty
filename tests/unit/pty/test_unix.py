@@ -23,7 +23,7 @@ def test_unix_pty_basic_io(real_pty):
 
         time.sleep(0.1)
 
-        result = real_pty.read(1000)
+        result = real_pty.read_bytes(1000).decode()
         assert "hello" in result or "echo" in result
 
         real_pty.write("exit\n")
@@ -51,7 +51,7 @@ def test_unix_pty_process_spawn(real_pty):
 
         time.sleep(0.1)
 
-        result = real_pty.read(1000)
+        result = real_pty.read_bytes(1000).decode()
         assert "test123" in result or "echo" in result
 
         real_pty.write("exit\n")
@@ -80,7 +80,7 @@ def test_unix_pty_utf8_handling(real_pty):
 
         time.sleep(0.2)
 
-        result = real_pty.read(1000)
+        result = real_pty.read_bytes(1000).decode()
         assert "🚽" in result or "echo" in result
         assert "�" not in result
 

@@ -10,7 +10,7 @@ def _run(sequence):
     board = Board(width=80, height=24, model=XTERM)
     wire = MemoryConnection()
     board.host.attach(wire)
-    board.feed_host_data(sequence)
+    board.feed_host_data(sequence.encode())
     return board, wire
 
 
@@ -54,5 +54,5 @@ def test_a_title_ended_by_escape_is_not_set():
 
 def test_escape_at_the_end_of_a_chunk_waits_for_the_next():
     board, wire = _run("\x1bP$qm\x1b")
-    board.feed_host_data("\\")
+    board.feed_host_data("\\".encode())
     assert wire.data == ["\x1bP1$r0m\x1b\\"]

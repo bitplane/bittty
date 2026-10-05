@@ -15,7 +15,7 @@ def _mouse(setup, *args, model=XTERM, cell_px=None, **kwargs):
     board.host.attach(wire)
     if cell_px:
         board.set_caps(TerminalCaps(cell_px=cell_px))
-    board.feed_host_data(setup)
+    board.feed_host_data(setup.encode())
     board.input_mouse(*args, **kwargs)
     return wire.text
 
@@ -40,7 +40,7 @@ def test_pixel_mode_replaces_sgr_mode():
     board = Board(model=XTERM)
     wire = MemoryConnection()
     board.host.attach(wire)
-    board.feed_host_data("\x1b[?1006h\x1b[?1016h\x1b[?1006$p\x1b[?1016$p")
+    board.feed_host_data("\x1b[?1006h\x1b[?1016h\x1b[?1006$p\x1b[?1016$p".encode())
     assert wire.data == ["\x1b[?1006;2$y", "\x1b[?1016;1$y"]
 
 

@@ -37,7 +37,7 @@ def _snapshot(board, wire):
     board.feed_host_data(
         "\x1b[1$w\x1b[2$w"  # DECCIR, DECTABSR
         "\x1bP$qr\x1b\\\x1bP$qs\x1b\\\x1bP$qm\x1b\\\x1bP$q*x\x1b\\"
-        "\x1b[?5$p\x1b[?6$p\x1b[?7$p\x1b[?69$p\x1b[4$p"
+        "\x1b[?5$p\x1b[?6$p\x1b[?7$p\x1b[?69$p\x1b[4$p".encode()
     )
     return list(wire.data)
 
@@ -45,50 +45,50 @@ def _snapshot(board, wire):
 @pytest.mark.parametrize("model", [VT510, BITTTY])
 def test_a_restored_state_reads_back_the_same(model):
     board, wire = _board(model)
-    board.feed_host_data(STATE)
+    board.feed_host_data(STATE.encode())
     before = _snapshot(board, wire)
     wire.data.clear()
-    board.feed_host_data("\x1b[1$u")
+    board.feed_host_data("\x1b[1$u".encode())
     (report,) = wire.data
     assert report.startswith("\x1bP1$s") and report.endswith("\x1b\\")
 
-    board.feed_host_data("\x1bc")
+    board.feed_host_data("\x1bc".encode())
     assert _snapshot(board, wire) != before
-    board.feed_host_data("\x1bP1$p" + report[5:])
+    board.feed_host_data(("\x1bP1$p" + report[5:]).encode())
     assert _snapshot(board, wire) == before
 
 
 def test_the_report_is_hex():
     board, wire = _board()
-    board.feed_host_data("\x1b[1$u")
+    board.feed_host_data("\x1b[1$u".encode())
     data = wire.data[0][5:-2]
     assert data == data.upper() and bytes.fromhex(data)
 
 
 def test_restoring_leaves_the_screen_alone():
     board, wire = _board()
-    board.feed_host_data("\x1b[1$u")
+    board.feed_host_data("\x1b[1$u".encode())
     report = wire.data[0]
-    board.feed_host_data("hello\x1bP1$p" + report[5:])
+    board.feed_host_data(("hello\x1bP1$p" + report[5:]).encode())
     assert board.capture_text() == "hello"
 
 
 @pytest.mark.parametrize("data", ["XYZ", "414", ""])
 def test_a_malformed_restore_is_ignored(data):
     board, _ = _board()
-    board.feed_host_data("\x1b[5;10r\x1bP1$p" + data + "\x1b\\")
+    board.feed_host_data(("\x1b[5;10r\x1bP1$p" + data + "\x1b\\").encode())
     assert (board.blitter.scroll_top, board.blitter.scroll_bottom) == (4, 9)
 
 
 @pytest.mark.parametrize("request_", ["\x1b[$u", "\x1b[0$u", "\x1b[3$u"])
 def test_other_reports_are_ignored(request_):
     board, wire = _board()
-    board.feed_host_data(request_)
+    board.feed_host_data(request_.encode())
     assert wire.data == []
 
 
 @pytest.mark.parametrize("model", [XTERM, LINUX])
 def test_a_terminal_without_state_reports_does_not_answer(model):
     board, wire = _board(model)
-    board.feed_host_data("\x1b[1$u")
+    board.feed_host_data("\x1b[1$u".encode())
     assert wire.data == []

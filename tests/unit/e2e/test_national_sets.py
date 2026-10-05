@@ -32,5 +32,5 @@ POSITIONS = "#$@[\\]^_`{|}~"
 def test_national_replacement_sets(designators, shown):
     for designator in designators:
         board = Board(width=20, height=2, model=XTERM)
-        board.feed_host_data(f"\x1b[?42h\x1b({designator}{POSITIONS}")
+        board.feed_host_data(f"\x1b[?42h\x1b({designator}{POSITIONS}".encode())
         assert board.blitter.current_page.get_line_text(0).rstrip() == shown, designator

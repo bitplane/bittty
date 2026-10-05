@@ -13,7 +13,7 @@ def driver(model=XTERM, setup=""):
     board = Board(model=model)
     wire = MemoryConnection()
     board.host.attach(wire)
-    board.feed_host_data(setup)
+    board.feed_host_data(setup.encode())
     return board, wire
 
 
@@ -146,7 +146,7 @@ def test_modified_delete_is_not_del_under_modify_other_keys():
     board.input_key_event(KeyEvent("delete", M.CTRL))
     assert wire.text == "\x7f"
     wire.data.clear()
-    board.feed_host_data("\x1b[>4;1m")
+    board.feed_host_data("\x1b[>4;1m".encode())
     board.input_key_event(KeyEvent("delete", M.CTRL))
     board.input_key_event(KeyEvent("delete"))
     assert wire.text == "\x1b[3;5~\x7f"
@@ -181,12 +181,12 @@ def test_control_inverts_backarrow(setup, mods, expected):
 def test_delete_mode_survives_ris_and_decstr():
     """xterm 407: 1037 is a setting, not terminal state; DECRQM shows the legacy keyboard's DEL default."""
     board, wire = driver(setup="\x1b[?1060h")
-    board.feed_host_data("\x1b[?1037$p")
+    board.feed_host_data("\x1b[?1037$p".encode())
     assert wire.text == "\x1b[?1037;1$y"
-    board.feed_host_data("\x1b[?1037l\x1bc\x1b[!p")
+    board.feed_host_data("\x1b[?1037l\x1bc\x1b[!p".encode())
     wire.data.clear()
     board.input_key_event(KeyEvent("delete"))
-    board.feed_host_data("\x1b[?1037$p")
+    board.feed_host_data("\x1b[?1037$p".encode())
     assert wire.text == "\x1b[3~\x1b[?1037;2$y"
 
 
@@ -277,7 +277,7 @@ def test_xterm_powers_on_with_eight_bit_input():
 def test_bittty_alt_and_meta_send_escape(mods):
     board, wire = driver(BITTTY)
     board.input_key_event(KeyEvent("a", mods, text="a"))
-    board.feed_host_data("\x1bc")
+    board.feed_host_data("\x1bc".encode())
     board.input_key_event(KeyEvent("a", mods, text="a"))
     assert wire.text == "\x1ba\x1ba"
 
@@ -294,6 +294,6 @@ def test_alt_text_keys_send_escape_on_linux_and_kitty(model, mods, expected):
     board, wire = driver(model)
     text = "A" if mods & M.SHIFT else "a"
     board.input_key_event(KeyEvent("a", mods, text=text, shifted_key="A"))
-    board.feed_host_data("\x1bc\x1b[?1036l\x1b[?1039l")
+    board.feed_host_data("\x1bc\x1b[?1036l\x1b[?1039l".encode())
     board.input_key_event(KeyEvent("a", mods, text=text, shifted_key="A"))
     assert wire.text == expected * 2

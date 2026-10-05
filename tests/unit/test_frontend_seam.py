@@ -150,37 +150,25 @@ class QueueConnection:
     def write(self, data):
         self.data.append(data)
 
-    async def read_async(self, size):
-        return self.chunks.pop(0) if self.chunks else ""
+    async def read_bytes_async(self, size):
+        return self.chunks.pop(0) if self.chunks else b""
 
 
 @pytest.mark.asyncio
 async def test_host_port_receive_side_pumps_into_the_sink():
     port = HostPort()
     seen = []
-    port.connect(QueueConnection(["ab", "cd"]), seen.append, on_idle=lambda: True)
+    port.connect(QueueConnection([b"ab", b"cd"]), seen.append, on_idle=lambda: True)
     await port._reader_task
-    assert seen == ["ab", "cd"]
+    assert seen == [b"ab", b"cd"]
 
 
 @pytest.mark.asyncio
 async def test_host_port_pumps_child_output_through_the_parser_into_video():
     board = Board(width=20, height=3)
-    board.host.connect(QueueConnection(["hello"]), board._dispatch_pty_data, on_idle=lambda: True)
+    board.host.connect(QueueConnection([b"hello"]), board.feed_host_data, on_idle=lambda: True)
     await board.host._reader_task
     assert "hello" in board.capture_pane()
-
-
-@pytest.mark.asyncio
-async def test_host_port_accepts_text_from_a_nominal_raw_reader():
-    class TextOnlyConnection(QueueConnection):
-        async def read_bytes_async(self, size):
-            return self.chunks.pop(0) if self.chunks else ""
-
-    board = Board(width=20, height=3)
-    board.host.connect(TextOnlyConnection(["hello"]), board._dispatch_pty_data, on_idle=lambda: True)
-    await board.host._reader_task
-    assert board.capture_text() == "hello"
 
 
 def test_display_port_receive_side_reaches_the_devices():

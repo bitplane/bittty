@@ -29,20 +29,20 @@ SHOWN = {
 def test_vt5xx_sets(designation, shown):
     designator, national = designation
     board = Board(width=100, height=2, model=VT510)
-    board.feed_host_data(("\x1b[?42h" if national else "") + f"\x1b({designator}" + GL)
+    board.feed_host_data((("\x1b[?42h" if national else "") + f"\x1b({designator}" + GL).encode())
     assert board.blitter.current_page.get_line_text(0).rstrip() == shown
 
 
 @pytest.mark.parametrize("designator", ['">', "%=", "&5", "%3", "%2"])
 def test_national_sets_need_national_mode(designator):
     board = Board(width=100, height=2, model=VT510)
-    board.feed_host_data(f"\x1b({designator}" + GL)
+    board.feed_host_data((f"\x1b({designator}" + GL).encode())
     assert board.blitter.current_page.get_line_text(0).rstrip() == GL
 
 
 def test_xterm_at_its_vt4xx_level_has_none_of_them():
     board = Board(width=100, height=2, model=XTERM)
-    board.feed_host_data("\x1b(&4" + GL)
+    board.feed_host_data(("\x1b(&4" + GL).encode())
     assert board.blitter.current_page.get_line_text(0).rstrip() == GL
 
 
@@ -51,7 +51,7 @@ def test_they_can_be_the_user_preferred_set(designator):
     board = Board(width=100, height=2, model=VT510)
     wire = MemoryConnection()
     board.host.attach(wire)
-    board.feed_host_data(f"\x1bP0!u{designator}\x1b\\\x1b[&u\x1b(<" + GL)
+    board.feed_host_data((f"\x1bP0!u{designator}\x1b\\\x1b[&u\x1b(<" + GL).encode())
     assert wire.data == [f"\x1bP0!u{designator}\x1b\\"]
     assert board.blitter.current_page.get_line_text(0).rstrip() == SHOWN[(designator, False)]
 
@@ -63,6 +63,6 @@ def test_their_keyboards_send_them_in_national_mode(language, typed, sent):
     board = Board(model=VT510)
     wire = MemoryConnection()
     board.host.attach(wire)
-    board.feed_host_data(f"\x1b[;{language} }}\x1b[?42h")
+    board.feed_host_data(f"\x1b[;{language} }}\x1b[?42h".encode())
     board.input_key_event(KeyEvent("a", text=typed))
     assert wire.text == sent

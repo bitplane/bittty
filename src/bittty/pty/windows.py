@@ -88,9 +88,8 @@ class WinptyProcessWrapper:
 class WindowsPTY(PTY):
     """Windows PTY implementation using pywinpty.
 
-    Note: This PTY operates in text mode - winpty handles UTF-8 internally.
-    The read/write methods work directly with strings for performance,
-    with bytes conversion only when needed for compatibility.
+    winpty is text-only: received text is re-encoded so the host line is bytes on every
+    platform, and write() passes text straight through.
     """
 
     def __init__(self, rows: int = constants.DEFAULT_TERMINAL_HEIGHT, cols: int = constants.DEFAULT_TERMINAL_WIDTH):
@@ -103,12 +102,6 @@ class WindowsPTY(PTY):
         wrapper = WinptyFileWrapper(self._pty)
         super().__init__(wrapper, wrapper, rows, cols)
 
-    def read(self, size: int = constants.DEFAULT_PTY_BUFFER_SIZE) -> str:
-        """Read data directly from winpty (text mode, no UTF-8 splitting needed)."""
-        if self.closed:
-            return ""
-        return self.from_process.read(size)
-
     def write(self, data: str) -> int:
         """Write string data directly to winpty (text mode)."""
         if self.closed:
@@ -117,7 +110,9 @@ class WindowsPTY(PTY):
 
     def read_bytes(self, size: int) -> bytes:
         """pywinpty exposes decoded text: re-encode it so the host line is bytes on every platform."""
-        return self.read(size).encode()
+        if self.closed:
+            return b""
+        return self.from_process.read(size).encode()
 
     def write_bytes(self, data: bytes) -> int:
         """Pass protocol bytes through winpty's text-only input, one character per byte.

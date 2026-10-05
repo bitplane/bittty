@@ -194,8 +194,8 @@ class Board:
             return
         self.blitter.write_text(text, self.style.current)
 
-    def feed_host_data(self, data: bytes | str) -> None:
-        """Canonical host-output entry point, preserving raw printer-controller bytes."""
+    def feed_host_data(self, data: bytes) -> None:
+        """Canonical host-output entry point: the child's bytes, raw printer-controller data kept raw."""
         with self._output_lock:
             sink = self._pty_data_callback or self.parser.feed
             self.printer.feed_host_data(data, sink)
@@ -580,10 +580,6 @@ class Board:
         """Swap the host port's receive sink (a terminal uses this to add render throttling)."""
         self._pty_data_callback = callback
 
-    def _dispatch_pty_data(self, data: bytes | str) -> None:
-        """The host port's receive sink: the callback if set, else straight into the parser."""
-        self.feed_host_data(data)
-
     def _pty_idle(self) -> bool:
         """Nothing to read this wakeup: reap the child if it has exited."""
         if self.process and self.process.poll() is not None:
@@ -608,7 +604,7 @@ class Board:
             # The host port pumps the PTY's receive side from here on
             self.host.connect(
                 self.pty,
-                self._dispatch_pty_data,
+                self.feed_host_data,
                 on_idle=self._pty_idle,
                 on_closed=self.stop_process,
             )

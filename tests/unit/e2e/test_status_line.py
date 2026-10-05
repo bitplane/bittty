@@ -27,7 +27,7 @@ def _run(sequence, model=VT510):
     board.host.attach(wire)
     recorder = Recorder()
     board.display.attach(recorder)
-    board.feed_host_data(sequence)
+    board.feed_host_data(sequence.encode())
     return board, wire, recorder.events
 
 

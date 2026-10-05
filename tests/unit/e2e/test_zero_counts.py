@@ -10,7 +10,7 @@ DIGITS = "0123456789" * 8
 
 def _run(sequence):
     board = Board(width=80, height=24, model=XTERM)
-    board.feed_host_data(f"\x1b[2;1H{DIGITS}\x1b[2;15H{sequence}")
+    board.feed_host_data(f"\x1b[2;1H{DIGITS}\x1b[2;15H{sequence}".encode())
     return board
 
 

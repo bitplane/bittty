@@ -20,7 +20,7 @@ def _run(sequence, model=VT510, chunks=None):
     wire = MemoryConnection()
     board.host.attach(wire)
     for chunk in chunks or [sequence]:
-        board.feed_host_data(chunk)
+        board.feed_host_data(chunk.encode())
     return board, wire
 
 

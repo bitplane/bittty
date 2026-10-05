@@ -16,7 +16,7 @@ def _run(sequence, model):
     board = Board(model=model)
     wire = MemoryConnection()
     board.host.attach(wire)
-    board.feed_host_data(sequence)
+    board.feed_host_data(sequence.encode())
     return board, wire.data
 
 

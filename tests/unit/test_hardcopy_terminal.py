@@ -21,12 +21,6 @@ def test_the_host_prints_on_paper():
     assert _printed(terminal) == ["hello", "world"]
 
 
-def test_text_from_the_host_prints_too():
-    terminal = HardcopyTerminal(MemoryConnection())
-    terminal.receive("hello")
-    assert _printed(terminal) == ["hello"]
-
-
 def test_it_identifies_itself_as_an_la120():
     wire = MemoryConnection()
     terminal = HardcopyTerminal(wire)
@@ -55,7 +49,7 @@ def test_local_echo_prints_what_is_typed():
 
 
 def test_the_host_line_pumps_onto_paper():
-    wire = MemoryConnection(receive=["one\r\n", "two"])
+    wire = MemoryConnection(receive=[b"one\r\n", b"two"])
     terminal = HardcopyTerminal(wire)
 
     async def run():

@@ -25,8 +25,10 @@ def test_output_waits_for_both_pages_and_pty_resize(monkeypatch, direct):
 
     def output():
         attempted.set()
-        feed = board.parser.feed if direct else board.feed_host_data
-        feed("\x1b[6;12HX")
+        if direct:
+            board.parser.feed("\x1b[6;12HX")
+        else:
+            board.feed_host_data(b"\x1b[6;12HX")
         assert board.pty.resizes == [(6, 12)]
         completed.set()
 

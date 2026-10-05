@@ -221,6 +221,6 @@ def test_modify_other_keys_matches_xterm(level, sym, mods, expected):
     board = Board(model=XTERM)
     wire = MemoryConnection()
     board.host.attach(wire)
-    board.feed_host_data(f"\x1b[>4;{level}m")
+    board.feed_host_data(f"\x1b[>4;{level}m".encode())
     board.input_key_event(event(sym, mods))
     assert wire.text == expected

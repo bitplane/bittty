@@ -19,7 +19,7 @@ def _run(sequence, model=VT510):
     board = Board(width=12, height=4, model=model)
     wire = MemoryConnection()
     board.host.attach(wire)
-    board.feed_host_data(sequence)
+    board.feed_host_data(sequence.encode())
     lines = [board.blitter.current_page.get_line_text(y).rstrip() for y in range(3)]
     return lines, (board.cursor.y + 1, board.cursor.display_x + 1), wire.data
 

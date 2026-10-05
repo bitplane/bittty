@@ -12,7 +12,7 @@ def _status(model, mode):
     board = Board(model=model)
     wire = MemoryConnection()
     board.host.attach(wire)
-    board.feed_host_data(f"\x1b[{mode}$p\x1b[{mode}h\x1b[{mode}$p")
+    board.feed_host_data(f"\x1b[{mode}$p\x1b[{mode}h\x1b[{mode}$p".encode())
     return wire.data
 
 

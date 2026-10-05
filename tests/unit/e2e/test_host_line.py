@@ -20,7 +20,7 @@ def _run(sequence, model=VT510):
     board = Board(width=40, height=4, model=model)
     wire = MemoryConnection()
     board.host.attach(wire)
-    board.feed_host_data(sequence)
+    board.feed_host_data(sequence.encode())
     return board, wire
 
 
@@ -91,7 +91,7 @@ def test_printer_selectors_leave_the_host_line_alone():
 
 def test_the_connection_is_offered_the_line_and_each_change():
     board, wire = _run("")
-    board.feed_host_data("\x1b[1;8*r\x1b[1;8*r\x1b[?103h")
+    board.feed_host_data("\x1b[1;8*r\x1b[1;8*r\x1b[?103h".encode())
     faster = replace(SerialLine(), transmit_baud=38400)
     assert wire.lines == [SerialLine(), faster, replace(faster, half_duplex=True)]  # the whole line on attach
 

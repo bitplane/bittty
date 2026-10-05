@@ -42,9 +42,9 @@ class HardcopyTerminal:
     def disconnect(self) -> None:
         self.host.disconnect()
 
-    def receive(self, data: bytes | str) -> None:
+    def receive(self, data: bytes) -> None:
         """Print the host's output, and send any reply it asked for back up the line."""
-        self._print(data)
+        self.printer.write_bytes(data)
         replies = self.printer.take_inbound()
         if replies:
             self.host.write_bytes(replies, flush=True)
@@ -53,8 +53,4 @@ class HardcopyTerminal:
         """Keys typed at the keyboard: sent to the host, and printed too under local echo."""
         self.host.write(text, flush=True)
         if self.local_echo:
-            self._print(text)
-
-    def _print(self, data: bytes | str) -> None:
-        """An eight-bit printer: text prints as Latin-1, and what that cannot hold as '?'."""
-        self.printer.write_bytes(data.encode("latin-1", errors="replace") if isinstance(data, str) else data)
+            self.printer.write_bytes(text.encode("latin-1", errors="replace"))  # eight-bit: '?' for the rest

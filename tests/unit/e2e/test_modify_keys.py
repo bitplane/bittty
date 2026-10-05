@@ -16,13 +16,13 @@ def driver(setup="", model=XTERM):
     board = Board(model=model)
     wire = MemoryConnection()
     board.host.attach(wire)
-    board.feed_host_data(setup)
+    board.feed_host_data(setup.encode())
     wire.data.clear()
     return board, wire
 
 
 def query(board, wire, resource):
-    board.feed_host_data(f"\x1b[?{resource}m")
+    board.feed_host_data(f"\x1b[?{resource}m".encode())
     return "".join(wire.data.pop() for _ in list(wire.data))
 
 
@@ -53,7 +53,7 @@ def test_xtqmodkeys_ignores_resources_xterm_does_not_have():
 
 def test_query_is_not_sgr_on_a_terminal_without_modifier_resources():
     board, wire = driver(model=LINUX)
-    board.feed_host_data("\x1b[?4mX")
+    board.feed_host_data("\x1b[?4mX".encode())
     assert wire.data == []
     assert board.blitter.current_page.get_cell(0, 0)[0].underline is None
 

@@ -29,10 +29,13 @@ logger = logging.getLogger(__name__)
 
 @runtime_checkable
 class Connection(Protocol):
-    """A cable implementation (PTY, pipe, socket) that accepts terminal input/reply data."""
+    """A cable implementation (PTY, pipe, socket): text out to the host, bytes back from it."""
 
     def write(self, data: str):
         """Write data to the connected host."""
+
+    async def read_bytes_async(self, size: int) -> bytes:
+        """The host's next output; empty when there is none yet."""
 
 
 @runtime_checkable
@@ -76,7 +79,7 @@ class HostPort:
     ) -> None:
         self.connection = connection
         self.on_connected = on_connected
-        self.on_data: Callable[[bytes | str], None] | None = None
+        self.on_data: Callable[[bytes], None] | None = None
         self.on_idle: Callable[[], bool] | None = None
         self.on_closed: Callable[[], None] | None = None
         self._reader_task: asyncio.Task | None = None
@@ -105,13 +108,13 @@ class HostPort:
     def connect(
         self,
         connection: Connection,
-        on_data: Callable[[bytes | str], None],
+        on_data: Callable[[bytes], None],
         on_idle: Callable[[], bool] | None = None,
         on_closed: Callable[[], None] | None = None,
     ) -> None:
         """Plug in a duplex connection and start pumping its receive side.
 
-        on_data receives each decoded chunk. on_idle fires when a read returns
+        on_data receives each chunk of bytes. on_idle fires when a read returns
         nothing — return True to stop the pump (the board reaps its dead child
         there). on_closed fires when the connection errors out.
         """
@@ -136,11 +139,7 @@ class HostPort:
             try:
                 # A big buffer so a flooding child drains in few wakeups
                 # instead of blocking on the PTY.
-                raw_reader = getattr(self.connection, "read_bytes_async", None)
-                if callable(raw_reader):
-                    data = await raw_reader(65536)
-                else:
-                    data = await self.connection.read_async(65536)
+                data = await self.connection.read_bytes_async(65536)
 
                 if not data:
                     if self.on_idle is not None and self.on_idle():
@@ -220,8 +219,6 @@ class PrinterPort:
         """Attach a connection and pump its optional receive side."""
         self.attach(connection)
         reader = getattr(connection, "read_bytes_async", None)
-        if not callable(reader):
-            reader = getattr(connection, "read_async", None)
         if callable(reader):
             self._reader_task = asyncio.create_task(self._pump(reader))
 
@@ -338,16 +335,12 @@ class MemoryConnection:
         self.data.append(data)
         return len(data)
 
-    def send(self, data) -> None:
-        """Queue data as if the child had produced it."""
+    def send(self, data: bytes) -> None:
+        """Queue bytes as if the child had produced them."""
         self._inbound.append(data)
 
-    async def read_async(self, size: int = 65536) -> str:
-        return self._inbound.pop(0) if self._inbound else ""
-
     async def read_bytes_async(self, size: int = 65536) -> bytes:
-        data = self._inbound.pop(0) if self._inbound else b""
-        return data.encode() if isinstance(data, str) else data
+        return self._inbound.pop(0) if self._inbound else b""
 
     def resize(self, rows: int, cols: int) -> None:
         """Record a window-size change, as a PTY would apply one."""
