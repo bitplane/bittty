@@ -5,6 +5,8 @@ A Board has pages of it: page memory for the primary screen, and the alternate s
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+
 from . import constants
 from .style import Style, parse_sgr_sequence
 from .width import DEFAULT_WIDTH_POLICY, WidthPolicy
@@ -18,6 +20,15 @@ CONTINUATION = ""
 
 class WideHead(str):
     """A string stored as the head of a width-2 glyph."""
+
+
+@dataclass(frozen=True, slots=True)
+class Line:
+    """One row of video memory, detached from its page: what scrollback keeps."""
+
+    cells: tuple[Cell, ...]
+    wrapped: bool = False  # the logical line continues in the next row
+    attribute: str = constants.LINE_SINGLE  # DECDWL/DECDHL
 
 
 def _coerce_style(style_or_ansi) -> Style:
@@ -236,6 +247,10 @@ class Video:
     def reset_wrapped_lines(self) -> None:
         """Clear all automatic-wrap metadata."""
         self.wrapped_lines = [False] * self.height
+
+    def line(self, y: int) -> Line:
+        """A detached copy of row y."""
+        return Line(tuple(self.grid[y]), self.wrapped_lines[y], self.line_attributes[y])
 
     def get_content(self) -> list[list[Cell]]:
         """Get the page's content as a 2D grid."""
@@ -713,8 +728,9 @@ class Video:
         self.row_gen = [0] * height
         self._touch_page()
 
-    def reflow(self, width: int, height: int, cursor: tuple[int, int]) -> tuple[int, int]:
-        """Re-wrap the page's soft-wrapped lines to a new width; return where the cursor goes.
+    def reflow(self, width: int, height: int, cursor: tuple[int, int]) -> tuple[tuple[int, int], list[Line]]:
+        """Re-wrap the page's soft-wrapped lines to a new width; return where the cursor goes,
+        and the rows cut from the top to make it fit, oldest first.
 
         A logical line is a run of rows joined by their wrap flags. Each is cut into rows of the
         new width, never splitting a wide character, and every row but its last wraps. Trailing
@@ -762,6 +778,7 @@ class Video:
             rows.pop()
             wrapped.pop()
         top = max(0, min(len(rows) - height, new_cursor[0]))
+        cut = [Line(tuple(row), wrap) for row, wrap in zip(rows[:top], wrapped[:top])]
         rows, wrapped = rows[top : top + height], wrapped[top : top + height]
         rows += [self._create_empty_row(width) for _ in range(height - len(rows))]
         wrapped += [False] * (height - len(wrapped))
@@ -770,7 +787,7 @@ class Video:
         self.width, self.height = width, height
         self.row_gen = [0] * height
         self._touch_page()
-        return min(new_cursor[1], width - 1), min(new_cursor[0] - top, height - 1)
+        return (min(new_cursor[1], width - 1), min(new_cursor[0] - top, height - 1)), cut
 
     def link_extent(self, x: int, y: int) -> tuple | None:
         """The contiguous same-link run containing (x, y) on its row.

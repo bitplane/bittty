@@ -38,6 +38,7 @@ from ..options import (
     KITTY_KEYBOARD,
     XTERM_MODIFY_KEYS,
 )
+from ..present import ScreenChanged
 from .modes import ModeEffect
 
 if TYPE_CHECKING:
@@ -368,6 +369,7 @@ class KeyboardDevice(Device):
             elif char == constants.HT:
                 cursor.horizontal_tab()
         flush_run()
+        board.present(ScreenChanged())
 
     def report_focus(self, focused: bool) -> None:
         """Focus reporting (DECSET 1004) — send CSI I on focus in, CSI O on focus out."""

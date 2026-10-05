@@ -9,9 +9,9 @@ from .. import constants
 from ..clusters import ClusterWriter
 from ..operations import Operation
 from ..options import DEC_CHARACTER_EDITING, DEC_LINE_EDITING, DEC_STATUS_LINE
-from ..present import StatusLineChanged
+from ..present import RowsScrolledOff, ScrollbackCleared, StatusLineChanged
 from ..style import Style, parse_sgr_sequence
-from ..video import Video
+from ..video import Line, Video
 from ..width import DEFAULT_WIDTH_POLICY, WidthPolicy
 from .base import Device
 from .modes import ModeEffect
@@ -28,36 +28,41 @@ class Surface:
     """What the cursor writes on: a page, the rows of it in play, and its margins.
 
     The main display and the one-row status line are each a surface; DECSASD swaps
-    the whole of one for the other.
+    the whole of one for the other. The blitter holds the active one's values as plain
+    attributes — they are read on every printed run — so a surface is what is set aside.
     """
 
     page: Video
-    height: int
+    rows: int
     scroll_top: int
     scroll_bottom: int
     left_margin: int
     right_margin: int
 
     @classmethod
-    def whole(cls, page: Video, width: int, height: int) -> Surface:
+    def whole(cls, page: Video, width: int, rows: int) -> Surface:
         """A surface whose margins take in the whole page."""
-        return cls(page, height, 0, height - 1, 0, width - 1)
+        return cls(page, rows, 0, rows - 1, 0, width - 1)
 
+    @classmethod
+    def of(cls, blitter: Blitter) -> Surface:
+        """The surface the blitter is writing on."""
+        b = blitter
+        return cls(b.current_page, b.rows, b.scroll_top, b.scroll_bottom, b.left_margin, b.right_margin)
 
-def _on_surface(field: str) -> property:
-    """A blitter attribute that is the active surface's."""
-    return property(lambda self: getattr(self.surface, field), lambda self, value: setattr(self.surface, field, value))
+    def apply(self, blitter: Blitter) -> None:
+        """Make this the surface the blitter writes on."""
+        b = blitter
+        b.current_page, b.rows, b.scroll_top, b.scroll_bottom, b.left_margin, b.right_margin = (
+            self.page, self.rows, self.scroll_top, self.scroll_bottom, self.left_margin, self.right_margin
+        )  # fmt: skip
 
 
 class Blitter(Device):
-    """Owns the video pages and applies screen/editing operations."""
+    """Owns the video pages and applies screen/editing operations.
 
-    current_page = _on_surface("page")
-    rows = _on_surface("height")  # the page's lines, or the status line's one
-    scroll_top = _on_surface("scroll_top")
-    scroll_bottom = _on_surface("scroll_bottom")
-    left_margin = _on_surface("left_margin")
-    right_margin = _on_surface("right_margin")
+    `rows` is the active surface's: the page's lines, or the status line's one.
+    """
 
     def __init__(self, board: Board, width: int, height: int, width_policy: WidthPolicy | None = None) -> None:
         self.board = board
@@ -75,7 +80,7 @@ class Blitter(Device):
         self.page = self.shown_page = 0
         self._fit_page_memory()
         self.alt_page = Video(width, height, self.width_policy)
-        self.surface = Surface.whole(self.primary_page, width, height)
+        Surface.whole(self.primary_page, width, height).apply(self)
         self.in_alt_screen = False
         self.attr_change_extent = "stream"  # DECSACE: "stream" (power-on) or "rectangle"
         self.last_printed_char = ""  # REP before any printing repeats nothing
@@ -232,12 +237,13 @@ class Blitter(Device):
         self.reset_grapheme_state()
         here = (cursor.display_x, cursor.y, cursor.wrap_pending)
         if status:
-            self._main = (self.surface, here)
-            self.surface = Surface.whole(self.status_page, self.width, 1)
+            self._main = (Surface.of(self), here)
+            Surface.whole(self.status_page, self.width, 1).apply(self)
             x, y, wrap = self._status_x, 0, False
         else:
             self._status_x = here[0]
-            self.surface, (x, y, wrap) = self._main
+            surface, (x, y, wrap) = self._main
+            surface.apply(self)
         self.status_active = status
         cursor.set_position(x, y)
         if wrap:
@@ -400,10 +406,12 @@ class Blitter(Device):
         for page in self.videos:
             if not reflow or page is self.alt_page:
                 page.resize(width, height)
-            elif page is self.current_page:
-                cursor.set_position(*page.reflow(width, height, here))
-            else:
-                page.reflow(width, height, (0, 0))
+                continue
+            position, cut = page.reflow(width, height, here if page is self.current_page else (0, 0))
+            if page is self.current_page:
+                cursor.set_position(*position)
+            if page is self.main_page:
+                self._to_history(cut)
         self._fit_page_memory()
         self.current_page = self.alt_page if self.in_alt_screen else self.primary_page
         self.status_page.resize(width, 1)
@@ -486,6 +494,8 @@ class Blitter(Device):
         elif mode == constants.ERASE_ALL:
             for y in range(self.rows):
                 self.current_page.clear_line(y, constants.ERASE_ALL, 0, bg_ansi)
+        elif mode == constants.ERASE_SAVED_LINES:
+            self.board.present(ScrollbackCleared())
 
     def clear_line(self, mode: int = constants.ERASE_FROM_CURSOR_TO_END) -> None:
         """Clear line."""
@@ -765,10 +775,31 @@ class Blitter(Device):
             return
         self._shift_line_segment(cursor.y, cursor.x, self.right_margin, count)
 
+    def _scrolls_into_history(self) -> bool:
+        """Whether rows scrolled off the top are kept: a full-width region at the top of the
+        displayed primary screen, as in xterm, and a terminal that keeps scrollback."""
+        return (
+            self.board.display.keeps_scrollback
+            and self.scroll_top == 0
+            and self.left_margin == 0
+            and self.right_margin == self.width - 1
+            and not self.in_alt_screen
+            and self.current_page is self.main_page
+        )
+
+    def _to_history(self, lines: list[Line]) -> None:
+        # Sent at once, never gathered: a line that is sent and dropped dies young, where a
+        # chunk's worth held back would outlive garbage collections and cost more than it saves.
+        if lines:
+            self.board.present(RowsScrolledOff(tuple(lines)))
+
     def scroll(self, lines: int) -> None:
         """Scroll content within the active scroll region; the status line never scrolls."""
         if lines == 0 or self.scroll_top > self.scroll_bottom or self.status_active:
             return
+        if lines > 0 and self._scrolls_into_history():
+            count = min(lines, self.scroll_bottom + 1)
+            self._to_history([self.current_page.line(y) for y in range(count)])
 
         abs_lines = abs(lines)
         if self.left_margin == 0 and self.right_margin == self.width - 1 and self.board.style.current.bg is None:

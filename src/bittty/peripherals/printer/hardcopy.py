@@ -9,17 +9,8 @@ into the host line exactly where a board would, through a HostPort.
 from __future__ import annotations
 
 from ...connections import Connection, HostPort
-from .pages import PRINT_UNITS_PER_INCH, PrinterPageGeometry, PrinterRect
-from .virtual import PrinterModel, VirtualPrinter
-
-# Terminals & Printers Handbook ch. 14: "ESC [ c or ESC [ 0 c — LA120 transmits ESC [ ? 2 c",
-# on fanfold paper up to 14 7/8 inches wide; the form length here is the usual 11 inches.
-_FANFOLD = PrinterPageGeometry(
-    width=PRINT_UNITS_PER_INCH * 119 // 8,
-    height=PRINT_UNITS_PER_INCH * 11,
-    printable_area=PrinterRect(0, 0, PRINT_UNITS_PER_INCH * 119 // 8, PRINT_UNITS_PER_INCH * 11),
-)
-LA120 = PrinterModel("la120", page_geometry=_FANFOLD, primary_device_attributes=(2,))
+from .models import LA120
+from .virtual import VirtualPrinter
 
 
 class HardcopyTerminal:

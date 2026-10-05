@@ -1,7 +1,9 @@
 """Present events: discrete side-effects the board pushes to the attached terminal (chrome).
 
-Screen content stays *pull* (a terminal (chrome) reads capture_pane()/capture_text()/get_line
-on its own cadence). Only these discrete events are *pushed*, through the board's DisplayPort.
+The rule: push what would otherwise be lost, pull what is still there. Screen content
+is *pull* — a terminal reads it through the DisplayPort (see connections.display.Screen)
+on its own cadence; ScreenChanged only says it is worth a look. Everything that is not
+in video memory, or is about to leave it, is *pushed* as one of these events.
 Each is a plain frozen dataclass — pure data, no imports from board/devices — so
 board.py can depend on this module without a cycle.
 """
@@ -9,6 +11,10 @@ board.py can depend on this module without a cycle.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .video import Line
 
 
 @dataclass(frozen=True)
@@ -187,8 +193,45 @@ class ChromeResourcesChanged:
     enabled: frozenset[str]
 
 
+@dataclass(frozen=True)
+class ScreenChanged:
+    """Video memory or the cursor may have changed: pull the screen when next painting.
+
+    Sent once per chunk of host output (and per local echo), never per cell, so a
+    terminal can mark itself dirty and repaint on its own frame clock.
+    """
+
+
+@dataclass(frozen=True)
+class RowsScrolledOff:
+    """Rows scrolled off the top of the primary screen, oldest first: what a scrollback keeps.
+
+    Only full-width scrolls of a region starting at the top row count, as in xterm;
+    the alternate screen and the status line never scroll into history. A reflow that
+    has to drop rows from the top sends them too.
+    """
+
+    lines: tuple[Line, ...]
+
+
+@dataclass(frozen=True)
+class ScrollbackCleared:
+    """The child asked for the saved lines to be erased (ED 3, CSI 3 J)."""
+
+
+@dataclass(frozen=True)
+class ChildExited:
+    """The host side ended: the child exited (returncode), or the line dropped (None)."""
+
+    returncode: int | None
+
+
 PresentEvent = (
-    Bell
+    ScreenChanged
+    | RowsScrolledOff
+    | ScrollbackCleared
+    | ChildExited
+    | Bell
     | TitleChanged
     | Notification
     | ClipboardChanged

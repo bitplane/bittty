@@ -55,6 +55,8 @@ def test_display_port_forwards_and_is_null_safe():
     assert seen == []
 
     class Sink:
+        keeps_scrollback = False
+
         def present(self, event):
             seen.append(event)
 

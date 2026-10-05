@@ -42,7 +42,7 @@ chrome a human looks at, and two full-duplex ports connect the board to its outs
 
 **Video** (`src/bittty/video.py`)
 - Video memory: a 2D cell grid, each cell a (Style, char) pair. The board writes it through
-  the blitter; terminals read it (pull) via `capture_pane()`/`get_line()`. Pages: page
+  the blitter; terminals read it (pull) through the display port's `page`. Pages: page
   memory for the primary screen (several on the VT510), and the alternate screen
 
 **Parser** (`src/bittty/parser/core.py`)
@@ -51,17 +51,21 @@ chrome a human looks at, and two full-duplex ports connect the board to its outs
   memoized registry-direct CSI dispatch — keep these hot paths intact
 
 **Terminal** (`src/bittty/terminals/base.py`)
-- The chrome ABC. Composes a Board (never subclasses it), plugs into its display port,
-  receives present events through typed `on_*` hooks, and pushes physical facts up
-  (caps, focus, resize, input)
+- The chrome ABC. Composes a Board (never subclasses it; given one or builds one), plugs
+  into its display port and talks to the board only through it (`terminal.port`): present
+  events arrive at typed `on_*` hooks, physical facts go up (caps, focus, resize, input),
+  and the screen is pulled (`port.page`, `port.cursor`, `damaged_rows()`). The rule: push
+  what would otherwise be lost (rows scrolling off, the child exiting), pull what is still
+  there. Scrollback belongs to the terminal: set `keeps_scrollback` to get `RowsScrolledOff`
 - **StdioTerminal** (`terminals/stdio.py`): the reference terminal, whose venue is this
   process's stdio/tty
 
 **Ports** (`src/bittty/connections/`)
 - Full-duplex jacks on the board. **HostPort** carries bytes both ways to the child: a
   `Connection` (PTY, pipe, socket) plugs in and the port pumps its receive side into the
-  parser. **DisplayPort** carries typed events both ways to the chrome: present events
-  down, input/focus/caps up. Its name is the video-connector pun, kept on purpose.
+  parser. **DisplayPort** carries typed events both ways to the chrome — present events
+  down, input/focus/caps up — and is the `Screen` the chrome reads. Its name is the
+  video-connector pun, kept on purpose.
   **PrinterPort** carries bytes to the auxiliary cable. The package also holds the
   in-memory/stream cables and the settings a port offers its cable (`serial_line`,
   `printer_config`). A cable implements its whole protocol; ports never probe for methods

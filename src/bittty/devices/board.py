@@ -10,7 +10,6 @@ from __future__ import annotations
 import logging
 import subprocess
 import sys
-from collections.abc import Callable
 from threading import RLock
 from typing import Any
 
@@ -21,7 +20,7 @@ from ..keyboard.keys import KeyEvent
 from ..model import DEFAULT, Model
 from ..operations import Operation
 from ..parser import Parser
-from ..present import PresentEvent
+from ..present import ChildExited, PresentEvent, ScreenChanged
 from ..pty import StdioPTY, UnixPTY, WindowsPTY
 from ..width import WidthPolicy
 from .blitter import Blitter
@@ -78,7 +77,6 @@ class Board:
         self.stdout = stdout
         self._pty: Any | None = None
         self.process: subprocess.Popen | None = None
-        self._pty_data_callback: Callable[[str], None] | None = None
 
         self.model = model or DEFAULT
         self.palette_overrides = palette_overrides or {}
@@ -162,8 +160,8 @@ class Board:
     def feed_host_data(self, data: bytes) -> None:
         """Canonical host-output entry point: the child's bytes, raw printer-controller data kept raw."""
         with self._output_lock:
-            sink = self._pty_data_callback or self.parser.feed
-            self.printer.feed_host_data(data, sink)
+            self.printer.feed_host_data(data, self.parser.feed)
+        self.present(ScreenChanged())
 
     def resize(self, width: int, height: int) -> None:
         """Resize for an internal/host request, without an in-band notification."""
@@ -173,6 +171,7 @@ class Board:
             self.blitter.resize(width, height)
             if self.pty is not None:
                 self.pty.resize(height, width)
+        self.present(ScreenChanged())
 
     def resize_from_frontend(self, width: int, height: int) -> None:
         """Apply an observed outer-terminal resize, then notify an opted-in child."""
@@ -408,17 +407,19 @@ class Board:
         else:
             self.host.attach(value)
 
-    def set_pty_data_callback(self, callback: Callable[[str], None]) -> None:
-        """Swap the host port's receive sink (a terminal uses this to add render throttling)."""
-        self._pty_data_callback = callback
-
     def _pty_idle(self) -> bool:
         """Nothing to read this wakeup: reap the child if it has exited."""
         if self.process and self.process.poll() is not None:
             logger.info("Process has exited, stopping terminal")
-            self.stop_process()
+            self._hang_up()
             return True
         return False
+
+    def _hang_up(self) -> None:
+        """The host side ended on its own: unplug, and tell the terminal how."""
+        returncode = self.process.poll() if self.process else None
+        self.stop_process()
+        self.present(ChildExited(returncode))
 
     async def start_process(self) -> None:
         """Start the child process with PTY."""
@@ -438,7 +439,7 @@ class Board:
                 self.pty,
                 self.feed_host_data,
                 on_idle=self._pty_idle,
-                on_closed=self.stop_process,
+                on_closed=self._hang_up,
             )
 
         except BaseException:

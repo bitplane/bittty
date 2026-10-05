@@ -9,7 +9,7 @@ printer's equivalent of the terminal's Model.
 from __future__ import annotations
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from enum import Enum
 
 from ...connections import InboundLine, PrinterStatus
@@ -21,8 +21,8 @@ from .languages import (
     _PrinterLayoutCommand,
     _PrinterReportCommand,
 )
+from .models import DEFAULT_MODELS, PrinterModel
 from .pages import (
-    LETTER_PAGE_GEOMETRY,
     PRINT_UNITS_PER_INCH,
     PrinterBitImage,
     PrinterControlToken,
@@ -66,65 +66,45 @@ class PrinterMechanicalEvent:
     y: int
 
 
-@dataclass(frozen=True)
-class PrinterModel:
-    """Immutable physical identity and report capabilities of a virtual printer.
+@dataclass
+class _Layout:
+    """The page layout a printer language programs: margins, pitch, form length and tab stops.
 
-    Device-attribute tuples contain the parameters following ``CSI ?`` (DA) or
-    ``CSI >`` (DA2).  Status tuples contain DEC PPL extended-report parameters;
-    the virtual printer supplies the private CSI marker and the brief report.
-    ``None`` means the model does not implement that report.
+    Power-on and a language reset build a fresh one. Entering the IBM language sets the
+    DEC layout aside whole, rather than field by field.
     """
 
-    name: str
-    device_type: PrinterType = PrinterType.DEC_ANSI
-    page_geometry: PrinterPageGeometry = LETTER_PAGE_GEOMETRY
-    primary_device_attributes: tuple[int, ...] | None = (72,)
-    secondary_device_attributes: tuple[int, ...] | None = None
-    ready_status_parameters: tuple[int, ...] = (20,)
-    offline_status_parameters: tuple[int, ...] = (24,)
-    unavailable_status_parameters: tuple[int, ...] = (59,)
-    supports_cursor_position_report: bool = False
+    left_margin: int
+    right_margin: int
+    top_margin: int
+    bottom_margin: int
+    logical_page_bottom: int
+    horizontal_advance: int = PRINT_UNITS_PER_INCH // 10
+    vertical_advance: int = PRINT_UNITS_PER_INCH // 6
+    ibm_base_horizontal_advance: int = PRINT_UNITS_PER_INCH // 10
+    ibm_double_width: bool = False
+    ibm_perforation_skip: int = 0
+    no_forms: bool = False
+    vertical_grid_pending: bool = False
+    horizontal_tabs: set[int] = field(default_factory=set)
+    vertical_tabs: set[int] = field(default_factory=set)
 
-    def __post_init__(self) -> None:
-        if not self.name:
-            raise ValueError("profile name must not be empty")
-        object.__setattr__(self, "device_type", PrinterType(self.device_type))
-        for field_name in (
-            "primary_device_attributes",
-            "secondary_device_attributes",
-            "ready_status_parameters",
-            "offline_status_parameters",
-            "unavailable_status_parameters",
-        ):
-            parameters = getattr(self, field_name)
-            if parameters is None:
-                if field_name.endswith("status_parameters"):
-                    raise ValueError(f"{field_name} must contain one or more parameters from 0 to 999")
-                continue
-            parameters = tuple(parameters)
-            if not parameters or any(parameter < 0 or parameter > 999 for parameter in parameters):
-                raise ValueError(f"{field_name} must contain one or more parameters from 0 to 999")
-            object.__setattr__(self, field_name, parameters)
+    @classmethod
+    def power_on(cls, area: PrinterRect, language: PrinterLanguage) -> _Layout:
+        """10 pitch, 6 lines per inch, the whole printable area, and the power-on tab stops.
 
-
-GENERIC_DEC_PPL2_PRINTER = PrinterModel("generic-dec-ppl2")
-GENERIC_PROPRINTER = PrinterModel(
-    "generic-ibm-proprinter",
-    device_type=PrinterType.PROPRINTER,
-    primary_device_attributes=None,
-)
-GENERIC_DEC_AND_IBM_PRINTER = PrinterModel(
-    "generic-dec-ppl2-and-ibm-proprinter",
-    device_type=PrinterType.DEC_AND_IBM,
-)
-
-
-_DEFAULT_PROFILES = {
-    PrinterType.DEC_ANSI: GENERIC_DEC_PPL2_PRINTER,
-    PrinterType.PROPRINTER: GENERIC_PROPRINTER,
-    PrinterType.DEC_AND_IBM: GENERIC_DEC_AND_IBM_PRINTER,
-}
+        Horizontal stops every eight columns; vertical stops on every line, except under
+        the IBM language, which powers on with none.
+        """
+        layout = cls(area.left, area.right, area.top, area.bottom, area.bottom)
+        columns = area.width // (420 * 3) + 2
+        layout.horizontal_tabs = {
+            area.left + (column - 1) * layout.horizontal_advance for column in range(9, columns + 1, 8)
+        }
+        if language is not PrinterLanguage.IBM_PROPRINTER:
+            lines = area.height // (600 * 3) + 2
+            layout.vertical_tabs = {area.top + (line - 1) * layout.vertical_advance for line in range(1, lines + 1)}
+        return layout
 
 
 class VirtualPrinter:
@@ -146,7 +126,7 @@ class VirtualPrinter:
     ) -> None:
         if profile is None:
             resolved_type = PrinterType.DEC_ANSI if device_type is None else PrinterType(device_type)
-            profile = _DEFAULT_PROFILES[resolved_type]
+            profile = DEFAULT_MODELS[resolved_type]
         elif device_type is not None and PrinterType(device_type) is not profile.device_type:
             raise ValueError("device_type must match profile.device_type")
         page_geometry = profile.page_geometry if page_geometry is None else page_geometry
@@ -163,38 +143,22 @@ class VirtualPrinter:
         self.on_actuate = on_actuate
         self._mechanical_events: list[PrinterMechanicalEvent] = []
         self._downloaded_glyphs: dict[int, PrinterDownloadedGlyph] = {}
+        initial_language = (
+            PrinterLanguage.IBM_PROPRINTER if self._device_type is PrinterType.PROPRINTER else PrinterLanguage.DEC_PPL
+        )
+        # The print head, and the layout the language has programmed around it.
         self._active_x = page_geometry.printable_area.left
         self._active_y = page_geometry.printable_area.top
-        self._left_margin = page_geometry.printable_area.left
-        self._right_margin = page_geometry.printable_area.right
-        self._top_margin = page_geometry.printable_area.top
-        self._bottom_margin = page_geometry.printable_area.bottom
         self._right_margin_flag = False
-        self._horizontal_advance = PRINT_UNITS_PER_INCH // 10
-        self._ibm_base_horizontal_advance = self._horizontal_advance
-        self._ibm_double_width = False
-        self._ibm_perforation_skip = 0
-        self._dec_layout_snapshot: tuple[object, ...] | None = None
-        self._vertical_advance = PRINT_UNITS_PER_INCH // 6
-        self._logical_page_bottom = page_geometry.printable_area.bottom
-        self._no_forms = False
-        self._vertical_grid_pending = False
-        self._horizontal_tabs, self._vertical_tabs = self._initial_tab_tables(
-            page_geometry.printable_area,
-            self._horizontal_advance,
-            self._vertical_advance,
-        )
+        self._layout = _Layout.power_on(page_geometry.printable_area, initial_language)
+        self._dec_layout: _Layout | None = None  # the DEC layout, set aside while the IBM language runs
         self._pending_data = bytearray()
         self._pending_ascii = True
         self._pending_x = self._active_x
         self._pending_y = self._active_y
         self._pending_state: VirtualPrinterState | None = None
         self._pending_marks = False
-        initial_language = (
-            PrinterLanguage.IBM_PROPRINTER if self._device_type is PrinterType.PROPRINTER else PrinterLanguage.DEC_PPL
-        )
-        if initial_language is PrinterLanguage.IBM_PROPRINTER:
-            self._vertical_tabs.clear()
+        self._layout_commands = self._layout_command_table()
         self._language_engine = _PrinterLanguageEngine(
             initial_language,
             supports_proprinter_switching=self._device_type is PrinterType.DEC_AND_IBM,
@@ -335,7 +299,7 @@ class VirtualPrinter:
         while offset < size:
             if not self._prepare_to_image(state):
                 return
-            available = (self._right_margin - self._active_x) // self._horizontal_advance
+            available = (self._layout.right_margin - self._active_x) // self._layout.horizontal_advance
             if available <= 0:
                 self._right_margin_flag = True
                 return
@@ -359,7 +323,7 @@ class VirtualPrinter:
         marks: bool,
         completes_line: bool,
     ) -> None:
-        advance = len(data) * self._horizontal_advance
+        advance = len(data) * self._layout.horizontal_advance
         if self._pending_data and (
             self._pending_ascii != ascii_run or self._pending_state != state or self._pending_y != self._active_y
         ):
@@ -388,35 +352,38 @@ class VirtualPrinter:
             self._flush_pending_run()
 
     def _prepare_to_image(self, state: VirtualPrinterState) -> bool:
-        if self._right_margin - self._left_margin < self._horizontal_advance:
+        if self._layout.right_margin - self._layout.left_margin < self._layout.horizontal_advance:
             self._right_margin_flag = True
             return False
         if not self._vertical_cell_fits(self._active_y):
             self._form_feed()
-        if not self._right_margin_flag and self._active_x + self._horizontal_advance <= self._right_margin:
+        if (
+            not self._right_margin_flag
+            and self._active_x + self._layout.horizontal_advance <= self._layout.right_margin
+        ):
             return True
         if state.control_representation or state.autowrap:
             self._right_margin_flag = False
             self._advance_line(home=True)
-            return self._active_x + self._horizontal_advance <= self._right_margin
+            return self._active_x + self._layout.horizontal_advance <= self._layout.right_margin
         self._right_margin_flag = True
         return False
 
     def _vertical_cell_fits(self, top: int) -> bool:
-        if self._no_forms:
+        if self._layout.no_forms:
             return True
-        if self._bottom_margin - self._top_margin < self._vertical_advance:
-            return top == self._top_margin
-        return top + self._vertical_advance <= self._bottom_margin
+        if self._layout.bottom_margin - self._layout.top_margin < self._layout.vertical_advance:
+            return top == self._layout.top_margin
+        return top + self._layout.vertical_advance <= self._layout.bottom_margin
 
     def _advance_line(self, *, home: bool) -> None:
         self._flush_pending_run()
         self._align_vertical_grid()
         if home:
-            self._active_x = self._left_margin
+            self._active_x = self._layout.left_margin
             self._right_margin_flag = False
-        next_y = self._active_y + self._vertical_advance
-        if self._no_forms or self._vertical_cell_fits(next_y):
+        next_y = self._active_y + self._layout.vertical_advance
+        if self._layout.no_forms or self._vertical_cell_fits(next_y):
             self._active_y = next_y
         else:
             self._form_feed()
@@ -424,48 +391,50 @@ class VirtualPrinter:
 
     def _form_feed(self) -> None:
         self._flush_pending_run()
-        if self._no_forms:
+        if self._layout.no_forms:
             self._advance_line(home=False)
             return
         completed = self._page_store.complete(force=True)
         assert completed is not None
         self._actuate(PrinterMechanicalAction.PAGE_EJECT, completed.number)
-        self._active_y = self._top_margin
+        self._active_y = self._layout.top_margin
         self._line_checkpoint = self._page_store.checkpoint()
 
     def _record_control(self, byte: int) -> None:
         self._flush_pending_run()
         if byte == 0x08:  # BS
             if not self._right_margin_flag:
-                self._active_x = max(self._left_margin, self._active_x - self._horizontal_advance)
+                self._active_x = max(self._layout.left_margin, self._active_x - self._layout.horizontal_advance)
         elif byte == 0x09:  # HT
             targets = (
                 stop
-                for stop in self._horizontal_tabs
-                if self._active_x < stop < self._right_margin and stop >= self._left_margin
+                for stop in self._layout.horizontal_tabs
+                if self._active_x < stop < self._layout.right_margin and stop >= self._layout.left_margin
             )
             target = min(
                 targets,
-                default=self._active_x if self.state.language is PrinterLanguage.IBM_PROPRINTER else self._right_margin,
+                default=self._active_x
+                if self.state.language is PrinterLanguage.IBM_PROPRINTER
+                else self._layout.right_margin,
             )
             if target == self._active_x:
                 return
-            if target >= self._right_margin:
-                self._active_x = self._right_margin
+            if target >= self._layout.right_margin:
+                self._active_x = self._layout.right_margin
                 self._right_margin_flag = True
             else:
                 self._active_x = target
         elif byte == 0x0A:  # LF
             self._advance_line(home=self.state.control_representation or self.state.line_feed_new_line)
         elif byte == 0x0B:  # VT
-            if self._no_forms:
+            if self._layout.no_forms:
                 self._advance_line(home=False)
             else:
                 self._align_vertical_grid()
                 targets = (
                     stop
-                    for stop in self._vertical_tabs
-                    if self._active_y < stop <= self._last_vertical_position() and stop >= self._top_margin
+                    for stop in self._layout.vertical_tabs
+                    if self._active_y < stop <= self._last_vertical_position() and stop >= self._layout.top_margin
                 )
                 target = min(targets, default=None)
                 if target is None and self.state.language is PrinterLanguage.IBM_PROPRINTER:
@@ -477,10 +446,10 @@ class VirtualPrinter:
         elif byte == 0x0C:  # FF
             self._form_feed()
             if self.state.language is PrinterLanguage.IBM_PROPRINTER:
-                self._active_x = self._left_margin
+                self._active_x = self._layout.left_margin
                 self._right_margin_flag = False
         elif byte == 0x0D:  # CR
-            self._active_x = self._left_margin
+            self._active_x = self._layout.left_margin
             self._right_margin_flag = False
             if self.state.carriage_return_new_line:
                 self._advance_line(home=True)
@@ -489,78 +458,64 @@ class VirtualPrinter:
         elif byte == 0x85:  # NEL
             self._advance_line(home=True)
 
+    def _layout_command_table(self) -> dict[_PrinterLayoutCommand, Callable[[int, tuple[int, ...]], None]]:
+        """What each layout command does, given its first parameter (0 if none) and all of them."""
+        C = _PrinterLayoutCommand
+        return {
+            C.HORIZONTAL_PITCH: lambda p, ps: self._set_horizontal_pitch(p),
+            C.VERTICAL_PITCH: lambda p, ps: self._set_vertical_pitch(p),
+            C.PAGE_LENGTH: lambda p, ps: self._set_page_length(p),
+            C.HORIZONTAL_MARGINS: lambda p, ps: self._set_horizontal_margins(*ps),
+            C.VERTICAL_MARGINS: lambda p, ps: self._set_vertical_margins(*ps),
+            C.HORIZONTAL_ABSOLUTE: lambda p, ps: self._horizontal_absolute(p),
+            C.HORIZONTAL_RELATIVE: lambda p, ps: self._horizontal_relative(p),
+            C.VERTICAL_ABSOLUTE: lambda p, ps: self._vertical_absolute(p),
+            C.VERTICAL_RELATIVE: lambda p, ps: self._vertical_relative(p),
+            C.SET_HORIZONTAL_TABS: lambda p, ps: self._set_tab_parameters(
+                self._layout.horizontal_tabs, ps, horizontal=True
+            ),
+            C.SET_VERTICAL_TABS: lambda p, ps: self._set_tab_parameters(
+                self._layout.vertical_tabs, ps, horizontal=False
+            ),
+            C.CLEAR_TABS: lambda p, ps: self._clear_tabs(ps),
+            C.SET_HORIZONTAL_TAB_HERE: lambda p, ps: self._layout.horizontal_tabs.add(self._active_x),
+            C.SET_VERTICAL_TAB_HERE: lambda p, ps: self._layout.vertical_tabs.add(self._active_y),
+            C.CLEAR_HORIZONTAL_TABS: lambda p, ps: self._layout.horizontal_tabs.clear(),
+            C.CLEAR_VERTICAL_TABS: lambda p, ps: self._layout.vertical_tabs.clear(),
+            # The language engine keeps the unit mode; _parameter_distance reads it from state.
+            C.POSITION_UNIT_MODE: lambda p, ps: None,
+            C.IBM_HORIZONTAL_PITCH: lambda p, ps: self._set_ibm_horizontal_pitch(p),
+            C.IBM_LINE_SPACING: lambda p, ps: self._set_ibm_line_spacing(p),
+            C.IBM_VERTICAL_MOTION: lambda p, ps: self._ibm_vertical_motion(p),
+            C.IBM_DOUBLE_WIDTH: lambda p, ps: self._set_ibm_double_width(bool(p)),
+            C.IBM_REPLACE_HORIZONTAL_TABS: lambda p, ps: self._replace_tabs(
+                self._layout.horizontal_tabs, ps, horizontal=True
+            ),
+            C.IBM_REPLACE_VERTICAL_TABS: lambda p, ps: self._replace_tabs(
+                self._layout.vertical_tabs, ps, horizontal=False
+            ),
+            C.IBM_RESET_TABS: lambda p, ps: self._reset_ibm_tabs(),
+            C.IBM_FORM_LENGTH_LINES: lambda p, ps: self._set_ibm_form_length_lines(p),
+            C.IBM_FORM_LENGTH_INCHES: lambda p, ps: self._set_ibm_form_length_inches(p),
+            C.IBM_LANGUAGE_ENTER: lambda p, ps: self._save_dec_layout(),
+            C.IBM_LANGUAGE_LEAVE: lambda p, ps: self._restore_dec_layout(),
+            C.IBM_CANCEL_LINE: lambda p, ps: self._page_store.truncate(self._line_checkpoint),
+            C.IBM_SET_TOP_OF_FORM: lambda p, ps: self._set_ibm_top_of_form(),
+            C.IBM_PERFORATION_SKIP: lambda p, ps: self._set_ibm_perforation_skip(p),
+            C.IBM_BELL: lambda p, ps: self._actuate(PrinterMechanicalAction.BELL, self._page_store.current_page.number),
+        }
+
     def _record_layout(self, command: _PrinterLayoutCommand, parameters: tuple[int, ...]) -> None:
         self._flush_pending_run()
-        parameter = parameters[0] if parameters else 0
-        if command is _PrinterLayoutCommand.HORIZONTAL_PITCH:
-            self._set_horizontal_pitch(parameter)
-        elif command is _PrinterLayoutCommand.VERTICAL_PITCH:
-            self._set_vertical_pitch(parameter)
-        elif command is _PrinterLayoutCommand.PAGE_LENGTH:
-            self._set_page_length(parameter)
-        elif command is _PrinterLayoutCommand.HORIZONTAL_MARGINS:
-            self._set_horizontal_margins(*parameters)
-        elif command is _PrinterLayoutCommand.VERTICAL_MARGINS:
-            self._set_vertical_margins(*parameters)
-        elif command is _PrinterLayoutCommand.HORIZONTAL_ABSOLUTE:
-            self._horizontal_absolute(parameter)
-        elif command is _PrinterLayoutCommand.HORIZONTAL_RELATIVE:
-            self._horizontal_relative(parameter)
-        elif command is _PrinterLayoutCommand.VERTICAL_ABSOLUTE:
-            self._vertical_absolute(parameter)
-        elif command is _PrinterLayoutCommand.VERTICAL_RELATIVE:
-            self._vertical_relative(parameter)
-        elif command is _PrinterLayoutCommand.SET_HORIZONTAL_TABS:
-            self._set_tab_parameters(self._horizontal_tabs, parameters, horizontal=True)
-        elif command is _PrinterLayoutCommand.SET_VERTICAL_TABS:
-            self._set_tab_parameters(self._vertical_tabs, parameters, horizontal=False)
-        elif command is _PrinterLayoutCommand.CLEAR_TABS:
-            self._clear_tabs(parameters)
-        elif command is _PrinterLayoutCommand.SET_HORIZONTAL_TAB_HERE:
-            self._horizontal_tabs.add(self._active_x)
-        elif command is _PrinterLayoutCommand.SET_VERTICAL_TAB_HERE:
-            self._vertical_tabs.add(self._active_y)
-        elif command is _PrinterLayoutCommand.CLEAR_HORIZONTAL_TABS:
-            self._horizontal_tabs.clear()
-        elif command is _PrinterLayoutCommand.CLEAR_VERTICAL_TABS:
-            self._vertical_tabs.clear()
-        elif command is _PrinterLayoutCommand.IBM_HORIZONTAL_PITCH:
-            self._set_ibm_horizontal_pitch(parameter)
-        elif command is _PrinterLayoutCommand.IBM_LINE_SPACING:
-            self._set_ibm_line_spacing(parameter)
-            self._apply_ibm_perforation_skip()
-        elif command is _PrinterLayoutCommand.IBM_VERTICAL_MOTION:
-            self._ibm_vertical_motion(parameter)
-            self._line_checkpoint = self._page_store.checkpoint()
-        elif command is _PrinterLayoutCommand.IBM_DOUBLE_WIDTH:
-            self._set_ibm_double_width(bool(parameter))
-        elif command is _PrinterLayoutCommand.IBM_REPLACE_HORIZONTAL_TABS:
-            self._horizontal_tabs.clear()
-            self._set_tab_parameters(self._horizontal_tabs, parameters, horizontal=True)
-        elif command is _PrinterLayoutCommand.IBM_REPLACE_VERTICAL_TABS:
-            self._vertical_tabs.clear()
-            self._set_tab_parameters(self._vertical_tabs, parameters, horizontal=False)
-        elif command is _PrinterLayoutCommand.IBM_RESET_TABS:
-            self._reset_ibm_tabs()
-        elif command is _PrinterLayoutCommand.IBM_FORM_LENGTH_LINES:
-            self._set_page_length(parameter)
-            self._apply_ibm_perforation_skip()
-        elif command is _PrinterLayoutCommand.IBM_FORM_LENGTH_INCHES:
-            self._set_ibm_form_length_inches(parameter)
-            self._apply_ibm_perforation_skip()
-        elif command is _PrinterLayoutCommand.IBM_LANGUAGE_ENTER:
-            self._save_dec_layout()
-        elif command is _PrinterLayoutCommand.IBM_LANGUAGE_LEAVE:
-            self._restore_dec_layout()
-        elif command is _PrinterLayoutCommand.IBM_CANCEL_LINE:
-            self._page_store.truncate(self._line_checkpoint)
-        elif command is _PrinterLayoutCommand.IBM_SET_TOP_OF_FORM:
-            self._set_ibm_top_of_form()
-        elif command is _PrinterLayoutCommand.IBM_PERFORATION_SKIP:
-            self._ibm_perforation_skip = parameter
-            self._apply_ibm_perforation_skip()
-        elif command is _PrinterLayoutCommand.IBM_BELL:
-            self._actuate(PrinterMechanicalAction.BELL, self._page_store.current_page.number)
+        self._layout_commands[command](parameters[0] if parameters else 0, parameters)
+
+    def _replace_tabs(self, table: set[int], parameters: tuple[int, ...], *, horizontal: bool) -> None:
+        table.clear()
+        self._set_tab_parameters(table, parameters, horizontal=horizontal)
+
+    def _set_ibm_perforation_skip(self, lines: int) -> None:
+        self._layout.ibm_perforation_skip = lines
+        self._apply_ibm_perforation_skip()
 
     def _record_bit_image(self, horizontal_dpi: int, pins: int, adjacent_dots: bool, data: bytes) -> None:
         self._flush_pending_run()
@@ -568,10 +523,13 @@ class VirtualPrinter:
         complete_size = len(data) - len(data) % bytes_per_column
         if complete_size == 0:
             return
-        if not self._no_forms and self._active_y + pins * PRINT_UNITS_PER_INCH // 72 > self._bottom_margin:
+        if (
+            not self._layout.no_forms
+            and self._active_y + pins * PRINT_UNITS_PER_INCH // 72 > self._layout.bottom_margin
+        ):
             self._form_feed()
         column_advance = PRINT_UNITS_PER_INCH // horizontal_dpi
-        available_columns = max(0, (self._right_margin - self._active_x) // column_advance)
+        available_columns = max(0, (self._layout.right_margin - self._active_x) // column_advance)
         columns = min(complete_size // bytes_per_column, available_columns)
         if columns == 0:
             self._right_margin_flag = True
@@ -597,7 +555,7 @@ class VirtualPrinter:
             marks=any(image_data),
         )
         self._active_x += width
-        self._right_margin_flag = self._active_x >= self._right_margin
+        self._right_margin_flag = self._active_x >= self._layout.right_margin
 
     def _record_font_download(self, data: bytes) -> None:
         if not data:
@@ -631,8 +589,8 @@ class VirtualPrinter:
         elif command is _PrinterReportCommand.CURSOR_POSITION and self.profile.supports_cursor_position_report:
             self._flush_pending_run()
             area = self.page_geometry.printable_area
-            row = (self._active_y - area.top) // self._vertical_advance + 1
-            column = (self._active_x - area.left) // self._horizontal_advance + 1
+            row = (self._active_y - area.top) // self._layout.vertical_advance + 1
+            column = (self._active_x - area.left) // self._layout.horizontal_advance + 1
             self.send_bytes(f"\x1b[{row};{column}R".encode("ascii"))
 
     def _send_parameter_report(self, prefix: bytes, parameters: tuple[int, ...] | None, final: bytes) -> None:
@@ -664,40 +622,10 @@ class VirtualPrinter:
         area = self.page_geometry.printable_area
         self._active_x = area.left
         self._active_y = area.top
-        self._left_margin = area.left
-        self._right_margin = area.right
-        self._top_margin = area.top
-        self._bottom_margin = area.bottom
         self._right_margin_flag = False
-        self._horizontal_advance = PRINT_UNITS_PER_INCH // 10
-        self._ibm_base_horizontal_advance = self._horizontal_advance
-        self._ibm_double_width = False
-        self._ibm_perforation_skip = 0
-        self._dec_layout_snapshot = None
-        self._vertical_advance = PRINT_UNITS_PER_INCH // 6
-        self._logical_page_bottom = area.bottom
-        self._no_forms = False
-        self._vertical_grid_pending = False
-        self._horizontal_tabs, self._vertical_tabs = self._initial_tab_tables(
-            area,
-            self._horizontal_advance,
-            self._vertical_advance,
-        )
-        if self.state.language is PrinterLanguage.IBM_PROPRINTER:
-            self._vertical_tabs.clear()
+        self._layout = _Layout.power_on(area, self.state.language)
+        self._dec_layout = None
         self._line_checkpoint = self._page_store.checkpoint()
-
-    @staticmethod
-    def _initial_tab_tables(
-        area: PrinterRect, horizontal_advance: int, vertical_advance: int
-    ) -> tuple[set[int], set[int]]:
-        horizontal_capacity = area.width // (420 * 3) + 2
-        vertical_capacity = area.height // (600 * 3) + 2
-        horizontal_tabs = {
-            area.left + (column - 1) * horizontal_advance for column in range(9, horizontal_capacity + 1, 8)
-        }
-        vertical_tabs = {area.top + (line - 1) * vertical_advance for line in range(1, vertical_capacity + 1)}
-        return horizontal_tabs, vertical_tabs
 
     def _set_horizontal_pitch(self, parameter: int) -> None:
         advances = {
@@ -717,141 +645,117 @@ class VirtualPrinter:
             14: 800 * 3,
             15: 720 * 3,
         }
-        old_advance = self._horizontal_advance
+        old_advance = self._layout.horizontal_advance
         new_advance = advances.get(parameter)
         area = self.page_geometry.printable_area
-        self._left_margin = area.left
-        self._right_margin = area.right
+        self._layout.left_margin = area.left
+        self._layout.right_margin = area.right
         self._right_margin_flag = False
         if new_advance is None:
             return
-        self._horizontal_advance = new_advance
-        self._horizontal_tabs = {
-            area.left + (stop - area.left) * new_advance // old_advance for stop in self._horizontal_tabs
+        self._layout.horizontal_advance = new_advance
+        self._layout.horizontal_tabs = {
+            area.left + (stop - area.left) * new_advance // old_advance for stop in self._layout.horizontal_tabs
         }
         self._active_x = self._grid_ceiling(self._active_x, area.left, new_advance)
 
     def _set_ibm_horizontal_pitch(self, tenths_cpi: int) -> None:
         if tenths_cpi <= 0:
             return
-        self._ibm_base_horizontal_advance = round(PRINT_UNITS_PER_INCH * 10 / tenths_cpi)
+        self._layout.ibm_base_horizontal_advance = round(PRINT_UNITS_PER_INCH * 10 / tenths_cpi)
         self._apply_ibm_horizontal_advance()
 
     def _set_ibm_double_width(self, enabled: bool) -> None:
-        if self._ibm_double_width == enabled:
+        if self._layout.ibm_double_width == enabled:
             return
-        self._ibm_double_width = enabled
+        self._layout.ibm_double_width = enabled
         self._apply_ibm_horizontal_advance()
 
     def _apply_ibm_horizontal_advance(self) -> None:
         self._flush_pending_run()
-        self._horizontal_advance = self._ibm_base_horizontal_advance * (2 if self._ibm_double_width else 1)
-        if self._active_x > self._right_margin:
-            self._active_x = self._right_margin
+        self._layout.horizontal_advance = self._layout.ibm_base_horizontal_advance * (
+            2 if self._layout.ibm_double_width else 1
+        )
+        if self._active_x > self._layout.right_margin:
+            self._active_x = self._layout.right_margin
             self._right_margin_flag = True
 
     def _set_ibm_line_spacing(self, units_216: int) -> None:
-        if units_216 <= 0:
-            return
-        self._vertical_advance = units_216 * (PRINT_UNITS_PER_INCH // 216)
-        self._vertical_grid_pending = False
+        if units_216 > 0:
+            self._layout.vertical_advance = units_216 * (PRINT_UNITS_PER_INCH // 216)
+            self._layout.vertical_grid_pending = False
+        self._apply_ibm_perforation_skip()
 
     def _ibm_vertical_motion(self, units_216: int) -> None:
-        if units_216 <= 0:
-            return
-        distance = units_216 * (PRINT_UNITS_PER_INCH // 216)
-        target = self._active_y + distance
-        if self._no_forms or target < self._bottom_margin:
-            self._active_y = target
-        else:
-            self._form_feed()
+        """ESC J: feed paper, and begin a new line for CAN to cancel."""
+        if units_216 > 0:
+            target = self._active_y + units_216 * (PRINT_UNITS_PER_INCH // 216)
+            if self._layout.no_forms or target < self._layout.bottom_margin:
+                self._active_y = target
+            else:
+                self._form_feed()
+        self._line_checkpoint = self._page_store.checkpoint()
 
     def _reset_ibm_tabs(self) -> None:
         area = self.page_geometry.printable_area
-        capacity = area.width // self._horizontal_advance + 1
-        self._horizontal_tabs = {
-            area.left + (column - 1) * self._horizontal_advance for column in range(9, capacity + 1, 8)
+        capacity = area.width // self._layout.horizontal_advance + 1
+        self._layout.horizontal_tabs = {
+            area.left + (column - 1) * self._layout.horizontal_advance for column in range(9, capacity + 1, 8)
         }
-        self._vertical_tabs.clear()
+        self._layout.vertical_tabs.clear()
+
+    def _set_ibm_form_length_lines(self, lines: int) -> None:
+        self._set_page_length(lines)
+        self._apply_ibm_perforation_skip()
 
     def _set_ibm_form_length_inches(self, inches: int) -> None:
-        if inches <= 0:
-            return
-        area = self.page_geometry.printable_area
-        self._no_forms = False
-        self._logical_page_bottom = area.top + min(inches * PRINT_UNITS_PER_INCH, area.height)
-        self._top_margin = area.top
-        self._bottom_margin = self._logical_page_bottom
+        if inches > 0:
+            area = self.page_geometry.printable_area
+            self._layout.no_forms = False
+            self._layout.logical_page_bottom = area.top + min(inches * PRINT_UNITS_PER_INCH, area.height)
+            self._layout.top_margin = area.top
+            self._layout.bottom_margin = self._layout.logical_page_bottom
+        self._apply_ibm_perforation_skip()
 
     def _set_ibm_top_of_form(self) -> None:
         area = self.page_geometry.printable_area
-        form_length = max(self._vertical_advance, self._logical_page_bottom - self._top_margin)
-        self._top_margin = min(max(self._active_y, area.top), area.bottom)
-        self._logical_page_bottom = min(self._top_margin + form_length, area.bottom)
+        form_length = max(self._layout.vertical_advance, self._layout.logical_page_bottom - self._layout.top_margin)
+        self._layout.top_margin = min(max(self._active_y, area.top), area.bottom)
+        self._layout.logical_page_bottom = min(self._layout.top_margin + form_length, area.bottom)
         self._apply_ibm_perforation_skip()
 
     def _apply_ibm_perforation_skip(self) -> None:
-        if self._no_forms:
+        if self._layout.no_forms:
             return
-        skipped = self._ibm_perforation_skip * self._vertical_advance
-        self._bottom_margin = max(self._top_margin, self._logical_page_bottom - skipped)
+        skipped = self._layout.ibm_perforation_skip * self._layout.vertical_advance
+        self._layout.bottom_margin = max(self._layout.top_margin, self._layout.logical_page_bottom - skipped)
 
     def _save_dec_layout(self) -> None:
-        self._dec_layout_snapshot = (
-            self._left_margin,
-            self._right_margin,
-            self._top_margin,
-            self._bottom_margin,
-            self._horizontal_advance,
-            self._vertical_advance,
-            self._logical_page_bottom,
-            self._no_forms,
-            self._vertical_grid_pending,
-            self._horizontal_tabs.copy(),
-            self._vertical_tabs.copy(),
-        )
-        area = self.page_geometry.printable_area
-        self._left_margin = area.left
-        self._right_margin = area.right
-        self._top_margin = area.top
-        self._bottom_margin = area.bottom
-        self._horizontal_advance = PRINT_UNITS_PER_INCH // 10
-        self._ibm_base_horizontal_advance = self._horizontal_advance
-        self._ibm_double_width = False
-        self._ibm_perforation_skip = 0
-        self._vertical_advance = PRINT_UNITS_PER_INCH // 6
-        self._logical_page_bottom = area.bottom
-        self._no_forms = False
-        self._vertical_grid_pending = False
+        """Entering the IBM language: set the DEC layout aside whole and start from power-on."""
+        self._dec_layout = self._layout
+        self._layout = _Layout.power_on(self.page_geometry.printable_area, PrinterLanguage.IBM_PROPRINTER)
         self._reset_ibm_tabs()
-        self._active_x = min(max(self._active_x, self._left_margin), self._right_margin)
-        self._active_y = max(self._active_y, self._top_margin)
-        self._right_margin_flag = self._active_x >= self._right_margin
+        self._clamp_head()
 
     def _restore_dec_layout(self) -> None:
-        if self._dec_layout_snapshot is None:
+        """Leaving it: the DEC layout comes back; the IBM pitch does not, and the perforation skip stays."""
+        if self._dec_layout is None:
             return
-        (
-            self._left_margin,
-            self._right_margin,
-            self._top_margin,
-            self._bottom_margin,
-            self._horizontal_advance,
-            self._vertical_advance,
-            self._logical_page_bottom,
-            self._no_forms,
-            self._vertical_grid_pending,
-            horizontal_tabs,
-            vertical_tabs,
-        ) = self._dec_layout_snapshot
-        self._horizontal_tabs = horizontal_tabs
-        self._vertical_tabs = vertical_tabs
-        self._ibm_base_horizontal_advance = PRINT_UNITS_PER_INCH // 10
-        self._ibm_double_width = False
-        self._active_x = min(max(self._active_x, self._left_margin), self._right_margin)
-        self._active_y = max(self._active_y, self._top_margin)
-        self._right_margin_flag = self._active_x >= self._right_margin
-        self._dec_layout_snapshot = None
+        self._layout = replace(
+            self._dec_layout,
+            ibm_base_horizontal_advance=PRINT_UNITS_PER_INCH // 10,
+            ibm_double_width=False,
+            ibm_perforation_skip=self._layout.ibm_perforation_skip,
+        )
+        self._dec_layout = None
+        self._clamp_head()
+
+    def _clamp_head(self) -> None:
+        """Bring the print head inside the margins of a layout it was not set in."""
+        layout = self._layout
+        self._active_x = min(max(self._active_x, layout.left_margin), layout.right_margin)
+        self._active_y = max(self._active_y, layout.top_margin)
+        self._right_margin_flag = self._active_x >= layout.right_margin
 
     def _set_vertical_pitch(self, parameter: int) -> None:
         advances = {
@@ -879,42 +783,46 @@ class VirtualPrinter:
         new_advance = advances.get(parameter)
         if new_advance is None:
             return
-        old_advance = self._vertical_advance
+        old_advance = self._layout.vertical_advance
         origin = self.page_geometry.printable_area.top
-        self._vertical_advance = new_advance
-        self._vertical_tabs = {origin + (stop - origin) * new_advance // old_advance for stop in self._vertical_tabs}
-        if not self._no_forms:
-            self._top_margin = min(
-                self._grid_ceiling(self._top_margin, origin, new_advance),
-                self._logical_page_bottom,
+        self._layout.vertical_advance = new_advance
+        self._layout.vertical_tabs = {
+            origin + (stop - origin) * new_advance // old_advance for stop in self._layout.vertical_tabs
+        }
+        if not self._layout.no_forms:
+            self._layout.top_margin = min(
+                self._grid_ceiling(self._layout.top_margin, origin, new_advance),
+                self._layout.logical_page_bottom,
             )
-            self._bottom_margin = min(
-                self._grid_ceiling(self._bottom_margin, origin, new_advance),
-                self._logical_page_bottom,
+            self._layout.bottom_margin = min(
+                self._grid_ceiling(self._layout.bottom_margin, origin, new_advance),
+                self._layout.logical_page_bottom,
             )
-            self._vertical_grid_pending = True
+            self._layout.vertical_grid_pending = True
 
     def _set_page_length(self, parameter: int) -> None:
         area = self.page_geometry.printable_area
         if parameter == 0:
-            self._no_forms = True
-            self._vertical_grid_pending = False
+            self._layout.no_forms = True
+            self._layout.vertical_grid_pending = False
             return
         length = self._parameter_distance(parameter, horizontal=False)
-        self._no_forms = False
-        self._logical_page_bottom = area.top + min(length, area.height)
-        self._top_margin = area.top
-        self._bottom_margin = self._logical_page_bottom
+        self._layout.no_forms = False
+        self._layout.logical_page_bottom = area.top + min(length, area.height)
+        self._layout.top_margin = area.top
+        self._layout.bottom_margin = self._layout.logical_page_bottom
 
     def _set_horizontal_margins(self, left: int, right: int) -> None:
         area = self.page_geometry.printable_area
-        new_left = self._left_margin if left == 0 else self._parameter_position(left, horizontal=True)
-        new_right = self._right_margin if right == 0 else (area.left + self._parameter_distance(right, horizontal=True))
+        new_left = self._layout.left_margin if left == 0 else self._parameter_position(left, horizontal=True)
+        new_right = (
+            self._layout.right_margin if right == 0 else (area.left + self._parameter_distance(right, horizontal=True))
+        )
         new_right = min(new_right, area.right)
         if new_left > new_right or new_left > area.right:
             return
-        self._left_margin = new_left
-        self._right_margin = new_right
+        self._layout.left_margin = new_left
+        self._layout.right_margin = new_right
         if self._active_x < new_left:
             self._active_x = new_left
         elif self._active_x > new_right:
@@ -922,19 +830,21 @@ class VirtualPrinter:
             self._right_margin_flag = True
 
     def _set_vertical_margins(self, top: int, bottom: int) -> None:
-        if self._no_forms:
+        if self._layout.no_forms:
             return
         area = self.page_geometry.printable_area
-        new_top = self._top_margin if top == 0 else self._parameter_position(top, horizontal=False)
+        new_top = self._layout.top_margin if top == 0 else self._parameter_position(top, horizontal=False)
         new_bottom = (
-            self._bottom_margin if bottom == 0 else (area.top + self._parameter_distance(bottom, horizontal=False))
+            self._layout.bottom_margin
+            if bottom == 0
+            else (area.top + self._parameter_distance(bottom, horizontal=False))
         )
-        new_bottom = min(new_bottom, self._logical_page_bottom)
-        if new_top > new_bottom or new_top > self._logical_page_bottom:
+        new_bottom = min(new_bottom, self._layout.logical_page_bottom)
+        if new_top > new_bottom or new_top > self._layout.logical_page_bottom:
             return
-        self._top_margin = new_top
-        self._bottom_margin = new_bottom
-        self._vertical_grid_pending = False
+        self._layout.top_margin = new_top
+        self._layout.bottom_margin = new_bottom
+        self._layout.vertical_grid_pending = False
         if self._active_y < new_top:
             self._active_y = new_top
         elif self._active_y > self._last_vertical_position():
@@ -942,21 +852,21 @@ class VirtualPrinter:
 
     def _horizontal_absolute(self, parameter: int) -> None:
         target = self._parameter_position(max(1, parameter), horizontal=True)
-        target = max(target, self._left_margin)
-        if target > self._right_margin:
-            target = self._right_margin
+        target = max(target, self._layout.left_margin)
+        if target > self._layout.right_margin:
+            target = self._layout.right_margin
             self._right_margin_flag = True
         self._record_lined_motion(self._active_x, target)
         self._active_x = target
-        if target < self._right_margin:
+        if target < self._layout.right_margin:
             self._right_margin_flag = False
 
     def _horizontal_relative(self, parameter: int) -> None:
         if self._right_margin_flag:
             return
         target = self._active_x + self._parameter_distance(max(1, parameter), horizontal=True)
-        if target > self._right_margin:
-            target = self._right_margin
+        if target > self._layout.right_margin:
+            target = self._layout.right_margin
             self._right_margin_flag = True
         self._record_lined_motion(self._active_x, target)
         self._active_x = target
@@ -971,29 +881,29 @@ class VirtualPrinter:
                     min(start, end),
                     self._active_y,
                     max(start, end),
-                    self._active_y + self._vertical_advance,
+                    self._active_y + self._layout.vertical_advance,
                 ),
                 self.state,
             )
         )
 
     def _vertical_absolute(self, parameter: int) -> None:
-        if self._no_forms:
+        if self._layout.no_forms:
             self._advance_line(home=False)
             return
         self._align_vertical_grid()
         target = self._parameter_position(max(1, parameter), horizontal=False)
         if target < self._active_y:
             return
-        self._active_y = min(max(target, self._top_margin), self._last_vertical_position())
+        self._active_y = min(max(target, self._layout.top_margin), self._last_vertical_position())
 
     def _vertical_relative(self, parameter: int) -> None:
         self._align_vertical_grid()
         count = max(1, parameter)
-        if self._no_forms:
+        if self._layout.no_forms:
             count = min(count, 255)
         target = self._active_y + self._parameter_distance(count, horizontal=False)
-        self._active_y = target if self._no_forms else min(target, self._last_vertical_position())
+        self._active_y = target if self._layout.no_forms else min(target, self._last_vertical_position())
 
     def _set_tab_parameters(self, table: set[int], parameters: tuple[int, ...], *, horizontal: bool) -> None:
         for parameter in parameters:
@@ -1003,19 +913,19 @@ class VirtualPrinter:
     def _clear_tabs(self, parameters: tuple[int, ...]) -> None:
         for parameter in parameters:
             if parameter == 0:
-                self._horizontal_tabs.discard(self._active_x)
+                self._layout.horizontal_tabs.discard(self._active_x)
             elif parameter == 1:
                 self._align_vertical_grid()
-                self._vertical_tabs.discard(self._active_y)
+                self._layout.vertical_tabs.discard(self._active_y)
             elif parameter in (2, 3):
-                self._horizontal_tabs.clear()
+                self._layout.horizontal_tabs.clear()
             elif parameter == 4:
-                self._vertical_tabs.clear()
+                self._layout.vertical_tabs.clear()
 
     def _parameter_distance(self, parameter: int, *, horizontal: bool) -> int:
         if self.state.position_unit_mode:
             return parameter * (PRINT_UNITS_PER_INCH // 720)
-        return parameter * (self._horizontal_advance if horizontal else self._vertical_advance)
+        return parameter * (self._layout.horizontal_advance if horizontal else self._layout.vertical_advance)
 
     def _parameter_position(self, parameter: int, *, horizontal: bool) -> int:
         area = self.page_geometry.printable_area
@@ -1023,19 +933,19 @@ class VirtualPrinter:
         return origin + self._parameter_distance(max(1, parameter) - 1, horizontal=horizontal)
 
     def _align_vertical_grid(self) -> None:
-        if not self._vertical_grid_pending:
+        if not self._layout.vertical_grid_pending:
             return
         self._active_y = self._grid_ceiling(
             self._active_y,
             self.page_geometry.printable_area.top,
-            self._vertical_advance,
+            self._layout.vertical_advance,
         )
-        self._vertical_grid_pending = False
+        self._layout.vertical_grid_pending = False
 
     def _last_vertical_position(self) -> int:
-        if self._bottom_margin - self._top_margin < self._vertical_advance:
-            return self._top_margin
-        return self._bottom_margin - self._vertical_advance
+        if self._layout.bottom_margin - self._layout.top_margin < self._layout.vertical_advance:
+            return self._layout.top_margin
+        return self._layout.bottom_margin - self._layout.vertical_advance
 
     @staticmethod
     def _grid_ceiling(value: int, origin: int, increment: int) -> int:
@@ -1050,19 +960,19 @@ class VirtualPrinter:
         while offset < len(text):
             if not self._prepare_to_image(state):
                 return
-            available = (self._right_margin - self._active_x) // self._horizontal_advance
+            available = (self._layout.right_margin - self._active_x) // self._layout.horizontal_advance
             if available <= 0:
                 self._right_margin_flag = True
                 return
             end = min(len(text), offset + available)
             segment = text[offset:end]
-            advance = len(segment) * self._horizontal_advance
+            advance = len(segment) * self._layout.horizontal_advance
             token = PrinterControlToken(
                 PrinterRect(
                     self._active_x,
                     self._active_y,
                     self._active_x + advance,
-                    self._active_y + self._vertical_advance,
+                    self._active_y + self._layout.vertical_advance,
                 ),
                 source,
                 segment,
@@ -1101,13 +1011,13 @@ class VirtualPrinter:
         state: VirtualPrinterState,
         marks: bool,
     ) -> None:
-        advance = len(data) * self._horizontal_advance
+        advance = len(data) * self._layout.horizontal_advance
         run = PrinterTextRun(
             PrinterRect(
                 x,
                 y,
                 x + advance,
-                y + self._vertical_advance,
+                y + self._layout.vertical_advance,
             ),
             data,
             data.decode("ascii") if ascii_run else None,

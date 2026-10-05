@@ -91,7 +91,7 @@ class HostPort:
 
         on_data receives each chunk of bytes. on_idle fires when a read returns
         nothing — return True to stop the pump (the board reaps its dead child
-        there). on_closed fires when the connection errors out.
+        there). on_closed fires when the connection closes or errors out.
         """
         self.connection = connection
         self.on_data = on_data
@@ -139,6 +139,10 @@ class HostPort:
                 if self.on_closed is not None:
                     self.on_closed()
                 break
+        else:
+            # The cable reported itself closed (end of a stream, a dropped socket).
+            if self.connection is not None and self.on_closed is not None:
+                self.on_closed()
 
     @property
     def connected(self) -> bool:

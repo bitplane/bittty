@@ -52,6 +52,7 @@ LINE_DOUBLE_BOTTOM = "double_bottom"  # DECDHL bottom half
 ERASE_FROM_CURSOR_TO_END = 0
 ERASE_FROM_START_TO_CURSOR = 1
 ERASE_ALL = 2
+ERASE_SAVED_LINES = 3  # xterm: the scrollback, not the screen
 
 # --- Private Modes (DECSET/DECRST) ---
 # Used with CSI ? ... h/l

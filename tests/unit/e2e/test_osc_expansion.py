@@ -10,6 +10,8 @@ class _Recorder:
     def __init__(self):
         self.events = []
 
+    keeps_scrollback = False
+
     def present(self, event):
         self.events.append(event)
 

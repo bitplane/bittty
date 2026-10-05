@@ -7,7 +7,7 @@ are not part of the API.
 
 from __future__ import annotations
 
-from .hardcopy import LA120, HardcopyTerminal
+from .hardcopy import HardcopyTerminal
 from .languages import (
     PrintDirection,
     PrinterCharacterSet,
@@ -19,6 +19,13 @@ from .languages import (
     PrinterScript,
     PrinterUnderline,
     VirtualPrinterState,
+)
+from .models import (
+    GENERIC_DEC_AND_IBM_PRINTER,
+    GENERIC_DEC_PPL2_PRINTER,
+    GENERIC_PROPRINTER,
+    LA120,
+    PrinterModel,
 )
 from .pages import (
     LETTER_PAGE_GEOMETRY,
@@ -34,12 +41,8 @@ from .pages import (
     PrinterTextRun,
 )
 from .virtual import (
-    GENERIC_DEC_AND_IBM_PRINTER,
-    GENERIC_DEC_PPL2_PRINTER,
-    GENERIC_PROPRINTER,
     PrinterMechanicalAction,
     PrinterMechanicalEvent,
-    PrinterModel,
     PrinterUnsolicitedReports,
     VirtualPrinter,
 )

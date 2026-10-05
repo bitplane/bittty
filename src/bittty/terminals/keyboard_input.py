@@ -90,14 +90,14 @@ class KeyboardInput:
             if self.pasting:
                 end = data.find(_PASTE_END)
                 if end >= 0:
-                    self.terminal.board.display.input_paste(data[:end], phase="end")
+                    self.terminal.port.input_paste(data[:end], phase="end")
                     self.pasting = False
                     data = data[end + len(_PASTE_END) :]
                     continue
                 keep = next((n for n in range(min(5, len(data)), 0, -1) if data.endswith(_PASTE_END[:n])), 0)
                 chunk = data[:-keep] if keep else data
                 if chunk:
-                    self.terminal.board.display.input_paste(chunk, phase="chunk")
+                    self.terminal.port.input_paste(chunk, phase="chunk")
                 self.pending = data[-keep:] if keep else ""
                 return
             if self.discard:
@@ -136,7 +136,7 @@ class KeyboardInput:
                 interrupted = re.search(r"[\x00-\x1f]", data[1:]) if kind != "string" else None
                 if interrupted is not None:
                     end = interrupted.start() + 1
-                    self.terminal.board.display.input(data[:end])
+                    self.terminal.port.input(data[:end])
                     data = data[end:]
                     continue
                 if len(data) > MAX_SEQUENCE:
@@ -158,41 +158,37 @@ class KeyboardInput:
             return
         elif raw == "\x1b[200~":
             self.pasting = True
-            terminal.board.display.input_paste("", phase="start")
+            terminal.port.input_paste("", phase="start")
         elif raw.startswith("\x1b[<") and terminal.handle_sgr_mouse_sequence(raw):
             return
         elif raw in ("\x1b[I", "\x1b[O"):
             terminal.handle_focus(raw == "\x1b[I")
         elif raw == "\x1bO[":
-            terminal.board.display.input_key_event(KeyEvent("escape"))
-        elif (
-            terminal.host_keyboard_flags is not None
-            or terminal.board.keyboard.kitty_flags
-            or terminal.board.keyboard.keyboard_selected
-        ):
+            terminal.port.input_key_event(KeyEvent("escape"))
+        elif terminal.host_keyboard_flags is not None or terminal.port.kitty_flags or terminal.port.keyboard_selected:
             event = decode_key(raw)
             if isinstance(event, KeyEvent):
-                terminal.board.display.input_key_event(event)
+                terminal.port.input_key_event(event)
             elif isinstance(event, str):
-                terminal.board.display.input_text(event)
+                terminal.port.input_text(event)
             else:
-                terminal.board.display.input(raw)
+                terminal.port.input(raw)
         else:
-            terminal.board.display.input(raw)
+            terminal.port.input(raw)
 
     def _text(self, text):
-        board = self.terminal.board
-        if not board.keyboard.kitty_flags & KittyFlags.REPORT_ALL_KEYS:
-            board.display.input(text)
+        port = self.terminal.port
+        if not port.kitty_flags & KittyFlags.REPORT_ALL_KEYS:
+            port.input(text)
             return
         # Plain text gives no physical-key identity, even if the outer terminal
         # supports Kitty: an IME or a legacy intermediary may have supplied it.
         for match in _TEXT_RUN.finditer(text):
             chunk = match.group()
             if ord(chunk[0]) >= 32 and not 127 <= ord(chunk[0]) <= 159:
-                board.display.input_text(chunk)
+                port.input_text(chunk)
             else:
-                board.display.input(chunk)
+                port.input(chunk)
 
     def flush_trailing(self):
         disambiguated = bool(
@@ -207,17 +203,17 @@ class KeyboardInput:
         ):
             pending = self.pending
             self.pending = ""
-            board = self.terminal.board
-            if pending == "\x1b" and (board.modes.application_escape or board.modes.escape_sends_fs):
-                board.display.input_key_event(KeyEvent("escape"))
+            port = self.terminal.port
+            if pending == "\x1b" and port.escape_is_key:
+                port.input_key_event(KeyEvent("escape"))
             else:
-                board.display.input(pending)
+                port.input(pending)
 
     def finish(self):
         self.feed(self.utf8.decode(b"", final=True))
         if self.pasting:
-            self.terminal.board.display.input_paste(self.pending, phase="end")
+            self.terminal.port.input_paste(self.pending, phase="end")
             self.pasting = False
         elif self.pending and not self.discard:
-            self.terminal.board.display.input(self.pending)
+            self.terminal.port.input(self.pending)
         self.pending = ""

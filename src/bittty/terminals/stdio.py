@@ -53,17 +53,24 @@ class StdioTerminal(Terminal):
     Uses the whole venue. A subclass that wants chrome of its own — a status
     bar, a border — sets ``reserved_rows`` to keep rows off the emulated screen
     and overrides ``draw_chrome()`` to paint them.
+
+    Pass a board to show one already built (and perhaps already connected to its
+    host); it is fitted to the venue. Without one, a board running the user's
+    shell is made.
     """
 
     # Rows at the bottom of the venue that are the terminal's own, not the board's.
     reserved_rows = 0
 
-    def __init__(self) -> None:
+    def __init__(self, board: Board | None = None) -> None:
         size = shutil.get_terminal_size()
         self.width = max(1, size.columns)
         self.height = max(1, size.lines - self.reserved_rows)
         self.is_windows = platform.system() == "Windows"
-        board = Board(command=self.get_default_shell(), width=self.width, height=self.height)
+        if board is None:
+            board = Board(command=self.get_default_shell(), width=self.width, height=self.height)
+        elif (board.width, board.height) != (self.width, self.height):
+            board.display.resize(self.width, self.height)
         super().__init__(board)
         self.attach()
 
@@ -79,9 +86,7 @@ class StdioTerminal(Terminal):
         self.host_keyboard_pushed = False
         self.startup_input = b""
         self.input_parser = KeyboardInput(self)
-        self.dirty = False  # PTY data arrived; the run loop repaints on its tick
-        self._seen_page = None  # video page rendered last frame
-        self._seen_gen = -1  # its generation when we rendered it
+        self.dirty = False  # the screen changed; the run loop repaints on its tick
 
     def get_default_shell(self) -> str:
         """Get the default shell command for the current platform."""
@@ -100,6 +105,18 @@ class StdioTerminal(Terminal):
         return "sh"
 
     # --- Display hooks (present events) --- #
+
+    def on_screen_changed(self) -> None:
+        """Mark the screen for the run loop's next tick.
+
+        Painting per chunk of output would backpressure a flooding child (it blocks
+        writing to the PTY while we paint), turning a 66ms `find` into a 750ms one.
+        """
+        self.dirty = True
+
+    def on_child_exited(self, returncode: int | None) -> None:
+        """The child is gone: finish painting and stop."""
+        self.running = False
 
     def on_bell(self) -> None:
         """Ring the outer terminal's bell."""
@@ -232,22 +249,15 @@ class StdioTerminal(Terminal):
         child wants it visible (DECTCEM). The host hollows it on unfocus by
         itself, exactly like a real terminal.
         """
-        page = self.board.blitter.main_page  # this chrome draws no status line
-        if page is self._seen_page:
-            rows = page.dirty_rows(self._seen_gen)
-        else:
-            rows = range(page.height)  # new page (startup or alt-screen flip): paint everything
-        self._seen_page = page
-        self._seen_gen = page.observe()
-
+        page = self.port.page  # this chrome draws no status line
         print("\033[?25l", end="")
-        for y in rows:
+        for y in self.damaged_rows():
             if y < self.height:
                 print(f"\033[{y + 1}H{page.get_line(y, width=self.width)}\033[K", end="")
         self.draw_chrome()
-        board = self.board
-        if board.modes.cursor_visible and board.cursor.y < self.height and board.blitter.cursor_on_display:
-            print(f"\033[{board.cursor.y + 1};{board.cursor.display_x + 1}H\033[?25h", end="", flush=True)
+        cursor = self.port.cursor
+        if cursor is not None and cursor[1] < self.height:
+            print(f"\033[{cursor[1] + 1};{cursor[0] + 1}H\033[?25h", end="", flush=True)
         else:
             print(end="", flush=True)
 
@@ -257,20 +267,6 @@ class StdioTerminal(Terminal):
         Called after the board's rows and before the hardware cursor is placed,
         so a subclass can leave the cursor where the child put it.
         """
-
-    def handle_pty_data(self, data: str) -> None:
-        """Feed child output into the emulator and mark the screen dirty.
-
-        Rendering happens on the run loop's tick, not per PTY chunk — a repaint
-        per chunk backpressures a flooding child (it blocks writing to the PTY
-        while we paint), turning a 66ms `find` into a 750ms one.
-        """
-        try:
-            self.board.parser.feed(data)
-            self.dirty = True
-        except Exception:
-            logger.exception("Error handling PTY data: %r", data[-200:])
-            raise
 
     # --- input: mouse interception + forwarding --- #
 
@@ -298,15 +294,15 @@ class StdioTerminal(Terminal):
             event_type = "move"
             base_button &= ~32
 
-        self.board.display.input_mouse(x, y, base_button, event_type, modifiers)
+        self.port.input_mouse(x, y, base_button, event_type, modifiers)
         return True
 
     def handle_focus(self, focused: bool) -> None:
         """A host focus event: the backend owns the state; we just repaint."""
         if focused:
-            self.board.display.focus_in()
+            self.port.focus_in()
         else:
-            self.board.display.focus_out()
+            self.port.focus_out()
         self.dirty = True
 
     def handle_input(self, data: str | bytes) -> None:
@@ -323,7 +319,7 @@ class StdioTerminal(Terminal):
         self.width = max(1, size.columns)
         self.height = max(1, size.lines - self.reserved_rows)
         logger.info("Resize: %sx%s", self.width, self.height)
-        self.board.display.resize(self.width, self.height)
+        self.port.resize(self.width, self.height)
         self.dirty = True
 
     # --- run loop --- #
@@ -362,6 +358,11 @@ class StdioTerminal(Terminal):
                 logger.exception("Error in input loop")
                 break
 
+    async def start_host(self) -> None:
+        """Give the board a child, unless it was handed over already on a host line."""
+        if not self.board.host.connected:
+            await self.board.start_process()
+
     async def run(self) -> None:
         """Main loop: start the shell, pump input, render until it exits."""
         logger.info("Starting main loop")
@@ -371,8 +372,7 @@ class StdioTerminal(Terminal):
         try:
             self.setup_terminal()
             self.probe_capabilities()
-            self.board.set_pty_data_callback(self.handle_pty_data)
-            await self.board.start_process()
+            await self.start_host()
             self.handle_input(self.startup_input)
             self.startup_input = b""
             self.render_screen()
@@ -383,12 +383,6 @@ class StdioTerminal(Terminal):
                 if self.dirty:
                     self.dirty = False
                     self.render_screen()
-                if self.board.process and self.board.process.poll() is not None:
-                    self.running = False
-                    break
-                if not self.board.process:
-                    self.running = False
-                    break
 
             if self.dirty:  # paint whatever arrived after the last tick
                 self.render_screen()

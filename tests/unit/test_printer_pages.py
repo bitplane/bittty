@@ -487,6 +487,14 @@ def test_ibm_can_removes_the_current_print_buffer_without_rewinding_head():
     assert (run.data, run.bounds.left) == (b"B", 2160)
 
 
+def test_ibm_can_keeps_text_printed_before_a_paper_feed():
+    """ESC J starts a new line, so CAN cancels only what followed it."""
+    printer = VirtualPrinter(PrinterType.PROPRINTER)
+    printer.write_bytes(b"A\x1bJ\x24B\x18")
+
+    assert [item.data for item in printer.current_page.items] == [b"A"]
+
+
 def test_ibm_top_of_form_and_perforation_skip_bound_the_printable_form():
     geometry = _cell_geometry(10, 6)
     printer = VirtualPrinter(PrinterType.PROPRINTER, page_geometry=geometry)

@@ -1,4 +1,10 @@
-"""The display port: typed events between the board and the terminal (chrome)."""
+"""The display port: the board's jack toward the terminal (chrome).
+
+Three things cross it. Present events go down, pushed: what would otherwise be lost.
+Input goes up. And the screen is read across it, pulled: what is still there, read on
+the terminal's own cadence. A terminal needs nothing from the board but this jack and
+the board's power switch (start_process/stop_process).
+"""
 
 from __future__ import annotations
 
@@ -11,14 +17,44 @@ if TYPE_CHECKING:
     from ..devices.board import Board
     from ..keyboard.keys import KeyEvent
     from ..present import PresentEvent
+    from ..video import Video
 
 
 @runtime_checkable
 class Presentable(Protocol):
     """A terminal (chrome) that receives discrete present events from the board."""
 
+    # Whether it wants RowsScrolledOff. Copying each row as it leaves costs the board
+    # time on every line feed, so a terminal with no scrollback to fill says no.
+    keeps_scrollback: bool
+
     def present(self, event: PresentEvent) -> None:
         """Handle one present event."""
+
+
+@runtime_checkable
+class Screen(Protocol):
+    """What a terminal reads to paint: the displayed page and where to draw the cursor.
+
+    The board's DisplayPort is one; anything else that can answer these (a recording
+    played back without a board, say) can stand in for it.
+    """
+
+    @property
+    def width(self) -> int:
+        """Columns on the page."""
+
+    @property
+    def height(self) -> int:
+        """Rows on the page."""
+
+    @property
+    def page(self) -> Video:
+        """The page on display: read it, never write it. Its generations say which rows changed."""
+
+    @property
+    def cursor(self) -> tuple[int, int] | None:
+        """The cursor's (column, row) on the displayed page, or None when none should be drawn."""
 
 
 class DisplayPort:
@@ -48,10 +84,54 @@ class DisplayPort:
         """Whether a terminal (chrome) is attached."""
         return self.terminal is not None
 
+    @property
+    def keeps_scrollback(self) -> bool:
+        """Whether the attached terminal wants the rows that scroll off the top."""
+        return self.terminal is not None and self.terminal.keeps_scrollback
+
     def present(self, event: PresentEvent) -> None:
         """Forward a present event to the attached terminal, if any."""
         if self.terminal is not None:
             self.terminal.present(event)
+
+    # --- the screen, read by the terminal (chrome) --- #
+
+    @property
+    def width(self) -> int:
+        return self.board.width
+
+    @property
+    def height(self) -> int:
+        return self.board.height
+
+    @property
+    def page(self) -> Video:
+        return self.board.blitter.main_page  # never the status line: board.capture_status_line() reads that
+
+    @property
+    def cursor(self) -> tuple[int, int] | None:
+        board = self.board
+        if not (board.modes.cursor_visible and board.blitter.cursor_on_display):
+            return None
+        return board.cursor.display_x, board.cursor.y
+
+    # --- what the terminal needs to decode its venue's input --- #
+
+    @property
+    def kitty_flags(self) -> int:
+        """The Kitty keyboard enhancements the child has asked for, on the active screen."""
+        return self.board.keyboard.kitty_flags
+
+    @property
+    def keyboard_selected(self) -> bool:
+        """Whether an xterm keyboard (Sun/HP/SCO/legacy/VT220) replaces the model's keymap."""
+        return self.board.keyboard.keyboard_selected
+
+    @property
+    def escape_is_key(self) -> bool:
+        """Whether a lone ESC is a key press rather than a sequence's start (mintty 7727/7728)."""
+        modes = self.board.modes
+        return modes.application_escape or modes.escape_sends_fs
 
     # --- receive side: events from the terminal (chrome) --- #
 
