@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from ...connections import InboundLine, PrinterStatus
-from ...printer_config import PrinterConfiguration, PrinterType
+from ...connections.printer_config import PrinterConfiguration, PrinterType
 from .languages import (
     PrinterLanguage,
     VirtualPrinterState,

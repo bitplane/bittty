@@ -60,6 +60,9 @@ class PTY:
         """Write string as UTF-8 bytes."""
         return self.write_bytes(data.encode("utf-8"))
 
+    def configure_line(self, line) -> None:
+        """A PTY has no modem: baud rate, parity and flow control change nothing."""
+
     def resize(self, rows: int, cols: int) -> None:
         """Resize the terminal (base implementation just updates dimensions)."""
         self.rows = rows

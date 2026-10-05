@@ -1,4 +1,8 @@
-from bittty import HostPort, MemoryConnection
+import io
+
+from bittty import Connection, HostPort, MemoryConnection, MemoryPrinter, PrinterConnection, StreamPrinter
+from bittty.peripherals.printer import VirtualPrinter
+from bittty.pty import PTY, StdioPTY
 
 
 def test_host_port_ignores_writes_until_connection_is_attached():
@@ -29,3 +33,22 @@ def test_host_port_can_detach_connection():
 
     assert port.connected is False
     assert connection.data == []
+
+
+def test_every_host_cable_implements_the_whole_connection_protocol():
+    """The ports call these methods directly, so no cable may leave one out."""
+    cables = [MemoryConnection(), StdioPTY(io.BytesIO(), io.BytesIO()), PTY()]
+    assert all(isinstance(cable, Connection) for cable in cables)
+
+
+def test_every_printer_cable_implements_the_whole_printer_protocol():
+    cables = [MemoryPrinter(), StreamPrinter(io.BytesIO()), VirtualPrinter()]
+    assert all(isinstance(cable, PrinterConnection) for cable in cables)
+
+
+def test_a_partial_cable_is_not_a_connection():
+    class WriteOnly:
+        def write(self, data):
+            return len(data)
+
+    assert not isinstance(WriteOnly(), Connection)

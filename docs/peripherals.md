@@ -88,7 +88,7 @@ a peripheral that understands it may act on it.
 
 ## Tier 3: connections
 
-Ports are the jacks; connections are the cables (see `connections.py`). A connection changes
+Ports are the jacks; connections are the cables (see `bittty.connections`). A connection changes
 status reports and whether bytes go anywhere. It never changes what the terminal knows how
 to parse.
 

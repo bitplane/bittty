@@ -8,7 +8,7 @@ from bittty import (
     PrinterConfiguration,
     PrinterStatus,
 )
-from bittty.printer_config import (
+from bittty.connections.printer_config import (
     PrinterType,
     ProPrinterCodePage,
 )

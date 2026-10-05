@@ -57,11 +57,14 @@ chrome a human looks at, and two full-duplex ports connect the board to its outs
 - **StdioTerminal** (`terminals/stdio.py`): the reference terminal, whose venue is this
   process's stdio/tty
 
-**Ports** (`src/bittty/connections.py`)
+**Ports** (`src/bittty/connections/`)
 - Full-duplex jacks on the board. **HostPort** carries bytes both ways to the child: a
   `Connection` (PTY, pipe, socket) plugs in and the port pumps its receive side into the
   parser. **DisplayPort** carries typed events both ways to the chrome: present events
-  down, input/focus/caps up. Its name is the video-connector pun, kept on purpose
+  down, input/focus/caps up. Its name is the video-connector pun, kept on purpose.
+  **PrinterPort** carries bytes to the auxiliary cable. The package also holds the
+  in-memory/stream cables and the settings a port offers its cable (`serial_line`,
+  `printer_config`). A cable implements its whole protocol; ports never probe for methods
 
 **Peripherals** (`src/bittty/peripherals/`)
 - Simulations of hardware on the far end of a cable: `peripherals/printer` is a virtual

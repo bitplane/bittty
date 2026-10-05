@@ -84,7 +84,11 @@ resizes cannot generate false in-band resize notifications.
 
 ## Ports and Connections (`bittty.connections`)
 
-Ports are full-duplex jacks on the board; connections are the cables that plug in.
+Ports are full-duplex jacks on the board; connections are the cables that plug in. The
+package has a module per port (`host`, `display`, `printer`), the in-memory and stream
+cables (`cables`), and the settings a port offers its cable (`serial_line`,
+`printer_config`). Each port's protocol (`Connection`, `PrinterConnection`) is the whole
+interface: a cable implements every method, so ports call them without probing.
 
 - **HostPort** carries bytes both ways (a serial line). A `Connection` — PTY, pipe,
   socket — plugs in; the port's receive pump feeds the child's output into the parser.

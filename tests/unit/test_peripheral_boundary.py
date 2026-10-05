@@ -15,7 +15,7 @@ PERIPHERALS = SRC / "peripherals"
 
 # What a peripheral is allowed to reach for in core: the ports and cables it
 # plugs into, and the configuration the terminal offers it.
-CORE_ALLOWED = {"connections", "printer_config", "constants"}
+CORE_ALLOWED = {"connections", "constants"}
 
 
 def _module_imports(path: Path) -> set[str]:

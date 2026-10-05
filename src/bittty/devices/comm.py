@@ -10,8 +10,8 @@ from dataclasses import replace
 from typing import TYPE_CHECKING
 
 from ..options import DEC_HOST_LINE
-from ..printer_config import PrinterPortSelection
-from ..serial_line import (
+from ..connections.printer_config import PrinterPortSelection
+from ..connections.serial_line import (
     BAUD_BY_SELECTOR,
     RATE_BY_SELECTOR,
     SELECTOR_BY_BAUD,

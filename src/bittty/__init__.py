@@ -32,7 +32,7 @@ from .model import BITTTY, LINUX, VT100, VT102, VT220, VT320, VT420, VT510, XTER
 from .operations import Operation, OperationSink
 from .options import Option, PrinterCapabilities
 from .parser import Parser
-from .printer_config import PrinterConfiguration
+from .connections.printer_config import PrinterConfiguration
 from .style import (
     CURSOR_CODE,
     RESET_CODE,

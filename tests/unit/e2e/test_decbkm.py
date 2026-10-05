@@ -1,6 +1,6 @@
 """Test DECBKM (Backarrow-Key Mode) implementation."""
 
-from bittty import Board
+from bittty import Board, MemoryConnection
 from bittty.parser import Parser
 from bittty import constants
 
@@ -9,14 +9,9 @@ def test_decbkm_default_mode():
     """Test that backspace sends DEL by default."""
     board = Board(width=20, height=5)
 
-    # Mock the PTY to capture output
-    sent_data = []
-
-    class MockPTY:
-        def write(self, data):
-            sent_data.append(data)
-
-    board.pty = MockPTY()
+    connection = MemoryConnection()  # records what the board sends the host
+    board.pty = connection
+    sent_data = connection.data
 
     # Send backspace key
     board.input_key(constants.BS, constants.KEY_MOD_NONE)
@@ -30,14 +25,9 @@ def test_decbkm_set_bs_mode():
     board = Board(width=20, height=5)
     parser = Parser(board)
 
-    # Mock the PTY to capture output
-    sent_data = []
-
-    class MockPTY:
-        def write(self, data):
-            sent_data.append(data)
-
-    board.pty = MockPTY()
+    connection = MemoryConnection()  # records what the board sends the host
+    board.pty = connection
+    sent_data = connection.data
 
     # Set DECBKM mode (ESC [ ? 67 h)
     parser.feed("\x1b[?67h")
@@ -54,14 +44,9 @@ def test_decbkm_reset_to_del():
     board = Board(width=20, height=5)
     parser = Parser(board)
 
-    # Mock the PTY to capture output
-    sent_data = []
-
-    class MockPTY:
-        def write(self, data):
-            sent_data.append(data)
-
-    board.pty = MockPTY()
+    connection = MemoryConnection()  # records what the board sends the host
+    board.pty = connection
+    sent_data = connection.data
 
     # Set DECBKM mode first
     parser.feed("\x1b[?67h")

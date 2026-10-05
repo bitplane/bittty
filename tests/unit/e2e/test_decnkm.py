@@ -1,6 +1,6 @@
 """Test DECNKM (Numeric-Keypad Mode) implementation."""
 
-from bittty import Board
+from bittty import Board, MemoryConnection
 from bittty.parser import Parser
 
 
@@ -45,14 +45,9 @@ def test_decnkm_affects_numpad_keys():
     board = Board(width=20, height=5)
     parser = Parser(board)
 
-    # Mock the PTY to capture output
-    sent_data = []
-
-    class MockPTY:
-        def write(self, data):
-            sent_data.append(data)
-
-    board.pty = MockPTY()
+    connection = MemoryConnection()  # records what the board sends the host
+    board.pty = connection
+    sent_data = connection.data
 
     # Test numeric mode (default)
     board.input_numpad_key("0")
@@ -73,13 +68,9 @@ def test_decnkm_all_numpad_keys():
     board = Board(width=20, height=5)
     parser = Parser(board)
 
-    sent_data = []
-
-    class MockPTY:
-        def write(self, data):
-            sent_data.append(data)
-
-    board.pty = MockPTY()
+    connection = MemoryConnection()  # records what the board sends the host
+    board.pty = connection
+    sent_data = connection.data
 
     # Test in numeric mode
     numeric_keys = {

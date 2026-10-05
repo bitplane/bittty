@@ -13,7 +13,7 @@ import pytest
 
 from bittty import Board, MemoryConnection
 from bittty.model import VT510, XTERM
-from bittty.serial_line import FlowControl, FlowThreshold, HostPortSelection, Parity, SerialLine
+from bittty.connections.serial_line import FlowControl, FlowThreshold, HostPortSelection, Parity, SerialLine
 
 
 def _run(sequence, model=VT510):

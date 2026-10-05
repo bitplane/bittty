@@ -9,8 +9,8 @@ from bittty import (
 )
 from bittty.model import VT100, VT220, VT510, XTERM
 from bittty.parser import Parser
-from bittty.serial_line import FlowControl, Parity
-from bittty.printer_config import (
+from bittty.connections.serial_line import FlowControl, Parity
+from bittty.connections.printer_config import (
     PrintedDataType,
     PrinterPortSelection,
     PrinterType,

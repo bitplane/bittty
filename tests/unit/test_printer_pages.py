@@ -2,7 +2,7 @@ from dataclasses import FrozenInstanceError
 
 import pytest
 
-from bittty.printer_config import (
+from bittty.connections.printer_config import (
     PrinterType,
 )
 from bittty.peripherals.printer import (

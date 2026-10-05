@@ -9,13 +9,13 @@ from typing import TYPE_CHECKING
 
 from ..connections import PrinterConnection, PrinterPort, PrinterStatus
 from ..operations import Operation
-from ..printer_config import (
+from ..connections.printer_config import (
     PrintedDataType,
     PrinterConfiguration,
     PrinterType,
     ProPrinterCodePage,
 )
-from ..serial_line import FlowControl
+from ..connections.serial_line import FlowControl
 from .base import Device
 
 if TYPE_CHECKING:
@@ -68,6 +68,9 @@ class _TextPrinterAdapter:
         flusher = getattr(self.sink, "flush", None)
         if callable(flusher):
             flusher()
+
+    def configure(self, configuration: PrinterConfiguration) -> None:
+        """A text sink has no adapter to set."""
 
 
 class PrinterDevice(Device):

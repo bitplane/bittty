@@ -3,7 +3,7 @@ import io
 
 import pytest
 
-from bittty import Board, MemoryPrinter, PrinterPort, PrinterStatus, StreamPrinter
+from bittty import Board, MemoryConnection, MemoryPrinter, PrinterPort, PrinterStatus, StreamPrinter
 
 
 def test_memory_printer_and_stream_printer_are_binary():
@@ -19,13 +19,11 @@ def test_memory_printer_and_stream_printer_are_binary():
 
 
 def test_printer_port_reports_connection_status_and_survives_failure():
-    class BrokenPrinter:
-        status = PrinterStatus.OFFLINE
-
+    class JammedPrinter(MemoryPrinter):
         def write_bytes(self, data):
             raise OSError("paper jam")
 
-    port = PrinterPort(BrokenPrinter())
+    port = PrinterPort(JammedPrinter(status=PrinterStatus.OFFLINE))
     assert port.status is PrinterStatus.OFFLINE
     assert port.write_bytes(b"test") is None
     assert port.status is PrinterStatus.NOT_READY
@@ -35,17 +33,7 @@ def test_printer_port_reports_connection_status_and_survives_failure():
 async def test_duplex_memory_printer_pumps_input_to_the_host():
     board = Board()
 
-    class Host:
-        def __init__(self):
-            self.data = []
-
-        def write(self, data):
-            self.data.append(data)
-
-        def write_bytes(self, data):
-            self.data.append(data)
-
-    host = Host()
+    host = MemoryConnection()
     board.host.attach(host)
     printer = MemoryPrinter()
     board.printer.connect(printer)

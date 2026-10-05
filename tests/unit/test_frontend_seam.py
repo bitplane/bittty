@@ -3,7 +3,7 @@
 import pytest
 
 from bittty import Board, TerminalCaps
-from bittty.connections import DisplayPort, HostPort
+from bittty.connections import DisplayPort, HostPort, MemoryConnection
 from bittty.present import (
     Bell,
     GraphemeClusteringChanged,
@@ -139,26 +139,11 @@ def test_keyboard_indicator_event_dispatch():
     assert display.events == [("keyboard-indicator", True, False, True)]
 
 
-class QueueConnection:
-    """A real duplex Connection: canned chunks on the read side, writes recorded."""
-
-    def __init__(self, chunks=()):
-        self.chunks = list(chunks)
-        self.data = []
-        self.closed = False
-
-    def write(self, data):
-        self.data.append(data)
-
-    async def read_bytes_async(self, size):
-        return self.chunks.pop(0) if self.chunks else b""
-
-
 @pytest.mark.asyncio
 async def test_host_port_receive_side_pumps_into_the_sink():
     port = HostPort()
     seen = []
-    port.connect(QueueConnection([b"ab", b"cd"]), seen.append, on_idle=lambda: True)
+    port.connect(MemoryConnection([b"ab", b"cd"]), seen.append, on_idle=lambda: True)
     await port._reader_task
     assert seen == [b"ab", b"cd"]
 
@@ -166,7 +151,7 @@ async def test_host_port_receive_side_pumps_into_the_sink():
 @pytest.mark.asyncio
 async def test_host_port_pumps_child_output_through_the_parser_into_video():
     board = Board(width=20, height=3)
-    board.host.connect(QueueConnection([b"hello"]), board.feed_host_data, on_idle=lambda: True)
+    board.host.connect(MemoryConnection([b"hello"]), board.feed_host_data, on_idle=lambda: True)
     await board.host._reader_task
     assert "hello" in board.capture_pane()
 
@@ -174,7 +159,7 @@ async def test_host_port_pumps_child_output_through_the_parser_into_video():
 def test_display_port_receive_side_reaches_the_devices():
     """The upward pins: input, mouse, and focus flow from the chrome to the board."""
     board = Board(width=20, height=3)
-    connection = QueueConnection()
+    connection = MemoryConnection()
     board.host.attach(connection)
 
     board.parser.feed("\x1b[?1000h\x1b[?1006h")  # child asks for SGR mouse reports
