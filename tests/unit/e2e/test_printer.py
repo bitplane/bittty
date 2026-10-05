@@ -161,14 +161,28 @@ def test_normal_host_utf8_is_incrementally_decoded_around_raw_router():
 
 
 def test_eight_bit_csi_and_multiple_controller_transitions():
+    """The host line is UTF-8, so an eight-bit CSI arrives as U+009B."""
     board, _ = _term(width=20)
     printer = MemoryPrinter()
     board.printer.attach(printer)
 
-    board.feed_host_data(b"A\x9b5ione\x9b4iB\x1b[5itwo\x1b[4iC")
+    board.feed_host_data("A\x9b5ione\x9b4iB\x1b[5itwo\x1b[4iC".encode())
 
     assert bytes(printer.data) == b"onetwo"
     assert board.capture_text() == "ABC"
+
+
+def test_a_utf8_continuation_byte_is_not_an_eight_bit_csi():
+    """Û is C3 9B: its second byte is the raw CSI byte, but it is not a control."""
+    board, _ = _term(width=20)
+    printer = MemoryPrinter()
+    board.printer.attach(printer)
+
+    board.feed_host_data("AÛ5iB".encode())
+
+    assert board.printer.controller_mode is False
+    assert bytes(printer.data) == b""
+    assert board.capture_text() == "AÛ5iB"
 
 
 def test_controller_mode_forwards_escape_sequences_without_answering_them():

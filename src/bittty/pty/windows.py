@@ -2,7 +2,6 @@
 Windows PTY implementation using pywinpty.
 """
 
-import asyncio
 import logging
 import subprocess
 import time
@@ -13,7 +12,7 @@ except ImportError:
     winpty = None
 
 from .. import constants
-from .base import ENV, PTY
+from .base import PTY
 
 logger = logging.getLogger(__name__)
 
@@ -61,13 +60,10 @@ class WinptyProcessWrapper:
         self._pid = None
 
     def poll(self):
-        """Check if process is still running."""
-        if self.pty.isalive():
-            return None
-        else:
-            if self._returncode is None:
-                self._returncode = constants.DEFAULT_EXIT_CODE
-            return self._returncode
+        """The exit status, or None while the process runs."""
+        if self._returncode is None and not self.pty.isalive():
+            self._returncode = self.pty.get_exitstatus()
+        return self._returncode
 
     def wait(self):
         """Wait for process to complete."""
@@ -99,7 +95,7 @@ class WindowsPTY(PTY):
 
     def __init__(self, rows: int = constants.DEFAULT_TERMINAL_HEIGHT, cols: int = constants.DEFAULT_TERMINAL_WIDTH):
         if not winpty:
-            raise OSError("pywinpty not installed. Install with: pip install textual-terminal[windows]")
+            raise OSError("pywinpty not installed. Install with: pip install pywinpty")
 
         self._pty = winpty.PTY(cols, rows)
 
@@ -119,36 +115,31 @@ class WindowsPTY(PTY):
             return 0
         return self.to_process.write(data)
 
-    def write_bytes(self, data: bytes) -> int:
-        """Pass protocol bytes through winpty's text-only input interface."""
-        return self.write(data.decode("latin-1"))
+    def read_bytes(self, size: int) -> bytes:
+        """pywinpty exposes decoded text: re-encode it so the host line is bytes on every platform."""
+        return self.read(size).encode()
 
-    async def read_bytes_async(self, size: int = constants.DEFAULT_PTY_BUFFER_SIZE) -> str:
-        """Best-effort receive path: pywinpty exposes decoded text, not raw bytes."""
-        loop = asyncio.get_running_loop()
-        try:
-            return await loop.run_in_executor(None, self.read, size)
-        except Exception:
-            return ""
+    def write_bytes(self, data: bytes) -> int:
+        """Pass protocol bytes through winpty's text-only input, one character per byte.
+
+        These are raw protocol bytes (X10 mouse reports, eight-bit Meta), not UTF-8:
+        latin-1 keeps every byte value instead of replacing the high ones.
+        """
+        return self.write(data.decode("latin-1"))
 
     def resize(self, rows: int, cols: int) -> None:
         """Resize the terminal."""
         super().resize(rows, cols)
         self._pty.set_size(cols, rows)
 
-    def spawn_process(self, command: str, env: dict[str, str] | None = ENV) -> subprocess.Popen:
+    def spawn_process(self, command: str, env: dict[str, str] | None = None) -> subprocess.Popen:
         """Spawn a process attached to this PTY."""
         if self.closed:
             raise OSError("PTY is closed")
 
-        # Convert env dict to winpty format: null-separated "KEY=VALUE" string
-        if env:
-            env_strs = []
-            for key, value in env.items():
-                env_strs.append(f"{key}={value}")
-            env_string = "\0".join(env_strs) + "\0"
-        else:
-            env_string = ""
+        # winpty takes the environment as a null-separated "KEY=VALUE" block
+        env = self.environment() if env is None else env
+        env_string = "".join(f"{key}={value}\0" for key, value in env.items())
 
         self._pty.spawn(command, env=env_string)
 

@@ -5,6 +5,7 @@ Unix/Linux/macOS PTY implementation.
 import asyncio
 import logging
 import os
+import shlex
 import signal
 import struct
 import subprocess
@@ -14,17 +15,14 @@ try:
     import pty
     import termios
 except ImportError:
-    pcntl = None
+    fcntl = None
     pty = None
     termios = None
 
 from .. import constants
-from .base import ENV, PTY
+from .base import DEFAULT_TERM, PTY
 
 logger = logging.getLogger(__name__)
-
-
-UNIX_ENV = ENV | {"LC_ALL": os.environ.get("LC_ALL", "en_US.UTF-8")}
 
 
 class UnixPTY(PTY):
@@ -89,8 +87,12 @@ class UnixPTY(PTY):
             # Let base class close master_fd
             super().close()
 
-    def spawn_process(self, command: str, env: dict[str, str] = UNIX_ENV) -> subprocess.Popen:
-        """Spawn a process attached to this PTY."""
+    def environment(self, term: str = DEFAULT_TERM) -> dict[str, str]:
+        """The base environment, in a UTF-8 locale unless the caller chose one."""
+        return super().environment(term) | {"LC_ALL": os.environ.get("LC_ALL", "en_US.UTF-8")}
+
+    def spawn_process(self, command: str | list[str], env: dict[str, str] | None = None) -> subprocess.Popen:
+        """Spawn a process attached to this PTY; a string command is split like a shell would."""
 
         def preexec_fn():
             """Set up the child process to use PTY as controlling terminal."""
@@ -101,13 +103,13 @@ class UnixPTY(PTY):
             fcntl.ioctl(0, termios.TIOCSCTTY, 0)
 
         process = subprocess.Popen(
-            command if isinstance(command, list) else [command],
+            command if isinstance(command, list) else shlex.split(command),
             shell=False,
             stdin=self.slave_fd,
             stdout=self.slave_fd,
             stderr=self.slave_fd,
             preexec_fn=preexec_fn,
-            env=env,
+            env=self.environment() if env is None else env,
         )
 
         # Close slave fd in parent (child has its own copy)

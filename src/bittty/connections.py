@@ -369,31 +369,40 @@ class MemoryConnection:
 # thing that simulates a printer is bittty.peripherals.printer.VirtualPrinter.
 
 
+class InboundLine:
+    """Bytes a far-end device sends back up its cable, queued until the port reads them."""
+
+    def __init__(self) -> None:
+        self._queue: asyncio.Queue[bytes] = asyncio.Queue()
+
+    async def read(self, size: int) -> bytes:
+        data = await self._queue.get()
+        if len(data) <= size:
+            return data
+        self._queue.put_nowait(data[size:])
+        return data[:size]
+
+    def send(self, data: bytes) -> None:
+        self._queue.put_nowait(data)
+
+    def take(self) -> bytes:
+        """Everything sent that nobody has read yet, removed from the line."""
+        data = bytearray()
+        while not self._queue.empty():
+            data += self._queue.get_nowait()
+        return bytes(data)
+
+
 class MemoryPrinter:
-    """An in-memory duplex printer useful for virtual devices and tests."""
+    """An in-memory duplex printer cable that keeps everything written to it, for tests."""
 
     def __init__(self, *, status: PrinterStatus = PrinterStatus.READY) -> None:
         self.data = bytearray()
-        self._status = PrinterStatus(status)
+        self.status = PrinterStatus(status)
         self.closed = False
         self.configuration: PrinterConfiguration | None = None
         self.configuration_history: list[PrinterConfiguration] = []
-        self._inbound: asyncio.Queue[bytes] = asyncio.Queue()
-
-    @property
-    def status(self) -> PrinterStatus:
-        return self._status
-
-    @status.setter
-    def status(self, status: PrinterStatus) -> None:
-        status = PrinterStatus(status)
-        previous = self._status
-        self._status = status
-        if status is not previous:
-            self._status_changed()
-
-    def _status_changed(self) -> None:
-        """Hook for duplex devices that report asynchronous status changes."""
+        self._inbound = InboundLine()
 
     def write_bytes(self, data: bytes) -> int:
         if self.closed:
@@ -402,22 +411,15 @@ class MemoryPrinter:
         return len(data)
 
     async def read_bytes_async(self, size: int) -> bytes:
-        data = await self._inbound.get()
-        if len(data) <= size:
-            return data
-        self._inbound.put_nowait(data[size:])
-        return data[:size]
+        return await self._inbound.read(size)
 
     def send_bytes(self, data: bytes) -> None:
         """Inject bytes arriving from the printer toward the host."""
-        self._inbound.put_nowait(data)
+        self._inbound.send(data)
 
     def take_inbound(self) -> bytes:
         """Everything the printer has sent that nobody has read yet, removed from the line."""
-        data = bytearray()
-        while not self._inbound.empty():
-            data += self._inbound.get_nowait()
-        return bytes(data)
+        return self._inbound.take()
 
     def configure(self, configuration: PrinterConfiguration) -> None:
         """Record a configuration snapshot, as a virtual adapter would."""

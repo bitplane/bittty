@@ -49,10 +49,10 @@ def test_physical_type_selects_fixed_initial_language():
 
 
 def test_virtual_printer_keeps_an_exact_raw_trace_and_memory_duplex():
-    printer = VirtualPrinter()
+    printer = VirtualPrinter(trace=True)
     payload = b"text\x00\xff\x1b[?41h"
     assert printer.write_bytes(payload) == len(payload)
-    assert bytes(printer.data) == payload
+    assert bytes(printer.trace) == payload
 
     printer.send_bytes(b"reply")
     assert asyncio.run(printer.read_bytes_async(3)) == b"rep"
@@ -82,6 +82,14 @@ def test_profile_selects_physical_defaults_and_is_immutable():
         VirtualPrinter(PrinterType.PROPRINTER, profile=profile)
 
 
+def test_virtual_printer_keeps_pages_not_bytes_by_default():
+    """A long-running child prints for ever; only an opted-in trace keeps every byte."""
+    printer = VirtualPrinter()
+    printer.write_bytes(b"printed")
+    assert printer.trace is None
+    assert printer.current_page.items[0].data == b"printed"
+
+
 @pytest.mark.parametrize("introducer", (b"\x1b[", b"\x9b"))
 def test_dec_device_attribute_reports_use_profile_identity(introducer):
     profile = PrinterModel(
@@ -89,12 +97,12 @@ def test_dec_device_attribute_reports_use_profile_identity(introducer):
         primary_device_attributes=(73, 23),
         secondary_device_attributes=(53, 10, 0, 0, 0, 0, 0),
     )
-    printer = VirtualPrinter(profile=profile)
+    printer = VirtualPrinter(profile=profile, trace=True)
     printer.write_bytes(b"before" + introducer + b"c" + introducer + b">0c")
 
     assert asyncio.run(_read_printer_chunks(printer, 2)) == (b"\x1b[?73;23c\x1b[>53;10;0;0;0;0;0c")
     assert printer.current_page.items[0].data == b"before"
-    assert bytes(printer.data) == b"before" + introducer + b"c" + introducer + b">0c"
+    assert bytes(printer.trace) == b"before" + introducer + b"c" + introducer + b">0c"
 
 
 def test_unimplemented_and_malformed_device_attribute_requests_are_silent():
@@ -799,17 +807,17 @@ def test_configuration_snapshots_do_not_change_physical_identity():
 
     assert printer.device_type is PrinterType.DEC_AND_IBM
     assert printer.state.language is PrinterLanguage.DEC_PPL
-    assert printer.configuration_history == [configuration]
+    assert printer.configuration == configuration
 
 
 def test_board_routes_raw_controller_data_to_the_virtual_printer_engine():
     board = Board()
-    printer = VirtualPrinter(PrinterType.DEC_AND_IBM)
+    printer = VirtualPrinter(PrinterType.DEC_AND_IBM, trace=True)
     board.printer.attach(printer)
 
     board.feed_host_data(b"\x1b[5i\x1b[?41h\x1b[?58h\x1b[4i")
 
-    assert bytes(printer.data) == b"\x1b[?41h\x1b[?58h"
+    assert bytes(printer.trace) == b"\x1b[?41h\x1b[?58h"
     assert printer.state == VirtualPrinterState(
         PrinterLanguage.IBM_PROPRINTER,
         PrintDirection.UNIDIRECTIONAL,
@@ -817,10 +825,10 @@ def test_board_routes_raw_controller_data_to_the_virtual_printer_engine():
 
 
 def test_large_ordinary_write_takes_the_raw_fast_path():
-    printer = VirtualPrinter()
+    printer = VirtualPrinter(trace=True)
     payload = b"ordinary printer text " * 50_000
     printer.write_bytes(payload)
-    assert bytes(printer.data) == payload
+    assert bytes(printer.trace) == payload
     assert printer.state == VirtualPrinterState(
         PrinterLanguage.DEC_PPL,
         PrintDirection.BIDIRECTIONAL,

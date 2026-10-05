@@ -25,6 +25,7 @@ class MouseDevice(Device):
         self.board = board
         self.x = 0
         self.y = 0
+        self.pixel: tuple[int, int] | None = None  # the pointer's 0-based pixel, when the chrome knows it
         self.show = False
         # DEC locator state
         self.locator_enabled = 0  # 0 off, 1 on, 2 one-shot
@@ -64,6 +65,7 @@ class MouseDevice(Device):
         ps1, ps2 = operation.args
         self.locator_enabled = ps1 if ps1 in (0, 1, 2) else 0
         self.locator_pixels = ps2 == 1
+        self.locator_filter = None  # DECELR always cancels the filter rectangle
         if self.locator_enabled:
             self.board.modes.select_mouse_protocol(MouseProtocol.LOCATOR)
         else:
@@ -92,9 +94,32 @@ class MouseDevice(Device):
                 self.locator_report_up = False
 
     def set_filter_rectangle(self, operation: Operation) -> None:
-        """DECEFR — report once the locator leaves this rectangle."""
-        params = operation.args[0]
-        self.locator_filter = tuple(params[:4]) if len(params) >= 4 else None
+        """DECEFR — report once the locator leaves this rectangle; an omitted edge is the locator's position."""
+        if not self.locator_enabled:
+            return
+        row, col = self._locator_position()
+        edges = [*operation.args[0][:4], None, None, None]
+        self.locator_filter = tuple(
+            edge if edge is not None else here for edge, here in zip(edges, (row, col, row, col))
+        )
+        self._check_filter()
+
+    def _locator_position(self) -> tuple[int, int]:
+        """The 1-based (row, column) DECLRP reports: in cells, or in pixels when DECELR asked for them."""
+        if not self.locator_pixels:
+            return self.y, self.x
+        cell_width, cell_height = self.board.caps.cell_px or (1, 1)
+        px, py = self.pixel or ((self.x - 1) * cell_width, (self.y - 1) * cell_height)
+        return py + 1, px + 1
+
+    def _check_filter(self) -> None:
+        """Report (once) that the locator is outside the filter rectangle."""
+        top, left, bottom, right = self.locator_filter
+        row, col = self._locator_position()
+        if not (top <= row <= bottom and left <= col <= right):
+            self._emit_locator(10)  # locator left the filter rectangle
+            self.locator_filter = None
+            self._maybe_one_shot()
 
     def request_locator_position(self, operation: Operation) -> None:
         """DECRQLP — report the locator position now (or that it is unavailable)."""
@@ -105,7 +130,8 @@ class MouseDevice(Device):
         self._maybe_one_shot()
 
     def _emit_locator(self, event: int) -> None:
-        self.board.host.write(f"{constants.ESC}[{event};{self._button_mask};{self.y};{self.x};1&w", flush=True)
+        row, col = self._locator_position()
+        self.board.host.write(f"{constants.ESC}[{event};{self._button_mask};{row};{col};1&w", flush=True)
 
     def _maybe_one_shot(self) -> None:
         if self.locator_enabled == 2:
@@ -124,11 +150,7 @@ class MouseDevice(Device):
                 self._emit_locator(3 + button * 2)  # 3/5/7 = left/middle/right up
                 self._maybe_one_shot()
         elif event_type == "move" and self.locator_filter is not None:
-            top, left, bottom, right = self.locator_filter
-            if not (top <= self.y <= bottom and left <= self.x <= right):
-                self._emit_locator(10)  # locator left the filter rectangle
-                self.locator_filter = None
-                self._maybe_one_shot()
+            self._check_filter()
 
     # --- input --- #
 
@@ -155,6 +177,7 @@ class MouseDevice(Device):
         """
         self.x = x
         self.y = y
+        self.pixel = pixel
 
         if self.locator_enabled:
             self._report_locator_event(button, event_type)

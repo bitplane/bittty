@@ -280,10 +280,10 @@ def test_text_origin_uses_the_custom_printable_area():
 
 
 def test_ignored_nonpositioning_controls_are_not_recorded_as_printable_data():
-    printer = VirtualPrinter()
+    printer = VirtualPrinter(trace=True)
     printer.write_bytes(b"A\x00B\x07C\x0aD\x7fE\x81F")
 
-    assert bytes(printer.data) == b"A\x00B\x07C\x0aD\x7fE\x81F"
+    assert bytes(printer.trace) == b"A\x00B\x07C\x0aD\x7fE\x81F"
     first, second = printer.current_page.items
     assert (first.data, first.text, first.advance) == (b"ABC", "ABC", 3 * 2160)
     assert (second.data, second.text, second.advance) == (b"DEF", "DEF", 3 * 2160)
@@ -1006,7 +1006,7 @@ def test_crm_assembly_is_invariant_across_every_stream_boundary():
 
 
 def test_draining_pages_does_not_change_language_state_raw_trace_or_current_page():
-    printer = VirtualPrinter()
+    printer = VirtualPrinter(trace=True)
     printer.write_bytes(b"raw\x1b[?41h")
     printer._page_store.append(_item(10))
     completed = printer._page_store.complete()
@@ -1014,7 +1014,7 @@ def test_draining_pages_does_not_change_language_state_raw_trace_or_current_page
 
     assert printer.take_completed_pages() == (completed,)
     assert printer.current_page == current_before
-    assert bytes(printer.data) == b"raw\x1b[?41h"
+    assert bytes(printer.trace) == b"raw\x1b[?41h"
     assert printer.state == VirtualPrinterState(
         PrinterLanguage.DEC_PPL,
         PrintDirection.UNIDIRECTIONAL,

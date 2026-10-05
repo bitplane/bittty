@@ -22,10 +22,12 @@ if TYPE_CHECKING:
     from .board import Board
 
 
-_ENTRY_BYTES = (b"\x1b[5i", b"\x9b5i")
-_EXIT_BYTES = (b"\x1b[4i", b"\x9b4i")
 _ENTRY_TEXT = ("\x1b[5i", "\x9b5i")
 _EXIT_TEXT = ("\x1b[4i", "\x9b4i")
+# The host line is UTF-8: an eight-bit CSI arrives as U+009B (C2 9B), never as a bare
+# 0x9B, which is a continuation byte inside characters such as Û (C3 9B).
+_ENTRY_BYTES = tuple(pattern.encode() for pattern in _ENTRY_TEXT)
+_EXIT_BYTES = tuple(pattern.encode() for pattern in _EXIT_TEXT)
 _FLOW_CONTROL_DELETE = b"\x00\x11\x13"
 
 
@@ -310,10 +312,6 @@ class PrinterDevice(Device):
             if text:
                 normal_sink(text)
 
-    @staticmethod
-    def _control_text(pattern: bytes) -> str:
-        return pattern.decode("latin-1") if pattern.startswith(b"\x9b") else pattern.decode("ascii")
-
     def _feed_host_bytes(self, data: bytes, normal_sink: Callable[[str], None]) -> None:
         data = self._byte_pending + data
         self._byte_pending = b""
@@ -333,7 +331,7 @@ class PrinterDevice(Device):
                     self.emit_bytes(self._filter_printer_data(data[:index]))
                 data = data[index + len(pattern) :]
                 if pattern in _EXIT_BYTES:
-                    normal_sink(self._control_text(pattern))
+                    normal_sink(pattern.decode())
                 # Repeated controller-entry sequences are consumed, not printed.
                 continue
 
@@ -346,7 +344,7 @@ class PrinterDevice(Device):
                 return
             index, pattern = found
             self._feed_normal_bytes(data[:index], normal_sink)
-            normal_sink(self._control_text(pattern))
+            normal_sink(pattern.decode())
             data = data[index + len(pattern) :]
 
     def _feed_host_text(self, data: str, normal_sink: Callable[[str], None]) -> None:

@@ -48,7 +48,7 @@ def test_env_dict_to_string_conversion():
 
 @pytest.mark.windows
 def test_empty_env_string():
-    """Test that empty/None env results in empty string."""
+    """An empty environment is an empty block."""
 
     mock_winpty = Mock()
     mock_pty = Mock()
@@ -64,8 +64,7 @@ def test_empty_env_string():
 
         mock_pty.spawn = capture_spawn
 
-        # Test with None env
-        pty.spawn_process("cmd.exe", env=None)
+        pty.spawn_process("cmd.exe", env={})
 
         assert len(spawn_calls) == 1
         command, env_string = spawn_calls[0]

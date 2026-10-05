@@ -22,6 +22,7 @@ from ..model import DEFAULT, Model
 from ..operations import Operation
 from ..parser import Parser
 from ..present import Bell, PresentEvent, WindowRequest
+from ..pty import StdioPTY, UnixPTY, WindowsPTY
 from ..width import DEFAULT_WIDTH_POLICY, WidthPolicy
 from .blitter import Blitter
 from .charset import CharsetDevice
@@ -51,19 +52,12 @@ class Board:
         stdin=None,
         stdout=None,
     ):
-        """Create a platform-appropriate PTY handler."""
+        """Create the host cable: the given streams, else a platform-appropriate PTY."""
         if stdin is not None and stdout is not None:
-            from ..pty import StdioPTY
-
             return StdioPTY(stdin, stdout, rows, cols)
-        elif sys.platform == "win32":
-            from ..pty import WindowsPTY
-
+        if sys.platform == "win32":
             return WindowsPTY(rows, cols)
-        else:
-            from ..pty import UnixPTY
-
-            return UnixPTY(rows, cols)
+        return UnixPTY(rows, cols)
 
     def __init__(
         self,
@@ -607,9 +601,9 @@ class Board:
             self.pty = Board.get_pty_handler(self.height, self.width, self.stdin, self.stdout)
             logger.info(f"Created PTY: {self.width}x{self.height}")
 
-            # Spawn process attached to PTY
-            self.process = self.pty.spawn_process(self.command)
-            logger.info(f"Spawned process: pid={self.process.pid}")
+            # Spawn process attached to PTY (a stdio cable has none: its far end is already there)
+            self.process = self.pty.spawn_process(self.command, self.pty.environment(self.model.term))
+            logger.info("Spawned process: %s", self.process)
 
             # The host port pumps the PTY's receive side from here on
             self.host.connect(

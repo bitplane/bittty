@@ -12,8 +12,8 @@ from bittty import Board
 @pytest.fixture
 def board():
     """Create a real Board with stdio streams for integration testing."""
-    stdin = io.StringIO()
-    stdout = io.StringIO()
+    stdin = io.BytesIO()
+    stdout = io.BytesIO()
     return Board(width=80, height=24, stdin=stdin, stdout=stdout)
 
 

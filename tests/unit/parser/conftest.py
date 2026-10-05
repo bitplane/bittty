@@ -10,9 +10,9 @@ from bittty.constants import DEFAULT_TERMINAL_WIDTH, DEFAULT_TERMINAL_HEIGHT
 @pytest.fixture
 def board():
     """Create a real Board with stdio streams for integration testing."""
-    # Use StringIO streams for testing - Board creates StdioPTY internally
-    stdin = io.StringIO()
-    stdout = io.StringIO()
+    # Byte streams: start_process would plug them in as a StdioPTY host cable
+    stdin = io.BytesIO()
+    stdout = io.BytesIO()
 
     term = Board(width=80, height=24, stdin=stdin, stdout=stdout)
     return term

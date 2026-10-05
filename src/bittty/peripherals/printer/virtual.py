@@ -12,7 +12,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from enum import Enum
 
-from ...connections import MemoryPrinter, PrinterStatus
+from ...connections import InboundLine, PrinterStatus
 from ...printer_config import PrinterConfiguration, PrinterType
 from .languages import (
     PrinterLanguage,
@@ -127,8 +127,12 @@ _DEFAULT_PROFILES = {
 }
 
 
-class VirtualPrinter(MemoryPrinter):
-    """A duplex virtual printer with streaming printer-language state."""
+class VirtualPrinter:
+    """A duplex virtual printer with streaming printer-language state.
+
+    It keeps pages, not bytes: pass trace=True to also keep every byte received in
+    `trace`, which otherwise would grow for as long as the child prints.
+    """
 
     def __init__(
         self,
@@ -138,6 +142,7 @@ class VirtualPrinter(MemoryPrinter):
         page_geometry: PrinterPageGeometry | None = None,
         status: PrinterStatus = PrinterStatus.READY,
         on_actuate: Callable[[PrinterMechanicalEvent], None] | None = None,
+        trace: bool = False,
     ) -> None:
         if profile is None:
             resolved_type = PrinterType.DEC_ANSI if device_type is None else PrinterType(device_type)
@@ -147,7 +152,11 @@ class VirtualPrinter(MemoryPrinter):
         page_geometry = profile.page_geometry if page_geometry is None else page_geometry
         self._profile = profile
         self._unsolicited_reports = PrinterUnsolicitedReports.DISABLED
-        super().__init__(status=status)
+        self._status = PrinterStatus(status)
+        self.closed = False
+        self.configuration: PrinterConfiguration | None = None
+        self.trace: bytearray | None = bytearray() if trace else None
+        self._inbound = InboundLine()
         self._device_type = profile.device_type
         self._page_store = _PrinterPageStore(page_geometry)
         self._line_checkpoint = self._page_store.checkpoint()
@@ -268,9 +277,40 @@ class VirtualPrinter(MemoryPrinter):
         else:
             self.on_actuate(event)
 
+    # --- the cable's far end --- #
+
+    @property
+    def status(self) -> PrinterStatus:
+        return self._status
+
+    @status.setter
+    def status(self, status: PrinterStatus) -> None:
+        status = PrinterStatus(status)
+        previous = self._status
+        self._status = status
+        if status is not previous:
+            self._status_changed()
+
+    async def read_bytes_async(self, size: int) -> bytes:
+        return await self._inbound.read(size)
+
+    def send_bytes(self, data: bytes) -> None:
+        """Send bytes from the printer toward the host."""
+        self._inbound.send(data)
+
+    def take_inbound(self) -> bytes:
+        """Everything the printer has sent that nobody has read yet, removed from the line."""
+        return self._inbound.take()
+
+    def flush(self) -> None:
+        pass
+
+    def close(self) -> None:
+        self.closed = True
+
     def configure(self, configuration: PrinterConfiguration) -> None:
         """Apply adapter configuration without changing the fixed printer identity."""
-        super().configure(configuration)
+        self.configuration = configuration
         self._language_engine.set_ibm_code_page(configuration.code_page)
 
     def _record_printable(self, data: bytes) -> None:
@@ -1077,9 +1117,12 @@ class VirtualPrinter(MemoryPrinter):
         self._page_store.append(run, marks=marks)
 
     def write_bytes(self, data: bytes) -> int:
-        written = super().write_bytes(data)
+        if self.closed:
+            raise ValueError("printer is closed")
+        if self.trace is not None:
+            self.trace += data
         self._language_engine.feed(data)
-        return written
+        return len(data)
 
     def reset(self) -> None:
         """Restore the physical printer's power-on language state."""

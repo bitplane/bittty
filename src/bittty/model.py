@@ -106,6 +106,8 @@ class Model:
     mode_capabilities: frozenset[str] = BITTTY_MODE_CAPABILITIES
     # TERM-compatible name reported by XTGETTCAP; defaults to the model name.
     term_name: str | None = None
+    # The terminfo entry the child is told it runs on (TERM); defaults to the model name.
+    terminfo: str | None = None
     # Hardware fitted at power-on; contributes to the repertoire below.
     options: frozenset[Option] = field(default_factory=frozenset)
     # Non-mode control functions in the model's own software (e.g. the kitty
@@ -137,6 +139,11 @@ class Model:
     page_memory: tuple[tuple[int, int], ...] = ()
 
     @property
+    def term(self) -> str:
+        """The TERM value a child process is given."""
+        return self.terminfo or self.name
+
+    @property
     def capabilities(self) -> frozenset[str]:
         """Everything this terminal implements: its own repertoire plus its options."""
         if not self.options:
@@ -166,6 +173,7 @@ class Model:
 # Primary DA responses per vt100.net / xterm ctlseqs.
 XTERM = Model(
     name="xterm",
+    terminfo="xterm-256color",
     da1_response="\033[?62;1;6;8;9;15;18;21;22;23c",
     da2_response="\033[>1;10;0c",
     mode_capabilities=XTERM_MODE_CAPABILITIES,
@@ -196,6 +204,7 @@ XTERM = Model(
 
 BITTTY = Model(
     name="bittty",
+    terminfo="xterm-256color",
     da1_response="\033[?62;1;2;6;8;9;15;18;21;22;23c",
     term_name="xterm",
     da2_response=XTERM.da2_response,
@@ -401,6 +410,7 @@ TMUX = Model(
 # DA2 type 85 = 'U' (S/T/U pattern). Version field unverified.
 URXVT = Model(
     name="rxvt-unicode",
+    terminfo="rxvt-unicode-256color",
     da1_response="\033[?1;2c",
     da2_response="\033[>85;0;0c",
     da3_response=None,
@@ -414,6 +424,7 @@ URXVT = Model(
 # VTE version in the firmware field (8400). Truecolour, xterm-family keymap.
 GNOME = Model(
     name="gnome",
+    terminfo="xterm-256color",
     da1_response="\033[?61;1;21;22;28c",
     da2_response="\033[>61;8400;1c",
     da3_response=None,
@@ -428,6 +439,7 @@ GNOME = Model(
 # protocol handled by the keyboard device.
 KITTY = Model(
     name="kitty",
+    terminfo="xterm-kitty",
     da1_response="\033[?62;52;c",
     da2_response="\033[>1;4000;45c",
     da3_response=None,

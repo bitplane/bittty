@@ -14,10 +14,7 @@ from typing import BinaryIO
 
 from .. import constants
 
-# Inherit the caller's environment (HOME, PATH, USER, SHELL, ...) and override
-# only what the terminal owns. subprocess env= replaces wholesale, so a bare
-# {"TERM": ...} would launch the child with *nothing else* — no HOME, no PATH.
-ENV = os.environ | {"TERM": "xterm-256color"}
+DEFAULT_TERM = "xterm-256color"
 
 
 class PTY:
@@ -98,8 +95,17 @@ class PTY:
         """Check if PTY is closed."""
         return self.from_process.closed
 
-    def spawn_process(self, command: str, env: dict[str, str] = ENV) -> subprocess.Popen:
+    def environment(self, term: str = DEFAULT_TERM) -> dict[str, str]:
+        """The child's environment: the caller's, with only what the terminal owns overridden.
+
+        subprocess env= replaces wholesale, so a bare {"TERM": ...} would launch the
+        child with *nothing else* — no HOME, no PATH.
+        """
+        return os.environ | {"TERM": term}
+
+    def spawn_process(self, command: str, env: dict[str, str] | None = None) -> subprocess.Popen:
         """Spawn a process connected to PTY streams."""
+        env = self.environment() if env is None else env
         return subprocess.Popen(
             command, shell=True, stdin=self.to_process, stdout=self.from_process, stderr=self.from_process, env=env
         )

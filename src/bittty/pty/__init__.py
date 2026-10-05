@@ -3,8 +3,8 @@ PTY implementations for terminal emulation.
 """
 
 from .base import PTY
+from .stdio import StdioPTY
+from .unix import UnixPTY
 from .windows import WindowsPTY
-from .unix import UnixPTY  # noqa: F401
 
-
-__all__ = ["PTY", "WindowsPTY", "UnixPTY"]
+__all__ = ["PTY", "StdioPTY", "UnixPTY", "WindowsPTY"]
