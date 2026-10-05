@@ -177,32 +177,32 @@ def test_tracking_modes_are_mutually_exclusive_and_query_the_selector():
     board, parser, transport = _board()
 
     parser.feed("\x1b[?1000h\x1b[?1002h")
-    assert board.modes.mouse_protocol is MouseProtocol.BUTTON
+    assert board.mouse.protocol is MouseProtocol.BUTTON
     assert board.modes.mode_status(True, 1000) == 2
     assert board.modes.mode_status(True, 1002) == 1
 
     # Resetting an inactive member is a no-op; resetting the selected one turns tracking off.
     parser.feed("\x1b[?1000l\x1b[?1000$p\x1b[?1002$p")
-    assert board.modes.mouse_protocol is MouseProtocol.BUTTON
+    assert board.mouse.protocol is MouseProtocol.BUTTON
     assert transport.data[-2:] == ["\x1b[?1000;2$y", "\x1b[?1002;1$y"]
 
     parser.feed("\x1b[?1002l")
-    assert board.modes.mouse_protocol is MouseProtocol.OFF
+    assert board.mouse.protocol is MouseProtocol.OFF
 
 
 def test_mouse_encodings_are_mutually_exclusive_and_reset_to_legacy():
     board, parser, _ = _board()
 
     parser.feed("\x1b[?1005h\x1b[?1015h")
-    assert board.modes.mouse_encoding is MouseEncoding.URXVT
+    assert board.mouse.encoding is MouseEncoding.URXVT
     assert board.modes.mode_status(True, 1005) == 2
     assert board.modes.mode_status(True, 1015) == 1
 
     parser.feed("\x1b[?1005l")
-    assert board.modes.mouse_encoding is MouseEncoding.URXVT
+    assert board.mouse.encoding is MouseEncoding.URXVT
 
     parser.feed("\x1b[?1015l")
-    assert board.modes.mouse_encoding is MouseEncoding.LEGACY
+    assert board.mouse.encoding is MouseEncoding.LEGACY
     assert board.modes.mode_status(True, 1015) == 2
 
 
@@ -224,11 +224,11 @@ def test_locator_and_xterm_tracking_replace_each_other_and_drive_capture():
     board.display.attach(recorder)
 
     parser.feed("\x1b[1'z")
-    assert board.modes.mouse_protocol is MouseProtocol.LOCATOR
+    assert board.mouse.protocol is MouseProtocol.LOCATOR
     assert recorder.events[-1] == MouseCaptureChanged("any")
 
     parser.feed("\x1b[?1000h")
-    assert board.modes.mouse_protocol is MouseProtocol.NORMAL
+    assert board.mouse.protocol is MouseProtocol.NORMAL
     assert board.mouse.locator_enabled == 0
     assert recorder.events[-1] == MouseCaptureChanged("basic")
 
@@ -256,8 +256,8 @@ def test_declared_defaults_restore_on_hard_reset():
     assert board.modes.auto_wrap is True
     assert board.modes.special_modifiers is True
     assert board.modes.allow_alt_screen is True
-    assert board.modes.mouse_protocol is MouseProtocol.OFF
-    assert board.modes.mouse_encoding is MouseEncoding.LEGACY
+    assert board.mouse.protocol is MouseProtocol.OFF
+    assert board.mouse.encoding is MouseEncoding.LEGACY
 
 
 def test_private_mode_save_restore_is_independent_and_ignores_unsaved_modes():
@@ -281,8 +281,8 @@ def test_private_mode_restore_reconstructs_exclusive_mouse_groups():
 
     parser.feed("\x1b[?1000;1002;1003;1005;1006;1015r")
 
-    assert board.modes.mouse_protocol is MouseProtocol.NORMAL
-    assert board.modes.mouse_encoding is MouseEncoding.SGR
+    assert board.mouse.protocol is MouseProtocol.NORMAL
+    assert board.mouse.encoding is MouseEncoding.SGR
 
 
 def test_private_mode_restore_batches_frontend_reconciliation():

@@ -408,6 +408,7 @@ class Board:
         self.title.reset(hard=hard)
         self.charset.reset()
         if hard:
+            self.mouse.reset()
             self.palette.reset()
         self.modes.reconcile_all()
 

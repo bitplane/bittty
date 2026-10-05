@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 from .. import constants
 from ..options import DEC_LOCATOR, XTERM_EXTRAS
 from ..present import PointerModeChanged
-from .modes import MouseEncoding, MouseProtocol
+from .modes import ModeEffect, MouseEncoding, MouseProtocol
 
 if TYPE_CHECKING:
     from .board import Board
@@ -27,12 +27,8 @@ class MouseDevice(Device):
         self.y = 0
         self.pixel: tuple[int, int] | None = None  # the pointer's 0-based pixel, when the chrome knows it
         self.show = False
-        # DEC locator state
-        self.locator_enabled = 0  # 0 off, 1 on, 2 one-shot
         self.locator_pixels = False
-        self.locator_report_down = False
-        self.locator_report_up = False
-        self.locator_filter: tuple[int, int, int, int] | None = None  # top, left, bottom, right
+        self.reset()
         self._button_mask = 0
         self._pressed: set[int] = set()  # buttons currently held (drives 1002 drag motion)
         self.handlers = {}
@@ -51,6 +47,43 @@ class MouseDevice(Device):
                 }
             )
 
+    def reset(self) -> None:
+        """Power-on (RIS): no tracking protocol, legacy encoding, the locator off."""
+        self.protocol = MouseProtocol.OFF
+        self.encoding = MouseEncoding.LEGACY  # modes 1005/1006/1015/1016 select the others
+
+    @property
+    def protocol(self) -> MouseProtocol:
+        """The application mouse protocol: modes 9/1000/1002/1003 select it, DECELR selects the locator."""
+        return self._protocol
+
+    @protocol.setter
+    def protocol(self, protocol: MouseProtocol) -> None:
+        # The locator's registers live only while it owns tracking.
+        if protocol is not MouseProtocol.LOCATOR:
+            self.locator_enabled = 0  # 0 off, 1 on, 2 one-shot
+            self.locator_filter: tuple[int, int, int, int] | None = None  # top, left, bottom, right
+            self.locator_report_down = False
+            self.locator_report_up = False
+        self._protocol = protocol
+
+    def capture(self) -> str:
+        """The physical events the chrome must capture for the selected protocol."""
+        protocol = self.protocol
+        if protocol in (MouseProtocol.ANY, MouseProtocol.LOCATOR):
+            return "any"
+        if protocol is MouseProtocol.BUTTON:
+            return "button"
+        if protocol in (MouseProtocol.X10, MouseProtocol.NORMAL):
+            return "basic"
+        if self.board.modes.alternate_scroll_mode and self.board.blitter.in_alt_screen:
+            return "basic"
+        return "off"
+
+    def _select(self, protocol: MouseProtocol) -> None:
+        self.protocol = protocol
+        self.board.modes.reconcile(ModeEffect.MOUSE_CAPTURE)
+
     # --- DEC locator control functions --- #
 
     def set_pointer_mode(self, operation: Operation) -> None:
@@ -63,21 +96,17 @@ class MouseDevice(Device):
     def enable_locator(self, operation: Operation) -> None:
         """DECELR — enable/disable locator reporting; ps2==1 selects pixel coordinates."""
         ps1, ps2 = operation.args
-        self.locator_enabled = ps1 if ps1 in (0, 1, 2) else 0
         self.locator_pixels = ps2 == 1
-        self.locator_filter = None  # DECELR always cancels the filter rectangle
-        if self.locator_enabled:
-            self.board.modes.select_mouse_protocol(MouseProtocol.LOCATOR)
+        if ps1 in (1, 2):
+            self._select(MouseProtocol.LOCATOR)
+            self.locator_enabled = ps1
+            self.locator_filter = None  # DECELR always cancels the filter rectangle
         else:
-            self._disable_locator_state()
-            self.board.modes.clear_locator_protocol()
+            self._disable_locator()
 
-    def _disable_locator_state(self) -> None:
-        """Clear DEC locator registers without feeding back into mode selection."""
-        self.locator_enabled = 0
-        self.locator_filter = None
-        self.locator_report_down = False
-        self.locator_report_up = False
+    def _disable_locator(self) -> None:
+        """Turn the locator off, and tracking with it only when the locator owns it."""
+        self._select(MouseProtocol.OFF if self.protocol is MouseProtocol.LOCATOR else self.protocol)
 
     def select_locator_events(self, operation: Operation) -> None:
         """DECSLE — choose whether button presses/releases trigger reports."""
@@ -135,8 +164,7 @@ class MouseDevice(Device):
 
     def _maybe_one_shot(self) -> None:
         if self.locator_enabled == 2:
-            self._disable_locator_state()
-            self.board.modes.clear_locator_protocol()
+            self._disable_locator()
 
     def _report_locator_event(self, button: int, event_type: str) -> None:
         if event_type == "press":
@@ -182,8 +210,7 @@ class MouseDevice(Device):
         if self.locator_enabled:
             self._report_locator_event(button, event_type)
 
-        modes = self.board.modes
-        protocol = modes.mouse_protocol
+        protocol = self.protocol
         is_move = event_type == "move"
         if event_type == "press":
             if button < 3:  # wheel "presses" (64/65) have no release and are not drags
@@ -196,7 +223,7 @@ class MouseDevice(Device):
         # is displayed. Application mouse tracking always takes precedence.
         if (
             protocol is MouseProtocol.OFF
-            and modes.alternate_scroll_mode
+            and self.board.modes.alternate_scroll_mode
             and self.board.blitter.in_alt_screen
             and event_type == "press"
             and button in (constants.MOUSE_BUTTON_WHEEL_UP, constants.MOUSE_BUTTON_WHEEL_DOWN)
@@ -227,9 +254,9 @@ class MouseDevice(Device):
         else:
             bits = button | mods
 
-        if modes.mouse_encoding in (MouseEncoding.SGR, MouseEncoding.SGR_PIXELS):
+        if self.encoding in (MouseEncoding.SGR, MouseEncoding.SGR_PIXELS):
             final_char = "m" if event_type == "release" else "M"
-            if modes.mouse_encoding is MouseEncoding.SGR_PIXELS:
+            if self.encoding is MouseEncoding.SGR_PIXELS:
                 cell_width, cell_height = self.board.caps.cell_px or (1, 1)
                 px, py = pixel or ((x - 1) * cell_width, (y - 1) * cell_height)
                 x, y = px + 1, py + 1
@@ -242,11 +269,11 @@ class MouseDevice(Device):
             bits = (bits & ~3) | 3
 
         # The encoding selector is mutually exclusive; legacy is the default.
-        if modes.mouse_encoding is MouseEncoding.URXVT:
+        if self.encoding is MouseEncoding.URXVT:
             self.board.host.write(f"{constants.ESC}[{32 + bits};{x};{y}M")
             return
 
-        if modes.mouse_encoding is MouseEncoding.UTF8:
+        if self.encoding is MouseEncoding.UTF8:
             # Mode 1005 UTF-8-encodes the three X10 values and extends the
             # coordinate ceiling from 223 to 2015.
             self.board.host.write(

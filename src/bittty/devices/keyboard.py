@@ -342,7 +342,7 @@ class KeyboardDevice(Device):
         what is displayed, so setting it later reveals loaded indications.
         """
         modes = self.board.modes
-        if modes.mode_status(True, 110) == 2:  # DECKLHIM known and reset
+        if modes.recognizes(True, 110) and not modes.led_host_indicator_mode:
             return (modes.num_lock_mode, modes.caps_lock_mode, False)
         return (self.led_num, self.led_caps, self.led_scroll)
 
@@ -648,7 +648,8 @@ class KeyboardDevice(Device):
             # sends its text even under DECKPAM. Other terminals keep DECKPAM.
             numeric = bool(
                 bits & KeyModifiers.NUM_LOCK
-                and self.board.modes.mode_status(True, 1035) == 1
+                and self.board.modes.recognizes(True, 1035)
+                and self.board.modes.special_modifiers
                 and event.text
                 and len(event.text) == 1
             )

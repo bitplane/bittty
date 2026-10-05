@@ -16,8 +16,8 @@ def test_mode_device_applies_implemented_modes_and_ignores_unimplemented_modes()
     assert modes.cursor_application_mode is True
     assert modes.reverse_screen is True
     assert modes.auto_repeat is True
-    assert modes.mouse_protocol is MouseProtocol.NORMAL
-    assert modes.mouse_encoding is MouseEncoding.SGR
+    assert board.mouse.protocol is MouseProtocol.NORMAL
+    assert board.mouse.encoding is MouseEncoding.SGR
     assert modes.bracketed_paste is True
 
 

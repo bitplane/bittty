@@ -124,7 +124,7 @@ def test_vt220_is_distinct_across_every_axis():
 
     # Modes: the VT220 predates mouse tracking, so DECSET 1000 is a no-op.
     parser.feed("\x1b[?1000h")
-    assert vt220.modes.mouse_protocol is MouseProtocol.OFF
+    assert vt220.mouse.protocol is MouseProtocol.OFF
 
     # Charsets: it knows DEC Supplemental ("<", a VT220 addition) but not DEC
     # Technical (">", a later set).

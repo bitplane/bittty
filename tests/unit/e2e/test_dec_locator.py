@@ -182,3 +182,20 @@ def test_a_filter_needs_the_locator_enabled():
     parser.feed("\x1b[1'z")
     board.input_mouse(11, 5, 0, "move", set())
     assert transport.data == []
+
+
+def test_hard_reset_turns_the_locator_off():
+    board, parser, transport = _driver()
+    parser.feed("\x1b[1'z\x1b[1'{")  # enabled, reporting button-down
+    board.reset(hard=True)
+    board.input_mouse(3, 4, 0, "press", set())
+    parser.feed("\x1b['|")
+    assert transport.data == ["\x1b[0&w"]
+    assert board.mouse.capture() == "off"
+
+
+def test_disabling_the_locator_leaves_xterm_tracking_alone():
+    board, parser, transport = _driver()
+    parser.feed("\x1b[?1000h\x1b[0'z")
+    board.input_mouse(3, 4, 0, "press", set())
+    assert transport.data == [b"\x1b[M" + bytes((32, 35, 36))]

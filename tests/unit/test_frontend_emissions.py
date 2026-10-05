@@ -149,4 +149,4 @@ def test_events_are_dropped_with_no_frontend():
     parser = Parser(board)
     parser.feed("\x1b]2;t\x07\x1b[?1000h\x07")
     assert board.title.title == "t"
-    assert board.modes.mouse_protocol is MouseProtocol.NORMAL
+    assert board.mouse.protocol is MouseProtocol.NORMAL

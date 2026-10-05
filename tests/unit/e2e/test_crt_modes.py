@@ -42,4 +42,4 @@ def test_display_modes(model, mode, attr):
 
 def test_xterm_nine_is_still_its_mouse():
     board, _ = _run("\x1b[?9h", XTERM)
-    assert not board.modes.interlace and board.modes.mouse_protocol.name == "X10"
+    assert not board.modes.interlace and board.mouse.protocol.name == "X10"

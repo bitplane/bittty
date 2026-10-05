@@ -71,11 +71,11 @@ def test_mouse_encoding_modes_report_and_change_real_state(mode, encoding):
     board, parser, transport = _term()
 
     parser.feed(f"\x1b[?{mode}$p\x1b[?{mode}h\x1b[?{mode}$p")
-    assert board.modes.mouse_encoding is encoding
+    assert board.mouse.encoding is encoding
     assert transport.data[-2:] == [f"\x1b[?{mode};2$y", f"\x1b[?{mode};1$y"]
 
     parser.feed(f"\x1b[?{mode}l")
-    assert board.modes.mouse_encoding is MouseEncoding.LEGACY
+    assert board.mouse.encoding is MouseEncoding.LEGACY
 
 
 @pytest.mark.parametrize(

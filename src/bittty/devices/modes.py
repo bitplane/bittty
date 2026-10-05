@@ -84,8 +84,6 @@ class ModeSpec:
     queryable: bool = False  # DECRQM reports this mode's state
     apply_fn: Callable[[ModeDevice, bool], None] | None = None  # side effect
     status_fn: Callable[[ModeDevice], int] | None = None  # custom DECRQM status
-    group: str | None = None
-    group_value: MouseProtocol | MouseEncoding | None = None
     effects: frozenset[ModeEffect] = frozenset()
     save_fn: Callable[[ModeDevice], None] | None = None
     restore_fn: Callable[[ModeDevice], None] | None = None
@@ -95,9 +93,7 @@ class ModeSpec:
         return (self.private, self.number)
 
     def apply(self, device: ModeDevice, value: bool) -> None:
-        if self.group is not None:
-            device._set_group_member(self.group, self.group_value, value)
-        elif self.attr is not None:
+        if self.attr is not None:
             setattr(device, self.attr, (not value) if self.invert else value)
         if self.apply_fn is not None:
             self.apply_fn(device, value)
@@ -106,13 +102,9 @@ class ModeSpec:
         """DECRQM status: 1 = set, 2 = reset, 0 = not recognised."""
         if self.status_fn is not None:
             return self.status_fn(device)
-        if self.group is not None:
-            is_set = getattr(device, self.group) == self.group_value
-        elif self.queryable and self.attr is not None:
-            is_set = getattr(device, self.attr) != self.invert
-        else:
-            return 0
-        return 1 if is_set else 2
+        if self.queryable and self.attr is not None:
+            return 1 if getattr(device, self.attr) != self.invert else 2
+        return 0
 
 
 # --- side effects for modes that do more than flip a flag --- #
@@ -158,6 +150,40 @@ def _keyboard_style(capability: str, number: int, style: KeyboardStyle) -> ModeS
         save_fn=_save_keyboard_style,
         restore_fn=_restore_keyboard_style,
     )
+
+
+def _mouse_mode(
+    capability: str,
+    number: int,
+    attr: str,
+    member: MouseProtocol | MouseEncoding,
+    off: MouseProtocol | MouseEncoding,
+    effects: frozenset[ModeEffect],
+) -> ModeSpec:
+    """One of a mutually exclusive mouse selection: setting selects it, resetting deselects it only if selected."""
+
+    def apply(device: ModeDevice, enabled: bool) -> None:
+        mouse = device.board.mouse
+        if enabled or getattr(mouse, attr) is member:
+            setattr(mouse, attr, member if enabled else off)
+
+    return ModeSpec(
+        capability,
+        number,
+        True,
+        queryable=True,
+        apply_fn=apply,
+        status_fn=_status_of(lambda device: getattr(device.board.mouse, attr) is member),
+        effects=effects,
+    )
+
+
+def _mouse_protocol(capability: str, number: int, protocol: MouseProtocol) -> ModeSpec:
+    return _mouse_mode(capability, number, "protocol", protocol, MouseProtocol.OFF, _MOUSE_EFFECT)
+
+
+def _mouse_encoding(capability: str, number: int, encoding: MouseEncoding) -> ModeSpec:
+    return _mouse_mode(capability, number, "encoding", encoding, MouseEncoding.LEGACY, frozenset())
 
 
 def _set_delete_mode(device: ModeDevice, value: bool) -> None:
@@ -373,15 +399,7 @@ MODE_SPECS: tuple[ModeSpec, ...] = (
     ModeSpec(mp.DEC_AUTO_REPEAT, 8, True, "auto_repeat", default=True, queryable=True),
     ModeSpec(mp.MINTTY_APPLICATION_ESCAPE, 7727, True, "application_escape", queryable=True),
     ModeSpec(mp.MINTTY_ESCAPE_FS, 7728, True, "escape_sends_fs", queryable=True),
-    ModeSpec(
-        mp.XTERM_MOUSE_X10,
-        9,
-        True,
-        queryable=True,
-        group="mouse_protocol",
-        group_value=MouseProtocol.X10,
-        effects=_MOUSE_EFFECT,
-    ),
+    _mouse_protocol(mp.XTERM_MOUSE_X10, 9, MouseProtocol.X10),
     ModeSpec(
         mp.XTERM_CURSOR_BLINK,
         12,
@@ -473,58 +491,13 @@ MODE_SPECS: tuple[ModeSpec, ...] = (
         queryable=True,
         effects=frozenset({ModeEffect.KEYBOARD_INDICATOR}),
     ),
-    ModeSpec(
-        mp.XTERM_MOUSE_NORMAL,
-        1000,
-        True,
-        queryable=True,
-        group="mouse_protocol",
-        group_value=MouseProtocol.NORMAL,
-        effects=_MOUSE_EFFECT,
-    ),
+    _mouse_protocol(mp.XTERM_MOUSE_NORMAL, 1000, MouseProtocol.NORMAL),
     ModeSpec(mp.XTERM_FOCUS, 1004, True, "focus_reporting", queryable=True),
-    ModeSpec(
-        mp.XTERM_MOUSE_BUTTON,
-        1002,
-        True,
-        queryable=True,
-        group="mouse_protocol",
-        group_value=MouseProtocol.BUTTON,
-        effects=_MOUSE_EFFECT,
-    ),
-    ModeSpec(
-        mp.XTERM_MOUSE_ANY,
-        1003,
-        True,
-        queryable=True,
-        group="mouse_protocol",
-        group_value=MouseProtocol.ANY,
-        effects=_MOUSE_EFFECT,
-    ),
-    ModeSpec(
-        mp.XTERM_MOUSE_UTF8,
-        1005,
-        True,
-        queryable=True,
-        group="mouse_encoding",
-        group_value=MouseEncoding.UTF8,
-    ),
-    ModeSpec(
-        mp.XTERM_MOUSE_SGR,
-        1006,
-        True,
-        queryable=True,
-        group="mouse_encoding",
-        group_value=MouseEncoding.SGR,
-    ),
-    ModeSpec(
-        mp.XTERM_MOUSE_SGR_PIXELS,
-        1016,
-        True,
-        queryable=True,
-        group="mouse_encoding",
-        group_value=MouseEncoding.SGR_PIXELS,
-    ),
+    _mouse_protocol(mp.XTERM_MOUSE_BUTTON, 1002, MouseProtocol.BUTTON),
+    _mouse_protocol(mp.XTERM_MOUSE_ANY, 1003, MouseProtocol.ANY),
+    _mouse_encoding(mp.XTERM_MOUSE_UTF8, 1005, MouseEncoding.UTF8),
+    _mouse_encoding(mp.XTERM_MOUSE_SGR, 1006, MouseEncoding.SGR),
+    _mouse_encoding(mp.XTERM_MOUSE_SGR_PIXELS, 1016, MouseEncoding.SGR_PIXELS),
     ModeSpec(
         mp.XTERM_ALTERNATE_SCROLL,
         1007,
@@ -533,14 +506,7 @@ MODE_SPECS: tuple[ModeSpec, ...] = (
         queryable=True,
         effects=_MOUSE_EFFECT,
     ),
-    ModeSpec(
-        mp.URXVT_MOUSE,
-        1015,
-        True,
-        queryable=True,
-        group="mouse_encoding",
-        group_value=MouseEncoding.URXVT,
-    ),
+    _mouse_encoding(mp.URXVT_MOUSE, 1015, MouseEncoding.URXVT),
     ModeSpec(mp.XTERM_EIGHT_BIT_INPUT, 1034, True, "eight_bit_input", queryable=True),
     ModeSpec(
         mp.XTERM_SPECIAL_MODIFIERS,
@@ -754,8 +720,6 @@ class ModeDevice(Device):
 
     def _set_defaults(self) -> None:
         """Restore declared mode defaults and the non-mode keypad registers."""
-        self.mouse_protocol = MouseProtocol.OFF
-        self.mouse_encoding = MouseEncoding.LEGACY
         initialized: set[str] = set()
         power_on = self.board.model.power_on_modes
         for spec in MODE_SPECS:
@@ -774,8 +738,6 @@ class ModeDevice(Device):
         if hard:
             self._saved_private_modes.clear()
             self._set_defaults()
-            if hasattr(self.board, "mouse"):
-                self.board.mouse._disable_locator_state()
             fixed_grapheme = self._runtime_mode_status.get((True, 2027))
             self.grapheme_clustering = fixed_grapheme == 3
             self.board.blitter.set_grapheme_clustering(self.grapheme_clustering)
@@ -812,40 +774,6 @@ class ModeDevice(Device):
 
     # --- applying modes --- #
 
-    def _set_group(self, group: str, value: MouseProtocol | MouseEncoding | None) -> None:
-        if group == "mouse_protocol":
-            protocol = MouseProtocol.OFF if value is None else value
-            if protocol is not MouseProtocol.LOCATOR and hasattr(self.board, "mouse"):
-                self.board.mouse._disable_locator_state()
-            self.mouse_protocol = protocol
-        elif group == "mouse_encoding":
-            self.mouse_encoding = MouseEncoding.LEGACY if value is None else value
-        else:
-            raise ValueError(f"unknown exclusive mode group {group!r}")
-
-    def _set_group_member(
-        self,
-        group: str,
-        member: MouseProtocol | MouseEncoding | None,
-        enabled: bool,
-    ) -> None:
-        """Set a group member, or clear it only when that member is selected."""
-        if enabled:
-            self._set_group(group, member)
-        elif getattr(self, group) is member:
-            self._set_group(group, None)
-
-    def select_mouse_protocol(self, protocol: MouseProtocol) -> None:
-        """Select a protocol from DEC locator or a compatibility caller."""
-        self._set_group("mouse_protocol", protocol)
-        self.reconcile(ModeEffect.MOUSE_CAPTURE)
-
-    def clear_locator_protocol(self) -> None:
-        """Turn tracking off only when DEC locator currently owns the protocol."""
-        if self.mouse_protocol is MouseProtocol.LOCATOR:
-            self.mouse_protocol = MouseProtocol.OFF
-            self.reconcile(ModeEffect.MOUSE_CAPTURE)
-
     def _apply(self, private: bool, param: int | None, value: bool) -> frozenset[ModeEffect]:
         if param is None:
             return frozenset()
@@ -870,19 +798,6 @@ class ModeDevice(Device):
 
     def _apply_many(self, private: bool, params: tuple[int | None, ...], value: bool) -> None:
         self._apply_values(private, ((param, value) for param in params))
-
-    def _mouse_capture(self) -> str:
-        """Derive the physical events the attached frontend must capture."""
-        protocol = self.mouse_protocol
-        if protocol in (MouseProtocol.ANY, MouseProtocol.LOCATOR):
-            return "any"
-        if protocol is MouseProtocol.BUTTON:
-            return "button"
-        if protocol in (MouseProtocol.X10, MouseProtocol.NORMAL):
-            return "basic"
-        if self.alternate_scroll_mode and self.board.blitter.in_alt_screen:
-            return "basic"
-        return "off"
 
     def reconcile(self, *effects: ModeEffect, force: bool = False) -> None:
         """Reconcile typed derived frontend state, batching during mode lists."""
@@ -1034,7 +949,7 @@ def _indicator_state(device: ModeDevice) -> tuple[bool, bool, bool] | None:
 
 # Each frontend-facing effect: the state it reports (None: nothing to report) and its event.
 _EFFECT_EVENTS: dict[ModeEffect, tuple[Callable[[ModeDevice], object], Callable[[object], PresentEvent]]] = {
-    ModeEffect.MOUSE_CAPTURE: (ModeDevice._mouse_capture, MouseCaptureChanged),
+    ModeEffect.MOUSE_CAPTURE: (lambda device: device.board.mouse.capture(), MouseCaptureChanged),
     ModeEffect.CURSOR: (attrgetter("cursor_visible"), CursorVisibilityChanged),
     ModeEffect.CURSOR_BLINK: (attrgetter("cursor_blinking"), CursorBlinkChanged),
     ModeEffect.REVERSE: (attrgetter("reverse_screen"), ReverseScreenChanged),
