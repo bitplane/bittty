@@ -303,14 +303,18 @@ def _right_to_left(device: ModeDevice, value: bool) -> None:
 
 def _crt_saver(device: ModeDevice, value: bool) -> None:
     """DECCRTSM drives the blank-timeout register: the VT510 blanks after 30 minutes."""
-    device.board.blank_timeout = 30 if value else 0
+    device.board.console.blank_timeout = 30 if value else 0
 
 
-_crt_saver_status = _status_of(lambda device: bool(device.board.blank_timeout))
+_crt_saver_status = _status_of(lambda device: bool(device.board.console.blank_timeout))
 
 
 def _ambiguous_width(device: ModeDevice, value: bool) -> None:
-    device.board.set_ambiguous_width(2 if value else 1)
+    device.board.blitter.set_ambiguous_width(2 if value else 1)
+
+
+def _ambiguous_width_double(device: ModeDevice) -> bool:
+    return device.board.blitter.width_policy.ambiguous_width == 2
 
 
 def _grapheme_clustering(device: ModeDevice, value: bool) -> None:
@@ -329,10 +333,10 @@ _ignore_null_status = _status_of(lambda device: device.board.printer.configurati
 
 
 def _conceal_answerback(device: ModeDevice, value: bool) -> None:
-    device.board.set_answerback_concealed(value)
+    device.board.console.set_answerback_concealed(value)
 
 
-_conceal_answerback_status = _status_of(lambda device: device.board.answerback_concealed)
+_conceal_answerback_status = _status_of(lambda device: device.board.console.answerback_concealed)
 
 
 def _inband_resize(device: ModeDevice, value: bool) -> None:
@@ -341,11 +345,7 @@ def _inband_resize(device: ModeDevice, value: bool) -> None:
 
 
 def _margin_bell(device: ModeDevice, value: bool) -> None:
-    device.board.reset_margin_bell()
-
-
-def _ambiguous_width_default(device: ModeDevice) -> bool:
-    return device.board.width_policy.ambiguous_width == 2
+    device.board.console.reset_margin_bell()
 
 
 _MOUSE_EFFECT = frozenset({ModeEffect.MOUSE_CAPTURE})
@@ -391,7 +391,7 @@ MODE_SPECS: tuple[ModeSpec, ...] = (
     ),
     ModeSpec(mp.DEC_ORIGIN, 6, True, "origin_mode", queryable=True),
     ModeSpec(mp.DEC_RIGHT_TO_LEFT, 34, True, "right_to_left", queryable=True, apply_fn=_right_to_left),
-    # CRT settings the chrome carries out; it reads them here and from board.blank_timeout.
+    # CRT settings the chrome carries out; it reads them here and from board.console.blank_timeout.
     ModeSpec(mp.DEC_INTERLACE, 9, True, "interlace", queryable=True),
     ModeSpec(mp.DEC_CRT_SAVER, 97, True, apply_fn=_crt_saver, status_fn=_crt_saver_status),
     ModeSpec(mp.DEC_OVERSCAN, 106, True, "overscan", queryable=True),
@@ -598,10 +598,8 @@ MODE_SPECS: tuple[ModeSpec, ...] = (
         mp.UNICODE_AMBIGUOUS_WIDTH,
         8840,
         True,
-        "ambiguous_width_double",
-        default=_ambiguous_width_default,
-        queryable=True,
         apply_fn=_ambiguous_width,
+        status_fn=_status_of(_ambiguous_width_double),
         effects=frozenset({ModeEffect.WIDTH}),
     ),
 )
@@ -741,7 +739,6 @@ class ModeDevice(Device):
             fixed_grapheme = self._runtime_mode_status.get((True, 2027))
             self.grapheme_clustering = fixed_grapheme == 3
             self.board.blitter.set_grapheme_clustering(self.grapheme_clustering)
-            self.board.restore_width_policy()
         else:
             # DECSTR soft reset — the widely-agreed subset (SGR is reset by the style device).
             self.insert_mode = False
@@ -936,7 +933,7 @@ def _ambiguous_width_state(device: ModeDevice) -> int | None:
     """1 or 2, on a terminal with mode 8840; None on one that cannot change it."""
     if not device.recognizes(True, 8840):
         return None
-    return 2 if device.ambiguous_width_double else 1
+    return 2 if _ambiguous_width_double(device) else 1
 
 
 def _indicator_state(device: ModeDevice) -> tuple[bool, bool, bool] | None:

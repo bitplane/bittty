@@ -54,7 +54,7 @@ def test_board_uses_its_configured_ambiguous_width():
 def test_stored_width_survives_policy_changes():
     board = Board(width=8, height=1, width_policy=WidthPolicy(ambiguous_width=2))
     board.parser.feed("·")
-    board.set_ambiguous_width(1)
+    board.blitter.set_ambiguous_width(1)
     board.blitter.current_page.normalize_row(0)
     board.parser.feed("·")
 
@@ -84,14 +84,14 @@ def test_detected_width_sets_automatic_baseline_but_not_explicit_baseline():
 def test_mode_8840_changes_future_writes_and_ris_restores_baseline():
     board = Board(width=8, height=1, width_policy=WidthPolicy(ambiguous_width=2))
     board.parser.feed("\x1b[?8840l·")
-    assert board.width_policy.ambiguous_width == 1
+    assert board.blitter.width_policy.ambiguous_width == 1
     assert row_chars(board)[0] == "·"
 
     board.parser.feed("\x1b[!p")  # DECSTR preserves the runtime width mode
-    assert board.width_policy.ambiguous_width == 1
+    assert board.blitter.width_policy.ambiguous_width == 1
 
     board.parser.feed("\x1bc")  # RIS restores the constructor baseline
-    assert board.width_policy.ambiguous_width == 2
+    assert board.blitter.width_policy.ambiguous_width == 2
     board.parser.feed("·")
     assert row_chars(board)[:2] == ["·", ""]
 
@@ -101,9 +101,9 @@ def test_caps_update_during_mode_override_only_changes_the_next_reset_baseline()
     board.parser.feed("\x1b[?8840h")
     board.set_caps(TerminalCaps(ambiguous_width=1))
 
-    assert board.width_policy.ambiguous_width == 2
+    assert board.blitter.width_policy.ambiguous_width == 2
     board.parser.feed("\x1bc")
-    assert board.width_policy.ambiguous_width == 1
+    assert board.blitter.width_policy.ambiguous_width == 1
 
 
 def test_wide_character_uses_head_and_continuation_cells():

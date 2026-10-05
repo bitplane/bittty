@@ -13,7 +13,7 @@ def test_enq_transmits_the_answerback_string():
     board, parser = _term()
     transport = MemoryConnection()
     board.host.attach(transport)
-    board.answerback = "bittty"
+    board.console.answerback = "bittty"
 
     parser.feed("\x05")  # ENQ
     assert "".join(transport.data) == "bittty"
@@ -53,5 +53,5 @@ def test_bell_volume_registers():
     board, parser = _term()
     parser.feed("\x1b[3 t")  # DECSWBV — warning bell volume
     parser.feed("\x1b[5 u")  # DECSMBV — margin bell volume
-    assert board.warning_bell_volume == 3
-    assert board.margin_bell_volume == 5
+    assert board.console.warning_bell_volume == 3
+    assert board.console.margin_bell_volume == 5

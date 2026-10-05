@@ -72,13 +72,13 @@ class CursorDevice(Device):
         if x is not None:
             self.x = max(0, min(x, self.board.width - 1))
         if y is not None:
-            self.y = max(0, min(y, self.board.height - 1))
+            self.y = max(0, min(y, self.board.blitter.rows - 1))
 
     def vt52_position(self, row: int, column: int) -> None:
         """VT52 ESC Y — a row or column off the screen leaves that coordinate alone (xterm 407)."""
         board = self.board
         x = column if 0 <= column < board.width else self.display_x
-        self.set_position(x, row if 0 <= row < board.height else self.y)
+        self.set_position(x, row if 0 <= row < board.blitter.rows else self.y)
 
     def move_to(self, x: int | None, y: int | None) -> None:
         """Apply a CUP/HVP/VPA move, honouring origin mode (DECOM).
@@ -108,7 +108,7 @@ class CursorDevice(Device):
 
     def move_down(self, count: int) -> None:
         self.cancel_pending_wrap()
-        bottom = self.board.blitter.scroll_bottom if self.board.modes.origin_mode else self.board.height - 1
+        bottom = self.board.blitter.scroll_bottom if self.board.modes.origin_mode else self.board.blitter.rows - 1
         self.y = min(bottom, self.y + count)
 
     def move_forward(self, count: int) -> None:
@@ -137,7 +137,7 @@ class CursorDevice(Device):
         right = screen.right_margin if within_columns else self.board.width - 1
         within_rows = screen.scroll_top <= self.y <= screen.scroll_bottom
         top = screen.scroll_top if within_rows else 0
-        bottom = screen.scroll_bottom if within_rows else self.board.height - 1
+        bottom = screen.scroll_bottom if within_rows else self.board.blitter.rows - 1
 
         while count > 0:
             if self.x > left:
@@ -248,7 +248,7 @@ class CursorDevice(Device):
         self.cancel_pending_wrap()
         if self.y == screen.scroll_bottom and within_columns:
             screen.scroll(1)
-        elif self.y < self.board.height - 1:
+        elif self.y < self.board.blitter.rows - 1:
             # Below the bottom margin the cursor still advances (bounded by the
             # screen); it only scrolls when sitting on the margin itself.
             self.y += 1

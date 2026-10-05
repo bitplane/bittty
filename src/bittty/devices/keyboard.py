@@ -440,6 +440,48 @@ class KeyboardDevice(Device):
                     mods &= ~(mask | M.CTRL)
         return mods
 
+    def transmit(self, data: str | bytes, *, local_text: str | None = None, margin_key: bool = False) -> None:
+        """Send keyboard data to the host, unless locked; echo it locally (SRM) and ring the margin bell."""
+        modes = self.board.modes
+        if modes.keyboard_locked:
+            return
+        # Bytes are already on the wire's terms: user-defined keys and eight-bit Meta.
+        if isinstance(data, bytes):
+            self.board.host.write_bytes(data)
+        else:
+            self.board.host.write(data)
+        if modes.local_echo and local_text is not None:
+            self._echo(local_text)
+        if margin_key:
+            self.board.console.check_margin_bell()
+
+    def _echo(self, text: str) -> None:
+        """Display local keyboard echo directly, never through the ANSI parser."""
+        board = self.board
+        cursor = board.cursor
+        run: list[str] = []
+
+        def flush_run() -> None:
+            if run:
+                board.blitter.write_text("".join(run), board.style.current)
+                run.clear()
+
+        for char in text:
+            code = ord(char)
+            if code >= 0x20 and not (0x7F <= code <= 0x9F):
+                run.append(char)
+                continue
+            flush_run()
+            if char == constants.CR:
+                cursor.carriage_return()
+            elif char in (constants.LF, constants.VT, constants.FF):
+                cursor.line_feed()
+            elif char == constants.BS:
+                cursor.backspace()
+            elif char == constants.HT:
+                cursor.horizontal_tab()
+        flush_run()
+
     def report_focus(self, focused: bool) -> None:
         """Focus reporting (DECSET 1004) — send CSI I on focus in, CSI O on focus out."""
         if self.board.modes.focus_reporting:
@@ -486,7 +528,7 @@ class KeyboardDevice(Device):
             sequence = apply_modifier(sequence, xterm_modifier(mods), keypad=keypad, placement=placement)
         elif keypad and keymap.keypad_meta_prefix and mods & (M.ALT | M.META):
             sequence = constants.ESC + sequence
-        self.board.transmit_keyboard(sequence)
+        self.transmit(sequence)
 
     @property
     def delete_sends_del(self) -> bool:
@@ -515,7 +557,7 @@ class KeyboardDevice(Device):
         resource, code = _EXTENDED_KEYS.get(name, (None, None))
         level = self.modify_keys[resource] if resource and keymap.modifiers else 2
         if level >= 4:
-            self.board.transmit_keyboard(self._extended_key(code, mods, resource))
+            self.transmit(self._extended_key(code, mods, resource))
             return
         placement = 2 if name in _EDITING_KEYPAD else level  # below 4, xterm leaves these alone
         self._send_key(sequence, mods, keypad=name in PF_KEYS, placement=placement)
@@ -534,7 +576,7 @@ class KeyboardDevice(Device):
             char = constants.ESC
         if char == "delete":  # the editing keypad's Delete, not KP_Delete
             if self._delete_is_del(mods):
-                self.board.transmit_keyboard(constants.DEL)
+                self.transmit(constants.DEL)
                 return
             if self.keymap.delete_unmodified and not self.modify_other_keys:
                 mods = M.NONE
@@ -556,7 +598,7 @@ class KeyboardDevice(Device):
 
         backtab = self.keymap.keys.get("backtab") if char == "\t" and mods & M.SHIFT else None
         if backtab is not None:  # xterm folds no modifiers into CSI Z
-            self.board.transmit_keyboard(backtab)
+            self.transmit(backtab)
             return
 
         if char == constants.ESC:
@@ -587,7 +629,7 @@ class KeyboardDevice(Device):
             num += keymap.ctrl_function_offset
             mods &= ~M.CTRL
         if keymap.user_keys and mods == M.SHIFT and num in self.user_defined_keys:
-            self.board.transmit_keyboard_bytes(self.user_defined_keys[num])
+            self.transmit(self.user_defined_keys[num])
             return
         self._named_key(f"f{num}", mods)
 
@@ -611,7 +653,7 @@ class KeyboardDevice(Device):
             text = (mods and keymap.modified.get(f"kp_{key.lower()}")) or keymap.numeric.get(key)
             if text is not None:
                 prefix = constants.ESC if keymap.keypad_meta_prefix and mods & (M.ALT | M.META) else ""
-                self.board.transmit_keyboard(prefix + text, local_text=text, margin_key=text.isprintable())
+                self.transmit(prefix + text, local_text=text, margin_key=text.isprintable())
             return
         sequence = keymap.keypad.get(key)
         if sequence is not None:
@@ -636,7 +678,7 @@ class KeyboardDevice(Device):
                 if event.event_type != "release" and local_text is None:
                     key = ALIASES.get(event.key, event.key)
                     local_text = {"enter": "\r", "kp_enter": "\r", "tab": "\t", "backspace": "\x08"}.get(key)
-                self.board.transmit_keyboard(sequence, local_text=local_text, margin_key=bool(text))
+                self.transmit(sequence, local_text=local_text, margin_key=bool(text))
             return
         key = ALIASES.get(event.key, event.key)
         bits = event.modifiers
@@ -665,10 +707,10 @@ class KeyboardDevice(Device):
             else:
                 self._named_key(key[3:], mods)
         elif event.text and not bits & 62 and not (bits & M.SHIFT and self.modify_other_keys >= 2):
-            self.board.transmit_keyboard(self._national(event.text), local_text=event.text, margin_key=True)
+            self.transmit(self._national(event.text), local_text=event.text, margin_key=True)
         elif event.text and len(event.text) > 1 and not bits & KeyModifiers.CTRL:
             prefix = constants.ESC if self._legacy_escape_prefix(mods) else ""
-            self.board.transmit_keyboard(prefix + self._national(event.text), local_text=event.text, margin_key=True)
+            self.transmit(prefix + self._national(event.text), local_text=event.text, margin_key=True)
         else:
             char = {"escape": "\x1b", "enter": "\r", "tab": "\t", "backspace": "\x08"}.get(key, key)
             if event.text and len(event.text) == 1 and not bits & KeyModifiers.CTRL:
@@ -687,9 +729,9 @@ class KeyboardDevice(Device):
             if self.kitty_flags & 16:
                 for offset in range(0, len(text), 128):
                     chunk = text[offset : offset + 128]
-                    self.board.transmit_keyboard(self._kitty_sequence(0, 1, chunk), local_text=chunk)
+                    self.transmit(self._kitty_sequence(0, 1, chunk), local_text=chunk)
             return
-        self.board.transmit_keyboard(self._national(text), local_text=text)
+        self.transmit(self._national(text), local_text=text)
 
     def input_paste(self, text: str, phase: str = "complete") -> None:
         """A complete paste or bounded chunks of one bracketed transaction."""
@@ -703,7 +745,7 @@ class KeyboardDevice(Device):
         if XTERM_PASTE in self.board.model.provides:
             self._paste_as_xterm(prefix, text, suffix)
         elif prefix + text + suffix:
-            self.board.transmit_keyboard(prefix + text + suffix, local_text=text)
+            self.transmit(prefix + text + suffix, local_text=text)
 
     def _paste_as_xterm(self, prefix: str, text: str, suffix: str) -> None:
         """Newlines as carriage returns (unless mode 2006), disallowed controls as spaces, and
@@ -714,17 +756,17 @@ class KeyboardDevice(Device):
             pasted = pasted.replace("\n", "\r")
         if not modes.readline_quoting:
             if prefix + pasted + suffix:
-                self.board.transmit_keyboard(prefix + pasted + suffix, local_text=text)
+                self.transmit(prefix + pasted + suffix, local_text=text)
             return
         quoted = b"".join(b"\x16" + bytes([byte]) for byte in pasted.encode())
-        self.board.transmit_keyboard_bytes(prefix.encode() + quoted + suffix.encode(), local_text=text)
+        self.transmit(prefix.encode() + quoted + suffix.encode(), local_text=text)
 
     def input(self, data: str, *, local_text: str | None = None, margin_key: bool = False) -> None:
         """Translate control codes based on terminal modes and send to the host."""
         # DECCKM's SS3 forms are legacy encodings; Kitty ignores the mode.
         if self.board.modes.cursor_application_mode and not self.kitty_flags and f"{constants.ESC}[" in data:
             data = self.translate_application_cursor_keys(data)
-        self.board.transmit_keyboard(data, local_text=local_text, margin_key=margin_key)
+        self.transmit(data, local_text=local_text, margin_key=margin_key)
 
     @staticmethod
     def translate_application_cursor_keys(data: str) -> str:

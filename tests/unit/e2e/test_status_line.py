@@ -4,9 +4,12 @@ Behaviour from the VT510 reference manual (DECSSDT, DECSASD). The xterm 407
 build used for the other fixtures has no status line, so none are captured.
 """
 
+from dataclasses import replace
+
 import pytest
 
 from bittty import Board, MemoryConnection
+from bittty.caps import TerminalCaps
 from bittty.model import VT510, XTERM
 from bittty.present import StatusLineChanged
 
@@ -100,3 +103,17 @@ def test_a_terminal_without_a_status_line_ignores_it():
     board, wire, _ = _run(WRITABLE + "text\x1bP$q$~\x1b\\", model=XTERM)
     assert _main(board)[0] == "text"
     assert wire.data == ["\x1bP0$r$~\x1b\\"]
+
+
+def test_page_size_reports_are_the_main_display_while_the_status_line_is_active():
+    """The status line is one row, but the page is still 5 lines (DECSLPP, DECSNLS)."""
+    board, wire, _ = _run(WRITABLE + "\x1bP$qt\x1b\\\x1bP$q*|\x1b\\")
+    assert board.blitter.status_active
+    assert wire.data == ["\x1bP0$r5t\x1b\\", "\x1bP0$r5*|\x1b\\"]
+
+
+def test_the_status_line_measures_with_the_detected_ambiguous_width():
+    board = Board(width=20, height=5, model=VT510)
+    board.set_caps(replace(TerminalCaps.unknown(), ambiguous_width=2))
+    board.feed_host_data((WRITABLE + "α|").encode())
+    assert [board.blitter.status_page.get_cell(x, 0)[1] for x in range(3)] == ["α", "", "|"]

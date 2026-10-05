@@ -29,15 +29,15 @@ chrome a human looks at, and two full-duplex ports connect the board to its outs
 ### Core Components
 
 **Board** (`src/bittty/devices/board.py`)
-- The whole emulator: hosts the devices and registers (focus, window state, console
-  registers), owns the child process and its PTY, and routes parser operations to device
-  handlers through a flat `registry` dict
+- The whole emulator: hosts the devices and a few registers (focus, conformance level), owns
+  the child process and its PTY, and routes parser operations to device handlers through a
+  flat `registry` dict built from its `devices`. `width`/`height` are the blitter's page size
 - No UI dependencies; runs headless. The public emulator API (`input_*`, `resize`,
   `capture_pane`, `start_process`) lives here
 
 **Devices** (`src/bittty/devices/`)
-- Single-responsibility cards plugged into the board: charset, control, cursor, keyboard,
-  modes, mouse, palette, printer, query, style, title — and the **Blitter**
+- Single-responsibility cards plugged into the board: charset, comm, console, control,
+  cursor, keyboard, macros, modes, mouse, palette, printer, query, style, title — and the **Blitter**
   (`devices/blitter.py`), the device that writes video memory
 
 **Video** (`src/bittty/video.py`)

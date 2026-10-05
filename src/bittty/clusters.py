@@ -59,8 +59,8 @@ class _ClusterTail:
     insert_mode: bool
     auto_wrap: bool
     width_policy: WidthPolicy
-    board_width: int
-    board_height: int
+    page_width: int
+    page_height: int
     write_left: int
     write_right: int
     overflow: bool = False
@@ -80,8 +80,8 @@ class _PendingPrefix:
     insert_mode: bool
     auto_wrap: bool
     width_policy: WidthPolicy
-    board_width: int
-    board_height: int
+    page_width: int
+    page_height: int
 
 
 class ClusterWriter:
@@ -109,13 +109,13 @@ class ClusterWriter:
         board = blitter.board
         if (
             blitter.current_page is not tail.page
-            or board.width != tail.board_width
-            or board.height != tail.board_height
+            or blitter.width != tail.page_width
+            or blitter.height != tail.page_height
             or board.cursor.x != tail.cursor_x
             or board.cursor.y != tail.cursor_y
             or board.modes.insert_mode != tail.insert_mode
             or board.modes.auto_wrap != tail.auto_wrap
-            or board.width_policy != tail.width_policy
+            or blitter.width_policy != tail.width_policy
             or not (0 <= tail.y < tail.page.height and 0 <= tail.x < tail.page.width)
             or tail.page.grid[tail.y] is not tail.row
         ):
@@ -132,13 +132,13 @@ class ClusterWriter:
         board = blitter.board
         return (
             blitter.current_page is prefix.page
-            and board.width == prefix.board_width
-            and board.height == prefix.board_height
+            and blitter.width == prefix.page_width
+            and blitter.height == prefix.page_height
             and board.cursor.x == prefix.cursor_x
             and board.cursor.y == prefix.cursor_y
             and board.modes.insert_mode == prefix.insert_mode
             and board.modes.auto_wrap == prefix.auto_wrap
-            and board.width_policy == prefix.width_policy
+            and blitter.width_policy == prefix.width_policy
             and 0 <= prefix.cursor_y < prefix.page.height
             and prefix.page.grid[prefix.cursor_y] is prefix.row
         )
@@ -161,9 +161,9 @@ class ClusterWriter:
             cursor_y=y,
             insert_mode=board.modes.insert_mode,
             auto_wrap=board.modes.auto_wrap,
-            width_policy=board.width_policy,
-            board_width=board.width,
-            board_height=board.height,
+            width_policy=blitter.width_policy,
+            page_width=blitter.width,
+            page_height=blitter.height,
         )
 
     def _snapshot_glyph_target(self, x: int, y: int, right: int) -> tuple[int, tuple[Cell, ...], tuple[Cell, ...]]:
@@ -214,9 +214,9 @@ class ClusterWriter:
                 cursor_y=board.cursor.y,
                 insert_mode=board.modes.insert_mode,
                 auto_wrap=board.modes.auto_wrap,
-                width_policy=board.width_policy,
-                board_width=board.width,
-                board_height=board.height,
+                width_policy=blitter.width_policy,
+                page_width=blitter.width,
+                page_height=blitter.height,
                 write_left=bounds[0],
                 write_right=bounds[1],
                 overflow=overflow,
@@ -238,9 +238,9 @@ class ClusterWriter:
         tail.cursor_y = board.cursor.y
         tail.insert_mode = board.modes.insert_mode
         tail.auto_wrap = board.modes.auto_wrap
-        tail.width_policy = board.width_policy
-        tail.board_width = board.width
-        tail.board_height = board.height
+        tail.width_policy = blitter.width_policy
+        tail.page_width = blitter.width
+        tail.page_height = blitter.height
         tail.write_left = bounds[0]
         tail.write_right = bounds[1]
         tail.overflow = overflow
@@ -307,7 +307,7 @@ class ClusterWriter:
     def _write_cluster_glyph(self, text: str, width: int, style: Style) -> None:
         blitter = self._blitter
         board = blitter.board
-        if width == 0 or width > board.width:
+        if width == 0 or width > blitter.width:
             return  # a zero-width cluster is not a glyph, and one wider than the screen cannot be shown
         cursor = board.cursor
         bounds = cursor.prepare_for_text_write()
@@ -460,10 +460,10 @@ class ClusterWriter:
                 ascii_parts.append(pending)
             else:
                 flush_ascii()
-                width = blitter.board.width_policy.grapheme_width(pending)
+                width = blitter.width_policy.grapheme_width(pending)
                 if width:
                     display = pending[:_MAX_CLUSTER_CODEPOINTS]
-                    self._write_cluster_glyph(display, blitter.board.width_policy.grapheme_width(display), style)
+                    self._write_cluster_glyph(display, blitter.width_policy.grapheme_width(display), style)
                     if self._tail is not None and len(pending) > _MAX_CLUSTER_CODEPOINTS:
                         self._tail.overflow = True
                         self._tail.context = pending[-_OVERFLOW_CONTEXT:]
@@ -477,10 +477,10 @@ class ClusterWriter:
             flush_ascii()
         else:
             flush_ascii()
-            width = blitter.board.width_policy.grapheme_width(pending)
+            width = blitter.width_policy.grapheme_width(pending)
             if width:
                 display = pending[:_MAX_CLUSTER_CODEPOINTS]
-                self._write_cluster_glyph(display, blitter.board.width_policy.grapheme_width(display), style)
+                self._write_cluster_glyph(display, blitter.width_policy.grapheme_width(display), style)
                 if self._tail is not None and len(pending) > _MAX_CLUSTER_CODEPOINTS:
                     self._tail.overflow = True
                     self._tail.context = pending[-_OVERFLOW_CONTEXT:]

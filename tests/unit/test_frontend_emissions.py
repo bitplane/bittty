@@ -58,23 +58,23 @@ def test_cwd_notify_pointer_font_events_and_registers():
     parser.feed("\x1b]9;ding\x07")
     parser.feed("\x1b]22;pointer\x07")
     parser.feed("\x1b]50;Fira 12\x07")
-    assert board.cwd == "file:///tmp" and CwdChanged("file:///tmp") in rec.events
+    assert board.console.cwd == "file:///tmp" and CwdChanged("file:///tmp") in rec.events
     assert Notification("ding") in rec.events
-    assert board.pointer_shape == "pointer" and PointerShapeChanged("pointer") in rec.events
-    assert board.font == "Fira 12" and FontChanged("Fira 12") in rec.events
+    assert board.console.pointer_shape == "pointer" and PointerShapeChanged("pointer") in rec.events
+    assert board.console.font == "Fira 12" and FontChanged("Fira 12") in rec.events
 
 
 def test_clipboard_event_and_register():
     board, parser, rec = _term()
     parser.feed("\x1b]52;c;aGk=\x07")  # base64 "hi"
-    assert board.clipboard["c"] == "hi"
+    assert board.console.clipboard["c"] == "hi"
     assert ClipboardChanged("c", "hi") in rec.events
 
 
 def test_window_state_and_request_events():
     board, parser, rec = _term()
     parser.feed("\x1b[2t")  # iconify
-    assert board.window_iconified is True
+    assert board.console.window_iconified is True
     assert any(isinstance(e, WindowStateChanged) and e.iconified for e in rec.events)
     parser.feed("\x1b[5t")  # raise
     assert WindowRequest("raise") in rec.events

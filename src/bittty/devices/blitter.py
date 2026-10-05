@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from .. import constants
@@ -11,6 +12,7 @@ from ..options import DEC_CHARACTER_EDITING, DEC_LINE_EDITING, DEC_STATUS_LINE
 from ..present import StatusLineChanged
 from ..style import Style, parse_sgr_sequence
 from ..video import Video
+from ..width import DEFAULT_WIDTH_POLICY, WidthPolicy
 from .base import Device
 from .modes import ModeEffect
 
@@ -18,27 +20,63 @@ _REVERSE_ATTRS = {1: "bold", 4: "underline", 5: "blink", 7: "reverse"}
 _STATUS_LINE_KINDS = ("none", "indicator", "host-writable")  # DECSSDT 0-2
 
 if TYPE_CHECKING:
-    from ..width import WidthPolicy
     from .board import Board
+
+
+@dataclass
+class Surface:
+    """What the cursor writes on: a page, the rows of it in play, and its margins.
+
+    The main display and the one-row status line are each a surface; DECSASD swaps
+    the whole of one for the other.
+    """
+
+    page: Video
+    height: int
+    scroll_top: int
+    scroll_bottom: int
+    left_margin: int
+    right_margin: int
+
+    @classmethod
+    def whole(cls, page: Video, width: int, height: int) -> Surface:
+        """A surface whose margins take in the whole page."""
+        return cls(page, height, 0, height - 1, 0, width - 1)
+
+
+def _on_surface(field: str) -> property:
+    """A blitter attribute that is the active surface's."""
+    return property(lambda self: getattr(self.surface, field), lambda self, value: setattr(self.surface, field, value))
 
 
 class Blitter(Device):
     """Owns the video pages and applies screen/editing operations."""
 
-    def __init__(self, board: Board) -> None:
+    current_page = _on_surface("page")
+    rows = _on_surface("height")  # the page's lines, or the status line's one
+    scroll_top = _on_surface("scroll_top")
+    scroll_bottom = _on_surface("scroll_bottom")
+    left_margin = _on_surface("left_margin")
+    right_margin = _on_surface("right_margin")
+
+    def __init__(self, board: Board, width: int, height: int, width_policy: WidthPolicy | None = None) -> None:
         self.board = board
+        self.width = width  # the page size: the board reports it as its own
+        self.height = height
+        # How wide a character is: the constructor's policy, else the chrome's detected
+        # ambiguous width, else narrow; mode 8840 overrides it until a hard reset.
+        self._width_policy_explicit = width_policy is not None
+        self._width_policy_baseline = width_policy or DEFAULT_WIDTH_POLICY
+        self._width_policy_overridden = False
+        self.width_policy = self._width_policy_baseline
         # Page memory: the primary screen is one of these pages. `page` has the cursor and
         # `shown_page` is on display; they part only while DECPCCM is reset.
-        self.pages = [Video(board.width, board.height, board.width_policy)]
+        self.pages = [Video(width, height, self.width_policy)]
         self.page = self.shown_page = 0
         self._fit_page_memory()
-        self.alt_page = Video(board.width, board.height, board.width_policy)
-        self.current_page = self.primary_page
+        self.alt_page = Video(width, height, self.width_policy)
+        self.surface = Surface.whole(self.primary_page, width, height)
         self.in_alt_screen = False
-        self.scroll_top = 0
-        self.scroll_bottom = board.height - 1
-        self.left_margin = 0
-        self.right_margin = board.width - 1
         self.attr_change_extent = "stream"  # DECSACE: "stream" (power-on) or "rectangle"
         self.last_printed_char = ""  # REP before any printing repeats nothing
         self._clusters = ClusterWriter(self)
@@ -46,11 +84,11 @@ class Blitter(Device):
         self.right_to_left = False  # DECRLM
         self._rtl_wrap_at: tuple[int, int] | None = None  # where a right-to-left line was filled
         # The status line (DECSSDT/DECSASD) is a one-row display of its own: while it is
-        # active, writes go to status_page and the main display's context waits in _main.
+        # active, writes go to status_page and the main surface and its cursor wait in _main.
         self.status_type = board.model.status_line_type
-        self.status_page = Video(board.width, 1, board.width_policy)
+        self.status_page = Video(width, 1, self.width_policy)
         self.status_active = False
-        self._main: tuple | None = None
+        self._main: tuple[Surface, tuple[int, int, bool]] | None = None
         self._status_x = 0
         self.handlers = {
             "DECSLRM": self.apply_left_right_margins,
@@ -133,9 +171,9 @@ class Blitter(Device):
     def _fit_page_memory(self) -> None:
         """Hold as many pages as the model's memory has at this page size, keeping those that fit."""
         board = self.board
-        count = board.model.pages_for(board.height)
+        count = board.model.pages_for(self.height)
         del self.pages[count:]
-        self.pages += [Video(board.width, board.height, board.width_policy) for _ in range(count - len(self.pages))]
+        self.pages += [Video(self.width, self.height, self.width_policy) for _ in range(count - len(self.pages))]
         self.page = min(self.page, count - 1)
         self.shown_page = min(self.shown_page, count - 1)
 
@@ -190,20 +228,16 @@ class Blitter(Device):
         status = status and self.status_type == 2
         if status == self.status_active:
             return
-        board, cursor = self.board, self.board.cursor
+        cursor = self.board.cursor
         self.reset_grapheme_state()
         here = (cursor.display_x, cursor.y, cursor.wrap_pending)
         if status:
-            self._main = (self.current_page, board.height, self.scroll_top, self.scroll_bottom,
-                          self.left_margin, self.right_margin, *here)  # fmt: skip
-            self.current_page, board.height = self.status_page, 1
-            self.scroll_top = self.scroll_bottom = self.left_margin = 0
-            self.right_margin = board.width - 1
+            self._main = (self.surface, here)
+            self.surface = Surface.whole(self.status_page, self.width, 1)
             x, y, wrap = self._status_x, 0, False
         else:
             self._status_x = here[0]
-            (self.current_page, board.height, self.scroll_top, self.scroll_bottom,
-             self.left_margin, self.right_margin, x, y, wrap) = self._main  # fmt: skip
+            self.surface, (x, y, wrap) = self._main
         self.status_active = status
         cursor.set_position(x, y)
         if wrap:
@@ -226,7 +260,7 @@ class Blitter(Device):
         code_to_use = ansi_code if ansi_code else board.style.current
         translated_text = board.charset.translate(text)
         cursor = board.cursor
-        width = board.width
+        width = self.width
 
         def write_ascii_run(run: str) -> None:
             remaining = run
@@ -250,7 +284,7 @@ class Blitter(Device):
                 if start < index:
                     write_ascii_run(translated_text[start:index])
 
-                char_width = board.width_policy.width(char)
+                char_width = self.width_policy.width(char)
                 if char_width > width:
                     start = index + 1
                     continue
@@ -310,11 +344,11 @@ class Blitter(Device):
         board, cursor = self.board, self.board.cursor
         style = ansi_code or board.style.current
         for char in board.charset.translate(text):
-            width = board.width_policy.width(char)
-            if not 0 < width <= board.width:
+            width = self.width_policy.width(char)
+            if not 0 < width <= self.width:
                 continue
             if self._rtl_wrap_at == (cursor.x, cursor.y) and board.modes.auto_wrap:
-                right = self.right_margin if cursor.x >= self.left_margin else board.width - 1
+                right = self.right_margin if cursor.x >= self.left_margin else self.width - 1
                 cursor.line_feed(is_wrapped=True)
                 cursor.x = right
             self._rtl_wrap_at = None
@@ -345,9 +379,9 @@ class Blitter(Device):
         """
         if count <= 0 or not self.last_printed_char:
             return
-        screenful = self.board.width * self.board.height
+        screenful = self.width * self.rows
         if count > screenful:
-            count = screenful + count % self.board.width
+            count = screenful + count % self.width
         self.write_text(self.last_printed_char * count)
 
     def resize(self, width: int, height: int) -> None:
@@ -355,10 +389,11 @@ class Blitter(Device):
         self.select_active_display(False)
         self.reset_grapheme_state()
         board, cursor = self.board, self.board.cursor
-        reflow = width != board.width and (board.model.reflows or board.modes.text_reflow)
+        reflow = width != self.width and (board.model.reflows or board.modes.text_reflow)
         here = (cursor.display_x, cursor.y)  # before the new width clamps it
-        board.width = width
-        board.height = height
+        self.width = width
+        self.height = height
+        self.rows = height
 
         # Page memory re-wraps its soft-wrapped lines on a terminal that reflows; the
         # alternate screen, like every page elsewhere, is cut at the new width.
@@ -382,19 +417,19 @@ class Blitter(Device):
 
     def set_page_columns(self, columns: int) -> None:
         """DECSCPP — change page width without clearing or resetting regions."""
-        if columns not in (80, 132) or columns == self.board.width:
+        if columns not in (80, 132) or columns == self.width:
             return
 
-        old_width = self.board.width
+        old_width = self.width
         old_left = self.left_margin
         old_right = self.right_margin
         full_width_region = old_left == 0 and old_right == old_width - 1
 
         self.select_active_display(False)
         self.reset_grapheme_state()
-        self.board.width = columns
+        self.width = columns
         for page in self.videos:
-            page.resize(columns, self.board.height)
+            page.resize(columns, self.height)
         self.status_page.resize(columns, 1)
 
         if full_width_region:
@@ -405,11 +440,30 @@ class Blitter(Device):
             self.right_margin = max(self.left_margin + 1, min(old_right, columns - 1))
         self.board.cursor.clamp_to_terminal()
 
-    def set_width_policy(self, policy: WidthPolicy) -> None:
-        """Use a new policy for future writes on both video pages."""
+    def _install_width_policy(self, policy: WidthPolicy) -> None:
+        """Use a new policy for future writes on every page, without reinterpreting stored cells."""
         self.reset_grapheme_state()
-        for page in self.videos:
+        self.width_policy = policy
+        for page in (*self.videos, self.status_page):
             page.width_policy = policy
+
+    def set_ambiguous_width(self, width: int) -> None:
+        """Mode 8840: override the ambiguous width until a hard reset."""
+        self._width_policy_overridden = True
+        self._install_width_policy(WidthPolicy(ambiguous_width=width))
+
+    def detect_ambiguous_width(self, width: int) -> None:
+        """The chrome measured its ambiguous width: the new baseline, unless the constructor chose one."""
+        if self._width_policy_explicit:
+            return
+        self._width_policy_baseline = WidthPolicy(ambiguous_width=width)
+        if not self._width_policy_overridden:
+            self._install_width_policy(self._width_policy_baseline)
+
+    def restore_width_policy(self) -> None:
+        """Clear a mode 8840 override and restore the baseline."""
+        self._width_policy_overridden = False
+        self._install_width_policy(self._width_policy_baseline)
 
     def clear_screen(self, mode: int = constants.ERASE_FROM_CURSOR_TO_END) -> None:
         """Clear screen."""
@@ -423,14 +477,14 @@ class Blitter(Device):
                 self.board.cursor.x,
                 bg_ansi,
             )
-            for y in range(self.board.cursor.y + 1, self.board.height):
+            for y in range(self.board.cursor.y + 1, self.rows):
                 self.current_page.clear_line(y, constants.ERASE_ALL, 0, bg_ansi)
         elif mode == constants.ERASE_FROM_START_TO_CURSOR:
             for y in range(self.board.cursor.y):
                 self.current_page.clear_line(y, constants.ERASE_ALL, 0, bg_ansi)
             self.clear_line(constants.ERASE_FROM_START_TO_CURSOR)
         elif mode == constants.ERASE_ALL:
-            for y in range(self.board.height):
+            for y in range(self.rows):
                 self.current_page.clear_line(y, constants.ERASE_ALL, 0, bg_ansi)
 
     def clear_line(self, mode: int = constants.ERASE_FROM_CURSOR_TO_END) -> None:
@@ -452,7 +506,7 @@ class Blitter(Device):
     def selective_erase_display(self, mode: int) -> None:
         """DECSED — erase in display, leaving DECSCA-protected characters."""
         self.board.cursor.cancel_pending_wrap()
-        cx, cy, w, h = self.board.cursor.x, self.board.cursor.y, self.board.width, self.board.height
+        cx, cy, w, h = self.board.cursor.x, self.board.cursor.y, self.width, self.rows
         if mode == constants.ERASE_FROM_CURSOR_TO_END:
             rows = [(cx, w, cy)] + [(0, w, y) for y in range(cy + 1, h)]
         elif mode == constants.ERASE_FROM_START_TO_CURSOR:
@@ -466,7 +520,7 @@ class Blitter(Device):
     def selective_erase_line(self, mode: int) -> None:
         """DECSEL — erase in line, leaving DECSCA-protected characters."""
         self.board.cursor.cancel_pending_wrap()
-        cx, cy, w = self.board.cursor.x, self.board.cursor.y, self.board.width
+        cx, cy, w = self.board.cursor.x, self.board.cursor.y, self.width
         if mode == constants.ERASE_FROM_CURSOR_TO_END:
             span = range(cx, w)
         elif mode == constants.ERASE_FROM_START_TO_CURSOR:
@@ -482,12 +536,12 @@ class Blitter(Device):
         """Clamp 1-based top/left/bottom/right (None/0 = extremes) to 0-based inclusive bounds."""
         t = (top - 1) if top else 0
         left0 = (left - 1) if left else 0
-        b = (bottom - 1) if bottom else (self.board.height - 1)
-        r = (right - 1) if right else (self.board.width - 1)
-        t = max(0, min(t, self.board.height - 1))
-        b = max(t, min(b, self.board.height - 1))
-        left0 = max(0, min(left0, self.board.width - 1))
-        r = max(left0, min(r, self.board.width - 1))
+        b = (bottom - 1) if bottom else (self.rows - 1)
+        r = (right - 1) if right else (self.width - 1)
+        t = max(0, min(t, self.rows - 1))
+        b = max(t, min(b, self.rows - 1))
+        left0 = max(0, min(left0, self.width - 1))
+        r = max(left0, min(r, self.width - 1))
         return t, left0, b, r
 
     def rectangle_styles(self, params) -> set[Style]:
@@ -513,7 +567,7 @@ class Blitter(Device):
             return
         char = chr(params[0]) if params and params[0] else " "
         t, left, b, r = self._rectangle(*self._four(params, 1))
-        char_width = self.board.width_policy.width(char)
+        char_width = self.width_policy.width(char)
         for y in range(t, b + 1):
             x = left
             while x + char_width - 1 <= r:
@@ -551,12 +605,12 @@ class Blitter(Device):
             # at that edge, never an orphaned fragment.
             if row and row[0][1] == "":
                 row[0] = (row[0][0], " ")
-            if row and r + 1 < self.board.width and source.get_cell(r + 1, y)[1] == "":
+            if row and r + 1 < self.width and source.get_cell(r + 1, y)[1] == "":
                 row[-1] = (row[-1][0], " ")
             cells.append(row)
         for dy, row in enumerate(cells):
             ty = dt + dy
-            if 0 <= ty < self.board.height and 0 <= dl < self.board.width:
+            if 0 <= ty < self.rows and 0 <= dl < self.width:
                 target.replace_cells(dl, ty, row)
 
     def set_attr_change_extent(self, ps: int) -> None:
@@ -568,7 +622,7 @@ class Blitter(Device):
         top, left, bottom, right = self._four(params)
         if self.attr_change_extent == "stream":
             # Raw corners, clamped to the screen but not normalised (the end may precede the start).
-            h, w = self.board.height, self.board.width
+            h, w = self.rows, self.width
             t = max(0, min((top - 1) if top else 0, h - 1))
             left0 = max(0, min((left - 1) if left else 0, w - 1))
             b = max(0, min((bottom - 1) if bottom else h - 1, h - 1))
@@ -627,21 +681,21 @@ class Blitter(Device):
 
     def alignment_test(self) -> None:
         """Fill the screen with 'E' characters for alignment testing."""
-        test_text = "E" * self.board.width
-        for y in range(self.board.height):
+        test_text = "E" * self.width
+        for y in range(self.rows):
             self.current_page.set(0, y, test_text)
 
     def set_scroll_region(self, top: int, bottom: int) -> None:
         """Set scroll region."""
-        self.scroll_top = max(0, min(top, self.board.height - 1))
-        self.scroll_bottom = max(self.scroll_top, min(bottom, self.board.height - 1))
+        self.scroll_top = max(0, min(top, self.rows - 1))
+        self.scroll_bottom = max(self.scroll_top, min(bottom, self.rows - 1))
 
     def set_top_and_bottom_margins(self, top: int, bottom: int | None) -> None:
         """DECSTBM — set the scroll region and home the cursor (origin-aware).
 
         A region of fewer than two lines is ignored, cursor and all (xterm 407).
         """
-        bottom = self.board.height - 1 if bottom is None else min(bottom, self.board.height - 1)
+        bottom = self.rows - 1 if bottom is None else min(bottom, self.rows - 1)
         if top >= bottom:
             return
         self.set_scroll_region(top, bottom)
@@ -657,7 +711,7 @@ class Blitter(Device):
             return
         cursor.x = self.left_margin
 
-        if self.left_margin == 0 and self.right_margin == self.board.width - 1 and self.board.style.current.bg is None:
+        if self.left_margin == 0 and self.right_margin == self.width - 1 and self.board.style.current.bg is None:
             self.current_page.scroll_region_down(cursor.y, self.scroll_bottom, count)
         else:
             self.current_page.scroll_rectangle_down(
@@ -679,7 +733,7 @@ class Blitter(Device):
             return
         cursor.x = self.left_margin
 
-        if self.left_margin == 0 and self.right_margin == self.board.width - 1 and self.board.style.current.bg is None:
+        if self.left_margin == 0 and self.right_margin == self.width - 1 and self.board.style.current.bg is None:
             self.current_page.scroll_region_up(cursor.y, self.scroll_bottom, count)
         else:
             self.current_page.scroll_rectangle_up(
@@ -717,7 +771,7 @@ class Blitter(Device):
             return
 
         abs_lines = abs(lines)
-        if self.left_margin == 0 and self.right_margin == self.board.width - 1 and self.board.style.current.bg is None:
+        if self.left_margin == 0 and self.right_margin == self.width - 1 and self.board.style.current.bg is None:
             if lines > 0:
                 self.current_page.scroll_region_up(self.scroll_top, self.scroll_bottom, abs_lines)
             else:
@@ -787,7 +841,7 @@ class Blitter(Device):
                 self.left_margin,
                 columns,
                 top=0,
-                bottom=self.board.height - 1,
+                bottom=self.rows - 1,
                 style_or_ansi=Style(),
             )
         else:
@@ -806,7 +860,7 @@ class Blitter(Device):
 
     def set_left_right_margins(self, left: int | None, right: int | None) -> None:
         """DECSLRM — set the left/right margins (1-based; None/0 = extremes) and home the cursor."""
-        width = self.board.width
+        width = self.width
         left1 = left or 1
         right1 = min(right or width, width)  # clamped to the screen, as in xterm 407
         if not left1 < right1:
@@ -820,7 +874,7 @@ class Blitter(Device):
     def reset_left_right_margins(self) -> None:
         """Restore the margins to the full screen width."""
         self.left_margin = 0
-        self.right_margin = self.board.width - 1
+        self.right_margin = self.width - 1
         self.board.cursor.cancel_pending_wrap()
 
     def apply_left_right_margins(self, operation: Operation) -> None:
@@ -844,10 +898,11 @@ class Blitter(Device):
     def reset(self, hard: bool = True) -> None:
         """Restore the full scroll region; a hard reset also clears both pages to primary."""
         self.reset_grapheme_state()
-        self.set_scroll_region(0, self.board.height - 1)
-        self.left_margin, self.right_margin = 0, self.board.width - 1  # a pending wrap survives DECSTR
+        self.set_scroll_region(0, self.rows - 1)
+        self.left_margin, self.right_margin = 0, self.width - 1  # a pending wrap survives DECSTR
         if not hard:
             return
+        self.restore_width_policy()
         self.set_right_to_left(False)
         self.in_alt_screen = False
         self.page = self.shown_page = 0
@@ -858,7 +913,7 @@ class Blitter(Device):
         for buf in self.videos:
             buf.reset_line_attributes()
             buf.reset_wrapped_lines()
-            for y in range(self.board.height):
+            for y in range(self.rows):
                 buf.clear_line(y, constants.ERASE_ALL, 0, "")
         self.last_printed_char = ""
 
@@ -866,9 +921,9 @@ class Blitter(Device):
         """DECCOLM — switch 80/132 columns; always clears the screen and homes the cursor."""
         if columns not in (80, 132):
             return
-        if self.board.width != columns:
-            self.resize(columns, self.board.height)
-        self.set_scroll_region(0, self.board.height - 1)
+        if self.width != columns:
+            self.resize(columns, self.height)
+        self.set_scroll_region(0, self.rows - 1)
         self.reset_left_right_margins()
         if not self.board.modes.no_clear_column_mode:
             self.clear_screen(constants.ERASE_ALL)
@@ -879,5 +934,5 @@ class Blitter(Device):
         self.board.cursor.cancel_pending_wrap()
         y = self.board.cursor.y
         style = self.board.style.current
-        for x in range(self.board.cursor.x, min(self.board.cursor.x + count, self.board.width)):
+        for x in range(self.board.cursor.x, min(self.board.cursor.x + count, self.width)):
             self.current_page.set_cell(x, y, " ", style)

@@ -24,13 +24,13 @@ def _term():
 def test_osc_22_sets_the_pointer_shape():
     board, parser, _ = _term()
     parser.feed("\x1b]22;pointer\x07")
-    assert board.pointer_shape == "pointer"
+    assert board.console.pointer_shape == "pointer"
 
 
 def test_osc_50_sets_and_queries_the_font():
     board, parser, transport = _term()
     parser.feed("\x1b]50;Fira Code 12\x07")
-    assert board.font == "Fira Code 12"
+    assert board.console.font == "Fira Code 12"
     parser.feed("\x1b]50;?\x07")
     assert transport.data[-1] == "\x1b]50;Fira Code 12\x07"
 

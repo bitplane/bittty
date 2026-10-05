@@ -26,10 +26,10 @@ def test_setterm_updates_board_registers():
     parser.feed("\x1b[9;5]")  # screen-blank timeout (minutes)
     parser.feed("\x1b[14;30]")  # VESA powerdown
     parser.feed("\x1b[16;250]")  # cursor blink interval
-    assert (board.bell_hz, board.bell_ms) == (440, 200)
-    assert board.blank_timeout == 5
-    assert board.vesa_powerdown == 30
-    assert board.cursor_blink_ms == 250
+    assert (board.console.bell_hz, board.console.bell_ms) == (440, 200)
+    assert board.console.blank_timeout == 5
+    assert board.console.vesa_powerdown == 30
+    assert board.console.cursor_blink_ms == 250
 
 
 def test_setterm_console_switch_is_a_signal():

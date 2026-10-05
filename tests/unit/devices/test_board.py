@@ -8,7 +8,7 @@ def test_board_exposes_device_slots():
 
     assert board.parser.sink is board
     assert board.devices["cursor"] is board.cursor
-    assert board.devices["host"] is board.host
+    assert board.devices["console"] is board.console
     assert board.devices["blitter"] is board.blitter
     assert board.devices["style"] is board.style
     assert board.devices["title"] is board.title

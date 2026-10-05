@@ -222,7 +222,7 @@ class PrinterDevice(Device):
             bottom = self.board.blitter.scroll_bottom
         else:
             top = 0
-            bottom = self.board.height - 1
+            bottom = page.height - 1
         lines = [page.get_line_text(y).rstrip() for y in range(top, bottom + 1)]
         return "\r\n".join(lines) + "\r\n"
 

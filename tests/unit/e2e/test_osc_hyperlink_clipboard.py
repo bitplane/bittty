@@ -41,7 +41,7 @@ def test_osc52_set_and_query_clipboard():
 
     encoded = base64.b64encode(b"hello").decode("ascii")
     parser.feed(f"\x1b]52;c;{encoded}\x07")
-    assert board.clipboard["c"] == "hello"
+    assert board.console.clipboard["c"] == "hello"
 
     parser.feed("\x1b]52;c;?\x07")
     assert transport.data == [f"\x1b]52;c;{encoded}\x07"]

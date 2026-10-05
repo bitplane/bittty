@@ -26,12 +26,12 @@ def _run(sequence, model):
 )
 def test_crt_saver(sequence, timeout, status):
     board, replies = _run(sequence + "\x1b[?97$p", VT510)
-    assert board.blank_timeout == timeout and replies == [f"\x1b[?97;{status}$y"]
+    assert board.console.blank_timeout == timeout and replies == [f"\x1b[?97;{status}$y"]
 
 
 def test_the_linux_blank_timeout_is_the_same_register():
     board, _ = _run("\x1b[9;10]", LINUX)
-    assert board.blank_timeout == 10
+    assert board.console.blank_timeout == 10
 
 
 @pytest.mark.parametrize(("model", "mode", "attr"), [(VT510, 106, "overscan"), (VT100, 9, "interlace")])

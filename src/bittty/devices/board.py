@@ -21,9 +21,9 @@ from ..keys import KeyEvent
 from ..model import DEFAULT, Model
 from ..operations import Operation
 from ..parser import Parser
-from ..present import Bell, PresentEvent, WindowRequest
+from ..present import PresentEvent
 from ..pty import StdioPTY, UnixPTY, WindowsPTY
-from ..width import DEFAULT_WIDTH_POLICY, WidthPolicy
+from ..width import WidthPolicy
 from .blitter import Blitter
 from .charset import CharsetDevice
 from .control import ControlDevice
@@ -35,6 +35,7 @@ from .palette import PaletteDevice
 from .printer import PrinterDevice
 from .macros import MacroDevice
 from .comm import CommDevice
+from .console import ConsoleDevice
 from .query import QueryDevice
 from .style import StyleDevice
 from .title import TitleDevice
@@ -71,12 +72,8 @@ class Board:
         width_policy: WidthPolicy | None = None,
         margin_bell_columns: int = 10,
     ) -> None:
-        if margin_bell_columns < 0:
-            raise ValueError("margin_bell_columns must be non-negative")
         self.command = command
         self._output_lock = RLock()
-        self.width = width
-        self.height = height
         self.stdin = stdin
         self.stdout = stdout
         self._pty: Any | None = None
@@ -85,43 +82,16 @@ class Board:
 
         self.model = model or DEFAULT
         self.palette_overrides = palette_overrides or {}
-        self._width_policy_explicit = width_policy is not None
-        self._width_policy_baseline = width_policy or DEFAULT_WIDTH_POLICY
-        self._width_policy_overridden = False
-        self.width_policy = self._width_policy_baseline
-        self.clipboard: dict[str, str] = {}  # OSC 52 selections; terminals sync this
-        self.cwd: str = ""  # OSC 7 reported working directory
-        self.pointer_shape: str = ""  # OSC 22 mouse-pointer shape
-        self.font: str = ""  # OSC 50 font selection
         self.conformance_level: int = 62  # DECSCL
         self.c1_eightbit: bool = False  # S7C1T/S8C1T: transmit C1 controls as 8-bit
         self.ansi_conformance_level: int = 1  # ESC SP L/M/N
         # Physical facts about the box the terminal lives in; a terminal (chrome) reports these.
         self.focused: bool = True
-        # XTWINOPS window state; a windowing terminal actuates these.
-        self.window_iconified: bool = False
-        self.window_maximized: bool = False
-        self.window_fullscreen: bool = False
-        self.window_position: tuple[int, int] = (0, 0)
-        # linux console setterm hardware registers; a display/audio backend actuates these.
-        self.screen_blanked: bool = False
-        self.blank_timeout: int = self.model.blank_timeout  # minutes; 0 = never
-        self.bell_hz: int = 750
-        self.bell_ms: int = 125
-        self.vesa_powerdown: int = 0
-        self.cursor_blink_ms: int = 0
-        self.default_underline_color: int | None = None
-        self.default_dim_color: int | None = None
-        self._answerback: str = ""
-        self._answerback_concealed = False
-        self.margin_bell_columns = margin_bell_columns
-        self._margin_bell_latch: tuple[int, int] | None = None
-        self.warning_bell_volume: int = 8  # DECSWBV (0-8)
-        self.margin_bell_volume: int = 0  # DECSMBV (0-8)
         self.host = HostPort(on_connected=self._host_connected)  # duplex jack toward the child
         self.display = DisplayPort(self)  # duplex jack toward the terminal (chrome)
         self.caps = TerminalCaps.unknown()  # what the real terminal can do (terminal pushes)
 
+        self.blitter = Blitter(self, width, height, width_policy)  # first: it holds the page size the others read
         self.charset = CharsetDevice(self)
         self.cursor = CursorDevice(self)
         self.keyboard = KeyboardDevice(self)
@@ -130,9 +100,9 @@ class Board:
         self.palette = PaletteDevice(self)
         self.printer = PrinterDevice(self)
         self.comm = CommDevice(self)
-        self.blitter = Blitter(self)
         self.style = StyleDevice(self)
         self.title = TitleDevice(self)
+        self.console = ConsoleDevice(self, margin_bell_columns)
 
         self.control = ControlDevice(self)
         self.query = QueryDevice(self)
@@ -142,13 +112,13 @@ class Board:
             "charset": self.charset,
             "control": self.control,
             "cursor": self.cursor,
-            "host": self.host,
             "keyboard": self.keyboard,
             "modes": self.modes,
             "mouse": self.mouse,
             "palette": self.palette,
             "printer": self.printer,
             "comm": self.comm,
+            "console": self.console,
             "query": self.query,
             "macros": self.macros,
             "blitter": self.blitter,
@@ -159,25 +129,20 @@ class Board:
         self.registry = self._build_registry()
         self.parser = Parser(self, feed_lock=self._output_lock)
 
+    @property
+    def width(self) -> int:
+        """Columns on the page."""
+        return self.blitter.width
+
+    @property
+    def height(self) -> int:
+        """Lines on the page (the main display's, even while the status line is written)."""
+        return self.blitter.height
+
     def _build_registry(self) -> dict:
         """Merge every device's operation handlers into one name -> handler table."""
         registry = {"PRINT": self._print}
-        for device in (
-            self.charset,
-            self.control,
-            self.cursor,
-            self.keyboard,
-            self.modes,
-            self.mouse,
-            self.palette,
-            self.printer,
-            self.comm,
-            self.blitter,
-            self.style,
-            self.query,
-            self.title,
-            self.macros,
-        ):
+        for device in self.devices.values():
             for name, handler in device.handlers.items():
                 if name in registry:
                     raise ValueError(f"operation {name!r} claimed by more than one device")
@@ -237,156 +202,22 @@ class Board:
             if self.width != old_width and self.pty is not None:
                 self.pty.resize(self.height, self.width)
 
-    def bell(self) -> None:
-        """Ring the terminal bell: pushed to the terminal (chrome) as a present event."""
-        self.present(Bell())
-        if self.modes.bell_urgent:
-            self.request_window("urgent")
-        if self.modes.bell_raise:
-            self.request_window("raise")
-
-    def request_window(self, kind: str) -> None:
-        """Present one window-manager action request; delivered, never stored."""
-        self.present(WindowRequest(kind))
-
-    def reset_margin_bell(self) -> None:
-        """Re-arm the xterm margin bell after its mode changes."""
-        self._margin_bell_latch = None
-
-    def check_margin_bell(self) -> None:
-        """Ring once when a printable keystroke occurs in the right-margin zone."""
-        if not self.modes.margin_bell or self.margin_bell_columns == 0:
-            self._margin_bell_latch = None
-            return
-        cursor = self.cursor
-        blitter = self.blitter
-        inside_margins = (
-            blitter.scroll_top <= cursor.y <= blitter.scroll_bottom
-            and blitter.left_margin <= cursor.display_x <= blitter.right_margin
-        )
-        right = blitter.right_margin if inside_margins else self.width - 1
-        in_zone = cursor.display_x >= max(0, right + 1 - self.margin_bell_columns)
-        latch = (cursor.y, right)
-        if not in_zone:
-            self._margin_bell_latch = None
-        elif self._margin_bell_latch != latch:
-            self._margin_bell_latch = latch
-            self.bell()
-
-    def echo_input(self, text: str) -> None:
-        """Display local keyboard echo directly, never through the ANSI parser."""
-        run: list[str] = []
-
-        def flush_run() -> None:
-            if run:
-                self.blitter.write_text("".join(run), self.style.current)
-                run.clear()
-
-        for char in text:
-            code = ord(char)
-            if code >= 0x20 and not (0x7F <= code <= 0x9F):
-                run.append(char)
-                continue
-            flush_run()
-            if char == constants.CR:
-                self.cursor.carriage_return()
-            elif char in (constants.LF, constants.VT, constants.FF):
-                self.cursor.line_feed()
-            elif char == constants.BS:
-                self.cursor.backspace()
-            elif char == constants.HT:
-                self.cursor.horizontal_tab()
-        flush_run()
-
-    def transmit_keyboard(self, data: str, *, local_text: str | None = None, margin_key: bool = False) -> None:
-        """Apply keyboard policies, then transmit one text payload to the child."""
-        if self.modes.keyboard_locked:
-            return
-        self.host.write(data)
-        if self.modes.local_echo and local_text is not None:
-            self.echo_input(local_text)
-        if margin_key:
-            self.check_margin_bell()
-
-    def transmit_keyboard_bytes(
-        self,
-        data: bytes,
-        *,
-        local_text: str | None = None,
-        margin_key: bool = False,
-    ) -> None:
-        """Byte-oriented variant used by legacy eight-bit Meta input."""
-        if self.modes.keyboard_locked:
-            return
-        self.host.write_bytes(data)
-        if self.modes.local_echo and local_text is not None:
-            self.echo_input(local_text)
-        if margin_key:
-            self.check_margin_bell()
-
     def present(self, event: PresentEvent) -> None:
         """Push a discrete side-effect to the attached terminal (no-op if none)."""
         self.display.present(event)
 
-    @property
-    def answerback(self) -> str | None:
-        """Configured answerback, or None while DECCANSM conceals it."""
-        return None if self._answerback_concealed else self._answerback
-
-    @answerback.setter
-    def answerback(self, value: str) -> None:
-        if not isinstance(value, str):
-            raise TypeError("answerback must be a string")
-        self._answerback = value
-        self._answerback_concealed = False
-
-    @property
-    def answerback_concealed(self) -> bool:
-        return self._answerback_concealed
-
-    def set_answerback_concealed(self, concealed: bool) -> None:
-        """Conceal irreversibly until a new message is assigned."""
-        if concealed:
-            self._answerback_concealed = True
-
-    def send_answerback(self) -> None:
-        """Transmit the stored secret without exposing it through the public getter."""
-        if self._answerback:
-            self.host.write(self._answerback, flush=True)
-
     def _host_connected(self) -> None:
         """Handle a real duplex line establishment."""
-        if hasattr(self, "modes") and self.modes.auto_answerback:
-            self.send_answerback()
+        if self.modes.auto_answerback:
+            self.console.send_answerback()
 
     def set_caps(self, caps: TerminalCaps) -> None:
         """Record what the real terminal can do (a terminal (chrome) pushes this after probing)."""
         self.caps = caps
         if caps.grapheme_mode is not None:
             self.modes.set_grapheme_capability(caps.grapheme_mode)
-        if not self._width_policy_explicit and caps.ambiguous_width is not None:
-            self._width_policy_baseline = WidthPolicy(ambiguous_width=caps.ambiguous_width)
-            if not self._width_policy_overridden:
-                self._install_width_policy(self._width_policy_baseline)
-                self.modes.ambiguous_width_double = caps.ambiguous_width == 2
-
-    def _install_width_policy(self, policy: WidthPolicy) -> None:
-        """Make a policy active for future writes on both video pages."""
-        self.width_policy = policy
-        self.blitter.set_width_policy(policy)
-
-    def set_ambiguous_width(self, width: int, *, mode_override: bool = True) -> None:
-        """Set the active ambiguous width without reinterpreting stored cells."""
-        if mode_override:
-            self._width_policy_overridden = True
-        self._install_width_policy(WidthPolicy(ambiguous_width=width))
-        self.modes.ambiguous_width_double = width == 2
-
-    def restore_width_policy(self) -> None:
-        """Clear a runtime override and restore the constructor/detected baseline."""
-        self._width_policy_overridden = False
-        self._install_width_policy(self._width_policy_baseline)
-        self.modes.ambiguous_width_double = self._width_policy_baseline.ambiguous_width == 2
+        if caps.ambiguous_width is not None:
+            self.blitter.detect_ambiguous_width(caps.ambiguous_width)
 
     def set_focus(self, focused: bool) -> None:
         """Record the box's focus state and report it to the child (DECSET 1004)."""

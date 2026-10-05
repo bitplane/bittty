@@ -25,15 +25,17 @@ The whole emulator: devices, registers, the child process and its PTY. It routes
 operations to device handlers through a flat `registry` dict and runs headless — a board
 with nothing plugged into its display port behaves identically.
 
-Devices are single-responsibility cards: charset, control, cursor, keyboard, modes, mouse,
-palette, printer, query, style, title, and the **Blitter** — the device that writes video
+Devices are single-responsibility cards: charset, comm, console, control, cursor, keyboard,
+macros, modes, mouse, palette, printer, query, style, title, and the **Blitter** — the device that writes video
 memory. It blits; it does not render.
 
 A device is part of the terminal. What plugs *into* it lives in `bittty.peripherals` and is
 never imported by core — see [peripherals.md](peripherals.md).
 
-Registers on the board hold physical facts reported by the chrome (focus, window state,
-caps) and hardware state the child can set (bell pitch, blank timeout, console requests).
+Registers on the board hold physical facts reported by the chrome (focus, caps). The
+**console** device keeps the box's own registers: window state (XTWINOPS), the bells, the
+answerback, the linux setterm registers (bell pitch, blank timeout) and the OSC desktop
+settings (clipboard, working directory, pointer shape, font).
 
 Host-output chunks (`feed_host_data` and `board.parser.feed`) and board resize calls
 share a reentrant lock. Both pages, cursor/margins, PTY sizing and frontend resize
@@ -58,8 +60,11 @@ DECCRA and DECRQCRA name pages; DECCIR and DECRQDE report them.
 
 Models with a DEC status line (VT510, bittty) add a one-row status page. DECSSDT picks its
 type (the chrome hears `on_status_line`), and DECSASD sends writes there as to a one-row
-display, where only column positions apply and nothing scrolls. `blitter.main_page` stays on
-the main display for the chrome, and `capture_status_line()` reads the status line.
+display, where only column positions apply and nothing scrolls. The blitter writes on a
+*surface* (a page, its rows and its margins) and DECSASD swaps the main surface for the
+status line's whole, so `blitter.rows` is 1 there while `board.height` stays the page's.
+`blitter.main_page` stays on the main display for the chrome, and `capture_status_line()`
+reads the status line.
 
 On a width change, a terminal that reflows (gnome and kitty always; bittty under mode 2028,
 on by default) re-wraps page memory's soft-wrapped lines to the new width, never splitting a

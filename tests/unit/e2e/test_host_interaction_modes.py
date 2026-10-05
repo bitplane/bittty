@@ -78,7 +78,7 @@ def test_kam_soft_reset_and_hard_mode_defaults():
 @pytest.mark.asyncio
 async def test_auto_answerback_fires_only_on_real_connect():
     board = Board(model=VT510)
-    board.answerback = "VT510"
+    board.console.answerback = "VT510"
     board.modes.set_private_modes((100,), True)
 
     attached = MemoryConnection()
@@ -94,7 +94,7 @@ async def test_auto_answerback_fires_only_on_real_connect():
 @pytest.mark.asyncio
 async def test_enabling_auto_answerback_on_a_live_connection_waits_for_reconnect():
     board = Board(model=VT510)
-    board.answerback = "hello"
+    board.console.answerback = "hello"
     first = MemoryConnection()
     board.host.connect(first, board.feed_host_data, on_idle=lambda: True)
     await board.host._reader_task
@@ -109,20 +109,20 @@ async def test_enabling_auto_answerback_on_a_live_connection_waits_for_reconnect
 
 def test_concealed_answerback_stays_transmittable_and_cannot_be_reset():
     board, parser, transport, _ = _term(model=VT510)
-    board.answerback = "secret"
+    board.console.answerback = "secret"
     parser.feed("\x1b[?101h\x1b[?101l")
 
-    assert board.answerback is None
-    assert board.answerback_concealed is True
+    assert board.console.answerback is None
+    assert board.console.answerback_concealed is True
     assert board.modes.mode_status(True, 101) == 1
     parser.feed("\x05")
     assert transport.data == ["secret"]
 
     parser.feed("\x1bc")
-    assert board.answerback is None
-    board.answerback = "replacement"
-    assert board.answerback == "replacement"
-    assert board.answerback_concealed is False
+    assert board.console.answerback is None
+    board.console.answerback = "replacement"
+    assert board.console.answerback == "replacement"
+    assert board.console.answerback_concealed is False
     assert board.modes.mode_status(True, 101) == 2
 
 

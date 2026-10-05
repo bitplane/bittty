@@ -64,7 +64,7 @@ def test_shell_integration_osc():
     recorder = _Recorder()
     board.display.attach(recorder)
     parser.feed("\x1b]7;file:///home/gaz\x07")
-    assert board.cwd == "file:///home/gaz"
+    assert board.console.cwd == "file:///home/gaz"
 
     parser.feed("\x1b]9;build finished\x07")
     parser.feed("\x1b]777;notify;Title;Body\x07")

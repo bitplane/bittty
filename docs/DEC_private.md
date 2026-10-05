@@ -85,7 +85,7 @@ Related ANSI modes: KAM (`CSI 2 h/l`) and SRM (`CSI 12 h/l`) implement keyboard 
 | 90 | DEC | DECTHAISCM - Thai Space Compensating Mode | X |
 | 95 | DEC | DECNCSM - No Clearing Screen on Column Change Mode | ✅ |
 | 96 | DEC | DECRLCM - Right to Left Copy Mode | X |
-| 97 | DEC | DECCRTSM - CRT Save Mode (drives board.blank_timeout) | ✅ |
+| 97 | DEC | DECCRTSM - CRT Save Mode (drives board.console.blank_timeout) | ✅ |
 | 98 | DEC | DECARSM - Auto Resize Mode | X |
 | 99 | DEC | DECMCM - Modem Control Mode (held with the host line's settings and offered to its connection) | ✅ |
 | 100 | DEC | DECAAM - Auto Answerback Mode | ✅ |

@@ -1,4 +1,4 @@
-"""XTWINOPS window manipulation: state stored as board registers, plus reports."""
+"""XTWINOPS window manipulation: state stored as console registers, plus reports."""
 
 from bittty import Board, MemoryConnection, constants
 from bittty.caps import TerminalCaps
@@ -24,15 +24,15 @@ def _term(width=80, height=24):
 def test_iconify_state():
     board, parser, _ = _term()
     parser.feed("\x1b[2t")  # iconify
-    assert board.window_iconified is True
+    assert board.console.window_iconified is True
     parser.feed("\x1b[1t")  # de-iconify
-    assert board.window_iconified is False
+    assert board.console.window_iconified is False
 
 
 def test_move_and_report_position():
     board, parser, transport = _term()
     parser.feed("\x1b[3;120;40t")  # move window to (120, 40)
-    assert board.window_position == (120, 40)
+    assert board.console.window_position == (120, 40)
     parser.feed("\x1b[13t")  # report position
     assert transport.data[-1] == "\x1b[3;120;40t"
 
@@ -48,11 +48,11 @@ def test_report_iconify_state():
 def test_maximize_and_fullscreen():
     board, parser, _ = _term()
     parser.feed("\x1b[9;1t")  # maximize
-    assert board.window_maximized is True
+    assert board.console.window_maximized is True
     parser.feed("\x1b[10;1t")  # fullscreen on
-    assert board.window_fullscreen is True
+    assert board.console.window_fullscreen is True
     parser.feed("\x1b[10;2t")  # fullscreen toggle -> off
-    assert board.window_fullscreen is False
+    assert board.console.window_fullscreen is False
 
 
 def test_raise_lower_refresh_are_signals():
