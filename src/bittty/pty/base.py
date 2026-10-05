@@ -95,12 +95,8 @@ class PTY:
         )
 
     async def read_bytes_async(self, size: int = constants.DEFAULT_PTY_BUFFER_SIZE) -> bytes:
-        """Read raw bytes asynchronously without passing through the text decoder."""
-        loop = asyncio.get_running_loop()
-        try:
-            return await loop.run_in_executor(None, self.read_bytes, size)
-        except Exception:
-            return b""
+        """Read raw bytes on a worker thread; a failure reaches the host port, which unplugs the cable."""
+        return await asyncio.get_running_loop().run_in_executor(None, self.read_bytes, size)
 
     def flush(self) -> None:
         """Flush output."""

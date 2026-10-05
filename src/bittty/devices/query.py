@@ -141,13 +141,7 @@ class QueryDevice(Device):
 
     def report_version(self, operation: Operation) -> None:
         """XTVERSION (CSI > q) — reply DCS > | name version ST."""
-        try:
-            from importlib.metadata import version
-
-            rev = version("bittty")
-        except Exception:
-            rev = "0"
-        self.board.host.write(f"\x1bP>|bittty({rev})\x1b\\", flush=True)
+        self.board.host.write(f"\x1bP>|bittty({constants.VERSION})\x1b\\", flush=True)
 
     def report_cursor_position(self, operation: Operation) -> None:
         row = self.board.cursor.y + 1

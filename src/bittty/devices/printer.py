@@ -47,38 +47,11 @@ def _partial_suffix_length(data, patterns) -> int:
     return 0
 
 
-class _TextPrinterAdapter:
-    """Best-effort compatibility for the historical write(str)/callable API."""
-
-    status = PrinterStatus.READY
-    closed = False
-
-    def __init__(self, sink, encoding: str, errors: str) -> None:
-        self.sink = sink
-        self._decoder = codecs.getincrementaldecoder(encoding)(errors=errors)
-
-    def write_bytes(self, data: bytes):
-        text = self._decoder.decode(data, final=False)
-        if not text:
-            return 0
-        writer = self.sink.write if hasattr(self.sink, "write") else self.sink
-        return writer(text)
-
-    def flush(self) -> None:
-        flusher = getattr(self.sink, "flush", None)
-        if callable(flusher):
-            flusher()
-
-    def configure(self, configuration: PrinterConfiguration) -> None:
-        """A text sink has no adapter to set."""
-
-
 class PrinterDevice(Device):
     """Own printer modes and the byte-oriented auxiliary port."""
 
     def __init__(self, board: Board) -> None:
         self.board = board
-        self.sink = None
         self.encoding = "utf-8"
         self.errors = "replace"
         self.port = PrinterPort(on_data=self.receive_bytes)
@@ -103,35 +76,23 @@ class PrinterDevice(Device):
     def capabilities(self):
         return self.board.model.printer_capabilities
 
-    def attach(self, sink, *, encoding: str = "utf-8", errors: str = "replace") -> None:
-        """Attach a printer connection or a legacy callable/write(str) sink."""
-        self.sink = sink
-        self.encoding = encoding
-        self.errors = errors
-        if callable(getattr(sink, "write_bytes", None)):
-            connection = sink
-        else:
-            connection = _TextPrinterAdapter(sink, encoding, errors)
+    def attach(self, connection: PrinterConnection, *, encoding: str = "utf-8", errors: str = "replace") -> None:
+        """Plug in a printer cable, transmit side only; composed text is encoded as `encoding`."""
         self.port.attach(connection)
-        self._configure_adapter()
+        self._plugged(encoding, errors)
 
-    def connect(
-        self,
-        connection: PrinterConnection,
-        *,
-        encoding: str = "utf-8",
-        errors: str = "replace",
-    ) -> None:
-        """Attach a duplex byte connection and start its inbound pump."""
-        self.sink = connection
+    def connect(self, connection: PrinterConnection, *, encoding: str = "utf-8", errors: str = "replace") -> None:
+        """Plug in a duplex printer cable and start its inbound pump."""
+        self.port.connect(connection)
+        self._plugged(encoding, errors)
+
+    def _plugged(self, encoding: str, errors: str) -> None:
         self.encoding = encoding
         self.errors = errors
-        self.port.connect(connection)
         self._configure_adapter()
 
     def detach(self) -> None:
         self.port.disconnect()
-        self.sink = None
 
     @property
     def status(self) -> PrinterStatus:
@@ -141,10 +102,6 @@ class PrinterDevice(Device):
 
     def emit_bytes(self, data: bytes, *, flush: bool = False):
         return self.port.write_bytes(data, flush=flush)
-
-    def emit(self, text: str) -> None:
-        """Compatibility spelling for composed printer text."""
-        self.emit_text(text)
 
     def emit_text(self, text: str, *, flush: bool = False) -> None:
         self.emit_bytes(text.encode(self.encoding, errors=self.errors), flush=flush)

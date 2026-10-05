@@ -11,8 +11,7 @@ Peripherals — simulations of hardware on the far end of a cable — are not ex
 here either: import them from bittty.peripherals.<name>. Core never imports them.
 """
 
-from importlib.metadata import PackageNotFoundError, version
-
+from . import constants
 from .caps import TerminalCaps
 from .connections import (
     Connection,
@@ -40,10 +39,7 @@ from .style import (
 from .video import Video
 from .width import WidthPolicy
 
-try:
-    __version__ = version("bittty")
-except PackageNotFoundError:
-    __version__ = "unknown"
+__version__ = constants.VERSION
 
 __all__ = [
     "BITTTY",

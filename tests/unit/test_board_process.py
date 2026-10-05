@@ -36,3 +36,11 @@ async def test_a_command_string_is_split_into_arguments():
 async def test_the_child_is_told_the_model_terminfo_name(model, term):
     board = Board(command="""sh -c 'printf %s "$TERM"'""", model=model)
     assert await _run(board) == term
+
+
+async def test_a_child_that_cannot_start_raises_and_leaves_nothing_plugged_in():
+    board = Board(command="/nonexistent/program")
+    with pytest.raises(FileNotFoundError):
+        await board.start_process()
+    assert board.pty is None
+    assert board.process is None

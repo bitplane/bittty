@@ -190,7 +190,7 @@ class Board:
     def print_text(self, text: str) -> None:
         """Write printable text (the parser's fast path — no Operation wrapper)."""
         if self.printer.controller_mode:  # MC printer-controller: text goes to paper, not the screen
-            self.printer.emit(text)
+            self.printer.emit_text(text)
             return
         self.blitter.write_text(text, self.style.current)
 
@@ -609,9 +609,9 @@ class Board:
                 on_closed=self.stop_process,
             )
 
-        except Exception:
-            logger.exception("Failed to start terminal process")
-            self.stop_process()
+        except BaseException:
+            self.stop_process()  # unplug whatever was made before it failed
+            raise
 
     def stop_process(self) -> None:
         """Stop the child process and clean up."""

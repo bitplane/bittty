@@ -47,7 +47,6 @@ class ProPrinterCodePage(IntEnum):
     GREEK = 210
     SPANISH = 220
     PC_INTERNATIONAL = 437
-    INTERNATIONAL = 437  # backward-friendly shorthand
     MULTILINGUAL = 850
     SLAVIC = 852
     TURKISH = 857

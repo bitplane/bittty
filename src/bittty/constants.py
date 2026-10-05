@@ -5,6 +5,14 @@ This module contains constants used in the terminal parsing and emulation logic,
 following standards like VT100, VT220, and xterm.
 """
 
+from importlib.metadata import PackageNotFoundError, version
+
+# The installed package's version: XTVERSION reports it, and bittty.__version__ is it.
+try:
+    VERSION = version("bittty")
+except PackageNotFoundError:
+    VERSION = "unknown"
+
 # --- Parser States ---
 GROUND = "GROUND"
 ESCAPE = "ESCAPE"
