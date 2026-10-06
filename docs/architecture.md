@@ -102,6 +102,17 @@ The rule for the seam is: **push what would otherwise be lost, pull what is stil
 
 Scrollback is the terminal's, not the board's: a real terminal has none (xterm's saveLines
 is the window's), and a board that kept history would stop being small and deterministic.
+
+A terminal given a store (`Terminal(board, scrollback)`) keeps scrollback: the base turns
+each row it is sent into a `ScrollbackLine` (text, a style per cell, and a shape only when
+a cell holds other than one code point) and appends it, saying whether the line goes on.
+The store (`terminals/scrollback.py`) holds logical lines numbered for life and lays them
+out at any width, a line to ceil(cells / width) rows, so history re-wraps on resize and a
+line number is a stable reference for whatever indexes a store grows later. The
+`Scrollback` protocol is the least a store does; `MemoryScrollback` forgets its oldest
+lines past a budget of cells (each line one more, so empty ones count). The view is
+the terminal's too: `view_top` anchors it as (line, row within it), so it holds still
+while output arrives, and `view_rows()` is history above the screen.
 Physical facts flow the other way: the
 venue's resize, focus, input, and capabilities go down to the board through the port.
 Frontend resizes use a distinct display-port path, so host-requested XTWINOPS/DECSLPP

@@ -15,6 +15,7 @@ _REVERSE.update(
     {(7, "~"): "home", (8, "~"): "end", (11, "~"): "f1", (12, "~"): "f2", (14, "~"): "f4", (57427, "~"): "kp_begin"}
 )
 _PASTE_END = "\x1b[201~"
+_PAGE_VIEW = re.compile(r"\x1b\[([56]);2(?::([123]))?~")  # Shift+PageUp/PageDown; :3 is a release
 _REPLY = re.compile(
     r"\x1b(?:\[\?[0-9;]*c|\[[0-9]+;[0-9]+R|\[\?2027;[0-4]\$y|\[(?:4|6);[0-9]+;[0-9]+t|\]11;.*)", re.DOTALL
 )
@@ -163,7 +164,16 @@ class KeyboardInput:
             return
         elif raw in ("\x1b[I", "\x1b[O"):
             terminal.handle_focus(raw == "\x1b[I")
-        elif raw == "\x1bO[":
+        elif terminal.scrollback is not None and (page := _PAGE_VIEW.fullmatch(raw)):
+            if page.group(2) != "3":
+                terminal.page_view(-1 if page.group(1) == "5" else 1)
+        else:
+            terminal.scroll_to_bottom()
+            self._key(raw)
+
+    def _key(self, raw):
+        terminal = self.terminal
+        if raw == "\x1bO[":
             terminal.port.input_key_event(KeyEvent("escape"))
         elif terminal.host_keyboard_flags is not None or terminal.port.kitty_flags or terminal.port.keyboard_selected:
             event = decode_key(raw)
@@ -177,6 +187,7 @@ class KeyboardInput:
             terminal.port.input(raw)
 
     def _text(self, text):
+        self.terminal.scroll_to_bottom()
         port = self.terminal.port
         if not port.kitty_flags & KittyFlags.REPORT_ALL_KEYS:
             port.input(text)

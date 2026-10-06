@@ -5,6 +5,7 @@ A Board has pages of it: page memory for the primary screen, and the alternate s
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from . import constants
@@ -829,42 +830,37 @@ class Video:
         """
         if not (0 <= y < self.height):
             return ""
+        return render_cells(self.grid[y], self.width if width is None else width)
 
-        # Use the page width if not specified
-        if width is None:
-            width = self.width
 
-        parts = []
-        row = self.grid[y]
-        current_style = Style()  # Start with default style
+def render_cells(row: Sequence[Cell], width: int) -> str:
+    """A row of cells as ANSI text exactly `width` columns wide, ending in the default style."""
+    parts = []
+    current_style = Style()  # Start with default style
 
-        # Process each cell up to specified width
-        limit = min(len(row), width)
-        for x in range(limit):
-            cell_style, char = row[x]
-            if char == CONTINUATION:
-                continue
-            # An explicit width may cut before a continuation that lies
-            # outside the requested pane. Render a blank rather than letting
-            # the wide glyph spill over its boundary.
-            if x + 1 == limit and x + 1 < len(row) and row[x + 1][1] == CONTINUATION:
-                char = " "
-            transition = current_style.diff(cell_style)
-            parts.append(transition)
-            parts.append(char)
-            current_style = cell_style
+    # Process each cell up to specified width
+    limit = min(len(row), width)
+    for x in range(limit):
+        cell_style, char = row[x]
+        if char == CONTINUATION:
+            continue
+        # An explicit width may cut before a continuation that lies
+        # outside the requested pane. Render a blank rather than letting
+        # the wide glyph spill over its boundary.
+        if x + 1 == limit and x + 1 < len(row) and row[x + 1][1] == CONTINUATION:
+            char = " "
+        transition = current_style.diff(cell_style)
+        parts.append(transition)
+        parts.append(char)
+        current_style = cell_style
 
-        # Pad to width if needed
-        current_width = min(len(row), width)
-        if current_width < width:
-            # Transition to default style for padding
-            reset_transition = current_style.diff(Style())
-            parts.append(reset_transition)
-            parts.append(" " * (width - current_width))
-            current_style = Style()
+    # Pad to width if needed
+    if limit < width:
+        # Transition to default style for padding
+        parts.append(current_style.diff(Style()))
+        parts.append(" " * (width - limit))
+        current_style = Style()
 
-        # Always end with a reset to prevent bleeding to next line
-        final_reset = current_style.diff(Style())
-        parts.append(final_reset)
-
-        return "".join(parts)
+    # Always end with a reset to prevent bleeding to next line
+    parts.append(current_style.diff(Style()))
+    return "".join(parts)

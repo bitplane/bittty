@@ -184,6 +184,13 @@ def test_rows_a_narrowing_reflow_cuts_from_the_top_are_sent():
     assert board.capture_text() == "def\nxy"
 
 
+def test_a_terminal_that_keeps_no_scrollback_is_not_asked_to_clear_it():
+    board, recorder = _board()
+    recorder.keeps_scrollback = False
+    board.feed_host_data(b"\x1b[3J")
+    assert recorder.of(ScrollbackCleared) == []
+
+
 def test_ed_3_asks_for_the_scrollback_to_be_cleared_and_leaves_the_screen():
     board, recorder = _board()
     board.feed_host_data(b"keep\x1b[3J")

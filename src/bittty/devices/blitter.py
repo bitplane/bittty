@@ -494,7 +494,7 @@ class Blitter(Device):
         elif mode == constants.ERASE_ALL:
             for y in range(self.rows):
                 self.current_page.clear_line(y, constants.ERASE_ALL, 0, bg_ansi)
-        elif mode == constants.ERASE_SAVED_LINES:
+        elif mode == constants.ERASE_SAVED_LINES and self.board.display.keeps_scrollback:
             self.board.present(ScrollbackCleared())
 
     def clear_line(self, mode: int = constants.ERASE_FROM_CURSOR_TO_END) -> None:

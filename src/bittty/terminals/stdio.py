@@ -17,9 +17,11 @@ import signal
 import sys
 
 from ..devices.board import Board
+from ..video import render_cells
 from .base import Terminal
 from .keyboard_input import KeyboardInput
 from .probe import probe_caps
+from .scrollback import Scrollback
 
 try:
     import termios
@@ -56,13 +58,14 @@ class StdioTerminal(Terminal):
 
     Pass a board to show one already built (and perhaps already connected to its
     host); it is fitted to the venue. Without one, a board running the user's
-    shell is made.
+    shell is made. Given a scrollback store, Shift+PageUp and Shift+PageDown page
+    through history, and typing returns to the live screen.
     """
 
     # Rows at the bottom of the venue that are the terminal's own, not the board's.
     reserved_rows = 0
 
-    def __init__(self, board: Board | None = None) -> None:
+    def __init__(self, board: Board | None = None, scrollback: Scrollback | None = None) -> None:
         size = shutil.get_terminal_size()
         self.width = max(1, size.columns)
         self.height = max(1, size.lines - self.reserved_rows)
@@ -71,7 +74,7 @@ class StdioTerminal(Terminal):
             board = Board(command=self.get_default_shell(), width=self.width, height=self.height)
         elif (board.width, board.height) != (self.width, self.height):
             board.display.resize(self.width, self.height)
-        super().__init__(board)
+        super().__init__(board, scrollback)
         self.attach()
 
         self.running = True
@@ -249,15 +252,20 @@ class StdioTerminal(Terminal):
         child wants it visible (DECTCEM). The host hollows it on unfocus by
         itself, exactly like a real terminal.
         """
-        page = self.port.page  # this chrome draws no status line
         print("\033[?25l", end="")
-        for y in self.damaged_rows():
-            if y < self.height:
-                print(f"\033[{y + 1}H{page.get_line(y, width=self.width)}\033[K", end="")
+        offset = self.view_offset()
+        if offset:  # scrolled back: everything shown has moved
+            for y, row in enumerate(self.view_rows()[: self.height]):
+                print(f"\033[{y + 1}H{render_cells(row, self.width)}\033[K", end="")
+        else:
+            page = self.port.page  # this chrome draws no status line
+            for y in self.damaged_rows():
+                if y < self.height:
+                    print(f"\033[{y + 1}H{page.get_line(y, width=self.width)}\033[K", end="")
         self.draw_chrome()
         cursor = self.port.cursor
-        if cursor is not None and cursor[1] < self.height:
-            print(f"\033[{cursor[1] + 1};{cursor[0] + 1}H\033[?25h", end="", flush=True)
+        if cursor is not None and cursor[1] + offset < self.height:
+            print(f"\033[{cursor[1] + offset + 1};{cursor[0] + 1}H\033[?25h", end="", flush=True)
         else:
             print(end="", flush=True)
 
@@ -303,6 +311,11 @@ class StdioTerminal(Terminal):
             self.port.focus_in()
         else:
             self.port.focus_out()
+        self.dirty = True
+
+    def page_view(self, pages: int) -> None:
+        """Page the view through history (negative: back), a row of overlap kept."""
+        self.scroll_view(pages * max(1, self.height - 1))
         self.dirty = True
 
     def handle_input(self, data: str | bytes) -> None:

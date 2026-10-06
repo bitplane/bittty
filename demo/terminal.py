@@ -14,6 +14,7 @@ import signal
 import sys
 from pathlib import Path
 
+from bittty.terminals.scrollback import MemoryScrollback
 from bittty.terminals.stdio import StdioTerminal
 
 # BITTTY_DEMO_LOG moves the log elsewhere; the tests point it at a tmpfs file.
@@ -57,7 +58,7 @@ async def main() -> None:
     if hasattr(signal, "SIGTERM"):
         signal.signal(signal.SIGTERM, _signal_handler)
 
-    await DemoTerminal().run()
+    await DemoTerminal(scrollback=MemoryScrollback()).run()
 
 
 if __name__ == "__main__":

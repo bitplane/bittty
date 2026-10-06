@@ -56,7 +56,9 @@ chrome a human looks at, and two full-duplex ports connect the board to its outs
   events arrive at typed `on_*` hooks, physical facts go up (caps, focus, resize, input),
   and the screen is pulled (`port.page`, `port.cursor`, `damaged_rows()`). The rule: push
   what would otherwise be lost (rows scrolling off, the child exiting), pull what is still
-  there. Scrollback belongs to the terminal: set `keeps_scrollback` to get `RowsScrolledOff`
+  there. Scrollback belongs to the terminal: give it a store (`terminals/scrollback.py`) and
+  it keeps the rows sent to it as numbered logical lines, laid out at any width, and can
+  show history above the screen (`view_rows()`)
 - **StdioTerminal** (`terminals/stdio.py`): the reference terminal, whose venue is this
   process's stdio/tty
 
