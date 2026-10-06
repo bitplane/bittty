@@ -10,19 +10,25 @@ auxiliary cable.
 - display: the Presentable and Screen protocols and DisplayPort
 - printer: the PrinterConnection protocol, PrinterStatus and PrinterPort
 - cables: connections that live in memory or on a stream
+- recording: a tap that records the host line (asciicast v2), and a cable that replays one
 - serial_line, printer_config: the settings a port offers its cable
 """
 
 from .cables import InboundLine, MemoryConnection, MemoryPrinter, StreamPrinter
 from .display import DisplayPort, Presentable, Screen
-from .host import Connection, HostPort
+from .host import Connection, HostPort, LineTap
 from .printer import PrinterConnection, PrinterPort, PrinterStatus
+from .recording import Cast, CastRecorder, CastReplay
 
 __all__ = [
+    "Cast",
+    "CastRecorder",
+    "CastReplay",
     "Connection",
     "DisplayPort",
     "HostPort",
     "InboundLine",
+    "LineTap",
     "MemoryConnection",
     "MemoryPrinter",
     "Presentable",

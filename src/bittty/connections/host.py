@@ -41,12 +41,34 @@ class Connection(Protocol):
         """Unplug the cable."""
 
 
+class LineTap(Protocol):
+    """A passive tap on the host line: sees every byte that crosses it, both ways, and each resize."""
+
+    def received(self, data: bytes) -> None:
+        """The child's output, as it arrives."""
+
+    def sent(self, data: str | bytes) -> None:
+        """What the board transmitted to the child: replies and encoded input."""
+
+    def resized(self, rows: int, cols: int) -> None:
+        """The far end was told the screen's new size."""
+
+
+class _NoTap:
+    """The tap on an untapped line."""
+
+    def received(self, data: bytes) -> None: ...
+    def sent(self, data: str | bytes) -> None: ...
+    def resized(self, rows: int, cols: int) -> None: ...
+
+
 class HostPort:
     """The board's jack toward the child program; a Connection (PTY, pipe) plugs in.
 
     Full duplex: write() is the transmit pin (replies and encoded input toward
     the child); connect() starts the receive pump, feeding the child's output
-    into a sink — the board wires it to its parser.
+    into a sink — the board wires it to its parser. A LineTap clipped onto
+    the port (`tap`) sees everything that crosses it, whatever the cable.
     """
 
     def __init__(
@@ -61,6 +83,7 @@ class HostPort:
         self.on_closed: Callable[[], None] | None = None
         self._reader_task: asyncio.Task | None = None
         self.line: SerialLine | None = None  # the host line's settings, on a terminal that has them
+        self.tap: LineTap = _NoTap()
 
     def attach(self, connection: Connection) -> None:
         """Attach a connection to this host port (transmit side only)."""
@@ -122,6 +145,7 @@ class HostPort:
                     await asyncio.sleep(0.01)
                     continue
 
+                self.tap.received(data)
                 self.on_data(data)
 
                 # Yield control to other async operations (like resize)
@@ -149,10 +173,17 @@ class HostPort:
         """Whether a connection is attached."""
         return self.connection is not None
 
+    def resize(self, rows: int, cols: int) -> None:
+        """Tell the far end the screen's new size."""
+        if self.connection is not None:
+            self.connection.resize(rows, cols)
+            self.tap.resized(rows, cols)
+
     def write(self, data: str, flush: bool = False):
         """Write data to the attached connection."""
         if self.connection is None:
             return None
+        self.tap.sent(data)
         result = self.connection.write(data)
         if flush:
             self.connection.flush()
@@ -162,6 +193,7 @@ class HostPort:
         """Write protocol bytes without passing them through UTF-8 encoding."""
         if self.connection is None:
             return None
+        self.tap.sent(data)
         result = self.connection.write_bytes(data)
         if flush:
             self.connection.flush()

@@ -64,10 +64,11 @@ chrome a human looks at, and two full-duplex ports connect the board to its outs
 
 **Ports** (`src/bittty/connections/`)
 - Full-duplex jacks on the board. **HostPort** carries bytes both ways to the child: a
-  `Connection` (PTY, pipe, socket) plugs in and the port pumps its receive side into the
-  parser. **DisplayPort** carries typed events both ways to the chrome — present events
-  down, input/focus/caps up — and is the `Screen` the chrome reads. Its name is the
-  video-connector pun, kept on purpose.
+  `Connection` (PTY, pipe, socket, a replayed recording) plugs in and the port pumps its
+  receive side into the parser; a `LineTap` on the port sees everything that crosses it
+  (`recording`: asciicast v2 recorder and replay cable). **DisplayPort** carries typed
+  events both ways to the chrome — present events down, input/focus/caps up — and is the
+  `Screen` the chrome reads. Its name is the video-connector pun, kept on purpose.
   **PrinterPort** carries bytes to the auxiliary cable. The package also holds the
   in-memory/stream cables and the settings a port offers its cable (`serial_line`,
   `printer_config`). A cable implements its whole protocol; ports never probe for methods

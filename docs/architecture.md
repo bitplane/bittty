@@ -127,7 +127,15 @@ cables (`cables`), and the settings a port offers its cable (`serial_line`,
 interface: a cable implements every method, so ports call them without probing.
 
 - **HostPort** carries bytes both ways (a serial line). A `Connection` — PTY, pipe,
-  socket — plugs in; the port's receive pump feeds the child's output into the parser.
+  socket — plugs in (`Board.start_process` plugs in a PTY with a child; `Board.connect`
+  any cable); the port's receive pump feeds the child's output into the parser, and
+  resizes reach whatever cable is plugged in. A `LineTap` clipped onto the port (`tap`)
+  sees every byte both ways and each resize, whatever the cable. `recording` holds a tap
+  that writes the line as asciicast v2 (`CastRecorder`; keys sent only on request, as they
+  include passwords) and a cable that plays a recording back (`CastReplay`, with speed and
+  an idle limit; resizes arrive as XTWINOPS 8). A recording is what crossed the line,
+  which is lossless; sampling the screen into frames (quantising) is lossy, and belongs to
+  a terminal pulling the screen on its own clock.
 - **PrinterPort** carries raw bytes both ways to whatever is on the auxiliary cable: a
   virtual printer, a binary stream, a serial adapter, a bridge to real hardware. Controller
   mode is routed before text decoding, and a capable adapter is offered immutable

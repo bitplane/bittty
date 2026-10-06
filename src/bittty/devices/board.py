@@ -15,7 +15,7 @@ from typing import Any
 
 from .. import constants
 from ..caps import TerminalCaps
-from ..connections import DisplayPort, HostPort
+from ..connections import Connection, DisplayPort, HostPort
 from ..keyboard.keys import KeyEvent
 from ..model import DEFAULT, Model
 from ..operations import Operation
@@ -169,8 +169,7 @@ class Board:
             raise ValueError("terminal dimensions must be positive")
         with self._output_lock:
             self.blitter.resize(width, height)
-            if self.pty is not None:
-                self.pty.resize(height, width)
+            self.host.resize(height, width)
         self.present(ScreenChanged())
 
     def resize_from_frontend(self, width: int, height: int) -> None:
@@ -198,8 +197,8 @@ class Board:
         with self._output_lock:
             old_width = self.width
             self.blitter.set_page_columns(columns)
-            if self.width != old_width and self.pty is not None:
-                self.pty.resize(self.height, self.width)
+            if self.width != old_width:
+                self.host.resize(self.height, self.width)
 
     def present(self, event: PresentEvent) -> None:
         """Push a discrete side-effect to the attached terminal (no-op if none)."""
@@ -433,18 +432,21 @@ class Board:
             # Spawn process attached to PTY (a stdio cable has none: its far end is already there)
             self.process = self.pty.spawn_process(self.command, self.pty.environment(self.model.term))
             logger.info("Spawned process: %s", self.process)
-
-            # The host port pumps the PTY's receive side from here on
-            self.host.connect(
-                self.pty,
-                self.feed_host_data,
-                on_idle=self._pty_idle,
-                on_closed=self._hang_up,
-            )
+            self.connect(self.pty)
 
         except BaseException:
             self.stop_process()  # unplug whatever was made before it failed
             raise
+
+    def connect(self, connection: Connection) -> None:
+        """Plug in a host cable and pump what it receives into the parser until it ends.
+
+        start_process plugs in a PTY with a child on it; anything else that
+        implements Connection (a socket, a replayed recording) plugs in here.
+        The cable ending is presented as ChildExited.
+        """
+        self.pty = connection
+        self.host.connect(connection, self.feed_host_data, on_idle=self._pty_idle, on_closed=self._hang_up)
 
     def stop_process(self) -> None:
         """Stop the child process and clean up."""
