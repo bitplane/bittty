@@ -49,6 +49,10 @@ _HOST_MOUSE_ENABLE = {
 }
 
 
+# SGR wheel buttons, and the rows a notch moves the view through history.
+_WHEEL = {64: -3, 65: 3}
+
+
 class StdioTerminal(Terminal):
     """Render a bittty Board to the real terminal this program is running in.
 
@@ -59,7 +63,9 @@ class StdioTerminal(Terminal):
     Pass a board to show one already built (and perhaps already connected to its
     host); it is fitted to the venue. Without one, a board running the user's
     shell is made. Given a scrollback store, Shift+PageUp and Shift+PageDown page
-    through history, and typing returns to the live screen.
+    through history, as does the mouse wheel while the child is not using the
+    mouse (the outer terminal then selects text with Shift held), and typing
+    returns to the live screen.
     """
 
     # Rows at the bottom of the venue that are the terminal's own, not the board's.
@@ -80,6 +86,7 @@ class StdioTerminal(Terminal):
         self.running = True
         self.old_termios = None
         self.host_mouse_mode: str | None = None
+        self.child_mouse_mode = "off"  # what the board wants captured; the wheel is ours while it wants nothing
         self.initial_ambiguous_width: int | None = None
         self.host_ambiguous_width: int | None = None
         self.host_grapheme_mutable = False
@@ -159,7 +166,17 @@ class StdioTerminal(Terminal):
         self.host_grapheme_clustering = enabled
 
     def on_mouse_capture(self, mode: str) -> None:
-        """Capture the physical mouse events requested by the board."""
+        """Capture the physical mouse events requested by the board, or, with a scrollback, the wheel."""
+        self.child_mouse_mode = mode
+        self.capture_host_mouse("basic" if self.wheel_scrolls_history else mode)
+
+    @property
+    def wheel_scrolls_history(self) -> bool:
+        """Whether the mouse is captured for the wheel to page history: a scrollback, and a child not using it."""
+        return self.child_mouse_mode == "off" and self.scrollback is not None
+
+    def capture_host_mouse(self, mode: str) -> None:
+        """Have the outer terminal report the mouse in a capture mode ("off" stops it)."""
         if mode == "off":
             self.disable_host_mouse()
             return
@@ -191,6 +208,7 @@ class StdioTerminal(Terminal):
         # ?1004: the host reports focus in/out (CSI I / CSI O) — drives our own
         # software cursor and is forwarded to a child that enabled 1004 itself.
         print("\033[?5;12;2004s\033[?2004h\033[?5l\033[?12l\033[?25l\033[?1004h\033[2J\033[H", end="", flush=True)
+        self.on_mouse_capture(self.child_mouse_mode)
 
     def restore_terminal(self) -> None:
         """Restore the host terminal to its original state."""
@@ -302,6 +320,9 @@ class StdioTerminal(Terminal):
             event_type = "move"
             base_button &= ~32
 
+        if self.wheel_scrolls_history and event_type == "press" and base_button in _WHEEL:
+            self.scroll_view(_WHEEL[base_button])
+            self.dirty = True
         self.port.input_mouse(x, y, base_button, event_type, modifiers)
         return True
 

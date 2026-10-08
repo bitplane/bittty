@@ -14,6 +14,7 @@ from bittty import Board, MemoryConnection
 from bittty.style import Style
 from bittty.terminals import StdioTerminal, Terminal
 from bittty.terminals.scrollback import MemoryScrollback, ScrollbackLine, rows_of
+from bittty.constants import LINE_DOUBLE_BOTTOM, LINE_DOUBLE_TOP, LINE_DOUBLE_WIDTH, LINE_SINGLE
 from bittty.video import CONTINUATION, WideHead
 
 PLAIN = Style()
@@ -111,6 +112,20 @@ def test_a_line_takes_ceil_cells_over_width_rows_and_an_empty_one_takes_one():
     assert [rows_of(cells, 4) for cells in (0, 1, 4, 5, 8, 9)] == [1, 1, 1, 2, 2, 3]
 
 
+@pytest.mark.parametrize(
+    "attribute, width",
+    [(LINE_SINGLE, 3), (LINE_DOUBLE_WIDTH, 6), (LINE_DOUBLE_TOP, 6), (LINE_DOUBLE_BOTTOM, 6)],
+)
+def test_a_line_keeps_its_size_and_a_double_size_one_is_twice_as_wide(attribute, width):
+    line = ScrollbackLine.of(_cells("abc"), attribute=attribute)
+    assert (line.attribute, line.width) == (attribute, width)
+
+
+def test_rows_joined_into_a_line_take_the_size_of_the_first():
+    parts = [ScrollbackLine.of(_cells("ab"), attribute=LINE_DOUBLE_WIDTH), _line("cd")]
+    assert ScrollbackLine.join(parts).attribute == LINE_DOUBLE_WIDTH
+
+
 # --- a memory store --- #
 
 
@@ -134,6 +149,39 @@ def test_a_view_says_which_line_a_row_is_and_where_a_line_starts():
     view = _store("abcdefghij", "", "xy").width(4)
     assert [view.line_at(row) for row in range(5)] == [(0, 0), (0, 1), (0, 2), (1, 0), (2, 0)]
     assert [view.row_for(line) for line in range(3)] == [0, 3, 4]
+
+
+def _double(text):
+    return ScrollbackLine.of(_cells(text), attribute=LINE_DOUBLE_WIDTH)
+
+
+def test_a_double_width_line_takes_rows_by_its_width_each_holding_half_the_cells():
+    store = MemoryScrollback()
+    store.append(_double("abcdef"))
+    store.append(_line("xy"))
+    view = store.width(4)
+    assert [row for row in map(len, view)] == [2, 2, 2, 4]
+    assert _text(view) == ["ab", "cd", "ef", "xy"]
+    assert (view.line_at(3), view.row_for(1)) == ((1, 0), 3)
+
+
+def test_at_an_odd_width_a_double_width_cell_cut_by_a_row_edge_is_not_shown():
+    store = MemoryScrollback()
+    store.append(_double("abcdef"))
+    assert _text(store.width(5)) == ["ab", "de", "f"]
+
+
+def test_a_double_width_line_still_arriving_takes_rows_by_its_width():
+    store = MemoryScrollback()
+    store.append(_double("abcd"), wrapped=True)
+    assert len(store.width(4)) == 2
+
+
+def test_forgetting_the_head_of_a_double_width_line_still_arriving_takes_its_rows_too():
+    store = MemoryScrollback(10)
+    for row in ("aaaa", "bbbb", "cccc", "dddd"):
+        store.append(_double(row), wrapped=True)
+    assert _text(store.width(8)) == ["cccc", "dddd"]
 
 
 def test_a_view_follows_the_store():
@@ -250,6 +298,12 @@ def test_a_terminal_keeps_lines_wrapped_across_rows_as_one():
     board, terminal = _terminal(width=4)
     board.feed_host_data(b"abcdef\r\n\r\n\r\n")
     assert terminal.scrollback.line(0).text == "abcdef"
+
+
+def test_a_terminal_keeps_a_lines_size():
+    board, terminal = _terminal()
+    board.feed_host_data(b"\x1b#6wide\r\n\r\n\r\n")
+    assert terminal.scrollback.line(0).attribute == LINE_DOUBLE_WIDTH
 
 
 def test_a_line_kept_loses_its_trailing_blanks():
@@ -399,3 +453,59 @@ def test_scrolled_back_one_row_the_cursor_is_drawn_a_row_lower(stdio, capsys):
     capsys.readouterr()
     terminal.render_screen()
     assert capsys.readouterr().out.endswith("\x1b[3;2H\x1b[?25h")
+
+
+# --- the wheel --- #
+
+
+def test_with_a_scrollback_the_mouse_is_captured_from_the_start_for_the_wheel(stdio, capsys):
+    terminal, _ = stdio
+    terminal.setup_terminal()
+    assert "\x1b[?1000h\x1b[?1006h" in capsys.readouterr().out
+    assert terminal.host_mouse_mode == "basic"
+
+
+def test_the_wheel_scrolls_history_three_rows_a_notch(stdio):
+    terminal, wire = stdio
+    terminal.handle_input(b"\x1b[<64;1;1M")
+    assert terminal.view_offset() == 3
+    terminal.handle_input(b"\x1b[<65;1;1M")
+    assert terminal.view_top is None
+    assert wire.data == []
+
+
+def test_a_wheel_release_does_not_scroll(stdio):
+    terminal, _ = stdio
+    terminal.handle_input(b"\x1b[<64;1;1m")
+    assert terminal.view_top is None
+
+
+def test_clicks_still_reach_the_board_which_sends_the_child_none_it_did_not_ask_for(stdio):
+    terminal, wire = stdio
+    terminal.handle_input(b"\x1b[<0;4;2M\x1b[<0;4;2m")
+    assert (terminal.board.mouse.x, terminal.board.mouse.y) == (4, 2)
+    assert wire.data == []
+
+
+def test_a_child_using_the_mouse_gets_the_wheel(stdio):
+    terminal, wire = stdio
+    terminal.board.feed_host_data(b"\x1b[?1000h\x1b[?1006h")
+    terminal.handle_input(b"\x1b[<64;1;1M")
+    assert terminal.view_top is None
+    assert "".join(wire.data) == "\x1b[<64;1;1M"
+
+
+def test_when_the_child_lets_go_of_the_mouse_the_wheel_is_kept_captured(stdio, capsys):
+    terminal, _ = stdio
+    terminal.board.feed_host_data(b"\x1b[?1003h")
+    terminal.board.feed_host_data(b"\x1b[?1003l")
+    assert terminal.host_mouse_mode == "basic"
+    assert terminal.wheel_scrolls_history
+
+
+def test_without_a_scrollback_the_mouse_is_left_to_the_outer_terminal(monkeypatch, capsys):
+    monkeypatch.setattr("shutil.get_terminal_size", lambda: os.terminal_size((10, 3)))
+    terminal = StdioTerminal(Board(width=10, height=3))
+    terminal.setup_terminal()
+    assert "\x1b[?1000h" not in capsys.readouterr().out
+    assert terminal.host_mouse_mode is None
