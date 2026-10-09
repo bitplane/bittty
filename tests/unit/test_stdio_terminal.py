@@ -307,6 +307,48 @@ def test_render_repaints_only_dirty_rows():
     assert "\033[2H" in out and "\033[1H" not in out
 
 
+def test_render_scrolls_the_venue_and_paints_only_the_rows_scrolled_in(capsys):
+    """Output scrolling the screen scrolls the outer terminal, in a region keeping any chrome still."""
+    display = StdioTerminal()
+    height = display.height
+    display.render_screen()
+    display.board.parser.feed(f"\033[{height}Hlast\r\nnew\r\n")
+    capsys.readouterr()
+
+    display.render_screen()
+    out = capsys.readouterr().out
+    assert out.startswith(f"\033[?25l\033[1;{height}r\033[{height}H\n\n\033[r")
+    painted = [y for y in range(1, height + 1) if f"\033[{y}H" in out.split("\033[r", 1)[1]]
+    assert painted[:2] == [height - 2, height - 1]  # "last" moved up 2; "new" and a blank line came in
+    assert set(painted) <= {height - 2, height - 1, height}
+
+
+def test_render_scrolls_the_venue_down_with_reverse_index(capsys):
+    display = StdioTerminal()
+    display.render_screen()
+    display.board.parser.feed("\033[H\033M\033M\033M")
+    capsys.readouterr()
+
+    display.render_screen()
+    assert f"\033[1;{display.height}r\033[H\033M\033M\033M\033[r" in capsys.readouterr().out
+
+
+def test_a_tick_paints_a_changed_screen_no_more_than_frame_rate_times_a_second(capsys):
+    display = StdioTerminal()
+    display.board.feed_host_data(b"a")
+    display.tick(10.0)
+    assert "a" in capsys.readouterr().out
+
+    display.board.feed_host_data(b"b")
+    display.tick(10.0 + 0.5 / display.frame_rate)
+    assert capsys.readouterr().out == ""
+    display.tick(10.0 + 1 / display.frame_rate)
+    assert "b" in capsys.readouterr().out
+
+    display.tick(20.0)  # nothing changed: nothing painted
+    assert capsys.readouterr().out == ""
+
+
 def test_the_reference_terminal_uses_the_whole_venue(capsys):
     """No status bar, no reserved rows: chrome of its own belongs to a subclass."""
     display = StdioTerminal()

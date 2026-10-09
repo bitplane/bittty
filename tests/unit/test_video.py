@@ -382,8 +382,44 @@ def test_full_height_scroll_dirties_the_page():
     page = Video(width=10, height=3)
     seen = page.observe()
     page.scroll_region_up(0, 2, 1)
-    assert page.page_gen >= seen
     assert page.dirty_rows(seen) == [0, 1, 2]
+
+
+def test_full_height_scroll_moves_the_stamps_with_the_rows():
+    """What was written moves with its row; only the row scrolled in is new."""
+    page = Video(width=10, height=4)
+    seen = page.observe()
+    page.set(0, 2, "hi")
+    page.scroll_region_up(0, 3, 1)
+    assert page.scrolled == 1
+    assert page.changed_rows(seen) == [1, 3]
+
+
+def test_full_height_scroll_down_counts_negative():
+    page = Video(width=10, height=4)
+    seen = page.observe()
+    page.set(0, 0, "hi")
+    page.scroll_region_down(0, 3, 2)
+    assert page.scrolled == -2
+    assert page.changed_rows(seen) == [0, 1, 2]
+
+
+def test_a_full_width_rectangle_scroll_with_a_background_is_a_full_height_scroll():
+    page = Video(width=10, height=3)
+    seen = page.observe()
+    page.scroll_rectangle_up(0, 2, 1, style_or_ansi="\x1b[41m")
+    assert page.scrolled == 1
+    assert page.changed_rows(seen) == [2]
+
+
+def test_partial_scrolls_move_nothing_whole():
+    """A region short of the page, or a rectangle short of its width, is stamped, not counted."""
+    page = Video(width=10, height=4)
+    seen = page.observe()
+    page.scroll_region_up(1, 3, 1)
+    page.scroll_rectangle_up(0, 3, 1, left=2, right=5)
+    assert page.scrolled == 0
+    assert page.changed_rows(seen) == [0, 1, 2, 3]
 
 
 def test_region_scroll_dirties_only_the_region():

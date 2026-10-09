@@ -87,6 +87,32 @@ def test_damaged_rows_are_everything_first_then_only_what_changed():
     assert list(terminal.damaged_rows()) == [1]
 
 
+def test_damage_says_how_far_the_page_scrolled_and_what_else_changed():
+    board, _ = _board()
+    terminal = Terminal(board)
+    board.feed_host_data(b"\x1b[2Ha\x1b[3Hb")
+    terminal.damage()
+    board.feed_host_data(b"\nc")
+    assert terminal.damage() == (1, [2])  # a and b moved up, painted already; c is new
+    assert list(terminal.damaged_rows()) == []
+
+
+def test_scrolling_a_page_or_more_damages_every_row_unscrolled():
+    board, _ = _board()
+    terminal = Terminal(board)
+    terminal.damage()
+    board.feed_host_data(b"\x1b[3H\n\n\n")
+    assert terminal.damage() == (0, range(3))
+
+
+def test_damaged_rows_are_every_row_after_a_scroll():
+    board, _ = _board()
+    terminal = Terminal(board)
+    terminal.damaged_rows()
+    board.feed_host_data(b"\x1b[3H\n")
+    assert list(terminal.damaged_rows()) == [0, 1, 2]
+
+
 def test_a_page_flip_damages_every_row():
     board, _ = _board()
     terminal = Terminal(board)

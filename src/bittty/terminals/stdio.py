@@ -70,6 +70,9 @@ class StdioTerminal(Terminal):
 
     # Rows at the bottom of the venue that are the terminal's own, not the board's.
     reserved_rows = 0
+    # Paints a second at most: a flooding child scrolls the whole screen between frames,
+    # so each is a full repaint, and fewer of them leave its output more of the time.
+    frame_rate = 30
 
     def __init__(self, board: Board | None = None, scrollback: Scrollback | None = None) -> None:
         size = shutil.get_terminal_size()
@@ -97,6 +100,7 @@ class StdioTerminal(Terminal):
         self.startup_input = b""
         self.input_parser = KeyboardInput(self)
         self.dirty = False  # the screen changed; the run loop repaints on its tick
+        self.next_frame = 0.0  # the loop's clock when it may paint again
 
     def get_default_shell(self) -> str:
         """Get the default shell command for the current platform."""
@@ -277,7 +281,10 @@ class StdioTerminal(Terminal):
                 print(f"\033[{y + 1}H{render_cells(row, self.width)}\033[K", end="")
         else:
             page = self.port.page  # this chrome draws no status line
-            for y in self.damaged_rows():
+            scrolled, rows = self.damage()
+            if scrolled:
+                print(self.scroll_venue(scrolled), end="")
+            for y in rows:
                 if y < self.height:
                     print(f"\033[{y + 1}H{page.get_line(y, width=self.width)}\033[K", end="")
         self.draw_chrome()
@@ -286,6 +293,25 @@ class StdioTerminal(Terminal):
             print(f"\033[{cursor[1] + offset + 1};{cursor[0] + 1}H\033[?25h", end="", flush=True)
         else:
             print(end="", flush=True)
+
+    def scroll_venue(self, rows: int) -> str:
+        """Move the board's rows of the venue up (negative: down), its own rows held still.
+
+        Line feeds at the bottom of a scroll region, or reverse index at the top: every
+        terminal has them, where SU/SD is not universal.
+        """
+        if rows > 0:
+            moves = f"\033[{self.height}H" + "\n" * rows
+        else:
+            moves = "\033[H" + "\033M" * -rows
+        return f"\033[1;{self.height}r{moves}\033[r"
+
+    def tick(self, now: float) -> None:
+        """Paint, if the screen changed and a frame is due by the clock `now`."""
+        if self.dirty and now >= self.next_frame:
+            self.dirty = False
+            self.next_frame = now + 1 / self.frame_rate
+            self.render_screen()
 
     def draw_chrome(self) -> None:
         """Paint the terminal's own rows, if it reserved any.
@@ -414,9 +440,7 @@ class StdioTerminal(Terminal):
             input_task = asyncio.create_task(self.input_loop())
             while self.running:
                 await asyncio.sleep(0.01)
-                if self.dirty:
-                    self.dirty = False
-                    self.render_screen()
+                self.tick(loop.time())
 
             if self.dirty:  # paint whatever arrived after the last tick
                 self.render_screen()

@@ -7,6 +7,8 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
+from itertools import groupby
+from operator import itemgetter
 
 from . import constants
 from .style import Style, parse_sgr_sequence
@@ -17,6 +19,7 @@ from .width import DEFAULT_WIDTH_POLICY, WidthPolicy
 # continuation column of a width-2 character stored in the preceding cell.
 Cell = tuple[Style, str]
 CONTINUATION = ""
+_DEFAULT_STYLE = Style()
 
 
 class WideHead(str):
@@ -78,10 +81,14 @@ class Video:
         # Dirty tracking: readers own the clock. Writes stamp the CURRENT
         # epoch (one store — no increment on the hot path); a renderer calls
         # observe() to open a new epoch after it snapshots. Targeted writes
-        # stamp their row in row_gen; whole-page upheavals (full scroll,
-        # resize) stamp page_gen instead of touching every row.
+        # stamp their row in row_gen; whole-page upheavals (resize) stamp
+        # page_gen instead of touching every row. A full-height scroll moves
+        # the stamps with their rows and counts the rows it moved up (down is
+        # negative) in `scrolled`, so a reader can scroll what it shows.
         self.generation = 1
         self.page_gen = 0
+        self.scroll_gen = 0  # when rows last moved in a full-height scroll
+        self.scrolled = 0
         self.row_gen: list[int] = [0] * height
 
     def _touch_row(self, y: int) -> None:
@@ -92,15 +99,30 @@ class Video:
         """Stamp the whole page as changed in the current epoch."""
         self.page_gen = self.generation
 
-    def _touch_scrolled(self, top: int, bottom: int) -> None:
-        """Stamp a scrolled region: whole page for a full-height scroll (the hot
-        path — one store instead of a stamp per row), per-row otherwise."""
-        if top == 0 and bottom == self.height - 1:
-            self.page_gen = self.generation
-            return
+    def _touch_rows(self, top: int, bottom: int) -> None:
+        """Stamp rows top..bottom as changed in the current epoch."""
         g = self.generation
         for y in range(top, bottom + 1):
             self.row_gen[y] = g
+
+    def _touch_scrolled(self, top: int, bottom: int, count: int) -> None:
+        """Stamp full rows moved `count` up (negative: down) within a region.
+
+        A full-height scroll moves the rows' stamps with them, stamps only the rows
+        it brings in, and counts the move; any other region is stamped whole.
+        """
+        if top or bottom != self.height - 1:
+            self._touch_rows(top, bottom)
+            return
+        g, kept = self.generation, self.height - abs(count)
+        if count > 0:
+            self.row_gen[:kept] = self.row_gen[count:]
+            self.row_gen[kept:] = [g] * count
+        else:
+            self.row_gen[-count:] = self.row_gen[:kept]
+            self.row_gen[:-count] = [g] * -count
+        self.scrolled += count
+        self.scroll_gen = g
 
     def observe(self) -> int:
         """Snapshot for dirty tracking: close the current epoch, open a new one.
@@ -112,7 +134,13 @@ class Video:
         return self.generation
 
     def dirty_rows(self, seen: int) -> list[int]:
-        """Rows changed since `seen` (a value returned by observe())."""
+        """Rows changed since `seen` (a value returned by observe()); all of them after a full-height scroll."""
+        if self.scroll_gen >= seen:
+            return list(range(self.height))
+        return self.changed_rows(seen)
+
+    def changed_rows(self, seen: int) -> list[int]:
+        """Rows written since `seen`, leaving out rows a full-height scroll only moved (see `scrolled`)."""
         if self.page_gen >= seen:
             return list(range(self.height))
         return [y for y, g in enumerate(self.row_gen) if g >= seen]
@@ -536,7 +564,7 @@ class Video:
             self.grid[y] = self._create_empty_row()
             self.line_attributes[y] = constants.LINE_SINGLE
             self.wrapped_lines[y] = False
-        self._touch_scrolled(top, bottom)
+        self._touch_scrolled(top, bottom, count)
 
     def scroll_rectangle_up(
         self,
@@ -585,6 +613,7 @@ class Video:
                 self.grid[y] = [blank] * self.width
                 self.line_attributes[y] = constants.LINE_SINGLE
                 self.wrapped_lines[y] = False
+            self._touch_scrolled(top, bottom, count)
         else:
             end = right + 1
             for y in range(top, bottom + 1 - count):
@@ -607,8 +636,7 @@ class Video:
 
             # A partial-row operation cannot move a row-wide DECDWL/DECDHL
             # attribute without also changing cells outside the rectangle.
-
-        self._touch_scrolled(top, bottom)
+            self._touch_rows(top, bottom)
 
     def scroll_region_down(
         self,
@@ -628,7 +656,7 @@ class Video:
             self.grid[y] = self._create_empty_row()
             self.line_attributes[y] = constants.LINE_SINGLE
             self.wrapped_lines[y] = False
-        self._touch_scrolled(top, bottom)
+        self._touch_scrolled(top, bottom, -count)
 
     def scroll_rectangle_down(
         self,
@@ -671,6 +699,7 @@ class Video:
                 self.grid[y] = [blank] * self.width
                 self.line_attributes[y] = constants.LINE_SINGLE
                 self.wrapped_lines[y] = False
+            self._touch_scrolled(top, bottom, -count)
         else:
             end = right + 1
             for y in range(bottom, top + count - 1, -1):
@@ -689,8 +718,7 @@ class Video:
             self.wrapped_lines[top + count : bottom + 1] = self.wrapped_lines[top : bottom + 1 - count]
             for y in range(top, top + count):
                 self.wrapped_lines[y] = False
-
-        self._touch_scrolled(top, bottom)
+            self._touch_rows(top, bottom)
 
     def resize(self, width: int, height: int) -> None:
         """Resize the page to new dimensions."""
@@ -834,33 +862,26 @@ class Video:
 
 
 def render_cells(row: Sequence[Cell], width: int) -> str:
-    """A row of cells as ANSI text exactly `width` columns wide, ending in the default style."""
+    """A row of cells as ANSI text exactly `width` columns wide, ending in the default style.
+
+    One style transition per run of a style, not per cell; a continuation is the empty string,
+    so joining a run's characters drops it.
+    """
+    cells = row[:width]
+    # An explicit width may cut before a continuation that lies outside the requested
+    # pane. Render a blank rather than letting the wide glyph spill over its boundary.
+    if width < len(row) and row[width][1] == CONTINUATION:
+        cells = [*cells[:-1], (cells[-1][0], " ")]
     parts = []
-    current_style = Style()  # Start with default style
-
-    # Process each cell up to specified width
-    limit = min(len(row), width)
-    for x in range(limit):
-        cell_style, char = row[x]
-        if char == CONTINUATION:
-            continue
-        # An explicit width may cut before a continuation that lies
-        # outside the requested pane. Render a blank rather than letting
-        # the wide glyph spill over its boundary.
-        if x + 1 == limit and x + 1 < len(row) and row[x + 1][1] == CONTINUATION:
-            char = " "
-        transition = current_style.diff(cell_style)
-        parts.append(transition)
-        parts.append(char)
-        current_style = cell_style
-
-    # Pad to width if needed
-    if limit < width:
-        # Transition to default style for padding
-        parts.append(current_style.diff(Style()))
-        parts.append(" " * (width - limit))
-        current_style = Style()
-
+    current = _DEFAULT_STYLE
+    for style, run in groupby(cells, itemgetter(0)):
+        parts.append(current.diff(style))
+        parts.append("".join(map(itemgetter(1), run)))
+        current = style
+    if len(cells) < width:
+        parts.append(current.diff(_DEFAULT_STYLE))
+        parts.append(" " * (width - len(cells)))
+        current = _DEFAULT_STYLE
     # Always end with a reset to prevent bleeding to next line
-    parts.append(current_style.diff(Style()))
+    parts.append(current.diff(_DEFAULT_STYLE))
     return "".join(parts)

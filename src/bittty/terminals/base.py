@@ -74,6 +74,7 @@ class Terminal:
         self.view_top: tuple[int, int] | None = None
         self._seen_page: Video | None = None  # the page painted last
         self._seen_gen = -1  # its generation when painted
+        self._seen_scrolled = 0  # and how far it had scrolled
 
     @property
     def port(self) -> DisplayPort:
@@ -81,14 +82,28 @@ class Terminal:
         return self.board.display
 
     def damaged_rows(self) -> Sequence[int]:
-        """The rows of the displayed page changed since the last call; all of them after a page flip.
+        """The rows of the displayed page changed since the last call; all of them after a page flip or a scroll.
 
-        Call it once per paint: asking is what marks the rows seen.
+        Call it once per paint (or `damage()` instead): asking is what marks the rows seen.
+        """
+        scrolled, rows = self.damage()
+        return range(self.port.page.height) if scrolled else rows
+
+    def damage(self) -> tuple[int, Sequence[int]]:
+        """How far the displayed page scrolled up since the last call (down is negative), and the rows
+        changed once the shown screen is scrolled to match; every row, unscrolled, after a page flip.
+
+        A terminal that can scroll what it shows does, then paints only these rows.
+        Call it once per paint (or `damaged_rows()` instead): asking is what marks the rows seen.
         """
         page = self.port.page
-        rows = page.dirty_rows(self._seen_gen) if page is self._seen_page else range(page.height)
-        self._seen_page, self._seen_gen = page, page.observe()
-        return rows
+        scrolled = page.scrolled - self._seen_scrolled
+        if page is not self._seen_page or abs(scrolled) >= page.height:
+            scrolled, rows = 0, range(page.height)
+        else:
+            rows = page.changed_rows(self._seen_gen)
+        self._seen_page, self._seen_gen, self._seen_scrolled = page, page.observe(), page.scrolled
+        return scrolled, rows
 
     # --- the view: history above the screen --- #
 
