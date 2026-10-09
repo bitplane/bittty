@@ -194,33 +194,10 @@ def generate_visualizations(perf_base_dir: Path):
         if not branches or not times:
             continue
 
-        # Create plot
-        plt.clear_data()
-        plt.clear_color()
-
-        # Set theme for black background with colors
-        plt.theme("dark")
-
-        # Bar chart with branches on x-axis, time on y-axis
-        plt.bar(branches, times, color="cyan")
-
-        # Configure plot
-        plt.title(f"Performance: {test_name}")
-        plt.xlabel("Branch/Version")
-        plt.ylabel("Time (seconds)")
-
-        # Use linear scale for now (log scale causing issues)
-        # plt.yscale("log")
-
-        # Set size - 24 rows height, auto width based on samples
-        width = max(60, len(branches) * 6 + 20)  # 6 chars per sample + margins
-        plt.plotsize(width, 24)
-
-        # Fancy border
-        plt.grid(True, True)
-
-        # Generate the plot as text
-        plot_text = plt.build()
+        # Bar chart with branches on x-axis, time on y-axis; 6 chars per sample + margins
+        figure = _figure(f"Performance: {test_name}", max(60, len(branches) * 6 + 20), 24)
+        figure.draw(figure.bar(branches, times))
+        plot_text = str(figure.build())
 
         # Save to file
         output_file = perf_base_dir / f"{test_name}.txt"
@@ -231,6 +208,20 @@ def generate_visualizations(perf_base_dir: Path):
 
     # Generate combined stacked chart
     generate_combined_chart(test_cases, perf_base_dir)
+
+
+def _figure(title: str, width: int, height: int):
+    """A cleared plotext figure on a black background, with axis labels and a grid."""
+    figure = plt.figure
+    figure.clear()
+    figure.theme("dark")
+    figure.title(title)
+    figure.label("Branch/Version", axis="x")
+    figure.label("Time (seconds)", axis="y")
+    figure.plot_size(width, height)
+    for axis in ("x", "y"):
+        figure.ruler(axis).grid()
+    return figure
 
 
 def generate_combined_chart(test_cases: dict, perf_base_dir: Path):
@@ -256,38 +247,20 @@ def generate_combined_chart(test_cases: dict, perf_base_dir: Path):
             label = label[-10:]
         branch_labels.append(label)
 
-    plt.clear_data()
-    plt.clear_color()
-    plt.theme("dark")
+    # Taller for the combined chart
+    figure = _figure("Performance Comparison: All Tests", max(80, len(branch_labels) * 8 + 30), 30)
 
-    # Prepare data for stacked bar chart
-    all_times = []
-    test_names = []
+    # Stack each test's bars on the ones before, as floating bars, so each keeps its own legend label.
     # Sort test cases to ensure consistent order
+    bottom = [0.0] * len(sorted_branches)
     for test_name, test_data in sorted(test_cases.items()):
-        test_names.append(test_name)
         test_times = {row["branch"]: float(row["time_min"]) for row in test_data if float(row["time_min"]) > 0}
-        times_for_test = [test_times.get(branch, 0) for branch in sorted_branches]
-        all_times.append(times_for_test)
-
-    # Create stacked bar chart
-    if all_times:
-        plt.stacked_bar(branch_labels, all_times, labels=test_names)
-
-    # Configure plot
-    plt.title("Performance Comparison: All Tests")
-    plt.xlabel("Branch/Version")
-    plt.ylabel("Time (seconds)")
-
-    # Set size - taller for combined chart
-    width = max(80, len(branch_labels) * 8 + 30)
-    plt.plotsize(width, 30)
-
-    # Add grid and legend
-    plt.grid(True, True)
+        top = [base + test_times.get(branch, 0) for base, branch in zip(bottom, sorted_branches)]
+        figure.draw(figure.bar(branch_labels, bottom, top).label(test_name))
+        bottom = top
 
     # Generate and save
-    plot_text = plt.build()
+    plot_text = str(figure.build())
     output_file = perf_base_dir / "combined.txt"
     with open(output_file, "w", encoding="utf-8") as f:
         f.write(plot_text)

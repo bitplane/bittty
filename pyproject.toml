@@ -20,7 +20,7 @@ dev = [
     "coverage",
     "pytest-cov",
     "pytest-asyncio",
-    "plotext",
+    "plotext>=6",
     "build",
     "twine",
     "ruff",
