@@ -944,6 +944,7 @@ class Blitter(Device):
         for buf in self.videos:
             buf.reset_line_attributes()
             buf.reset_wrapped_lines()
+            buf.reset_bands()
             for y in range(self.rows):
                 buf.clear_line(y, constants.ERASE_ALL, 0, "")
         self.last_printed_char = ""

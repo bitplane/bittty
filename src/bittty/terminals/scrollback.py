@@ -28,6 +28,7 @@ from operator import itemgetter
 from typing import Protocol
 
 from ..constants import LINE_SINGLE
+from ..image import Band
 from ..style import Style
 from ..video import CONTINUATION, Cell, WideHead
 
@@ -48,17 +49,22 @@ class ScrollbackLine:
     cell holding none. `styles` holds each cell's style, shared objects rather than
     one (style, char) pair per cell. `shape` is the number of code points in each
     cell (0 for a wide glyph's tail), or None when every cell holds exactly one.
-    `attribute` is the line's size (DECSWL/DECDWL/DECDHL), as video keeps it.
+    `attribute` is the line's size (DECSWL/DECDWL/DECDHL), as video keeps it. `bands` are
+    the images on its rows, each with the cell its row starts at, so a layout at any width
+    finds the row to show it on.
     """
 
     text: str
     styles: tuple[Style, ...]
     shape: tuple[int, ...] | None = None
     attribute: str = LINE_SINGLE
+    bands: tuple[tuple[int, Band], ...] = ()
 
     @classmethod
-    def of(cls, cells: Sequence[Cell], trim: bool = False, attribute: str = LINE_SINGLE) -> ScrollbackLine:
-        """Compact a row of video cells; `trim` drops its trailing unstyled blanks, as at a line's end."""
+    def of(
+        cls, cells: Sequence[Cell], trim: bool = False, attribute: str = LINE_SINGLE, bands: tuple[Band, ...] = ()
+    ) -> ScrollbackLine:
+        """Compact a row of video cells and its images; `trim` drops its trailing unstyled blanks, as at a line's end."""
         chars = tuple(map(_CHAR, cells))
         text = "".join(chars)
         if trim:
@@ -66,7 +72,8 @@ class ScrollbackLine:
             text = text[: len(text) - len(cells) + cut]
             cells, chars = cells[:cut], chars[:cut]
         regular = len(text) == len(chars) and CONTINUATION not in chars
-        return cls(text, tuple(map(_STYLE, cells)), None if regular else tuple(map(len, chars)), attribute)
+        shape = None if regular else tuple(map(len, chars))
+        return cls(text, tuple(map(_STYLE, cells)), shape, attribute, tuple((0, band) for band in bands))
 
     @classmethod
     def join(cls, parts: Sequence[ScrollbackLine]) -> ScrollbackLine:
@@ -74,7 +81,12 @@ class ScrollbackLine:
         regular = all(part.shape is None for part in parts)
         shape = None if regular else tuple(chain.from_iterable(part.shape or (1,) * len(part) for part in parts))
         text = "".join(part.text for part in parts)
-        return cls(text, tuple(chain.from_iterable(part.styles for part in parts)), shape, parts[0].attribute)
+        bands, start = [], 0
+        for part in parts:
+            bands += [(start + at, band) for at, band in part.bands]
+            start += len(part)
+        styles = tuple(chain.from_iterable(part.styles for part in parts))
+        return cls(text, styles, shape, parts[0].attribute, tuple(bands))
 
     def __len__(self) -> int:
         """Cells."""

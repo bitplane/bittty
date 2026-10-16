@@ -167,7 +167,8 @@ class Terminal:
     def on_rows_scrolled_off(self, lines: tuple[Line, ...]) -> None:
         """Keep the rows in the scrollback, a line's end without its trailing blanks."""
         for line in lines:
-            self.scrollback.append(ScrollbackLine.of(line.cells, not line.wrapped, line.attribute), line.wrapped)
+            row = ScrollbackLine.of(line.cells, not line.wrapped, line.attribute, line.bands)
+            self.scrollback.append(row, line.wrapped)
 
     def on_scrollback_cleared(self) -> None:
         self.scrollback.clear()

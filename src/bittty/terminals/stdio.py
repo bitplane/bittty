@@ -21,6 +21,7 @@ from ..video import render_cells
 from .base import Terminal
 from .keyboard_input import KeyboardInput
 from .probe import probe_caps
+from .raster import HALF_BLOCKS, composite
 from .scrollback import Scrollback
 
 try:
@@ -73,6 +74,7 @@ class StdioTerminal(Terminal):
     # Paints a second at most: a flooding child scrolls the whole screen between frames,
     # so each is a full repaint, and fewer of them leave its output more of the time.
     frame_rate = 30
+    glyphs = HALF_BLOCKS  # what images are drawn in
 
     def __init__(self, board: Board | None = None, scrollback: Scrollback | None = None) -> None:
         size = shutil.get_terminal_size()
@@ -285,8 +287,13 @@ class StdioTerminal(Terminal):
             if scrolled:
                 print(self.scroll_venue(scrolled), end="")
             for y in rows:
-                if y < self.height:
-                    print(f"\033[{y + 1}H{page.get_line(y, width=self.width)}\033[K", end="")
+                if y >= self.height:
+                    continue
+                if page.bands[y]:
+                    line = render_cells(composite(page.grid[y], page.bands[y], self.glyphs), self.width)
+                else:
+                    line = page.get_line(y, width=self.width)
+                print(f"\033[{y + 1}H{line}\033[K", end="")
         self.draw_chrome()
         cursor = self.port.cursor
         if cursor is not None and cursor[1] + offset < self.height:

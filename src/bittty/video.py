@@ -11,6 +11,7 @@ from itertools import groupby
 from operator import itemgetter
 
 from . import constants
+from .image import Band, Placement
 from .style import Style, parse_sgr_sequence
 from .width import DEFAULT_WIDTH_POLICY, WidthPolicy
 
@@ -33,6 +34,7 @@ class Line:
     cells: tuple[Cell, ...]
     wrapped: bool = False  # the logical line continues in the next row
     attribute: str = constants.LINE_SINGLE  # DECDWL/DECDHL
+    bands: tuple[Band, ...] = ()  # the images on the row, the topmost last
 
 
 def _coerce_style(style_or_ansi) -> Style:
@@ -77,6 +79,8 @@ class Video:
         # Whether the line continued via DECAWM. Reverse-wrap mode 45 follows
         # this metadata; it is deliberately one boolean per row, not per cell.
         self.wrapped_lines: list[bool] = [False] * height
+        # The images on each row, the topmost last; they move with their rows.
+        self.bands: list[tuple[Band, ...]] = [()] * height
 
         # Dirty tracking: readers own the clock. Writes stamp the CURRENT
         # epoch (one store — no increment on the hot path); a renderer calls
@@ -277,9 +281,21 @@ class Video:
         """Clear all automatic-wrap metadata."""
         self.wrapped_lines = [False] * self.height
 
+    def place(self, y: int, placement: Placement) -> None:
+        """Put an image on top of rows from y down, as far as it reaches or the page goes."""
+        bottom = min(y + placement.rows, self.height) - 1
+        for row in range(y, bottom + 1):
+            self.bands[row] += (Band(placement, row - y),)
+        self._touch_rows(y, bottom)
+
+    def reset_bands(self) -> None:
+        """Take every image off the page (RIS)."""
+        self.bands = [()] * self.height
+        self._touch_page()
+
     def line(self, y: int) -> Line:
         """A detached copy of row y."""
-        return Line(tuple(self.grid[y]), self.wrapped_lines[y], self.line_attributes[y])
+        return Line(tuple(self.grid[y]), self.wrapped_lines[y], self.line_attributes[y], self.bands[y])
 
     def get_content(self) -> list[list[Cell]]:
         """Get the page's content as a 2D grid."""
@@ -526,6 +542,8 @@ class Video:
         self.line_attributes.extend([constants.LINE_SINGLE] * count)
         del self.wrapped_lines[:count]
         self.wrapped_lines.extend([False] * count)
+        del self.bands[:count]
+        self.bands.extend([()] * count)
         self._touch_page()
 
     def scroll_down(self, count: int) -> None:
@@ -544,6 +562,8 @@ class Video:
         self.line_attributes[:0] = [constants.LINE_SINGLE] * count
         del self.wrapped_lines[-count:]
         self.wrapped_lines[:0] = [False] * count
+        del self.bands[-count:]
+        self.bands[:0] = [()] * count
         self._touch_page()
 
     def scroll_region_up(
@@ -560,10 +580,12 @@ class Video:
         self.grid[top : bottom + 1 - count] = self.grid[top + count : bottom + 1]
         self.line_attributes[top : bottom + 1 - count] = self.line_attributes[top + count : bottom + 1]
         self.wrapped_lines[top : bottom + 1 - count] = self.wrapped_lines[top + count : bottom + 1]
+        self.bands[top : bottom + 1 - count] = self.bands[top + count : bottom + 1]
         for y in range(bottom + 1 - count, bottom + 1):
             self.grid[y] = self._create_empty_row()
             self.line_attributes[y] = constants.LINE_SINGLE
             self.wrapped_lines[y] = False
+            self.bands[y] = ()
         self._touch_scrolled(top, bottom, count)
 
     def scroll_rectangle_up(
@@ -608,11 +630,13 @@ class Video:
             self.grid[top : bottom + 1 - count] = self.grid[top + count : bottom + 1]
             self.line_attributes[top : bottom + 1 - count] = self.line_attributes[top + count : bottom + 1]
             self.wrapped_lines[top : bottom + 1 - count] = self.wrapped_lines[top + count : bottom + 1]
+            self.bands[top : bottom + 1 - count] = self.bands[top + count : bottom + 1]
 
             for y in range(bottom + 1 - count, bottom + 1):
                 self.grid[y] = [blank] * self.width
                 self.line_attributes[y] = constants.LINE_SINGLE
                 self.wrapped_lines[y] = False
+                self.bands[y] = ()
             self._touch_scrolled(top, bottom, count)
         else:
             end = right + 1
@@ -635,7 +659,7 @@ class Video:
                 self.wrapped_lines[y] = False
 
             # A partial-row operation cannot move a row-wide DECDWL/DECDHL
-            # attribute without also changing cells outside the rectangle.
+            # attribute or image band without also changing cells outside the rectangle.
             self._touch_rows(top, bottom)
 
     def scroll_region_down(
@@ -652,10 +676,12 @@ class Video:
         self.grid[top + count : bottom + 1] = self.grid[top : bottom + 1 - count]
         self.line_attributes[top + count : bottom + 1] = self.line_attributes[top : bottom + 1 - count]
         self.wrapped_lines[top + count : bottom + 1] = self.wrapped_lines[top : bottom + 1 - count]
+        self.bands[top + count : bottom + 1] = self.bands[top : bottom + 1 - count]
         for y in range(top, top + count):
             self.grid[y] = self._create_empty_row()
             self.line_attributes[y] = constants.LINE_SINGLE
             self.wrapped_lines[y] = False
+            self.bands[y] = ()
         self._touch_scrolled(top, bottom, -count)
 
     def scroll_rectangle_down(
@@ -694,11 +720,13 @@ class Video:
             self.grid[top + count : bottom + 1] = self.grid[top : bottom + 1 - count]
             self.line_attributes[top + count : bottom + 1] = self.line_attributes[top : bottom + 1 - count]
             self.wrapped_lines[top + count : bottom + 1] = self.wrapped_lines[top : bottom + 1 - count]
+            self.bands[top + count : bottom + 1] = self.bands[top : bottom + 1 - count]
 
             for y in range(top, top + count):
                 self.grid[y] = [blank] * self.width
                 self.line_attributes[y] = constants.LINE_SINGLE
                 self.wrapped_lines[y] = False
+                self.bands[y] = ()
             self._touch_scrolled(top, bottom, -count)
         else:
             end = right + 1
@@ -729,11 +757,13 @@ class Video:
                 self.grid.append(self._create_empty_row(width))
             self.line_attributes.extend([constants.LINE_SINGLE] * (height - len(self.line_attributes)))
             self.wrapped_lines.extend([False] * (height - len(self.wrapped_lines)))
+            self.bands.extend([()] * (height - len(self.bands)))
         elif len(self.grid) > height:
             # Remove excess rows
             self.grid = self.grid[:height]
             self.line_attributes = self.line_attributes[:height]
             self.wrapped_lines = self.wrapped_lines[:height]
+            self.bands = self.bands[:height]
 
         # Adjust width of each row
         for y in range(len(self.grid)):
@@ -765,11 +795,14 @@ class Video:
         new width, never splitting a wide character, and every row but its last wraps. Trailing
         blanks are dropped, except up to the cursor. Rows past the new height go: blank rows below
         the cursor first, then rows at the top (no further than the cursor's), then at the bottom.
+        A line with an image on any of its rows keeps its rows as they are, cut at the new width.
         """
         cursor_x, cursor_y = cursor
         blank = self._empty_cell
         lines: list[list[Cell]] = []
+        held: list[range | None] = []  # per logical line, the rows it keeps when it holds an image
         cells: list[Cell] = []
+        first = 0  # the logical line's first row
         cursor_at: tuple[int, int] | None = None  # (logical line, cell offset)
         for y in range(self.height):
             if y == cursor_y:
@@ -780,13 +813,27 @@ class Video:
                 while len(cells) > keep and cells[-1] == blank:
                     cells.pop()
                 lines.append(cells)
-                cells = []
+                held.append(range(first, y + 1) if any(self.bands[first : y + 1]) else None)
+                cells, first = [], y + 1
 
         rows: list[list[Cell]] = []
         wrapped: list[bool] = []
+        bands: list[tuple[Band, ...]] = []
         new_cursor = (0, 0)  # (row, column)
         for index, line in enumerate(lines):
             start = len(rows)
+            if held[index]:
+                for y in held[index]:
+                    row = self.grid[y][:width]
+                    if width < self.width and self.grid[y][width][1] == CONTINUATION:
+                        row[-1] = blank  # a wide glyph cut by the new edge
+                    rows.append(row + [blank] * (width - len(row)))
+                    wrapped.append(self.wrapped_lines[y])
+                    bands.append(self.bands[y])
+                if cursor_at and cursor_at[0] == index:
+                    within, column = divmod(cursor_at[1], self.width)
+                    new_cursor = (start + within, min(column, width - 1))
+                continue
             row: list[Cell] = []
             for offset, cell in enumerate(line):
                 if cell[1] == CONTINUATION and row:  # a wide glyph's tail stays with its head
@@ -801,17 +848,25 @@ class Video:
                     new_cursor = (len(rows), len(row) - 1)
             rows.append(row + [blank] * (width - len(row)))
             wrapped += [True] * (len(rows) - start - 1) + [False]
+            bands += [()] * (len(rows) - start)
 
         # Too many rows: blank ones below the cursor go first, then rows at the top.
-        while len(rows) > height and len(rows) - 1 > new_cursor[0] and all(cell == blank for cell in rows[-1]):
+        while (
+            len(rows) > height
+            and len(rows) - 1 > new_cursor[0]
+            and not bands[-1]
+            and all(cell == blank for cell in rows[-1])
+        ):
             rows.pop()
             wrapped.pop()
+            bands.pop()
         top = max(0, min(len(rows) - height, new_cursor[0]))
-        cut = [Line(tuple(row), wrap) for row, wrap in zip(rows[:top], wrapped[:top])]
-        rows, wrapped = rows[top : top + height], wrapped[top : top + height]
+        cut = [Line(tuple(row), wrap, bands=row_bands) for row, wrap, row_bands in zip(rows[:top], wrapped, bands)]
+        rows, wrapped, bands = rows[top : top + height], wrapped[top : top + height], bands[top : top + height]
         rows += [self._create_empty_row(width) for _ in range(height - len(rows))]
         wrapped += [False] * (height - len(wrapped))
-        self.grid, self.wrapped_lines = rows, wrapped
+        bands += [()] * (height - len(bands))
+        self.grid, self.wrapped_lines, self.bands = rows, wrapped, bands
         self.line_attributes = [constants.LINE_SINGLE] * height
         self.width, self.height = width, height
         self.row_gen = [0] * height
