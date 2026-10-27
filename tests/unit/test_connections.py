@@ -1,6 +1,9 @@
+import asyncio
 import io
 
-from bittty import Connection, HostPort, MemoryConnection, MemoryPrinter, PrinterConnection, StreamPrinter
+import pytest
+
+from bittty import Board, Connection, HostPort, MemoryConnection, MemoryPrinter, PrinterConnection, StreamPrinter
 from bittty.peripherals.printer import VirtualPrinter
 from bittty.pty import PTY, StdioPTY
 
@@ -52,3 +55,81 @@ def test_a_partial_cable_is_not_a_connection():
             return len(data)
 
     assert not isinstance(WriteOnly(), Connection)
+
+
+@pytest.mark.asyncio
+async def test_reconnect_retires_old_reader_and_discards_its_pending_data():
+    class PendingCable(MemoryConnection):
+        def __init__(self):
+            super().__init__()
+            self.waiting = asyncio.Event()
+            self.incoming = asyncio.Queue()
+
+        async def read_bytes_async(self, size):
+            self.waiting.set()
+            try:
+                return await self.incoming.get()
+            except asyncio.CancelledError:
+                return b"stale"
+
+    old = PendingCable()
+    new = PendingCable()
+    port = HostPort()
+    received = []
+    port.connect(old, received.append)
+    first = port._reader_task
+    await old.waiting.wait()
+    port.connect(new, received.append)
+    new.incoming.put_nowait(b"fresh")
+    for _ in range(10):
+        await asyncio.sleep(0)
+    port.disconnect()
+    first.cancel()
+    await asyncio.sleep(0)
+    assert first.done()
+    assert received == [b"fresh"]
+
+
+@pytest.mark.asyncio
+async def test_reconnecting_same_cable_keeps_pending_read_and_rebinds_callback():
+    class PendingCable(MemoryConnection):
+        def __init__(self):
+            super().__init__()
+            self.waiting = asyncio.Event()
+            self.incoming = asyncio.Queue()
+
+        async def read_bytes_async(self, size):
+            self.waiting.set()
+            return await self.incoming.get()
+
+    cable = PendingCable()
+    port = HostPort()
+    old, new = [], []
+    port.connect(cable, old.append)
+    reader = port._reader_task
+    await cable.waiting.wait()
+    port.connect(cable, new.append)
+    assert port._reader_task is reader
+    cable.incoming.put_nowait(b"pending output")
+    for _ in range(10):
+        await asyncio.sleep(0)
+    port.disconnect()
+    await asyncio.sleep(0)
+    assert old == []
+    assert new == [b"pending output"]
+
+
+@pytest.mark.asyncio
+async def test_board_reconnect_starts_reader_for_new_cable():
+    board = Board()
+    old = MemoryConnection()
+    new = MemoryConnection([b"new cable"])
+    board.connect(old)
+    first = board.host._reader_task
+    await asyncio.sleep(0)
+    board.connect(new)
+    for _ in range(10):
+        await asyncio.sleep(0)
+    board.stop_process()
+    assert first.done()
+    assert board.capture_text() == "new cable"

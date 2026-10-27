@@ -82,6 +82,7 @@ class HostPort:
         self.on_idle: Callable[[], bool] | None = None
         self.on_closed: Callable[[], None] | None = None
         self._reader_task: asyncio.Task | None = None
+        self._reader_connection: Connection | None = None
         self.line: SerialLine | None = None  # the host line's settings, on a terminal that has them
         self.tap: LineTap = _NoTap()
 
@@ -116,28 +117,40 @@ class HostPort:
         nothing — return True to stop the pump (the board reaps its dead child
         there). on_closed fires when the connection closes or errors out.
         """
+        reuse_reader = (
+            self._reader_connection is connection and self._reader_task is not None and not self._reader_task.done()
+        )
+        if not reuse_reader:
+            self.disconnect()
         self.connection = connection
         self.on_data = on_data
         self.on_idle = on_idle
         self.on_closed = on_closed
         if self.on_connected is not None:
             self.on_connected()
-        self._reader_task = asyncio.create_task(self._pump())
+        if not reuse_reader:
+            self._reader_connection = connection
+            self._reader_task = asyncio.create_task(self._pump(connection))
 
     def disconnect(self) -> None:
         """Stop the receive pump and unplug the connection."""
         if self._reader_task and not self._reader_task.done():
             self._reader_task.cancel()
         self._reader_task = None
+        self._reader_connection = None
         self.connection = None
 
-    async def _pump(self) -> None:
+    async def _pump(self, connection: Connection) -> None:
         """Receive loop: drain the connection into on_data until it closes."""
-        while self.connection is not None and not self.connection.closed:
+        task = asyncio.current_task()
+        while self._reader_task is task and self.connection is connection and not connection.closed:
             try:
                 # A big buffer so a flooding child drains in few wakeups
                 # instead of blocking on the PTY.
-                data = await self.connection.read_bytes_async(65536)
+                data = await connection.read_bytes_async(65536)
+                # A cable may finish its pending read even after cancellation.
+                if self._reader_task is not task or self.connection is not connection:
+                    break
 
                 if not data:
                     if self.on_idle is not None and self.on_idle():
@@ -155,17 +168,17 @@ class HostPort:
                 break
             except OSError as e:
                 logger.info(f"Host connection read error: {e}")
-                if self.on_closed is not None:
+                if self._reader_task is task and self.connection is connection and self.on_closed is not None:
                     self.on_closed()
                 break
             except Exception:
                 logger.exception("Error reading from host connection")
-                if self.on_closed is not None:
+                if self._reader_task is task and self.connection is connection and self.on_closed is not None:
                     self.on_closed()
                 break
         else:
             # The cable reported itself closed (end of a stream, a dropped socket).
-            if self.connection is not None and self.on_closed is not None:
+            if self._reader_task is task and self.connection is connection and self.on_closed is not None:
                 self.on_closed()
 
     @property
