@@ -13,7 +13,7 @@ def read_until(real_pty, expected: tuple[str, ...], timeout: float = 2.0) -> str
     result = ""
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
-        result += real_pty.read(1000)
+        result += real_pty.read_bytes(1000).decode("utf-8")
         if any(text in result for text in expected):
             break
         time.sleep(0.02)
@@ -25,10 +25,10 @@ def test_read_until_ignores_startup_mode_bursts_before_command_output():
 
     class ChunkedPTY:
         def __init__(self):
-            self.chunks = iter(("\x1b[?9001h\x1b[?1004h", "echo hello\r\nhello\r\n"))
+            self.chunks = iter((b"\x1b[?9001h\x1b[?1004h", b"echo hello\r\nhello\r\n"))
 
-        def read(self, _size):
-            return next(self.chunks, "")
+        def read_bytes(self, _size):
+            return next(self.chunks, b"")
 
     result = read_until(ChunkedPTY(), ("hello", "echo"))
 
