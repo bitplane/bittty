@@ -74,12 +74,11 @@ class InboundLine:
 
     def __init__(self) -> None:
         self._queue: asyncio.Queue[bytes] = asyncio.Queue()
+        self._remainder = b""
 
     async def read(self, size: int) -> bytes:
-        data = await self._queue.get()
-        if len(data) <= size:
-            return data
-        self._queue.put_nowait(data[size:])
+        data = self._remainder or await self._queue.get()
+        self._remainder = data[size:]
         return data[:size]
 
     def send(self, data: bytes) -> None:
@@ -87,7 +86,8 @@ class InboundLine:
 
     def take(self) -> bytes:
         """Everything sent that nobody has read yet, removed from the line."""
-        data = bytearray()
+        data = bytearray(self._remainder)
+        self._remainder = b""
         while not self._queue.empty():
             data += self._queue.get_nowait()
         return bytes(data)

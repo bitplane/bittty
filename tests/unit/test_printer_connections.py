@@ -47,3 +47,15 @@ async def test_duplex_memory_printer_pumps_input_to_the_host():
 
     board.printer.detach()
     assert host.data == [b"reply"]
+
+
+@pytest.mark.asyncio
+async def test_partial_printer_reads_preserve_byte_order():
+    printer = MemoryPrinter()
+    printer.send_bytes(b"abcdef")
+    printer.send_bytes(b"XYZ")
+    assert await printer.read_bytes_async(3) == b"abc"
+    assert await printer.read_bytes_async(2) == b"de"
+    assert printer.take_inbound() == b"fXYZ"
+    printer.send_bytes(b"next")
+    assert await printer.read_bytes_async(4) == b"next"
