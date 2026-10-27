@@ -146,6 +146,9 @@ class UnixPTY(PTY):
 
         def read_ready():
             loop.remove_reader(self.master_fd)
+            # A readiness callback may already be queued when its future is cancelled.
+            if future.done():
+                return
             # Drain everything available (up to size) in this one wakeup:
             # one add_reader round-trip per burst, not per 4KB chunk, keeps
             # a flooding child from blocking on a slowly-drained PTY.
@@ -167,4 +170,9 @@ class UnixPTY(PTY):
             future.set_result(b"".join(parts))
 
         loop.add_reader(self.master_fd, read_ready)
-        return await future
+        try:
+            return await future
+        finally:
+            # close() already unregistered it; the descriptor may now belong to another cable.
+            if not self.closed:
+                loop.remove_reader(self.master_fd)
