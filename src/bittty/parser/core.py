@@ -180,7 +180,12 @@ class Parser:
     Uses small, state-specific scanners for speed.
     """
 
-    def __init__(self, sink: OperationSink, *, feed_lock=None) -> None:
+    def __init__(self, sink: OperationSink, *, feed_lock=None, max_string_size: int = 1024 * 1024) -> None:
+        # Bound complete OSC/DCS/APC/PM/SOS sequences, including delimiters, in characters.
+        if max_string_size <= 0:
+            raise ValueError("max_string_size must be positive")
+        self.max_string_size = max_string_size
+        self._discarding_string = False
         self._feed_lock = feed_lock if feed_lock is not None else RLock()
         self.sink = sink
         self.buffer = ""
@@ -214,6 +219,7 @@ class Parser:
     def _set_seq_bounds(self, start: int) -> None:
         """Set seq_start and scan_from based on 7-bit/8-bit introducer length."""
         self._seq_start = start
+        self._discarding_string = False
         b = self.buffer
         # 8-bit forms are single-char; 7-bit are ESC + one char
         if b[start] == "\x1b":
@@ -360,19 +366,20 @@ class Parser:
 
             # Linux console fixed-length palette forms hijack the OSC introducer but
             # carry no ST/BEL terminator: ESC ] P nrrggbb (10 chars) and ESC ] R.
-            if self.mode == "osc":
-                head = self.buffer[self._scan_from] if self._scan_from < len(self.buffer) else ""
+            if self.mode == "osc" and not self._discarding_string:
+                payload_start = self._seq_start + (2 if self.buffer[self._seq_start] == "\x1b" else 1)
+                head = self.buffer[payload_start] if payload_start < len(self.buffer) else ""
                 if head == "R":
-                    end = self._scan_from + 1
+                    end = payload_start + 1
                     self.emit(Operation("LINUX_PALETTE_RESET", (), self.buffer[self._seq_start : end]))
                     self.pos = end
                     self.mode = None
                     continue
                 if head == "P":
-                    if len(self.buffer) < self._scan_from + 8:
+                    if len(self.buffer) < payload_start + 8:
                         break  # ESC ] P + 7 hex not all here yet — wait for the next chunk
-                    end = self._scan_from + 8
-                    payload = self.buffer[self._scan_from + 1 : end]
+                    end = payload_start + 8
+                    payload = self.buffer[payload_start + 1 : end]
                     self.emit(Operation("LINUX_PALETTE_SET", (payload,), self.buffer[self._seq_start : end]))
                     self.pos = end
                     self.mode = None
@@ -381,7 +388,12 @@ class Parser:
             # STRING modes (OSC/DCS/APC/PM/SOS) — ST or BEL terminate; CAN/SUB cancels
             m = STR_TERM_RE.search(self.buffer, self._scan_from)
             if not m:
-                # incomplete string, wait
+                # Only a trailing ESC can participate in a terminator in the next chunk.
+                self._scan_from = len(self.buffer) - int(self.buffer.endswith("\x1b"))
+                if len(self.buffer) - self._seq_start > self.max_string_size:
+                    self._discarding_string = True
+                if self._discarding_string:
+                    self.pos = self._scan_from
                 break
             end = m.end()
             if m.lastgroup in ("cancel", "esc"):
@@ -391,7 +403,10 @@ class Parser:
                 self.mode = None
                 continue
             # include from starter to ST/BEL
-            self.dispatch(self.mode, self.buffer[self._seq_start : end])
+            if not self._discarding_string and end - self._seq_start <= self.max_string_size:
+                self.dispatch(self.mode, self.buffer[self._seq_start : end])
+            else:
+                printed.last_printed_char = None
             self.pos = end
             self.mode = None
             # loop to handle next token immediately
@@ -517,13 +532,10 @@ class Parser:
         a sequence prefix, and must reach the sink as-is. Never called on the
         output direction, where waiting for the rest of the sequence is right.
         """
-        if not self.buffer:
-            return
         data = self.buffer
-        self.buffer = ""
-        self.pos = 0
-        self.mode = None
-        self.emit(Operation("PRINT", (data,), data))
+        self.reset()
+        if data:
+            self.emit(Operation("PRINT", (data,), data))
 
     def reset(self) -> None:
         self.buffer = ""
@@ -531,3 +543,4 @@ class Parser:
         self.mode = None
         self._seq_start = 0
         self._scan_from = 0
+        self._discarding_string = False
