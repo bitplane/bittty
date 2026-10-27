@@ -14,6 +14,57 @@ from typing import BinaryIO
 from .. import constants
 
 DEFAULT_TERM = "xterm-256color"
+# Variables that say which terminal (or multiplexer, or editor) the caller runs in. The child
+# runs in this one, so they would be lies: a program seeing TMUX wraps its graphics for tmux.
+OUTER_TERMINAL_VARIABLES = frozenset(
+    {
+        "COLORTERM",
+        "TERM_PROGRAM",
+        "TERM_PROGRAM_VERSION",
+        "TERM_SESSION_ID",
+        "TERM_FEATURES",
+        "LC_TERMINAL",
+        "LC_TERMINAL_VERSION",
+        "TMUX",
+        "TMUX_PANE",
+        "STY",
+        "WINDOW",
+        "TERMCAP",
+        "ZELLIJ",
+        "ZELLIJ_PANE_ID",
+        "ZELLIJ_SESSION_NAME",
+        "VTE_VERSION",
+        "GNOME_TERMINAL_SCREEN",
+        "GNOME_TERMINAL_SERVICE",
+        "TILIX_ID",
+        "TERMINATOR_UUID",
+        "KONSOLE_VERSION",
+        "KONSOLE_DBUS_SERVICE",
+        "KONSOLE_DBUS_SESSION",
+        "KONSOLE_DBUS_WINDOW",
+        "KONSOLE_PROFILE_NAME",
+        "KITTY_WINDOW_ID",
+        "KITTY_PID",
+        "KITTY_PUBLIC_KEY",
+        "KITTY_INSTALLATION_DIR",
+        "WEZTERM_EXECUTABLE",
+        "WEZTERM_EXECUTABLE_DIR",
+        "WEZTERM_PANE",
+        "WEZTERM_UNIX_SOCKET",
+        "ALACRITTY_LOG",
+        "ALACRITTY_SOCKET",
+        "ALACRITTY_WINDOW_ID",
+        "GHOSTTY_BIN_DIR",
+        "GHOSTTY_RESOURCES_DIR",
+        "ITERM_PROFILE",
+        "ITERM_SESSION_ID",
+        "WT_PROFILE_ID",
+        "WT_SESSION",
+        "INSIDE_EMACS",
+        "NVIM",
+        "NVIM_LISTEN_ADDRESS",
+    }
+)
 
 
 class PTY:
@@ -79,13 +130,15 @@ class PTY:
         """Check if PTY is closed."""
         return self.from_process.closed
 
-    def environment(self, term: str = DEFAULT_TERM) -> dict[str, str]:
-        """The child's environment: the caller's, with only what the terminal owns overridden.
+    def environment(self, owned: dict[str, str] | None = None) -> dict[str, str]:
+        """The child's environment: the caller's, less what says which terminal it runs in,
+        with what this terminal owns (TERM, and the like) set.
 
         subprocess env= replaces wholesale, so a bare {"TERM": ...} would launch the
         child with *nothing else* — no HOME, no PATH.
         """
-        return os.environ | {"TERM": term}
+        inherited = {name: value for name, value in os.environ.items() if name not in OUTER_TERMINAL_VARIABLES}
+        return inherited | ({"TERM": DEFAULT_TERM} if owned is None else owned)
 
     def spawn_process(self, command: str, env: dict[str, str] | None = None) -> subprocess.Popen:
         """Spawn a process connected to PTY streams."""

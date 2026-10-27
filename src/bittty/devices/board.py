@@ -209,6 +209,15 @@ class Board:
         if self.modes.auto_answerback:
             self.console.send_answerback()
 
+    @property
+    def child_environment(self) -> dict[str, str]:
+        """What the child is told it runs on: the model's word, less what the terminal (chrome) says
+        it cannot show. Fixed when the child starts, so a chrome pushes its caps before that."""
+        environment = self.model.environment
+        if self.caps.color_depth in ("truecolor", "unknown"):
+            return environment
+        return {name: value for name, value in environment.items() if name != "COLORTERM"}
+
     def set_caps(self, caps: TerminalCaps) -> None:
         """Record what the real terminal can do (a terminal (chrome) pushes this after probing)."""
         self.caps = caps
@@ -430,7 +439,7 @@ class Board:
             logger.info(f"Created PTY: {self.width}x{self.height}")
 
             # Spawn process attached to PTY (a stdio cable has none: its far end is already there)
-            self.process = self.pty.spawn_process(self.command, self.pty.environment(self.model.term))
+            self.process = self.pty.spawn_process(self.command, self.pty.environment(self.child_environment))
             logger.info("Spawned process: %s", self.process)
             self.connect(self.pty)
 

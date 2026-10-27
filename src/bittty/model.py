@@ -144,6 +144,11 @@ class Model:
         return self.terminfo or self.name
 
     @property
+    def environment(self) -> dict[str, str]:
+        """The variables a child process is given to say what it runs on."""
+        return {"TERM": self.term} | ({"COLORTERM": "truecolor"} if self.color_depth == "truecolor" else {})
+
+    @property
     def capabilities(self) -> frozenset[str]:
         """Everything this terminal implements: its own repertoire plus its options."""
         if not self.options:

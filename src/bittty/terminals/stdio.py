@@ -15,12 +15,15 @@ import select
 import shutil
 import signal
 import sys
+from collections.abc import Sequence
 
 from ..devices.board import Board
-from ..video import render_cells
+from ..image import Band
+from ..video import Cell, render_cells
 from .base import Terminal
 from .keyboard_input import KeyboardInput
 from .probe import probe_caps
+from .colors import REDUCED, reduce_cells
 from .raster import HALF_BLOCKS, composite
 from .scrollback import Scrollback
 
@@ -280,26 +283,29 @@ class StdioTerminal(Terminal):
         offset = self.view_offset()
         if offset:  # scrolled back: everything shown has moved
             for y, row in enumerate(self.view_rows()[: self.height]):
-                print(f"\033[{y + 1}H{render_cells(row, self.width)}\033[K", end="")
+                print(f"\033[{y + 1}H{self.paint(row)}\033[K", end="")
         else:
             page = self.port.page  # this chrome draws no status line
             scrolled, rows = self.damage()
             if scrolled:
                 print(self.scroll_venue(scrolled), end="")
             for y in rows:
-                if y >= self.height:
-                    continue
-                if page.bands[y]:
-                    line = render_cells(composite(page.grid[y], page.bands[y], self.glyphs), self.width)
-                else:
-                    line = page.get_line(y, width=self.width)
-                print(f"\033[{y + 1}H{line}\033[K", end="")
+                if y < self.height:
+                    print(f"\033[{y + 1}H{self.paint(page.grid[y], page.bands[y])}\033[K", end="")
         self.draw_chrome()
         cursor = self.port.cursor
         if cursor is not None and cursor[1] + offset < self.height:
             print(f"\033[{cursor[1] + offset + 1};{cursor[0] + 1}H\033[?25h", end="", flush=True)
         else:
             print(end="", flush=True)
+
+    def paint(self, cells: Sequence[Cell], bands: Sequence[Band] = ()) -> str:
+        """A row as the venue can show it: its images drawn in, in colours the venue has."""
+        if bands:
+            cells = composite(cells, bands, self.glyphs)
+        if self.caps.color_depth in REDUCED:
+            cells = reduce_cells(cells, self.caps.color_depth)
+        return render_cells(cells, self.width)
 
     def scroll_venue(self, rows: int) -> str:
         """Move the board's rows of the venue up (negative: down), its own rows held still.
@@ -438,7 +444,7 @@ class StdioTerminal(Terminal):
             loop.add_signal_handler(signal.SIGWINCH, self.handle_resize)
         try:
             self.setup_terminal()
-            self.probe_capabilities()
+            self.probe_capabilities()  # first: the child's environment is made from the caps
             await self.start_host()
             self.handle_input(self.startup_input)
             self.startup_input = b""

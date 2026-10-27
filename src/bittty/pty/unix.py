@@ -20,7 +20,7 @@ except ImportError:
     termios = None
 
 from .. import constants
-from .base import DEFAULT_TERM, PTY
+from .base import PTY
 
 logger = logging.getLogger(__name__)
 
@@ -87,9 +87,9 @@ class UnixPTY(PTY):
             # Let base class close master_fd
             super().close()
 
-    def environment(self, term: str = DEFAULT_TERM) -> dict[str, str]:
+    def environment(self, owned: dict[str, str] | None = None) -> dict[str, str]:
         """The base environment, in a UTF-8 locale unless the caller chose one."""
-        return super().environment(term) | {"LC_ALL": os.environ.get("LC_ALL", "en_US.UTF-8")}
+        return super().environment(owned) | {"LC_ALL": os.environ.get("LC_ALL", "en_US.UTF-8")}
 
     def spawn_process(self, command: str | list[str], env: dict[str, str] | None = None) -> subprocess.Popen:
         """Spawn a process attached to this PTY; a string command is split like a shell would."""

@@ -68,6 +68,7 @@ class Terminal:
     def __init__(self, board: Board, scrollback: Scrollback | None = None) -> None:
         self.board = board
         self.scrollback = scrollback
+        self.caps = TerminalCaps.unknown()  # what the venue can do, as last pushed
         self.keeps_scrollback = scrollback is not None
         # Scrolled back, the top row shown, as (line, row within it) so it holds still
         # as output arrives and as the width changes; None shows the live screen.
@@ -150,6 +151,7 @@ class Terminal:
 
     def set_caps(self, caps: TerminalCaps) -> None:
         """Push the real terminal's capabilities down to the board."""
+        self.caps = caps
         self.board.display.set_caps(caps)
 
     # --- present dispatch --- #
